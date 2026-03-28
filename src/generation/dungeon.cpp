@@ -93,10 +93,11 @@ DungeonResult generate(RNG& rng, const DungeonParams& params) {
         result.rooms.push_back(room);
     }
 
-    // Player starts in first room center
+    // Player starts in first room center — place stairs up there
     if (!result.rooms.empty()) {
         result.start_x = result.rooms.front().cx();
         result.start_y = result.rooms.front().cy();
+        result.map.at(result.start_x, result.start_y).type = TileType::STAIRS_UP;
     }
 
     // Stairs down in last room center

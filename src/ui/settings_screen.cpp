@@ -238,9 +238,10 @@ void SettingsScreen::render_keybinds(SDL_Renderer* renderer, TTF_Font* font,
 
     Bind actions[] = {
         {"g / ,",        "Pick up item"},
-        {">",            "Descend stairs"},
+        {"Enter / >",    "Descend stairs"},
         {"i",            "Inventory"},
         {"z",            "Spellbook"},
+        {"c",            "Character sheet"},
         {"F11",          "Toggle fullscreen"},
         {"F12",          "Screenshot"},
     };

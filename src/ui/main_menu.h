@@ -1,6 +1,7 @@
 #pragma once
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
+#include "core/spritesheet.h"
 
 enum class MenuChoice {
     NONE,
@@ -17,7 +18,7 @@ public:
     MenuChoice handle_input(SDL_Event& event);
 
     void render(SDL_Renderer* renderer, TTF_Font* body, TTF_Font* title,
-                int w, int h) const;
+                TTF_Font* title_large, const SpriteManager& sprites, int w, int h) const;
 
     void set_can_continue(bool val) { can_continue_ = val; }
 

@@ -7,10 +7,12 @@ enum class NPCRole : int {
     PRIEST,
     FARMER,
     GUARD,
+    ELDER,  // quest giver
 };
 
 struct NPC {
     NPCRole role = NPCRole::FARMER;
     std::string name = "someone";
-    std::string dialogue = "..."; // what they say when you bump them
+    std::string dialogue = "...";
+    int quest_id = -1;  // quest to give on interaction (-1 = none)
 };

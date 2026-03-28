@@ -13,6 +13,9 @@ static TileType char_to_tile(char c) {
         case 'T': return TileType::TREE;
         case 't': case '"': return TileType::BRUSH;
         case '~': return TileType::WATER;
+        case 's': return TileType::FLOOR_SAND;
+        case 'i': return TileType::FLOOR_ICE;
+        case 'R': return TileType::ROCK;
         case '+': return TileType::DOOR_CLOSED;
         case '>': return TileType::STAIRS_DOWN;
         case '<': return TileType::STAIRS_UP;
@@ -24,7 +27,7 @@ static TileType char_to_tile(char c) {
 }
 
 static bool is_entity_char(char c) {
-    return c == '@' || c == 'S' || c == 'B' || c == 'P' || c == 'F' || c == 'G';
+    return c == '@' || c == 'S' || c == 'B' || c == 'P' || c == 'F' || c == 'G' || c == 'E';
 }
 
 MapFileResult load(const std::string& path) {
@@ -61,7 +64,8 @@ MapFileResult load(const std::string& path) {
 
             // Add some floor variation
             if (tile.type == TileType::FLOOR_GRASS || tile.type == TileType::FLOOR_DIRT ||
-                tile.type == TileType::FLOOR_STONE) {
+                tile.type == TileType::FLOOR_STONE || tile.type == TileType::FLOOR_SAND ||
+                tile.type == TileType::FLOOR_ICE) {
                 // ~30% chance of detail variant
                 // Use a simple hash for deterministic variation
                 unsigned hash = static_cast<unsigned>(x * 7 + y * 13 + x * y);

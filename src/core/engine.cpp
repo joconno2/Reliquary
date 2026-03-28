@@ -28,6 +28,7 @@
 Engine::Engine() {}
 
 Engine::~Engine() {
+    if (font_title_large_ && font_title_large_ != font_title_) TTF_CloseFont(font_title_large_);
     if (font_title_ && font_title_ != font_) TTF_CloseFont(font_title_);
     if (font_) TTF_CloseFont(font_);
     if (renderer_) SDL_DestroyRenderer(renderer_);
@@ -89,14 +90,16 @@ bool Engine::init() {
 }
 
 void Engine::reload_fonts() {
-    // Close existing fonts
+    if (font_title_large_ && font_title_large_ != font_title_) TTF_CloseFont(font_title_large_);
     if (font_title_ && font_title_ != font_) TTF_CloseFont(font_title_);
     if (font_) TTF_CloseFont(font_);
     font_ = nullptr;
     font_title_ = nullptr;
+    font_title_large_ = nullptr;
 
     int body_size = static_cast<int>(12 * ui_scale_);
     int title_size = static_cast<int>(32 * ui_scale_);
+    int title_large_size = static_cast<int>(96 * ui_scale_);
 
     font_ = TTF_OpenFont("assets/fonts/PrStart.ttf", body_size);
     if (!font_) {
@@ -108,6 +111,11 @@ void Engine::reload_fonts() {
     if (!font_title_) {
         fprintf(stderr, "Warning: Could not load Jacquard font: %s\n", TTF_GetError());
         font_title_ = font_;
+    }
+
+    font_title_large_ = TTF_OpenFont("assets/fonts/Jacquard12-Regular.ttf", title_large_size);
+    if (!font_title_large_) {
+        font_title_large_ = font_title_;
     }
 }
 
@@ -137,8 +145,8 @@ void Engine::generate_level() {
     int start_x, start_y;
 
     if (dungeon_level_ == 0) {
-        // Village — loaded from hand-authored map file
-        auto mresult = mapfile::load("data/maps/thornwall.map");
+        // Overworld — loaded from hand-authored map file
+        auto mresult = mapfile::load("data/maps/overworld.map");
         map_ = std::move(mresult.map);
         rooms_.clear();
         start_x = mresult.start_x;
@@ -180,7 +188,15 @@ void Engine::generate_level() {
                     npc_comp.role = NPCRole::GUARD;
                     npc_comp.name = "Guard";
                     npc_comp.dialogue = "Keep your blade sheathed in town.";
-                    sx = 0; sy = 1; // knight sprite
+                    sx = 0; sy = 1;
+                    break;
+                case 'E':
+                    npc_comp.role = NPCRole::ELDER;
+                    npc_comp.name = "Elder Maren";
+                    npc_comp.dialogue = "A wight has risen in the barrow east of here. "
+                                        "People have died. Will you put it down?";
+                    npc_comp.quest_id = static_cast<int>(QuestId::MQ_BARROW_WIGHT);
+                    sx = 4; sy = 6; // elderly sprite
                     break;
             }
             world_.add<NPC>(npc, std::move(npc_comp));
@@ -360,7 +376,34 @@ void Engine::try_move_player(int dx, int dy) {
             char buf[256];
             snprintf(buf, sizeof(buf), "%s: \"%s\"", npc.name.c_str(), npc.dialogue.c_str());
             log_.add(buf, {180, 180, 140, 255});
-            return; // talking doesn't cost a turn
+
+            // Quest giving
+            if (npc.quest_id >= 0) {
+                auto qid = static_cast<QuestId>(npc.quest_id);
+                if (!journal_.has_quest(qid)) {
+                    journal_.add_quest(qid);
+                    auto& qinfo = get_quest_info(qid);
+                    char qbuf[128];
+                    snprintf(qbuf, sizeof(qbuf), "Quest accepted: %s", qinfo.name);
+                    log_.add(qbuf, {220, 200, 100, 255});
+                } else if (journal_.get_state(qid) == QuestState::COMPLETE) {
+                    journal_.set_state(qid, QuestState::FINISHED);
+                    auto& qinfo = get_quest_info(qid);
+                    char qbuf[128];
+                    snprintf(qbuf, sizeof(qbuf), "Quest complete: %s (+%dxp, +%dgold)",
+                             qinfo.name, qinfo.xp_reward, qinfo.gold_reward);
+                    log_.add(qbuf, {120, 220, 120, 255});
+                    gold_ += qinfo.gold_reward;
+                    if (world_.has<Stats>(player_) && qinfo.xp_reward > 0) {
+                        world_.get<Stats>(player_).grant_xp(qinfo.xp_reward);
+                    }
+                    // Chain main quests
+                    if (qid == QuestId::MQ_BARROW_WIGHT) {
+                        npc.dialogue = "Something stirred when it fell. The scholar may know more.";
+                    }
+                }
+            }
+            return;
         }
         // Hostile — attack
         combat::melee_attack(world_, player_, target, rng_, log_);
@@ -399,11 +442,10 @@ void Engine::process_turn() {
         }
     }
 
-    // Give all entities energy
+    // Energy system: give energy, then each entity acts once if they can
     auto& energy_pool = world_.pool<Energy>();
     for (size_t i = 0; i < energy_pool.size(); i++) {
-        auto& e = energy_pool.at_index(i);
-        e.gain();
+        energy_pool.at_index(i).gain();
     }
 
     // Player spends energy
@@ -411,33 +453,30 @@ void Engine::process_turn() {
         world_.get<Energy>(player_).spend();
     }
 
-    // Process AI for all monsters that can act
-    // Multiple passes — fast monsters might get multiple actions
-    for (int pass = 0; pass < 3; pass++) {
-        ai::process(world_, map_, player_, rng_);
+    // Process AI — each monster acts at most once per player turn
+    ai::process(world_, map_, player_, rng_);
 
-        // Check for AI entities adjacent to player — they attack
-        auto& ai_pool = world_.pool<AI>();
-        for (size_t i = 0; i < ai_pool.size(); i++) {
-            Entity e = ai_pool.entity_at(i);
-            if (!world_.has<Position>(e) || !world_.has<Stats>(e)) continue;
+    // Monsters adjacent to player attack (once each)
+    auto& ai_pool = world_.pool<AI>();
+    for (size_t i = 0; i < ai_pool.size(); i++) {
+        Entity e = ai_pool.entity_at(i);
+        if (!world_.has<Position>(e) || !world_.has<Stats>(e)) continue;
+        if (!world_.has<Energy>(e) || !world_.get<Energy>(e).can_act()) continue;
 
-            auto& mpos = world_.get<Position>(e);
-            auto& ppos = world_.get<Position>(player_);
+        auto& mpos = world_.get<Position>(e);
+        auto& ppos = world_.get<Position>(player_);
 
-            int dx = std::abs(mpos.x - ppos.x);
-            int dy = std::abs(mpos.y - ppos.y);
+        int dx = std::abs(mpos.x - ppos.x);
+        int dy = std::abs(mpos.y - ppos.y);
 
-            if (dx <= 1 && dy <= 1 && (dx + dy > 0)) {
-                auto& ai_comp = ai_pool.at_index(i);
-                if (ai_comp.state == AIState::HUNTING) {
-                    combat::melee_attack(world_, e, player_, rng_, log_);
+        if (dx <= 1 && dy <= 1 && (dx + dy > 0)) {
+            auto& ai_comp = ai_pool.at_index(i);
+            if (ai_comp.state == AIState::HUNTING) {
+                combat::melee_attack(world_, e, player_, rng_, log_);
 
-                    // Check player death after each attack
-                    if (world_.has<Stats>(player_) && world_.get<Stats>(player_).hp <= 0) {
-                        state_ = GameState::DEAD;
-                        return;
-                    }
+                if (world_.has<Stats>(player_) && world_.get<Stats>(player_).hp <= 0) {
+                    state_ = GameState::DEAD;
+                    return;
                 }
             }
         }
@@ -712,6 +751,18 @@ void Engine::handle_input() {
                 return;
             }
 
+            // Quest log intercepts input
+            if (quest_log_.is_open()) {
+                quest_log_.handle_input(event);
+                return;
+            }
+
+            // Character sheet intercepts input
+            if (char_sheet_.is_open()) {
+                char_sheet_.handle_input(event);
+                return;
+            }
+
             // Spell screen intercepts input
             if (spell_screen_.is_open()) {
                 SpellAction act = spell_screen_.handle_input(event);
@@ -778,11 +829,35 @@ void Engine::handle_input() {
                     spell_screen_.open(player_);
                     break;
 
-                case SDLK_GREATER: {
+                // Character sheet
+                case SDLK_c:
+                    char_sheet_.open(player_);
+                    break;
+
+                // Quest log
+                case SDLK_q:
+                    quest_log_.open();
+                    break;
+
+                // Stairs — Enter on any stairs, > to descend, < to ascend
+                case SDLK_GREATER:
+                case SDLK_LESS:
+                case SDLK_RETURN: {
                     auto& pos = world_.get<Position>(player_);
-                    if (map_.at(pos.x, pos.y).type == TileType::STAIRS_DOWN) {
+                    auto tile_type = map_.at(pos.x, pos.y).type;
+                    if (tile_type == TileType::STAIRS_DOWN &&
+                        event.key.keysym.sym != SDLK_LESS) {
                         generate_level();
-                    } else {
+                    } else if (tile_type == TileType::STAIRS_UP &&
+                               event.key.keysym.sym != SDLK_GREATER) {
+                        if (dungeon_level_ > 0) {
+                            // Go back to overworld (level 0)
+                            dungeon_level_ = -1; // will increment to 0
+                            generate_level();
+                        } else {
+                            log_.add("You're already on the surface.", {150, 140, 130, 255});
+                        }
+                    } else if (event.key.keysym.sym != SDLK_RETURN) {
                         log_.add("There are no stairs here.", {150, 100, 100, 255});
                     }
                     break;
@@ -896,7 +971,7 @@ void Engine::render_hud() {
 void Engine::render() {
     // Main menu screen
     if (state_ == GameState::MAIN_MENU) {
-        main_menu_.render(renderer_, font_, font_title_, width_, height_);
+        main_menu_.render(renderer_, font_, font_title_, font_title_large_, sprites_, width_, height_);
         SDL_RenderPresent(renderer_);
         return;
     }
@@ -936,6 +1011,8 @@ void Engine::render() {
     // Overlay screens
     inventory_screen_.render(renderer_, font_, sprites_, world_, width_, height_);
     spell_screen_.render(renderer_, font_, world_, width_, height_);
+    char_sheet_.render(renderer_, font_, font_title_, sprites_, world_, width_, height_);
+    quest_log_.render(renderer_, font_, font_title_, journal_, width_, height_);
 
     // Pause menu overlay
     pause_menu_.render(renderer_, font_, font_title_, width_, height_);

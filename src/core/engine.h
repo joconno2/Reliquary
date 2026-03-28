@@ -13,6 +13,9 @@
 #include "ui/inventory_screen.h"
 #include "ui/creation_screen.h"
 #include "ui/spell_screen.h"
+#include "ui/character_sheet.h"
+#include "ui/quest_log.h"
+#include "components/quest.h"
 #include "ui/main_menu.h"
 #include "ui/settings_screen.h"
 #include "ui/pause_menu.h"
@@ -39,8 +42,9 @@ private:
     // SDL
     SDL_Window* window_ = nullptr;
     SDL_Renderer* renderer_ = nullptr;
-    TTF_Font* font_ = nullptr;        // Press Start 2P — body text, UI, messages
-    TTF_Font* font_title_ = nullptr;  // Jacquard 12 — titles, god names, decorative
+    TTF_Font* font_ = nullptr;             // Press Start 2P — body text, UI, messages
+    TTF_Font* font_title_ = nullptr;     // Jacquard 12 — titles, god names, decorative
+    TTF_Font* font_title_large_ = nullptr; // Jacquard 12 — main menu title, huge
 
     // Core systems
     World world_;
@@ -65,6 +69,9 @@ private:
     InventoryScreen inventory_screen_;
     CreationScreen creation_screen_;
     SpellScreen spell_screen_;
+    CharacterSheet char_sheet_;
+    QuestLog quest_log_;
+    QuestJournal journal_;
     MainMenu main_menu_;
     SettingsScreen settings_;
     PauseMenu pause_menu_;

@@ -39,18 +39,43 @@ MenuChoice MainMenu::handle_input(SDL_Event& event) {
     }
 }
 
-void MainMenu::render(SDL_Renderer* renderer, TTF_Font* body, TTF_Font* title,
-                       int w, int h) const {
+void MainMenu::render(SDL_Renderer* renderer, TTF_Font* body, [[maybe_unused]] TTF_Font* title,
+                       TTF_Font* title_large, const SpriteManager& sprites, int w, int h) const {
     // Dark background
     SDL_SetRenderDrawColor(renderer, 18, 20, 28, 255);
     SDL_RenderClear(renderer);
 
     int cx = w / 2;
 
-    // Title
+    // Layout: spread title, fire, and menu evenly across the screen height
+    // Title at ~15% from top, fire centered at ~42%, menu at ~68%
     SDL_Color title_col = {200, 180, 160, 255};
-    int title_y = h / 4;
-    ui::draw_text_centered(renderer, title, "Reliquary", title_col, cx, title_y);
+    int title_y = h * 12 / 100;
+    ui::draw_text_centered(renderer, title_large, "Reliquary", title_col, cx, title_y);
+
+    // Animated campfire — fire pit (lit) = animated-tiles.png row 3, 6 frames
+    int fire_frame = static_cast<int>((SDL_GetTicks() / 150) % 6);
+    int fire_size = 128;
+    int fire_cx = cx;
+    int fire_cy = h * 42 / 100; // vertical center of fire
+    int fire_x = fire_cx - fire_size / 2;
+    int fire_y = fire_cy - fire_size / 2;
+
+    sprites.draw_sprite_sized(renderer, SHEET_ANIMATED, fire_frame, 3,
+                               fire_x, fire_y, fire_size);
+
+    // Warm glow centered on the fire
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    for (int r = 3; r >= 1; r--) {
+        int glow_r = fire_size / 2 + r * 24;
+        int alpha = 8 - r * 2;
+        SDL_SetRenderDrawColor(renderer, 180, 100, 40, static_cast<Uint8>(alpha));
+        for (int dy = -glow_r; dy <= glow_r; dy += 4) {
+            int dx = static_cast<int>(std::sqrt(static_cast<float>(glow_r * glow_r - dy * dy)));
+            SDL_Rect glow = {fire_cx - dx, fire_cy + dy, dx * 2, 4};
+            SDL_RenderFillRect(renderer, &glow);
+        }
+    }
 
     // Menu options
     SDL_Color sel_col = {255, 220, 140, 255};
@@ -62,7 +87,7 @@ void MainMenu::render(SDL_Renderer* renderer, TTF_Font* body, TTF_Font* title,
     const char** options = can_continue_ ? opts_with_continue : opts_no_continue;
 
     int line_h = body ? TTF_FontLineSkip(body) : 20;
-    int menu_y = h / 2 + 20;
+    int menu_y = h * 68 / 100;
 
     for (int i = 0; i < count; i++) {
         bool is_sel = (i == selected_);

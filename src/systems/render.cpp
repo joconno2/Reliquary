@@ -14,7 +14,8 @@ namespace render {
 static bool is_floor_type(TileType type) {
     return type == TileType::FLOOR_STONE || type == TileType::FLOOR_DIRT ||
            type == TileType::FLOOR_GRASS || type == TileType::FLOOR_BONE ||
-           type == TileType::FLOOR_RED_STONE;
+           type == TileType::FLOOR_RED_STONE || type == TileType::FLOOR_SAND ||
+           type == TileType::FLOOR_ICE;
 }
 
 // Floor tile row in spritesheet (tiles.txt group - 1)
@@ -25,7 +26,18 @@ static int floor_row(TileType type) {
         case TileType::FLOOR_DIRT:      return 8;
         case TileType::FLOOR_BONE:      return 10;
         case TileType::FLOOR_RED_STONE: return 11;
+        case TileType::FLOOR_SAND:      return 8;  // reuse dirt sprites with tint
+        case TileType::FLOOR_ICE:       return 12;  // reuse blue stone floor
         default: return 6;
+    }
+}
+
+// Sand and ice get color tints applied during rendering
+static SDL_Color floor_tint(TileType type) {
+    switch (type) {
+        case TileType::FLOOR_SAND: return {220, 200, 140, 255}; // warm sandy tint
+        case TileType::FLOOR_ICE:  return {160, 200, 240, 255}; // cold blue tint
+        default: return {255, 255, 255, 255};
     }
 }
 
@@ -99,18 +111,30 @@ void draw_map(SDL_Renderer* renderer, const SpriteManager& sprites,
                                           screen_x, screen_y, TS, tint);
             };
 
+            // Blend two tints (visibility * floor color)
+            auto blend_tint = [](SDL_Color a, SDL_Color b) -> SDL_Color {
+                return {static_cast<Uint8>(a.r * b.r / 255),
+                        static_cast<Uint8>(a.g * b.g / 255),
+                        static_cast<Uint8>(a.b * b.b / 255), 255};
+            };
+
             auto draw_tile = [&](SDL_Color tint) {
                 if (is_floor_type(tile.type)) {
+                    SDL_Color ft = blend_tint(tint, floor_tint(tile.type));
                     auto fs = floor_sprite(tile.type, tile.variant);
-                    draw_sprite_scaled(fs.base.sheet, fs.base.col, fs.base.row, tint);
+                    draw_sprite_scaled(fs.base.sheet, fs.base.col, fs.base.row, ft);
                     if (fs.has_overlay) {
                         draw_sprite_scaled(fs.overlay.sheet, fs.overlay.col,
-                                           fs.overlay.row, tint);
+                                           fs.overlay.row, ft);
                     }
                 } else if (tile.type == TileType::TREE || tile.type == TileType::BRUSH) {
                     draw_sprite_scaled(SHEET_TILES, 0, 7, tint);
                     auto ref = tile_sprite(tile.type, tile.variant);
                     draw_sprite_scaled(ref.sheet, ref.col, ref.row, tint);
+                } else if (tile.type == TileType::ROCK) {
+                    // Rock on dirt base
+                    draw_sprite_scaled(SHEET_TILES, 0, 8, tint);
+                    draw_sprite_scaled(SHEET_TILES, 0, 18, tint); // large rock sprite
                 } else {
                     auto ref = tile_sprite(tile.type, tile.variant);
                     draw_sprite_scaled(ref.sheet, ref.col, ref.row, tint);

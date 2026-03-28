@@ -22,6 +22,9 @@ enum class TileType : uint8_t {
     WATER,
     TREE,
     BRUSH,       // walkable vegetation — looks like forest but passable
+    FLOOR_SAND,  // desert terrain
+    FLOOR_ICE,   // frozen terrain
+    ROCK,        // impassable rocky outcrop (blocks movement, not sight)
     COUNT
 };
 
