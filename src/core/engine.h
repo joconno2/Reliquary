@@ -9,9 +9,11 @@
 #include "ui/message_log.h"
 #include "generation/dungeon.h"
 #include "ui/inventory_screen.h"
+#include "ui/creation_screen.h"
 #include <vector>
 
 enum class GameState {
+    CREATING,
     PLAYING,
     DEAD,
     QUIT
@@ -38,7 +40,7 @@ private:
     RNG rng_;
     Camera camera_;
     MessageLog log_;
-    GameState state_ = GameState::PLAYING;
+    GameState state_ = GameState::CREATING;
 
     // Level data
     std::vector<Room> rooms_;
@@ -52,6 +54,7 @@ private:
 
     // UI
     InventoryScreen inventory_screen_;
+    CreationScreen creation_screen_;
 
     // Window config
     static constexpr int SCREEN_W = 1280;

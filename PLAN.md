@@ -2,7 +2,7 @@
 
 ## Current Status
 
-**Phase 3: Items & Inventory — IN PROGRESS**
+**Phase 4/5: Character System & Gods — IN PROGRESS**
 
 ### Phase 1: Core Engine — COMPLETE
 - [x] CMake build, SDL2, spritesheet loading, ECS, tilemap, dungeon gen, FOV, camera, message log
@@ -44,6 +44,24 @@ src/
 
 Full game design: `~/Documents/Work/Games/Development/Roguelike Project.md`
 
+### Phase 4/5: Character System & Gods — IN PROGRESS
+- [x] God definitions (7 gods with names, titles, domains, descriptions, stat bonuses)
+- [x] GodAlignment component (god ID + favor tracking)
+- [x] Class definitions (4 starting classes with stats, sprites, descriptions)
+- [x] Character creation screen — God select → Class select, with stat preview
+- [x] God + class stats combine at player creation
+- [x] Player sprite matches chosen class
+- [x] God name in HUD
+- [x] 6 dungeon zone themes (Warrens, Stonekeep, Deep Halls, Catacombs, Molten Depths, Sunken Halls)
+- [x] Atmospheric zone entry messages
+- [x] Depth-scaled room count
+- [ ] Backgrounds (15+ with starting gear + passives)
+- [ ] Traits (positive/negative selection)
+- [ ] Favor mechanics (gain/lose from actions)
+- [ ] Prayer abilities
+- [ ] God tenets
+- [ ] NPC god affiliations
+
 ## Next Up
 
-Remaining Phase 3 (shops, cursed/blessed, more items), then Phase 4: Character System.
+Backgrounds + traits, then favor/prayer mechanics.

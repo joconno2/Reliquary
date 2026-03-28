@@ -9,6 +9,8 @@
 #include "components/corpse.h"
 #include "components/item.h"
 #include "components/inventory.h"
+#include "components/god.h"
+#include "components/class_def.h"
 #include "systems/fov.h"
 #include "systems/combat.h"
 #include "systems/ai.h"
@@ -90,7 +92,7 @@ bool Engine::init() {
     camera_.viewport_w = SCREEN_W;
     camera_.viewport_h = SCREEN_H - LOG_HEIGHT - HUD_HEIGHT;
 
-    generate_level();
+    creation_screen_.reset();
 
     return true;
 }
@@ -118,12 +120,29 @@ void Engine::generate_level() {
         clear_entities_except_player();
     }
 
+    // Zone theming based on depth
+    struct ZoneTheme {
+        TileType wall, floor;
+        const char* name;
+    };
+    static const ZoneTheme ZONES[] = {
+        {TileType::WALL_DIRT,        TileType::FLOOR_DIRT,      "The Warrens"},
+        {TileType::WALL_STONE_ROUGH, TileType::FLOOR_STONE,     "Stonekeep"},
+        {TileType::WALL_STONE_BRICK, TileType::FLOOR_STONE,     "The Deep Halls"},
+        {TileType::WALL_CATACOMB,    TileType::FLOOR_BONE,      "The Catacombs"},
+        {TileType::WALL_IGNEOUS,     TileType::FLOOR_RED_STONE, "The Molten Depths"},
+        {TileType::WALL_LARGE_STONE, TileType::FLOOR_STONE,     "The Sunken Halls"},
+    };
+    constexpr int ZONE_COUNT = sizeof(ZONES) / sizeof(ZONES[0]);
+    int zone_idx = std::min(dungeon_level_ - 1, ZONE_COUNT - 1);
+    auto& zone = ZONES[zone_idx];
+
     DungeonParams params;
     params.width = 80;
     params.height = 50;
-    params.max_rooms = 15;
-    params.wall_type = TileType::WALL_STONE_BRICK;
-    params.floor_type = TileType::FLOOR_STONE;
+    params.max_rooms = 12 + dungeon_level_;
+    params.wall_type = zone.wall;
+    params.floor_type = zone.floor;
 
     auto result = dungeon::generate(rng_, params);
     map_ = std::move(result.map);
@@ -131,28 +150,33 @@ void Engine::generate_level() {
 
     // Create or reposition player
     if (player_ == NULL_ENTITY) {
+        auto build = creation_screen_.get_build();
+        auto& cls = get_class_info(build.class_id);
+        auto& god = get_god_info(build.god);
+
         player_ = world_.create();
         world_.add<Player>(player_);
         world_.add<Position>(player_, {result.start_x, result.start_y});
-        world_.add<Renderable>(player_, {SHEET_ROGUES, 0, 1, {255, 255, 255, 255}, 10});
+        world_.add<Renderable>(player_, {SHEET_ROGUES, cls.sprite_x, cls.sprite_y,
+                                         {255, 255, 255, 255}, 10});
         world_.add<Energy>(player_, {0, 100});
-
         world_.add<Inventory>(player_);
+        world_.add<GodAlignment>(player_, {build.god, 0});
 
         Stats player_stats;
         player_stats.name = "you";
-        player_stats.hp = 30;
-        player_stats.hp_max = 30;
-        player_stats.mp = 10;
-        player_stats.mp_max = 10;
-        player_stats.set_attr(Attr::STR, 12);
-        player_stats.set_attr(Attr::DEX, 12);
-        player_stats.set_attr(Attr::CON, 12);
-        player_stats.set_attr(Attr::INT, 10);
-        player_stats.set_attr(Attr::WIL, 10);
-        player_stats.set_attr(Attr::PER, 12);
-        player_stats.set_attr(Attr::CHA, 8);
-        player_stats.base_damage = 3;
+        player_stats.hp = cls.hp + god.bonus_hp;
+        player_stats.hp_max = cls.hp + god.bonus_hp;
+        player_stats.mp = cls.mp + god.bonus_mp;
+        player_stats.mp_max = cls.mp + god.bonus_mp;
+        player_stats.set_attr(Attr::STR, cls.str + god.str_bonus);
+        player_stats.set_attr(Attr::DEX, cls.dex + god.dex_bonus);
+        player_stats.set_attr(Attr::CON, cls.con + god.con_bonus);
+        player_stats.set_attr(Attr::INT, cls.intel + god.int_bonus);
+        player_stats.set_attr(Attr::WIL, cls.wil + god.wil_bonus);
+        player_stats.set_attr(Attr::PER, cls.per + god.per_bonus);
+        player_stats.set_attr(Attr::CHA, cls.cha + god.cha_bonus);
+        player_stats.base_damage = cls.base_damage;
         player_stats.base_speed = 100;
         world_.add<Stats>(player_, std::move(player_stats));
     } else {
@@ -169,16 +193,20 @@ void Engine::generate_level() {
     fov::compute(map_, pos.x, pos.y, stats.fov_radius());
     camera_.center_on(pos.x, pos.y);
 
-    char buf[64];
-    snprintf(buf, sizeof(buf), "Dungeon level %d.", dungeon_level_);
+    char buf[128];
+    snprintf(buf, sizeof(buf), "%s — Depth %d", zone.name, dungeon_level_);
     log_.add(buf, {180, 170, 160, 255});
 
-    if (dungeon_level_ == 1) {
-        log_.add("You descend into the dark.", {180, 170, 160, 255});
-        log_.add("The air is thick. Something old lingers here.", {120, 110, 100, 255});
-    } else {
-        log_.add("You descend deeper. The walls are older here.", {120, 110, 100, 255});
-    }
+    // Atmospheric entry messages per zone
+    static const char* ZONE_MESSAGES[] = {
+        "Dirt crumbles from the ceiling. Rats scatter at your approach.",
+        "Cold stone. The echo of your footsteps returns wrong.",
+        "The masonry here is ancient. Someone built this to last.",
+        "Bones line the walls. Not decoration — storage.",
+        "The heat is oppressive. The stone glows faintly red.",
+        "Water drips from every surface. The walls weep.",
+    };
+    log_.add(ZONE_MESSAGES[zone_idx], {120, 110, 100, 255});
 }
 
 void Engine::try_move_player(int dx, int dy) {
@@ -430,6 +458,21 @@ void Engine::handle_input() {
             return;
         }
 
+        // Character creation state
+        if (state_ == GameState::CREATING) {
+            if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE
+                && creation_screen_.is_done()) {
+                state_ = GameState::QUIT;
+                return;
+            }
+            creation_screen_.handle_input(event);
+            if (creation_screen_.is_done()) {
+                state_ = GameState::PLAYING;
+                generate_level();
+            }
+            return;
+        }
+
         if (event.type == SDL_KEYDOWN) {
             // Inventory mode intercepts input
             if (inventory_screen_.is_open()) {
@@ -582,9 +625,15 @@ void Engine::render_hud() {
         SDL_FreeSurface(surf);
     }
 
-    // Dungeon depth + gold + turn
-    char info[96];
-    snprintf(info, sizeof(info), "Depth: %d  Gold: %d  Turn: %d", dungeon_level_, gold_, game_turn_);
+    // God name + depth + gold + turn
+    const char* god_name = "";
+    if (world_.has<GodAlignment>(player_)) {
+        auto& ga = world_.get<GodAlignment>(player_);
+        god_name = get_god_info(ga.god).name;
+    }
+    char info[128];
+    snprintf(info, sizeof(info), "%s  Depth: %d  Gold: %d  Turn: %d",
+             god_name, dungeon_level_, gold_, game_turn_);
     surf = TTF_RenderText_Blended(font_, info, white);
     if (surf) {
         SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer_, surf);
@@ -596,10 +645,16 @@ void Engine::render_hud() {
 }
 
 void Engine::render() {
+    // Character creation screen
+    if (state_ == GameState::CREATING) {
+        creation_screen_.render(renderer_, font_, sprites_, SCREEN_W, SCREEN_H);
+        SDL_RenderPresent(renderer_);
+        return;
+    }
+
     SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
     SDL_RenderClear(renderer_);
 
-    // Offset rendering below HUD
     Camera render_cam = camera_;
 
     // Draw map
