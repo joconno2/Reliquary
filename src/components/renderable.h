@@ -7,4 +7,5 @@ struct Renderable {
     int sprite_y = 0;     // tile row in spritesheet
     SDL_Color tint = {255, 255, 255, 255};
     int z_order = 0;      // higher = drawn later (on top)
+    bool flip_h = false;  // horizontal flip (facing left)
 };

@@ -45,7 +45,7 @@ static void carve_v_tunnel(TileMap& map, int y1, int y2, int x, TileType floor, 
     }
 }
 
-DungeonResult generate(RNG& rng, const DungeonParams& params) {
+DungeonResult generate(RNG& rng, const DungeonParams& params, bool place_stairs_down) {
     DungeonResult result;
     result.map = TileMap(params.width, params.height);
 
@@ -100,8 +100,8 @@ DungeonResult generate(RNG& rng, const DungeonParams& params) {
         result.map.at(result.start_x, result.start_y).type = TileType::STAIRS_UP;
     }
 
-    // Stairs down in last room center
-    if (result.rooms.size() >= 2) {
+    // Stairs down in last room center (only if allowed)
+    if (place_stairs_down && result.rooms.size() >= 2) {
         result.stairs_x = result.rooms.back().cx();
         result.stairs_y = result.rooms.back().cy();
         result.map.at(result.stairs_x, result.stairs_y).type = TileType::STAIRS_DOWN;

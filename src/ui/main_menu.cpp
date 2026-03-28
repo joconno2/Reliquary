@@ -1,5 +1,10 @@
 #include "ui/main_menu.h"
 #include "ui/ui_draw.h"
+#include <cmath>
+
+// Option order: New Game, [Continue], Load, Settings, Quit
+// With continue:    0=New, 1=Continue, 2=Load, 3=Settings, 4=Quit
+// Without continue: 0=New, 1=Load, 2=Settings, 3=Quit
 
 MenuChoice MainMenu::handle_input(SDL_Event& event) {
     if (event.type != SDL_KEYDOWN) return MenuChoice::NONE;
@@ -21,14 +26,16 @@ MenuChoice MainMenu::handle_input(SDL_Event& event) {
                 switch (selected_) {
                     case 0: return MenuChoice::NEW_GAME;
                     case 1: return MenuChoice::CONTINUE;
-                    case 2: return MenuChoice::SETTINGS;
-                    case 3: return MenuChoice::QUIT;
+                    case 2: return MenuChoice::LOAD;
+                    case 3: return MenuChoice::SETTINGS;
+                    case 4: return MenuChoice::QUIT;
                 }
             } else {
                 switch (selected_) {
                     case 0: return MenuChoice::NEW_GAME;
-                    case 1: return MenuChoice::SETTINGS;
-                    case 2: return MenuChoice::QUIT;
+                    case 1: return MenuChoice::LOAD;
+                    case 2: return MenuChoice::SETTINGS;
+                    case 3: return MenuChoice::QUIT;
                 }
             }
             return MenuChoice::NONE;
@@ -39,32 +46,30 @@ MenuChoice MainMenu::handle_input(SDL_Event& event) {
     }
 }
 
-void MainMenu::render(SDL_Renderer* renderer, TTF_Font* body, [[maybe_unused]] TTF_Font* title,
-                       TTF_Font* title_large, const SpriteManager& sprites, int w, int h) const {
-    // Dark background
+void MainMenu::render(SDL_Renderer* renderer, TTF_Font* body, TTF_Font* title,
+                       TTF_Font* title_large, const SpriteManager& sprites,
+                       int w, int h) const {
     SDL_SetRenderDrawColor(renderer, 18, 20, 28, 255);
     SDL_RenderClear(renderer);
 
     int cx = w / 2;
 
-    // Layout: spread title, fire, and menu evenly across the screen height
-    // Title at ~15% from top, fire centered at ~42%, menu at ~68%
+    // Title
     SDL_Color title_col = {200, 180, 160, 255};
-    int title_y = h * 12 / 100;
+    int title_y = h * 10 / 100;
     ui::draw_text_centered(renderer, title_large, "Reliquary", title_col, cx, title_y);
 
-    // Animated campfire — fire pit (lit) = animated-tiles.png row 3, 6 frames
+    // Campfire
     int fire_frame = static_cast<int>((SDL_GetTicks() / 150) % 6);
     int fire_size = 128;
     int fire_cx = cx;
-    int fire_cy = h * 42 / 100; // vertical center of fire
+    int fire_cy = h * 40 / 100;
     int fire_x = fire_cx - fire_size / 2;
     int fire_y = fire_cy - fire_size / 2;
 
     sprites.draw_sprite_sized(renderer, SHEET_ANIMATED, fire_frame, 3,
                                fire_x, fire_y, fire_size);
 
-    // Warm glow centered on the fire
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     for (int r = 3; r >= 1; r--) {
         int glow_r = fire_size / 2 + r * 24;
@@ -77,34 +82,41 @@ void MainMenu::render(SDL_Renderer* renderer, TTF_Font* body, [[maybe_unused]] T
         }
     }
 
-    // Menu options
+    // Menu options — use the title font for bigger text
     SDL_Color sel_col = {255, 220, 140, 255};
     SDL_Color normal_col = {160, 155, 150, 255};
+    SDL_Color dim_col = {100, 95, 90, 255}; // for Load (placeholder)
 
     int count = option_count();
-    const char* opts_with_continue[] = {"New Game", "Continue", "Settings", "Quit"};
-    const char* opts_no_continue[]   = {"New Game", "Settings", "Quit"};
-    const char** options = can_continue_ ? opts_with_continue : opts_no_continue;
+    const char* opts_with_cont[] = {"New Game", "Continue", "Load Game", "Settings", "Quit"};
+    const char* opts_no_cont[]   = {"New Game", "Load Game", "Settings", "Quit"};
+    const char** options = can_continue_ ? opts_with_cont : opts_no_cont;
 
-    int line_h = body ? TTF_FontLineSkip(body) : 20;
-    int menu_y = h * 68 / 100;
+    // Use title font for menu items (bigger, more readable)
+    TTF_Font* menu_font = title ? title : body;
+    int line_h = menu_font ? TTF_FontLineSkip(menu_font) : 24;
+    int menu_y = h * 64 / 100;
 
     for (int i = 0; i < count; i++) {
         bool is_sel = (i == selected_);
 
+        // Load is dimmed (placeholder)
+        bool is_load = can_continue_ ? (i == 2) : (i == 1);
+
         if (is_sel) {
             int tw = 0, th = 0;
-            if (body) TTF_SizeText(body, options[i], &tw, &th);
-            SDL_Rect hl = {cx - tw / 2 - 10, menu_y - 2, tw + 20, line_h + 4};
+            if (menu_font) TTF_SizeText(menu_font, options[i], &tw, &th);
+            SDL_Rect hl = {cx - tw / 2 - 12, menu_y - 4, tw + 24, line_h + 8};
             SDL_SetRenderDrawColor(renderer, 30, 25, 40, 255);
             SDL_RenderFillRect(renderer, &hl);
         }
 
-        ui::draw_text_centered(renderer, body, options[i], is_sel ? sel_col : normal_col, cx, menu_y);
-        menu_y += line_h + 12;
+        SDL_Color col = is_sel ? sel_col : (is_load ? dim_col : normal_col);
+        ui::draw_text_centered(renderer, menu_font, options[i], col, cx, menu_y);
+        menu_y += line_h + 16;
     }
 
-    // Controls hint at bottom
+    // Hint
     SDL_Color hint_col = {70, 65, 60, 255};
-    ui::draw_text_centered(renderer, body, "[Up/Down] select   [Enter] confirm", hint_col, cx, h - 40);
+    ui::draw_text_centered(renderer, body, "[Up/Down] select   [Enter] confirm", hint_col, cx, h - 30);
 }

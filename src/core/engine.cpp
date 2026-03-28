@@ -119,6 +119,58 @@ void Engine::reload_fonts() {
     }
 }
 
+void Engine::do_save() {
+    SaveData data;
+    data.dungeon_level = dungeon_level_;
+    data.game_turn = game_turn_;
+    data.gold = gold_;
+    data.journal = journal_;
+    data.rng_seed = rng_.get_seed();
+
+    if (save::save_game(save::default_path(), data, world_, player_, map_)) {
+        log_.add("Game saved.", {100, 200, 100, 255});
+    } else {
+        log_.add("Failed to save.", {200, 100, 100, 255});
+    }
+}
+
+void Engine::do_load() {
+    World new_world;
+    TileMap new_map;
+    auto data = save::load_game(save::default_path(), new_world, new_map);
+
+    if (!data.valid) {
+        log_.add("No save file found.", {180, 140, 120, 255});
+        return;
+    }
+
+    world_ = std::move(new_world);
+    map_ = std::move(new_map);
+    dungeon_level_ = data.dungeon_level;
+    game_turn_ = data.game_turn;
+    gold_ = data.gold;
+    journal_ = data.journal;
+    rng_.reseed(data.rng_seed);
+
+    // Find the player entity
+    player_ = NULL_ENTITY;
+    auto& players = world_.pool<Player>();
+    if (players.size() > 0) {
+        player_ = players.entity_at(0);
+    }
+
+    if (player_ != NULL_ENTITY && world_.has<Position>(player_) && world_.has<Stats>(player_)) {
+        auto& pos = world_.get<Position>(player_);
+        auto& stats = world_.get<Stats>(player_);
+        fov::compute(map_, pos.x, pos.y, stats.fov_radius());
+        camera_.center_on(pos.x, pos.y);
+    }
+
+    state_ = GameState::PLAYING;
+    pause_menu_.close();
+    log_.add("Game loaded.", {100, 200, 100, 255});
+}
+
 void Engine::clear_entities_except_player() {
     // Collect all entities that aren't the player
     std::vector<Entity> to_destroy;
@@ -210,22 +262,27 @@ void Engine::generate_level() {
             world_.add<Stats>(npc, std::move(npc_stats));
         }
     } else {
-        // Dungeon zones
+        // Dungeon zones — each zone spans 3 depths
         struct ZoneTheme {
             TileType wall, floor;
             const char* name;
+            int max_depth; // deepest level in this zone
         };
         static const ZoneTheme ZONES[] = {
-            {TileType::WALL_DIRT,        TileType::FLOOR_DIRT,      "The Warrens"},
-            {TileType::WALL_STONE_ROUGH, TileType::FLOOR_STONE,     "Stonekeep"},
-            {TileType::WALL_STONE_BRICK, TileType::FLOOR_STONE,     "The Deep Halls"},
-            {TileType::WALL_CATACOMB,    TileType::FLOOR_BONE,      "The Catacombs"},
-            {TileType::WALL_IGNEOUS,     TileType::FLOOR_RED_STONE, "The Molten Depths"},
-            {TileType::WALL_LARGE_STONE, TileType::FLOOR_STONE,     "The Sunken Halls"},
+            {TileType::WALL_DIRT,        TileType::FLOOR_DIRT,      "The Warrens",       3},
+            {TileType::WALL_STONE_ROUGH, TileType::FLOOR_STONE,     "Stonekeep",         6},
+            {TileType::WALL_STONE_BRICK, TileType::FLOOR_STONE,     "The Deep Halls",    9},
+            {TileType::WALL_CATACOMB,    TileType::FLOOR_BONE,      "The Catacombs",    12},
+            {TileType::WALL_IGNEOUS,     TileType::FLOOR_RED_STONE, "The Molten Depths",15},
+            {TileType::WALL_LARGE_STONE, TileType::FLOOR_STONE,     "The Sunken Halls", 18},
         };
         constexpr int ZONE_COUNT = sizeof(ZONES) / sizeof(ZONES[0]);
-        int zone_idx = std::min(dungeon_level_ - 1, ZONE_COUNT - 1);
+        // Map depth to zone: depths 1-3 = zone 0, 4-6 = zone 1, etc.
+        int zone_idx = std::min((dungeon_level_ - 1) / 3, ZONE_COUNT - 1);
         auto& zone = ZONES[zone_idx];
+
+        // Don't place stairs down at the bottom of a zone
+        bool at_zone_bottom = (dungeon_level_ >= zone.max_depth);
 
         DungeonParams params;
         params.width = 80;
@@ -234,7 +291,7 @@ void Engine::generate_level() {
         params.wall_type = zone.wall;
         params.floor_type = zone.floor;
 
-        auto result = dungeon::generate(rng_, params);
+        auto result = dungeon::generate(rng_, params, !at_zone_bottom);
         map_ = std::move(result.map);
         rooms_ = std::move(result.rooms);
         start_x = result.start_x;
@@ -340,12 +397,19 @@ void Engine::generate_level() {
             "Water drips from every surface. The walls weep.",
         };
         constexpr int MSG_COUNT = sizeof(ZONE_NAMES) / sizeof(ZONE_NAMES[0]);
-        int idx = std::min(dungeon_level_ - 1, MSG_COUNT - 1);
+        int idx = std::min((dungeon_level_ - 1) / 3, MSG_COUNT - 1);
 
         char buf[128];
         snprintf(buf, sizeof(buf), "%s — Depth %d", ZONE_NAMES[idx], dungeon_level_);
         log_.add(buf, {180, 170, 160, 255});
         log_.add(ZONE_MESSAGES[idx], {120, 110, 100, 255});
+
+        // Zone depth limit message
+        static const int ZONE_MAX_DEPTHS[] = {3, 6, 9, 12, 15, 18};
+        if (dungeon_level_ == ZONE_MAX_DEPTHS[idx]) {
+            log_.add("You've reached the bottom of this place. There is nothing deeper here.",
+                     {180, 160, 120, 255});
+        }
     }
 }
 
@@ -373,6 +437,13 @@ void Engine::try_move_player(int dx, int dy) {
         // NPC — talk instead of fight
         if (world_.has<NPC>(target)) {
             auto& npc = world_.get<NPC>(target);
+
+            // Shopkeeper — open shop screen
+            if (npc.role == NPCRole::SHOPKEEPER) {
+                shop_screen_.open(player_, world_, rng_, &gold_);
+                return;
+            }
+
             char buf[256];
             snprintf(buf, sizeof(buf), "%s: \"%s\"", npc.name.c_str(), npc.dialogue.c_str());
             log_.add(buf, {180, 180, 140, 255});
@@ -381,11 +452,9 @@ void Engine::try_move_player(int dx, int dy) {
             if (npc.quest_id >= 0) {
                 auto qid = static_cast<QuestId>(npc.quest_id);
                 if (!journal_.has_quest(qid)) {
-                    journal_.add_quest(qid);
-                    auto& qinfo = get_quest_info(qid);
-                    char qbuf[128];
-                    snprintf(qbuf, sizeof(qbuf), "Quest accepted: %s", qinfo.name);
-                    log_.add(qbuf, {220, 200, 100, 255});
+                    // Show quest offer modal
+                    quest_offer_.show(qid, npc.name);
+                    pending_quest_npc_ = target;
                 } else if (journal_.get_state(qid) == QuestState::COMPLETE) {
                     journal_.set_state(qid, QuestState::FINISHED);
                     auto& qinfo = get_quest_info(qid);
@@ -395,7 +464,10 @@ void Engine::try_move_player(int dx, int dy) {
                     log_.add(qbuf, {120, 220, 120, 255});
                     gold_ += qinfo.gold_reward;
                     if (world_.has<Stats>(player_) && qinfo.xp_reward > 0) {
-                        world_.get<Stats>(player_).grant_xp(qinfo.xp_reward);
+                        if (world_.get<Stats>(player_).grant_xp(qinfo.xp_reward)) {
+                            pending_levelup_ = true;
+                            levelup_screen_.open(player_, rng_);
+                        }
                     }
                     // Chain main quests
                     if (qid == QuestId::MQ_BARROW_WIGHT) {
@@ -406,12 +478,24 @@ void Engine::try_move_player(int dx, int dy) {
             return;
         }
         // Hostile — attack
+        int level_before = world_.has<Stats>(player_) ? world_.get<Stats>(player_).level : 0;
         combat::melee_attack(world_, player_, target, rng_, log_);
         player_acted_ = true;
+        // Check for level-up
+        if (world_.has<Stats>(player_) && world_.get<Stats>(player_).level > level_before) {
+            pending_levelup_ = true;
+            levelup_screen_.open(player_, rng_);
+        }
         return;
     }
 
     if (!map_.is_walkable(nx, ny)) return;
+
+    // Mirror sprite when moving left (sprites face right by default)
+    if (world_.has<Renderable>(player_)) {
+        if (nx > pos.x) world_.get<Renderable>(player_).flip_h = true;
+        else if (nx < pos.x) world_.get<Renderable>(player_).flip_h = false;
+    }
 
     pos.x = nx;
     pos.y = ny;
@@ -540,6 +624,95 @@ void Engine::try_pickup() {
     log_.add("There is nothing here to pick up.", {120, 110, 100, 255});
 }
 
+void Engine::try_rest() {
+    if (!world_.has<Stats>(player_)) return;
+    auto& stats = world_.get<Stats>(player_);
+
+    // Can't rest at full HP and MP
+    if (stats.hp >= stats.hp_max && stats.mp >= stats.mp_max) {
+        log_.add("You don't need to rest.", {150, 140, 130, 255});
+        return;
+    }
+
+    // Can't rest if enemies are visible (check FOV for any AI entities)
+    auto& ai_pool = world_.pool<AI>();
+    for (size_t i = 0; i < ai_pool.size(); i++) {
+        Entity e = ai_pool.entity_at(i);
+        if (!world_.has<Position>(e)) continue;
+        auto& mpos = world_.get<Position>(e);
+        if (map_.in_bounds(mpos.x, mpos.y) && map_.at(mpos.x, mpos.y).visible) {
+            log_.add("You can't rest with enemies nearby.", {180, 120, 120, 255});
+            return;
+        }
+    }
+
+    // In dungeon: 30% chance of interruption
+    if (dungeon_level_ > 0 && rng_.chance(30)) {
+        // Spawn a wandering monster nearby
+        auto& ppos = world_.get<Position>(player_);
+        // Try to place monster within 3 tiles
+        for (int attempt = 0; attempt < 20; attempt++) {
+            int mx = ppos.x + rng_.range(-3, 3);
+            int my = ppos.y + rng_.range(-3, 3);
+            if (mx == ppos.x && my == ppos.y) continue;
+            if (!map_.in_bounds(mx, my) || !map_.is_walkable(mx, my)) continue;
+            // Check no entity there
+            if (combat::entity_at(world_, mx, my, player_) != NULL_ENTITY) continue;
+
+            // Spawn a simple monster appropriate for depth
+            Entity mob = world_.create();
+            world_.add<Position>(mob, {mx, my});
+
+            // Pick a random monster from the depth-appropriate range
+            int max_idx = std::min(17, 4 + dungeon_level_ * 2);
+            int idx = rng_.range(0, max_idx);
+
+            // Simple rat stats as fallback — the real spawn uses the table in populate
+            // but we just need one quick monster here
+            Stats ms;
+            ms.name = "something";
+            ms.hp = 8; ms.hp_max = 8;
+            ms.base_damage = 2;
+            ms.xp_value = 10;
+
+            // Use a generic hostile sprite
+            world_.add<Renderable>(mob, {SHEET_MONSTERS, 11, 6, {255, 255, 255, 255}, 5});
+            world_.add<AI>(mob, {AIState::HUNTING, ppos.x, ppos.y, 0, 20});
+            world_.add<Energy>(mob, {0, 100});
+
+            // Scale with depth
+            float hp_scale = 1.0f + dungeon_level_ * 0.15f;
+            float dmg_scale = 1.0f + dungeon_level_ * 0.1f;
+            ms.hp = static_cast<int>(ms.hp * hp_scale);
+            ms.hp_max = ms.hp;
+            ms.base_damage = static_cast<int>(ms.base_damage * dmg_scale);
+
+            (void)idx; // we used generic stats; could index table if populate.h exposed it
+            world_.add<Stats>(mob, std::move(ms));
+
+            log_.add("Your rest is interrupted!", {255, 120, 80, 255});
+            player_acted_ = true;
+            return;
+        }
+    }
+
+    // Rest succeeds — restore 25% of max HP and MP
+    int hp_restore = std::max(1, stats.hp_max / 4);
+    int mp_restore = std::max(1, stats.mp_max / 4);
+    int hp_actual = std::min(hp_restore, stats.hp_max - stats.hp);
+    int mp_actual = (stats.mp_max > 0) ? std::min(mp_restore, stats.mp_max - stats.mp) : 0;
+    stats.hp += hp_actual;
+    stats.mp += mp_actual;
+
+    // Costs 10 turns
+    game_turn_ += 10;
+
+    char buf[128];
+    snprintf(buf, sizeof(buf), "You rest for a while. (+%d HP, +%d MP)", hp_actual, mp_actual);
+    log_.add(buf, {100, 200, 100, 255});
+    player_acted_ = true;
+}
+
 void Engine::handle_inventory_action(InvAction action) {
     if (action == InvAction::CLOSE) {
         inventory_screen_.close();
@@ -663,6 +836,9 @@ void Engine::handle_input() {
                 case MenuChoice::CONTINUE:
                     state_ = GameState::PLAYING;
                     break;
+                case MenuChoice::LOAD:
+                    do_load();
+                    break;
                 case MenuChoice::SETTINGS:
                     settings_.reset();
                     return_from_settings_ = GameState::MAIN_MENU;
@@ -719,11 +895,11 @@ void Engine::handle_input() {
                         pause_menu_.close();
                         break;
                     case PauseChoice::SAVE:
-                        log_.add("Game saved.", {100, 200, 100, 255});
+                        do_save();
                         pause_menu_.close();
                         break;
                     case PauseChoice::LOAD:
-                        log_.add("Game loaded.", {100, 200, 100, 255});
+                        do_load();
                         pause_menu_.close();
                         break;
                     case PauseChoice::SETTINGS:
@@ -742,11 +918,65 @@ void Engine::handle_input() {
                 return;
             }
 
+            // Level-up screen intercepts all input
+            if (levelup_screen_.is_open()) {
+                LevelUpAction act = levelup_screen_.handle_input(event);
+                if (act == LevelUpAction::CHOSEN) {
+                    levelup_screen_.apply_choice(world_);
+                    levelup_screen_.close();
+                    pending_levelup_ = false;
+                    if (world_.has<Stats>(player_)) {
+                        auto& stats = world_.get<Stats>(player_);
+                        char buf[64];
+                        snprintf(buf, sizeof(buf), "You feel stronger. (Level %d)", stats.level);
+                        log_.add(buf, {255, 220, 100, 255});
+                    }
+                }
+                return;
+            }
+
+            // Shop screen intercepts input
+            if (shop_screen_.is_open()) {
+                ShopAction act = shop_screen_.handle_input(event);
+                if (act == ShopAction::CLOSE) {
+                    shop_screen_.close();
+                } else if (act == ShopAction::BUY) {
+                    if (shop_screen_.execute(world_, &gold_)) {
+                        log_.add("Purchased.", {180, 200, 140, 255});
+                    } else {
+                        log_.add("You can't buy that.", {180, 120, 120, 255});
+                    }
+                } else if (act == ShopAction::SELL) {
+                    if (shop_screen_.execute(world_, &gold_)) {
+                        log_.add("Sold.", {180, 200, 140, 255});
+                    }
+                }
+                return;
+            }
+
             // Inventory mode intercepts input
             if (inventory_screen_.is_open()) {
                 InvAction act = inventory_screen_.handle_input(event);
                 if (act != InvAction::NONE) {
                     handle_inventory_action(act);
+                }
+                return;
+            }
+
+            // Quest offer modal intercepts everything
+            if (quest_offer_.is_open()) {
+                auto choice = quest_offer_.handle_input(event);
+                if (choice == QuestOfferChoice::ACCEPT) {
+                    auto qid = quest_offer_.get_quest_id();
+                    journal_.add_quest(qid);
+                    auto& qinfo = get_quest_info(qid);
+                    char buf[128];
+                    snprintf(buf, sizeof(buf), "Quest accepted: %s", qinfo.name);
+                    log_.add(buf, {220, 200, 100, 255});
+                    quest_offer_.close();
+                } else if (choice == QuestOfferChoice::DECLINE) {
+                    log_.add("You decline the quest.", {140, 130, 120, 255});
+                    quest_offer_.close();
                 }
                 return;
             }
@@ -790,8 +1020,19 @@ void Engine::handle_input() {
             if (event.key.keysym.sym == SDLK_PAGEUP) { log_.scroll_up(); return; }
             if (event.key.keysym.sym == SDLK_PAGEDOWN) { log_.scroll_down(); return; }
 
-            // Dead state
+            // Dead state — any key returns to main menu
             if (state_ == GameState::DEAD) {
+                // Reset game state for new game
+                player_ = NULL_ENTITY;
+                dungeon_level_ = -1;
+                game_turn_ = 0;
+                gold_ = 0;
+                journal_ = {};
+                // Clear all entities
+                world_ = World();
+                state_ = GameState::MAIN_MENU;
+                main_menu_.set_can_continue(false);
+                log_ = MessageLog();
                 return;
             }
 
@@ -832,6 +1073,11 @@ void Engine::handle_input() {
                 // Character sheet
                 case SDLK_c:
                     char_sheet_.open(player_);
+                    break;
+
+                // Rest
+                case SDLK_r:
+                    try_rest();
                     break;
 
                 // Quest log
@@ -1013,6 +1259,9 @@ void Engine::render() {
     spell_screen_.render(renderer_, font_, world_, width_, height_);
     char_sheet_.render(renderer_, font_, font_title_, sprites_, world_, width_, height_);
     quest_log_.render(renderer_, font_, font_title_, journal_, width_, height_);
+    quest_offer_.render(renderer_, font_, font_title_, width_, height_);
+    levelup_screen_.render(renderer_, font_, width_, height_);
+    shop_screen_.render(renderer_, font_, sprites_, world_, width_, height_);
 
     // Pause menu overlay
     pause_menu_.render(renderer_, font_, font_title_, width_, height_);

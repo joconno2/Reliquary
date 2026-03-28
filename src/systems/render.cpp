@@ -160,6 +160,7 @@ void draw_entities(SDL_Renderer* renderer, const SpriteManager& sprites,
         int sheet, sx, sy;
         int dx, dy;
         SDL_Color tint;
+        bool flip_h;
     };
     std::vector<DrawCmd> cmds;
 
@@ -178,7 +179,7 @@ void draw_entities(SDL_Renderer* renderer, const SpriteManager& sprites,
         int screen_y = (pos.y - cam.y) * TS + y_offset;
 
         cmds.push_back({rend.z_order, rend.sprite_sheet, rend.sprite_x, rend.sprite_y,
-                         screen_x, screen_y, rend.tint});
+                         screen_x, screen_y, rend.tint, rend.flip_h});
     }
 
     std::sort(cmds.begin(), cmds.end(),
@@ -186,7 +187,7 @@ void draw_entities(SDL_Renderer* renderer, const SpriteManager& sprites,
 
     for (auto& cmd : cmds) {
         sprites.draw_sprite_sized(renderer, cmd.sheet, cmd.sx, cmd.sy,
-                                   cmd.dx, cmd.dy, TS, cmd.tint);
+                                   cmd.dx, cmd.dy, TS, cmd.tint, cmd.flip_h);
     }
 }
 

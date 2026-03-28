@@ -7,6 +7,7 @@ enum class MenuChoice {
     NONE,
     NEW_GAME,
     CONTINUE,
+    LOAD,
     SETTINGS,
     QUIT
 };
@@ -26,5 +27,6 @@ private:
     int selected_ = 0;
     bool can_continue_ = false;
 
-    int option_count() const { return can_continue_ ? 4 : 3; }
+    // Options: New Game, [Continue], Load, Settings, Quit
+    int option_count() const { return can_continue_ ? 5 : 4; }
 };

@@ -6,6 +6,8 @@
 #include "components/energy.h"
 #include "components/item.h"
 #include "core/spritesheet.h"
+#include <algorithm>
+#include <string>
 
 namespace populate {
 
@@ -40,12 +42,12 @@ static const MonsterDef MONSTER_TABLE[] = {
     {"troll",           SHEET_MONSTERS,  2, 1, 35,  18,  8, 18,  7, 2,  80, 10,  60},
     // Late game
     {"ghoul",           SHEET_MONSTERS,  5, 4, 22,  14, 12, 14,  5, 1, 110,  0,  40},
-    {"lich",            SHEET_MONSTERS,  2, 4, 28,  10, 10, 12,  8, 0, 100,  0,  80},
-    {"death knight",    SHEET_MONSTERS,  3, 4, 40,  18, 12, 16,  8, 4,  90,  0, 100},
+    {"lich",            SHEET_MONSTERS,  2, 4, 50,  10, 10, 12, 12, 0, 100,  0,  80},
+    {"death knight",    SHEET_MONSTERS,  3, 4, 65,  18, 12, 16, 14, 4,  90,  0, 100},
     {"manticore",       SHEET_MONSTERS,  3, 6, 35,  16, 14, 14,  7, 2, 110, 10,  70},
     {"minotaur",        SHEET_MONSTERS,  7, 7, 45,  20, 10, 18,  9, 3,  85, 10,  90},
     {"naga",            SHEET_MONSTERS,  4, 7, 30,  14, 16, 12,  6, 1, 120, 15,  60},
-    {"dragon",          SHEET_MONSTERS,  2, 8, 80,  22, 12, 22, 12, 5,  80,  0, 200},
+    {"dragon",          SHEET_MONSTERS,  2, 8,120,  22, 12, 22, 18, 5,  80,  0, 200},
 };
 
 static constexpr int MONSTER_COUNT = sizeof(MONSTER_TABLE) / sizeof(MONSTER_TABLE[0]);
@@ -69,13 +71,16 @@ void spawn_monsters(World& world, const TileMap& map,
 
             if (!map.is_walkable(x, y)) continue;
 
-            // Weighted: prefer lower indices (weaker monsters) but allow stronger
+            // Single roll — depth gating handles difficulty curve
             int idx = rng.range(0, max_idx);
-            // Second roll — take the lower of two to bias toward weaker
-            int idx2 = rng.range(0, max_idx);
-            if (idx2 < idx) idx = idx2;
 
             auto& def = MONSTER_TABLE[idx];
+
+            // Scale HP and damage with depth
+            float hp_scale = 1.0f + dungeon_level * 0.15f;
+            float dmg_scale = 1.0f + dungeon_level * 0.1f;
+            int scaled_hp = static_cast<int>(def.hp * hp_scale);
+            int scaled_dmg = static_cast<int>(def.base_damage * dmg_scale);
 
             Entity e = world.create();
             world.add<Position>(e, {x, y});
@@ -84,12 +89,12 @@ void spawn_monsters(World& world, const TileMap& map,
 
             Stats stats;
             stats.name = def.name;
-            stats.hp = def.hp;
-            stats.hp_max = def.hp;
+            stats.hp = scaled_hp;
+            stats.hp_max = scaled_hp;
             stats.set_attr(Attr::STR, def.str);
             stats.set_attr(Attr::DEX, def.dex);
             stats.set_attr(Attr::CON, def.con);
-            stats.base_damage = def.base_damage;
+            stats.base_damage = scaled_dmg;
             stats.natural_armor = def.natural_armor;
             stats.base_speed = def.speed;
             stats.xp_value = def.xp_value;
@@ -116,20 +121,27 @@ struct ItemDef {
 static const ItemDef WEAPON_TABLE[] = {
     {"dagger",         "A short, sharp blade.",           ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 0,  2, 0, 1, 0, 0,  15, ""},
     {"short sword",    "A reliable sidearm.",             ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 0,  3, 0, 0, 0, 0,  30, ""},
-    {"long sword",     "A well-balanced blade.",          ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 0,  5, 0, 0, 0, 0,  60, ""},
-    {"battle axe",     "Heavy. Splits bone.",             ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 3,  6, 0,-1, 0, 0,  55, ""},
     {"mace",           "Blunt and merciless.",            ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 5,  4, 0, 0, 0, 0,  40, ""},
     {"spear",          "Long reach. Keeps them at bay.",  ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 6,  4, 0, 1, 0, 0,  35, ""},
+    {"long sword",     "A well-balanced blade.",          ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 0,  5, 0, 0, 0, 0,  60, ""},
+    {"battle axe",     "Heavy. Splits bone.",             ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 3,  6, 0,-1, 0, 0,  55, ""},
+    {"bastard sword",  "Long blade. Versatile grip.",     ItemType::WEAPON, EquipSlot::MAIN_HAND, 2, 0,  7, 0, 0, 0, 0,  80, ""},
+    {"great axe",      "Two-handed devastation.",         ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 3,  9, 0,-2, 0, 0, 100, ""},
+    {"war hammer",     "Crushes plate like parchment.",   ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 5,  8, 0,-1, 0, 0,  90, ""},
 };
 
 static const ItemDef ARMOR_TABLE[] = {
     {"leather armor",  "Supple hide. Quiet.",             ItemType::ARMOR_CHEST, EquipSlot::CHEST,  1, 12, 0, 2, 0, 0, 0, 40, ""},
-    {"chain mail",     "Rings of iron. Heavy.",           ItemType::ARMOR_CHEST, EquipSlot::CHEST,  3, 12, 0, 4, 0,-1, 0, 80, ""},
     {"leather helm",   "Better than nothing.",            ItemType::ARMOR_HEAD,  EquipSlot::HEAD,   1, 15, 0, 1, 0, 0, 0, 20, ""},
-    {"iron helm",      "Cold iron on your skull.",        ItemType::ARMOR_HEAD,  EquipSlot::HEAD,   4, 15, 0, 2, 0, 0, 0, 45, ""},
     {"leather boots",  "Worn but sturdy.",                ItemType::ARMOR_FEET,  EquipSlot::FEET,   1, 14, 0, 1, 0, 0, 0, 20, ""},
     {"buckler",        "A small, round shield.",          ItemType::SHIELD,      EquipSlot::OFF_HAND,0, 11, 0, 2, 0, 1, 0, 30, ""},
+    {"chain mail",     "Rings of iron. Heavy.",           ItemType::ARMOR_CHEST, EquipSlot::CHEST,  3, 12, 0, 4, 0,-1, 0, 80, ""},
+    {"iron helm",      "Cold iron on your skull.",        ItemType::ARMOR_HEAD,  EquipSlot::HEAD,   4, 15, 0, 2, 0, 0, 0, 45, ""},
     {"kite shield",    "Large enough to hide behind.",    ItemType::SHIELD,      EquipSlot::OFF_HAND,1, 11, 0, 3, 0, 0, 0, 50, ""},
+    {"plate armor",    "Full plate. Weighs a fortune.",   ItemType::ARMOR_CHEST, EquipSlot::CHEST,  3, 12, 0, 6, 0,-2, 0,150, ""},
+    {"plate helm",     "A helm of tempered steel.",       ItemType::ARMOR_HEAD,  EquipSlot::HEAD,   4, 15, 0, 3, 0, 0, 0, 70, ""},
+    {"iron boots",     "Heavy. Unyielding.",              ItemType::ARMOR_FEET,  EquipSlot::FEET,   1, 14, 0, 2, 0, 0, 0, 50, ""},
+    {"tower shield",   "A wall of wood and iron.",        ItemType::SHIELD,      EquipSlot::OFF_HAND,1, 11, 0, 5, 0,-1, 0, 80, ""},
 };
 
 static const ItemDef CONSUMABLE_TABLE[] = {
@@ -166,9 +178,42 @@ static Entity create_item_from_def(World& world, const ItemDef& def, int x, int 
     return e;
 }
 
+// Apply quality prefix and bonus based on dungeon depth
+static void apply_quality(Item& item, int dungeon_level, RNG& rng) {
+    // Quality tiers: depth 5+ = Fine (+1), depth 10+ = Superior (+2), depth 15+ = Masterwork (+3)
+    int max_tier = 0;
+    if (dungeon_level >= 15) max_tier = 3;
+    else if (dungeon_level >= 10) max_tier = 2;
+    else if (dungeon_level >= 5) max_tier = 1;
+
+    if (max_tier == 0) return;
+
+    // 30% chance of quality item
+    if (!rng.chance(30)) return;
+
+    int tier = rng.range(1, max_tier);
+
+    const char* prefix = "";
+    switch (tier) {
+        case 1: prefix = "Fine"; break;
+        case 2: prefix = "Superior"; break;
+        case 3: prefix = "Masterwork"; break;
+    }
+
+    item.name = std::string(prefix) + " " + item.name;
+    item.gold_value = item.gold_value * (1 + tier);
+
+    // Apply bonus based on item type
+    if (item.type == ItemType::WEAPON) {
+        item.damage_bonus += tier;
+    } else {
+        item.armor_bonus += tier;
+    }
+}
+
 void spawn_items(World& world, const TileMap& map,
                   const std::vector<Room>& rooms, RNG& rng,
-                  [[maybe_unused]] int dungeon_level) {
+                  int dungeon_level) {
     for (size_t r = 0; r < rooms.size(); r++) {
         auto& room = rooms[r];
 
@@ -182,13 +227,19 @@ void spawn_items(World& world, const TileMap& map,
         // Pick item category
         int roll = rng.range(1, 100);
         if (roll <= 25) {
-            // Weapon
-            int idx = rng.range(0, WEAPON_COUNT - 1);
-            create_item_from_def(world, WEAPON_TABLE[idx], x, y);
+            // Weapon — deeper levels bias toward better weapons
+            int min_idx = std::min(dungeon_level / 3, WEAPON_COUNT - 1);
+            int idx = rng.range(min_idx, WEAPON_COUNT - 1);
+            Entity e = create_item_from_def(world, WEAPON_TABLE[idx], x, y);
+            auto& item = world.get<Item>(e);
+            apply_quality(item, dungeon_level, rng);
         } else if (roll <= 50) {
-            // Armor
-            int idx = rng.range(0, ARMOR_COUNT - 1);
-            create_item_from_def(world, ARMOR_TABLE[idx], x, y);
+            // Armor — deeper levels bias toward better armor
+            int min_idx = std::min(dungeon_level / 3, ARMOR_COUNT - 1);
+            int idx = rng.range(min_idx, ARMOR_COUNT - 1);
+            Entity e = create_item_from_def(world, ARMOR_TABLE[idx], x, y);
+            auto& item = world.get<Item>(e);
+            apply_quality(item, dungeon_level, rng);
         } else if (roll <= 85) {
             // Consumable
             int idx = rng.range(0, CONSUMABLE_COUNT - 1);

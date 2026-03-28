@@ -1,6 +1,7 @@
 #include "systems/ai.h"
 #include "components/ai.h"
 #include "components/position.h"
+#include "components/renderable.h"
 #include "components/stats.h"
 #include "components/energy.h"
 #include "components/player.h"
@@ -52,6 +53,12 @@ static bool tile_blocked_by_entity(World& world, int x, int y, Entity self) {
     return false;
 }
 
+static void update_facing(World& world, Entity e, int old_x, int new_x) {
+    if (world.has<Renderable>(e) && old_x != new_x) {
+        world.get<Renderable>(e).flip_h = (new_x > old_x);
+    }
+}
+
 // Move toward a target position
 static void move_toward(World& world, TileMap& map, Entity e,
                          int tx, int ty, [[maybe_unused]] RNG& rng) {
@@ -66,22 +73,24 @@ static void move_toward(World& world, TileMap& map, Entity e,
     int nx = pos.x + dx;
     int ny = pos.y + dy;
 
+    int old_x = pos.x;
+
     // Try direct path first
     if (map.is_walkable(nx, ny) && !tile_blocked_by_entity(world, nx, ny, e)) {
         pos.x = nx;
         pos.y = ny;
+        update_facing(world, e, old_x, pos.x);
         return;
     }
 
     // Try cardinal alternatives if diagonal blocked
     if (dx != 0 && dy != 0) {
-        // Try horizontal
         if (map.is_walkable(pos.x + dx, pos.y) &&
             !tile_blocked_by_entity(world, pos.x + dx, pos.y, e)) {
             pos.x += dx;
+            update_facing(world, e, old_x, pos.x);
             return;
         }
-        // Try vertical
         if (map.is_walkable(pos.x, pos.y + dy) &&
             !tile_blocked_by_entity(world, pos.x, pos.y + dy, e)) {
             pos.y += dy;
@@ -100,11 +109,13 @@ static void wander(World& world, TileMap& map, Entity e, RNG& rng) {
     int dy = rng.range(-1, 1);
     if (dx == 0 && dy == 0) return;
 
+    int old_x = pos.x;
     int nx = pos.x + dx;
     int ny = pos.y + dy;
     if (map.is_walkable(nx, ny) && !tile_blocked_by_entity(world, nx, ny, e)) {
         pos.x = nx;
         pos.y = ny;
+        update_facing(world, e, old_x, pos.x);
     }
 }
 
@@ -119,13 +130,14 @@ static void flee_from(World& world, TileMap& map, Entity e,
     if (fy > pos.y) dy = -1;
     else if (fy < pos.y) dy = 1;
 
+    int old_x = pos.x;
     int nx = pos.x + dx;
     int ny = pos.y + dy;
     if (map.is_walkable(nx, ny) && !tile_blocked_by_entity(world, nx, ny, e)) {
         pos.x = nx;
         pos.y = ny;
+        update_facing(world, e, old_x, pos.x);
     } else {
-        // Flee randomly if preferred direction blocked
         wander(world, map, e, rng);
     }
 }

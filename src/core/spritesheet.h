@@ -36,7 +36,10 @@ public:
     // Render a 32x32 source tile to an arbitrary destination size
     void draw_sprite_sized(SDL_Renderer* renderer, int sheet, int col, int row,
                             int dest_x, int dest_y, int dest_size,
-                            SDL_Color tint = {255, 255, 255, 255}) const;
+                            SDL_Color tint = {255, 255, 255, 255},
+                            bool flip_h = false) const;
+
+    static constexpr int FLIPPED_OFFSET = SHEET_COUNT; // flipped sheets start here
 
     // Get dimensions of a sheet in tiles
     int sheet_cols(int sheet) const;

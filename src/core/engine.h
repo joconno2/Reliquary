@@ -15,10 +15,14 @@
 #include "ui/spell_screen.h"
 #include "ui/character_sheet.h"
 #include "ui/quest_log.h"
+#include "ui/quest_offer.h"
 #include "components/quest.h"
+#include "save/save.h"
 #include "ui/main_menu.h"
 #include "ui/settings_screen.h"
 #include "ui/pause_menu.h"
+#include "ui/levelup_screen.h"
+#include "ui/shop_screen.h"
 #include <vector>
 
 enum class GameState {
@@ -71,10 +75,15 @@ private:
     SpellScreen spell_screen_;
     CharacterSheet char_sheet_;
     QuestLog quest_log_;
+    QuestOffer quest_offer_;
     QuestJournal journal_;
+    Entity pending_quest_npc_ = NULL_ENTITY; // NPC that offered the current quest
     MainMenu main_menu_;
     SettingsScreen settings_;
     PauseMenu pause_menu_;
+    LevelUpScreen levelup_screen_;
+    bool pending_levelup_ = false;
+    ShopScreen shop_screen_;
 
     // Track where Settings should return to
     GameState return_from_settings_ = GameState::MAIN_MENU;
@@ -99,4 +108,7 @@ private:
     void render_hud();
     void generate_level();
     void clear_entities_except_player();
+    void try_rest();
+    void do_save();
+    void do_load();
 };

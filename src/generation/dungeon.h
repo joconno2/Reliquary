@@ -35,6 +35,7 @@ struct DungeonResult {
 namespace dungeon {
 
 // Generate a dungeon using BSP-style room placement + corridors
-DungeonResult generate(RNG& rng, const DungeonParams& params);
+// If place_stairs_down is false, no downward staircase is placed (zone bottom).
+DungeonResult generate(RNG& rng, const DungeonParams& params, bool place_stairs_down = true);
 
 } // namespace dungeon
