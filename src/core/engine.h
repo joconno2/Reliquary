@@ -8,6 +8,7 @@
 #include "systems/render.h"
 #include "ui/message_log.h"
 #include "generation/dungeon.h"
+#include "generation/village.h"
 #include "ui/inventory_screen.h"
 #include "ui/creation_screen.h"
 #include "ui/spell_screen.h"
@@ -46,7 +47,7 @@ private:
 
     // Level data
     std::vector<Room> rooms_;
-    int dungeon_level_ = 0;
+    int dungeon_level_ = -1; // incremented to 0 for village, 1+ for dungeons
 
     // Player
     Entity player_ = NULL_ENTITY;

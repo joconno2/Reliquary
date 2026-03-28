@@ -106,24 +106,33 @@ DungeonResult generate(RNG& rng, const DungeonParams& params) {
         result.map.at(result.stairs_x, result.stairs_y).type = TileType::STAIRS_DOWN;
     }
 
-    // Place doors at room entrances (where corridor meets room edge)
-    // Simple heuristic: check corridor tiles adjacent to rooms
-    for (int y = 1; y < params.height - 1; y++) {
-        for (int x = 1; x < params.width - 1; x++) {
-            if (!result.map.is_walkable(x, y)) continue;
+    // Place doors only at room perimeter entrances (where corridor meets room edge)
+    for (auto& room : result.rooms) {
+        // Check each tile along the room perimeter
+        for (int side = 0; side < 4; side++) {
+            int len = (side < 2) ? room.w : room.h;
+            for (int i = 0; i < len; i++) {
+                int x, y;
+                switch (side) {
+                    case 0: x = room.x + i; y = room.y - 1;          break; // north edge
+                    case 1: x = room.x + i; y = room.y + room.h;     break; // south edge
+                    case 2: x = room.x - 1;          y = room.y + i; break; // west edge
+                    default: x = room.x + room.w;     y = room.y + i; break; // east edge
+                }
+                if (!result.map.in_bounds(x, y)) continue;
+                if (!result.map.is_walkable(x, y)) continue;
 
-            // A door candidate: walkable tile with walls on two opposite sides
-            // and walkable tiles on the other two
-            bool wall_n = result.map.is_opaque(x, y - 1);
-            bool wall_s = result.map.is_opaque(x, y + 1);
-            bool wall_e = result.map.is_opaque(x + 1, y);
-            bool wall_w = result.map.is_opaque(x - 1, y);
+                // Must be a chokepoint: walls on two opposite sides
+                bool wall_n = result.map.is_opaque(x, y - 1);
+                bool wall_s = result.map.is_opaque(x, y + 1);
+                bool wall_e = result.map.is_opaque(x + 1, y);
+                bool wall_w = result.map.is_opaque(x - 1, y);
+                bool is_chokepoint = (wall_n && wall_s && !wall_e && !wall_w) ||
+                                     (!wall_n && !wall_s && wall_e && wall_w);
 
-            bool is_door_spot = (wall_n && wall_s && !wall_e && !wall_w) ||
-                                (!wall_n && !wall_s && wall_e && wall_w);
-
-            if (is_door_spot && rng.chance(30)) {
-                result.map.at(x, y).type = TileType::DOOR_CLOSED;
+                if (is_chokepoint && rng.chance(40)) {
+                    result.map.at(x, y).type = TileType::DOOR_CLOSED;
+                }
             }
         }
     }

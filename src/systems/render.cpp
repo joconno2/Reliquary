@@ -63,6 +63,7 @@ SpriteRef tile_sprite(TileType type, [[maybe_unused]] uint8_t variant) {
         case TileType::STAIRS_DOWN:       return {SHEET_TILES, 7, 16};
         case TileType::STAIRS_UP:         return {SHEET_TILES, 8, 16};
         case TileType::WATER:             return {SHEET_TILES, 0, 12};
+        case TileType::TREE:              return {SHEET_TILES, 2, 25};
 
         // Floors handled by floor_sprite(), but provide fallback
         default:
@@ -91,7 +92,6 @@ void draw_map(SDL_Renderer* renderer, const SpriteManager& sprites,
 
             auto draw_tile = [&](SDL_Color tint) {
                 if (is_floor_type(tile.type)) {
-                    // Two-layer: blank base + scattered detail overlay
                     auto fs = floor_sprite(tile.type, tile.variant);
                     sprites.draw_sprite(renderer, fs.base.sheet, fs.base.col, fs.base.row,
                                         screen_x, screen_y, 1, tint);
@@ -99,6 +99,13 @@ void draw_map(SDL_Renderer* renderer, const SpriteManager& sprites,
                         sprites.draw_sprite(renderer, fs.overlay.sheet, fs.overlay.col,
                                             fs.overlay.row, screen_x, screen_y, 1, tint);
                     }
+                } else if (tile.type == TileType::TREE) {
+                    // Grass base + tree sprite on top
+                    sprites.draw_sprite(renderer, SHEET_TILES, 0, 7,
+                                        screen_x, screen_y, 1, tint);
+                    auto ref = tile_sprite(tile.type, tile.variant);
+                    sprites.draw_sprite(renderer, ref.sheet, ref.col, ref.row,
+                                        screen_x, screen_y, 1, tint);
                 } else {
                     auto ref = tile_sprite(tile.type, tile.variant);
                     sprites.draw_sprite(renderer, ref.sheet, ref.col, ref.row,

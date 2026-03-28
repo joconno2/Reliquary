@@ -120,33 +120,46 @@ void Engine::generate_level() {
         clear_entities_except_player();
     }
 
-    // Zone theming based on depth
-    struct ZoneTheme {
-        TileType wall, floor;
-        const char* name;
-    };
-    static const ZoneTheme ZONES[] = {
-        {TileType::WALL_DIRT,        TileType::FLOOR_DIRT,      "The Warrens"},
-        {TileType::WALL_STONE_ROUGH, TileType::FLOOR_STONE,     "Stonekeep"},
-        {TileType::WALL_STONE_BRICK, TileType::FLOOR_STONE,     "The Deep Halls"},
-        {TileType::WALL_CATACOMB,    TileType::FLOOR_BONE,      "The Catacombs"},
-        {TileType::WALL_IGNEOUS,     TileType::FLOOR_RED_STONE, "The Molten Depths"},
-        {TileType::WALL_LARGE_STONE, TileType::FLOOR_STONE,     "The Sunken Halls"},
-    };
-    constexpr int ZONE_COUNT = sizeof(ZONES) / sizeof(ZONES[0]);
-    int zone_idx = std::min(dungeon_level_ - 1, ZONE_COUNT - 1);
-    auto& zone = ZONES[zone_idx];
+    int start_x, start_y;
 
-    DungeonParams params;
-    params.width = 80;
-    params.height = 50;
-    params.max_rooms = 12 + dungeon_level_;
-    params.wall_type = zone.wall;
-    params.floor_type = zone.floor;
+    if (dungeon_level_ == 0) {
+        // Village — starting area
+        auto vresult = village::generate(rng_);
+        map_ = std::move(vresult.map);
+        rooms_ = std::move(vresult.buildings);
+        start_x = vresult.start_x;
+        start_y = vresult.start_y;
+    } else {
+        // Dungeon zones
+        struct ZoneTheme {
+            TileType wall, floor;
+            const char* name;
+        };
+        static const ZoneTheme ZONES[] = {
+            {TileType::WALL_DIRT,        TileType::FLOOR_DIRT,      "The Warrens"},
+            {TileType::WALL_STONE_ROUGH, TileType::FLOOR_STONE,     "Stonekeep"},
+            {TileType::WALL_STONE_BRICK, TileType::FLOOR_STONE,     "The Deep Halls"},
+            {TileType::WALL_CATACOMB,    TileType::FLOOR_BONE,      "The Catacombs"},
+            {TileType::WALL_IGNEOUS,     TileType::FLOOR_RED_STONE, "The Molten Depths"},
+            {TileType::WALL_LARGE_STONE, TileType::FLOOR_STONE,     "The Sunken Halls"},
+        };
+        constexpr int ZONE_COUNT = sizeof(ZONES) / sizeof(ZONES[0]);
+        int zone_idx = std::min(dungeon_level_ - 1, ZONE_COUNT - 1);
+        auto& zone = ZONES[zone_idx];
 
-    auto result = dungeon::generate(rng_, params);
-    map_ = std::move(result.map);
-    rooms_ = std::move(result.rooms);
+        DungeonParams params;
+        params.width = 80;
+        params.height = 50;
+        params.max_rooms = 12 + dungeon_level_;
+        params.wall_type = zone.wall;
+        params.floor_type = zone.floor;
+
+        auto result = dungeon::generate(rng_, params);
+        map_ = std::move(result.map);
+        rooms_ = std::move(result.rooms);
+        start_x = result.start_x;
+        start_y = result.start_y;
+    }
 
     // Create or reposition player
     if (player_ == NULL_ENTITY) {
@@ -156,7 +169,7 @@ void Engine::generate_level() {
 
         player_ = world_.create();
         world_.add<Player>(player_);
-        world_.add<Position>(player_, {result.start_x, result.start_y});
+        world_.add<Position>(player_, {start_x, start_y});
         world_.add<Renderable>(player_, {SHEET_ROGUES, cls.sprite_x, cls.sprite_y,
                                          {255, 255, 255, 255}, 10});
         world_.add<Energy>(player_, {0, 100});
@@ -212,12 +225,14 @@ void Engine::generate_level() {
         }
         world_.add<Spellbook>(player_, std::move(book));
     } else {
-        world_.get<Position>(player_) = {result.start_x, result.start_y};
+        world_.get<Position>(player_) = {start_x, start_y};
     }
 
-    // Spawn monsters and items
-    populate::spawn_monsters(world_, map_, rooms_, rng_, dungeon_level_);
-    populate::spawn_items(world_, map_, rooms_, rng_, dungeon_level_);
+    // Spawn monsters and items (not in village)
+    if (dungeon_level_ > 0) {
+        populate::spawn_monsters(world_, map_, rooms_, rng_, dungeon_level_);
+        populate::spawn_items(world_, map_, rooms_, rng_, dungeon_level_);
+    }
 
     // Compute initial FOV
     auto& pos = world_.get<Position>(player_);
@@ -225,20 +240,33 @@ void Engine::generate_level() {
     fov::compute(map_, pos.x, pos.y, stats.fov_radius());
     camera_.center_on(pos.x, pos.y);
 
-    char buf[128];
-    snprintf(buf, sizeof(buf), "%s — Depth %d", zone.name, dungeon_level_);
-    log_.add(buf, {180, 170, 160, 255});
+    if (dungeon_level_ == 0) {
+        log_.add("Thornwall.", {180, 170, 160, 255});
+        log_.add("A trading post at the edge of the world. Everyone is watching everyone.",
+                 {120, 110, 100, 255});
+        log_.add("The dungeon entrance lies to the east.", {100, 100, 90, 255});
+    } else {
+        // Dungeon zone messages
+        static const char* ZONE_NAMES[] = {
+            "The Warrens", "Stonekeep", "The Deep Halls",
+            "The Catacombs", "The Molten Depths", "The Sunken Halls",
+        };
+        static const char* ZONE_MESSAGES[] = {
+            "Dirt crumbles from the ceiling. Rats scatter at your approach.",
+            "Cold stone. The echo of your footsteps returns wrong.",
+            "The masonry here is ancient. Someone built this to last.",
+            "Bones line the walls. Not decoration — storage.",
+            "The heat is oppressive. The stone glows faintly red.",
+            "Water drips from every surface. The walls weep.",
+        };
+        constexpr int MSG_COUNT = sizeof(ZONE_NAMES) / sizeof(ZONE_NAMES[0]);
+        int idx = std::min(dungeon_level_ - 1, MSG_COUNT - 1);
 
-    // Atmospheric entry messages per zone
-    static const char* ZONE_MESSAGES[] = {
-        "Dirt crumbles from the ceiling. Rats scatter at your approach.",
-        "Cold stone. The echo of your footsteps returns wrong.",
-        "The masonry here is ancient. Someone built this to last.",
-        "Bones line the walls. Not decoration — storage.",
-        "The heat is oppressive. The stone glows faintly red.",
-        "Water drips from every surface. The walls weep.",
-    };
-    log_.add(ZONE_MESSAGES[zone_idx], {120, 110, 100, 255});
+        char buf[128];
+        snprintf(buf, sizeof(buf), "%s — Depth %d", ZONE_NAMES[idx], dungeon_level_);
+        log_.add(buf, {180, 170, 160, 255});
+        log_.add(ZONE_MESSAGES[idx], {120, 110, 100, 255});
+    }
 }
 
 void Engine::try_move_player(int dx, int dy) {
@@ -709,8 +737,13 @@ void Engine::render_hud() {
         god_name = get_god_info(ga.god).name;
     }
     char info[128];
-    snprintf(info, sizeof(info), "%s  Depth: %d  Gold: %d  Turn: %d",
-             god_name, dungeon_level_, gold_, game_turn_);
+    if (dungeon_level_ <= 0) {
+        snprintf(info, sizeof(info), "%s  Thornwall  Gold: %d  Turn: %d",
+                 god_name, gold_, game_turn_);
+    } else {
+        snprintf(info, sizeof(info), "%s  Depth: %d  Gold: %d  Turn: %d",
+                 god_name, dungeon_level_, gold_, game_turn_);
+    }
     surf = TTF_RenderText_Blended(font_, info, white);
     if (surf) {
         SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer_, surf);
@@ -729,7 +762,8 @@ void Engine::render() {
         return;
     }
 
-    SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
+    // Dark slate background — unexplored areas
+    SDL_SetRenderDrawColor(renderer_, 18, 20, 28, 255);
     SDL_RenderClear(renderer_);
 
     Camera render_cam = camera_;

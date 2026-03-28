@@ -20,6 +20,7 @@ enum class TileType : uint8_t {
     STAIRS_DOWN,
     STAIRS_UP,
     WATER,
+    TREE,
     COUNT
 };
 
