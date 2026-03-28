@@ -55,8 +55,12 @@ Full game design: `~/Documents/Work/Games/Development/Roguelike Project.md`
 - [x] 6 dungeon zone themes (Warrens, Stonekeep, Deep Halls, Catacombs, Molten Depths, Sunken Halls)
 - [x] Atmospheric zone entry messages
 - [x] Depth-scaled room count
-- [ ] Backgrounds (15+ with starting gear + passives)
-- [ ] Traits (positive/negative selection)
+- [x] 15 backgrounds with stat bonuses + unique passives (Gravedigger, Alchemist's Apprentice, Deserter, Noble Exile, Pit Fighter, Hedge Witch, Tomb Robber, Heretic Priest, Shipwreck Survivor, Ratcatcher, Blacksmith's Child, Disgraced Scholar, Plague Doctor, Executioner, Farmer)
+- [x] 22 traits (12 positive, 10 negative) with stat modifiers + special flags
+- [x] Background selection screen (browse + confirm)
+- [x] Trait selection screen (pick 3 positive + 2 negative, toggle selection)
+- [x] Full 4-screen creation flow: God → Class → Background → Traits → play
+- [x] All bonuses (god + class + background + traits) applied to player stats
 - [ ] Favor mechanics (gain/lose from actions)
 - [ ] Prayer abilities
 - [ ] God tenets

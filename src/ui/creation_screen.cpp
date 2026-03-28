@@ -6,14 +6,56 @@ void CreationScreen::reset() {
     phase_ = CreationPhase::GOD_SELECT;
     selected_ = 0;
     build_ = {};
+    bg_screen_.reset();
+    trait_screen_.reset();
 }
 
 bool CreationScreen::handle_input(SDL_Event& event) {
     if (phase_ == CreationPhase::DONE) return false;
     if (event.type != SDL_KEYDOWN) return false;
 
+    // Delegate to sub-screens
+    if (phase_ == CreationPhase::BACKGROUND_SELECT) {
+        bool consumed = bg_screen_.handle_input(event);
+        if (bg_screen_.is_confirmed()) {
+            build_.background = bg_screen_.get_selected();
+            bg_screen_.reset();
+            trait_screen_.reset();
+            phase_ = CreationPhase::TRAIT_SELECT;
+            return true;
+        }
+        // Esc goes back
+        if (!consumed && event.type == SDL_KEYDOWN &&
+            (event.key.keysym.sym == SDLK_ESCAPE ||
+             event.key.keysym.sym == SDLK_BACKSPACE)) {
+            phase_ = CreationPhase::CLASS_SELECT;
+            selected_ = static_cast<int>(build_.class_id);
+            return true;
+        }
+        return consumed;
+    }
+
+    if (phase_ == CreationPhase::TRAIT_SELECT) {
+        bool consumed = trait_screen_.handle_input(event);
+        if (trait_screen_.is_confirmed()) {
+            build_.traits = trait_screen_.get_selected_traits();
+            phase_ = CreationPhase::DONE;
+            return true;
+        }
+        // Esc goes back
+        if (!consumed && event.type == SDL_KEYDOWN &&
+            (event.key.keysym.sym == SDLK_ESCAPE ||
+             event.key.keysym.sym == SDLK_BACKSPACE)) {
+            trait_screen_.reset();
+            bg_screen_.reset();
+            phase_ = CreationPhase::BACKGROUND_SELECT;
+            return true;
+        }
+        return consumed;
+    }
+
     int max_sel = 0;
-    if (phase_ == CreationPhase::GOD_SELECT) max_sel = GOD_COUNT; // +1 for "None" would be heretic
+    if (phase_ == CreationPhase::GOD_SELECT) max_sel = GOD_COUNT;
     else if (phase_ == CreationPhase::CLASS_SELECT) max_sel = CLASS_COUNT;
 
     switch (event.key.keysym.sym) {
@@ -33,7 +75,8 @@ bool CreationScreen::handle_input(SDL_Event& event) {
                 selected_ = 0;
             } else if (phase_ == CreationPhase::CLASS_SELECT) {
                 build_.class_id = static_cast<ClassId>(selected_);
-                phase_ = CreationPhase::DONE;
+                bg_screen_.reset();
+                phase_ = CreationPhase::BACKGROUND_SELECT;
             }
             return true;
         case SDLK_ESCAPE:
@@ -83,6 +126,10 @@ void CreationScreen::render(SDL_Renderer* renderer, TTF_Font* font,
         render_god_select(renderer, font, sprites, w, h);
     } else if (phase_ == CreationPhase::CLASS_SELECT) {
         render_class_select(renderer, font, sprites, w, h);
+    } else if (phase_ == CreationPhase::BACKGROUND_SELECT) {
+        bg_screen_.render(renderer, font, w, h);
+    } else if (phase_ == CreationPhase::TRAIT_SELECT) {
+        trait_screen_.render(renderer, font, w, h);
     }
 }
 

@@ -25,6 +25,13 @@ struct SpriteRef {
     int row;
 };
 
+// Floor tiles can have two layers: base (solid color) + overlay (detail)
+struct FloorSprite {
+    SpriteRef base;    // blank colored floor
+    SpriteRef overlay; // no-bg detail sprite (or {-1,0,0} for none)
+    bool has_overlay;
+};
+
 SpriteRef tile_sprite(TileType type, uint8_t variant);
 
 // Render the visible tilemap

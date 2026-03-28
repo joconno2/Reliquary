@@ -1,19 +1,28 @@
 #pragma once
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
+#include <vector>
 #include "core/spritesheet.h"
 #include "components/god.h"
 #include "components/class_def.h"
+#include "components/background.h"
+#include "components/traits.h"
+#include "ui/background_select.h"
+#include "ui/trait_select.h"
 
 enum class CreationPhase {
     GOD_SELECT,
     CLASS_SELECT,
+    BACKGROUND_SELECT,
+    TRAIT_SELECT,
     DONE
 };
 
 struct CharacterBuild {
     GodId god = GodId::VETHRIK;
     ClassId class_id = ClassId::FIGHTER;
+    BackgroundId background = BackgroundId::FARMER;
+    std::vector<TraitId> traits;
 };
 
 class CreationScreen {
@@ -34,6 +43,9 @@ private:
     CreationPhase phase_ = CreationPhase::GOD_SELECT;
     int selected_ = 0;
     CharacterBuild build_;
+
+    BackgroundSelectScreen bg_screen_;
+    TraitSelectScreen trait_screen_;
 
     void render_god_select(SDL_Renderer* renderer, TTF_Font* font,
                             const SpriteManager& sprites, int w, int h) const;

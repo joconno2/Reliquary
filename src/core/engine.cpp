@@ -11,6 +11,8 @@
 #include "components/inventory.h"
 #include "components/god.h"
 #include "components/class_def.h"
+#include "components/background.h"
+#include "components/traits.h"
 #include "systems/fov.h"
 #include "systems/combat.h"
 #include "systems/ai.h"
@@ -163,21 +165,36 @@ void Engine::generate_level() {
         world_.add<Inventory>(player_);
         world_.add<GodAlignment>(player_, {build.god, 0});
 
+        auto& bg  = get_background_info(build.background);
+
         Stats player_stats;
         player_stats.name = "you";
-        player_stats.hp = cls.hp + god.bonus_hp;
-        player_stats.hp_max = cls.hp + god.bonus_hp;
+        player_stats.hp = cls.hp + god.bonus_hp + bg.bonus_hp;
+        player_stats.hp_max = cls.hp + god.bonus_hp + bg.bonus_hp;
         player_stats.mp = cls.mp + god.bonus_mp;
         player_stats.mp_max = cls.mp + god.bonus_mp;
-        player_stats.set_attr(Attr::STR, cls.str + god.str_bonus);
-        player_stats.set_attr(Attr::DEX, cls.dex + god.dex_bonus);
-        player_stats.set_attr(Attr::CON, cls.con + god.con_bonus);
-        player_stats.set_attr(Attr::INT, cls.intel + god.int_bonus);
-        player_stats.set_attr(Attr::WIL, cls.wil + god.wil_bonus);
-        player_stats.set_attr(Attr::PER, cls.per + god.per_bonus);
-        player_stats.set_attr(Attr::CHA, cls.cha + god.cha_bonus);
-        player_stats.base_damage = cls.base_damage;
+        player_stats.set_attr(Attr::STR, cls.str   + god.str_bonus + bg.str_bonus);
+        player_stats.set_attr(Attr::DEX, cls.dex   + god.dex_bonus + bg.dex_bonus);
+        player_stats.set_attr(Attr::CON, cls.con   + god.con_bonus + bg.con_bonus);
+        player_stats.set_attr(Attr::INT, cls.intel + god.int_bonus + bg.int_bonus);
+        player_stats.set_attr(Attr::WIL, cls.wil   + god.wil_bonus + bg.wil_bonus);
+        player_stats.set_attr(Attr::PER, cls.per   + god.per_bonus + bg.per_bonus);
+        player_stats.set_attr(Attr::CHA, cls.cha   + god.cha_bonus + bg.cha_bonus);
+        player_stats.base_damage = cls.base_damage + bg.bonus_damage;
         player_stats.base_speed = 100;
+
+        // Apply trait stat modifiers
+        for (TraitId tid : build.traits) {
+            const TraitInfo& tr = get_trait_info(tid);
+            player_stats.set_attr(Attr::STR, player_stats.attr(Attr::STR) + tr.str_mod);
+            player_stats.set_attr(Attr::DEX, player_stats.attr(Attr::DEX) + tr.dex_mod);
+            player_stats.set_attr(Attr::CON, player_stats.attr(Attr::CON) + tr.con_mod);
+            player_stats.set_attr(Attr::INT, player_stats.attr(Attr::INT) + tr.int_mod);
+            player_stats.set_attr(Attr::WIL, player_stats.attr(Attr::WIL) + tr.wil_mod);
+            player_stats.set_attr(Attr::PER, player_stats.attr(Attr::PER) + tr.per_mod);
+            player_stats.set_attr(Attr::CHA, player_stats.attr(Attr::CHA) + tr.cha_mod);
+        }
+
         world_.add<Stats>(player_, std::move(player_stats));
     } else {
         world_.get<Position>(player_) = {result.start_x, result.start_y};

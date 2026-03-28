@@ -116,22 +116,25 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
         if (def.hp <= 0) {
             result.killed = true;
             if (defender_is_player) {
+                // Don't call kill() on the player — engine handles death state.
+                // Just log it. Stats stays intact so engine can detect hp <= 0.
                 log.add("You die.", {255, 50, 50, 255});
             } else {
                 char buf[128];
                 snprintf(buf, sizeof(buf),
                     "The %s crumples to the ground.", def.name.c_str());
                 log.add(buf, {180, 160, 140, 255});
-            }
-            int xp = kill(world, defender, log);
-            // Grant XP to attacker if they're the player
-            if (attacker_is_player && world.has<Stats>(attacker) && xp > 0) {
-                auto& atk_stats = world.get<Stats>(attacker);
-                if (atk_stats.grant_xp(xp)) {
-                    char lvl_buf[64];
-                    snprintf(lvl_buf, sizeof(lvl_buf),
-                        "You reach level %d.", atk_stats.level);
-                    log.add(lvl_buf, {255, 220, 100, 255});
+
+                int xp = kill(world, defender, log);
+                // Grant XP to attacker if they're the player
+                if (attacker_is_player && world.has<Stats>(attacker) && xp > 0) {
+                    auto& atk_stats = world.get<Stats>(attacker);
+                    if (atk_stats.grant_xp(xp)) {
+                        char lvl_buf[64];
+                        snprintf(lvl_buf, sizeof(lvl_buf),
+                            "You reach level %d.", atk_stats.level);
+                        log.add(lvl_buf, {255, 220, 100, 255});
+                    }
                 }
             }
         }

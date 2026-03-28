@@ -2,13 +2,20 @@
 
 namespace dungeon {
 
+// Assign floor variant: 0 = clean (most tiles), 1-2 = scattered detail
+static uint8_t floor_variant(RNG& rng) {
+    // ~65% clean, ~35% detail
+    if (rng.chance(35)) return static_cast<uint8_t>(rng.range(1, 2));
+    return 0;
+}
+
 static void carve_room(TileMap& map, const Room& room, TileType floor, RNG& rng) {
     for (int y = room.y; y < room.y + room.h; y++) {
         for (int x = room.x; x < room.x + room.w; x++) {
             if (map.in_bounds(x, y)) {
                 auto& tile = map.at(x, y);
                 tile.type = floor;
-                tile.variant = static_cast<uint8_t>(rng.range(0, 2));
+                tile.variant = floor_variant(rng);
             }
         }
     }
@@ -21,7 +28,7 @@ static void carve_h_tunnel(TileMap& map, int x1, int x2, int y, TileType floor, 
         if (map.in_bounds(x, y)) {
             auto& tile = map.at(x, y);
             tile.type = floor;
-            tile.variant = static_cast<uint8_t>(rng.range(0, 2));
+            tile.variant = floor_variant(rng);
         }
     }
 }
@@ -33,7 +40,7 @@ static void carve_v_tunnel(TileMap& map, int y1, int y2, int x, TileType floor, 
         if (map.in_bounds(x, y)) {
             auto& tile = map.at(x, y);
             tile.type = floor;
-            tile.variant = static_cast<uint8_t>(rng.range(0, 2));
+            tile.variant = floor_variant(rng);
         }
     }
 }

@@ -11,36 +11,65 @@ namespace render {
 // Walls: row 0-5, col 0 = top view, col 1 = side view
 // Floors: row 6+ , col 0 = blank bg, col 1-3 = variants with bg, col 4-6 = no bg
 // Features: row 16 = doors/stairs/traps
-SpriteRef tile_sprite(TileType type, uint8_t variant) {
-    int v = variant % 3;
+static bool is_floor_type(TileType type) {
+    return type == TileType::FLOOR_STONE || type == TileType::FLOOR_DIRT ||
+           type == TileType::FLOOR_GRASS || type == TileType::FLOOR_BONE ||
+           type == TileType::FLOOR_RED_STONE;
+}
+
+// Floor tile row in spritesheet (tiles.txt group - 1)
+static int floor_row(TileType type) {
+    switch (type) {
+        case TileType::FLOOR_STONE:     return 6;
+        case TileType::FLOOR_GRASS:     return 7;
+        case TileType::FLOOR_DIRT:      return 8;
+        case TileType::FLOOR_BONE:      return 10;
+        case TileType::FLOOR_RED_STONE: return 11;
+        default: return 6;
+    }
+}
+
+// Two-layer floor: blank base + scattered detail overlay
+FloorSprite floor_sprite(TileType type, uint8_t variant) {
+    int row = floor_row(type);
+    FloorSprite fs;
+    fs.base = {SHEET_TILES, 0, row}; // col 0 = blank colored floor
+
+    // variant 0 = no detail, just the blank floor (most common)
+    // variant 1-2 = detail overlay using no-bg sprites (cols 4-5)
+    if (variant > 0) {
+        fs.overlay = {SHEET_TILES, 3 + (variant % 3), row};
+        fs.has_overlay = true;
+    } else {
+        fs.overlay = {-1, 0, 0};
+        fs.has_overlay = false;
+    }
+    return fs;
+}
+
+SpriteRef tile_sprite(TileType type, [[maybe_unused]] uint8_t variant) {
     switch (type) {
         // Walls — show side view (col 1)
         case TileType::WALL_DIRT:         return {SHEET_TILES, 1,  0};
         case TileType::WALL_STONE_ROUGH:  return {SHEET_TILES, 1,  1};
-        case TileType::WALL_STONE_BRICK:  return {SHEET_TILES, 1,  2}; // could use col 2 for variant
+        case TileType::WALL_STONE_BRICK:  return {SHEET_TILES, 1,  2};
         case TileType::WALL_IGNEOUS:      return {SHEET_TILES, 1,  3};
         case TileType::WALL_LARGE_STONE:  return {SHEET_TILES, 1,  4};
         case TileType::WALL_CATACOMB:     return {SHEET_TILES, 1,  5};
 
-        // Floors — col 1-3 are variants with background fill
-        // (row = group - 1): group 7 = row 6, group 8 = row 7, etc.
-        case TileType::FLOOR_STONE:       return {SHEET_TILES, 1 + v, 6};
-        case TileType::FLOOR_GRASS:       return {SHEET_TILES, 1 + v, 7};
-        case TileType::FLOOR_DIRT:        return {SHEET_TILES, 1 + v, 8};
-        case TileType::FLOOR_BONE:        return {SHEET_TILES, 1 + v, 10};
-        case TileType::FLOOR_RED_STONE:   return {SHEET_TILES, 1 + v, 11};
-
         // Features — group 17 = row 16
-        // 17.a = door1 (col 0), 17.b = door2 (col 1)
-        // 17.c = framed door shut (col 2), 17.d = framed door open (col 3)
-        // 17.h = staircase down (col 7), 17.i = staircase up (col 8)
         case TileType::DOOR_CLOSED:       return {SHEET_TILES, 2, 16};
         case TileType::DOOR_OPEN:         return {SHEET_TILES, 3, 16};
         case TileType::STAIRS_DOWN:       return {SHEET_TILES, 7, 16};
         case TileType::STAIRS_UP:         return {SHEET_TILES, 8, 16};
         case TileType::WATER:             return {SHEET_TILES, 0, 12};
 
-        default:                          return {SHEET_TILES, 0, 6}; // blank dark grey
+        // Floors handled by floor_sprite(), but provide fallback
+        default:
+            if (is_floor_type(type)) {
+                return {SHEET_TILES, 0, floor_row(type)};
+            }
+            return {SHEET_TILES, 0, 6}; // blank dark grey
     }
 }
 
@@ -60,18 +89,28 @@ void draw_map(SDL_Renderer* renderer, const SpriteManager& sprites,
             int screen_x = (x - cam.x) * TS;
             int screen_y = (y - cam.y) * TS + y_offset;
 
+            auto draw_tile = [&](SDL_Color tint) {
+                if (is_floor_type(tile.type)) {
+                    // Two-layer: blank base + scattered detail overlay
+                    auto fs = floor_sprite(tile.type, tile.variant);
+                    sprites.draw_sprite(renderer, fs.base.sheet, fs.base.col, fs.base.row,
+                                        screen_x, screen_y, 1, tint);
+                    if (fs.has_overlay) {
+                        sprites.draw_sprite(renderer, fs.overlay.sheet, fs.overlay.col,
+                                            fs.overlay.row, screen_x, screen_y, 1, tint);
+                    }
+                } else {
+                    auto ref = tile_sprite(tile.type, tile.variant);
+                    sprites.draw_sprite(renderer, ref.sheet, ref.col, ref.row,
+                                        screen_x, screen_y, 1, tint);
+                }
+            };
+
             if (tile.visible) {
-                auto ref = tile_sprite(tile.type, tile.variant);
-                sprites.draw_sprite(renderer, ref.sheet, ref.col, ref.row,
-                                    screen_x, screen_y);
+                draw_tile({255, 255, 255, 255});
             } else if (tile.explored) {
-                auto ref = tile_sprite(tile.type, tile.variant);
-                // Dimmed — explored but not currently visible
-                SDL_Color dim = {100, 100, 120, 255};
-                sprites.draw_sprite(renderer, ref.sheet, ref.col, ref.row,
-                                    screen_x, screen_y, 1, dim);
+                draw_tile({100, 100, 120, 255});
             }
-            // Unexplored tiles: draw nothing (black)
         }
     }
 }
