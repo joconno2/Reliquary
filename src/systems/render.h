@@ -29,10 +29,11 @@ SpriteRef tile_sprite(TileType type, uint8_t variant);
 
 // Render the visible tilemap
 void draw_map(SDL_Renderer* renderer, const SpriteManager& sprites,
-              const TileMap& map, const Camera& cam);
+              const TileMap& map, const Camera& cam, int y_offset = 0);
 
 // Render all entities with Position + Renderable
 void draw_entities(SDL_Renderer* renderer, const SpriteManager& sprites,
-                   World& world, const TileMap& map, const Camera& cam);
+                   World& world, const TileMap& map, const Camera& cam,
+                   int y_offset = 0);
 
 } // namespace render

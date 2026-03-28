@@ -1,6 +1,8 @@
 #include "systems/render.h"
 #include "components/position.h"
 #include "components/renderable.h"
+#include <algorithm>
+#include <vector>
 
 namespace render {
 
@@ -43,7 +45,7 @@ SpriteRef tile_sprite(TileType type, uint8_t variant) {
 }
 
 void draw_map(SDL_Renderer* renderer, const SpriteManager& sprites,
-              const TileMap& map, const Camera& cam) {
+              const TileMap& map, const Camera& cam, int y_offset) {
     constexpr int TS = SpriteManager::TILE_SIZE;
 
     int start_x = std::max(0, cam.x);
@@ -56,7 +58,7 @@ void draw_map(SDL_Renderer* renderer, const SpriteManager& sprites,
             auto& tile = map.at(x, y);
 
             int screen_x = (x - cam.x) * TS;
-            int screen_y = (y - cam.y) * TS;
+            int screen_y = (y - cam.y) * TS + y_offset;
 
             if (tile.visible) {
                 auto ref = tile_sprite(tile.type, tile.variant);
@@ -75,8 +77,18 @@ void draw_map(SDL_Renderer* renderer, const SpriteManager& sprites,
 }
 
 void draw_entities(SDL_Renderer* renderer, const SpriteManager& sprites,
-                   World& world, const TileMap& map, const Camera& cam) {
+                   World& world, const TileMap& map, const Camera& cam,
+                   int y_offset) {
     constexpr int TS = SpriteManager::TILE_SIZE;
+
+    // Collect visible entities and sort by z_order
+    struct DrawCmd {
+        int z_order;
+        int sheet, sx, sy;
+        int dx, dy;
+        SDL_Color tint;
+    };
+    std::vector<DrawCmd> cmds;
 
     auto& positions = world.pool<Position>();
     for (size_t i = 0; i < positions.size(); i++) {
@@ -86,15 +98,23 @@ void draw_entities(SDL_Renderer* renderer, const SpriteManager& sprites,
         auto& pos = positions.at_index(i);
         auto& rend = world.get<Renderable>(e);
 
-        // Only draw if tile is visible
         if (!map.in_bounds(pos.x, pos.y)) continue;
         if (!map.at(pos.x, pos.y).visible) continue;
 
         int screen_x = (pos.x - cam.x) * TS;
-        int screen_y = (pos.y - cam.y) * TS;
+        int screen_y = (pos.y - cam.y) * TS + y_offset;
 
-        sprites.draw_sprite(renderer, rend.sprite_sheet, rend.sprite_x, rend.sprite_y,
-                            screen_x, screen_y, 1, rend.tint);
+        cmds.push_back({rend.z_order, rend.sprite_sheet, rend.sprite_x, rend.sprite_y,
+                         screen_x, screen_y, rend.tint});
+    }
+
+    // Sort: lower z_order drawn first (corpses under creatures)
+    std::sort(cmds.begin(), cmds.end(),
+              [](const DrawCmd& a, const DrawCmd& b) { return a.z_order < b.z_order; });
+
+    for (auto& cmd : cmds) {
+        sprites.draw_sprite(renderer, cmd.sheet, cmd.sx, cmd.sy,
+                            cmd.dx, cmd.dy, 1, cmd.tint);
     }
 }
 

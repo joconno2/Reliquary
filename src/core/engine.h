@@ -7,9 +7,12 @@
 #include "core/rng.h"
 #include "systems/render.h"
 #include "ui/message_log.h"
+#include "generation/dungeon.h"
+#include <vector>
 
 enum class GameState {
     PLAYING,
+    DEAD,
     QUIT
 };
 
@@ -36,21 +39,28 @@ private:
     MessageLog log_;
     GameState state_ = GameState::PLAYING;
 
+    // Level data
+    std::vector<Room> rooms_;
+    int dungeon_level_ = 0;
+
     // Player
     Entity player_ = NULL_ENTITY;
     int game_turn_ = 0;
+    bool player_acted_ = false; // flag to trigger AI/energy tick
 
     // Window config
     static constexpr int SCREEN_W = 1280;
     static constexpr int SCREEN_H = 800;
     static constexpr int LOG_HEIGHT = 160;
-    static constexpr int FOV_RADIUS = 10;
+    static constexpr int HUD_HEIGHT = 24;
 
     // Methods
     void handle_input();
     void try_move_player(int dx, int dy);
     void open_door(int x, int y);
-    void update();
+    void process_turn();
     void render();
+    void render_hud();
     void generate_level();
+    void clear_entities_except_player();
 };
