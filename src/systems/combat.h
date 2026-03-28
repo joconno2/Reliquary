@@ -19,7 +19,7 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
 // Check if there's an attackable entity at position
 Entity entity_at(World& world, int x, int y, Entity ignore = 0);
 
-// Kill an entity — remove combat components, add corpse
-void kill(World& world, Entity e, MessageLog& log);
+// Kill an entity — remove combat components, add corpse. Returns XP value.
+int kill(World& world, Entity e, MessageLog& log);
 
 } // namespace combat

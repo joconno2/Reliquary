@@ -36,10 +36,32 @@ struct Stats {
     int attr(Attr a) const { return attributes[static_cast<int>(a)]; }
     void set_attr(Attr a, int val) { attributes[static_cast<int>(a)] = val; }
 
-    // Derived combat stats (computed, not stored — call these as needed)
+    // XP reward when killed (monsters only)
+    int xp_value = 0;
+
+    // Derived combat stats
     int melee_attack() const { return attr(Attr::STR) + level; }
     int melee_damage() const { return base_damage + attr(Attr::STR) / 3; }
     int dodge_value() const { return attr(Attr::DEX) / 2; }
     int protection() const { return natural_armor; }
     int fov_radius() const { return 8 + attr(Attr::PER) / 3; }
+
+    // Grant XP — returns true if leveled up
+    bool grant_xp(int amount) {
+        xp += amount;
+        if (xp >= xp_next) {
+            level++;
+            xp -= xp_next;
+            xp_next = level * level * 50 + 50; // scaling curve
+            // HP/MP boost on level
+            int hp_gain = 3 + attr(Attr::CON) / 4;
+            int mp_gain = 1 + attr(Attr::INT) / 5;
+            hp_max += hp_gain;
+            hp += hp_gain;
+            mp_max += mp_gain;
+            mp += mp_gain;
+            return true;
+        }
+        return false;
+    }
 };

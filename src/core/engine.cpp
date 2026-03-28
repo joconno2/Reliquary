@@ -7,6 +7,8 @@
 #include "components/ai.h"
 #include "components/energy.h"
 #include "components/corpse.h"
+#include "components/item.h"
+#include "components/inventory.h"
 #include "systems/fov.h"
 #include "systems/combat.h"
 #include "systems/ai.h"
@@ -135,6 +137,8 @@ void Engine::generate_level() {
         world_.add<Renderable>(player_, {SHEET_ROGUES, 0, 1, {255, 255, 255, 255}, 10});
         world_.add<Energy>(player_, {0, 100});
 
+        world_.add<Inventory>(player_);
+
         Stats player_stats;
         player_stats.name = "you";
         player_stats.hp = 30;
@@ -155,8 +159,9 @@ void Engine::generate_level() {
         world_.get<Position>(player_) = {result.start_x, result.start_y};
     }
 
-    // Spawn monsters
-    populate::spawn_monsters(world_, map_, rooms_, rng_);
+    // Spawn monsters and items
+    populate::spawn_monsters(world_, map_, rooms_, rng_, dungeon_level_);
+    populate::spawn_items(world_, map_, rooms_, rng_, dungeon_level_);
 
     // Compute initial FOV
     auto& pos = world_.get<Position>(player_);
@@ -288,6 +293,135 @@ void Engine::process_turn() {
     log_.set_turn(game_turn_);
 }
 
+void Engine::try_pickup() {
+    auto& pos = world_.get<Position>(player_);
+    auto& inv = world_.get<Inventory>(player_);
+
+    // Find items at player position
+    auto& positions = world_.pool<Position>();
+    for (size_t i = 0; i < positions.size(); i++) {
+        Entity e = positions.entity_at(i);
+        if (e == player_) continue;
+        if (!world_.has<Item>(e)) continue;
+
+        auto& ipos = positions.at_index(i);
+        if (ipos.x != pos.x || ipos.y != pos.y) continue;
+
+        auto& item = world_.get<Item>(e);
+
+        // Gold is auto-collected
+        if (item.type == ItemType::GOLD) {
+            gold_ += item.gold_value;
+            char buf[64];
+            snprintf(buf, sizeof(buf), "You pick up %d gold.", item.gold_value);
+            log_.add(buf, {220, 200, 80, 255});
+            world_.destroy(e);
+            player_acted_ = true;
+            return;
+        }
+
+        if (inv.is_full()) {
+            log_.add("Your pack is full.", {180, 120, 120, 255});
+            return;
+        }
+
+        char buf[128];
+        snprintf(buf, sizeof(buf), "You pick up the %s.", item.display_name().c_str());
+        log_.add(buf, {180, 175, 160, 255});
+
+        // Remove from ground (remove Position), add to inventory
+        world_.remove<Position>(e);
+        if (world_.has<Renderable>(e)) world_.remove<Renderable>(e);
+        inv.add(e);
+        player_acted_ = true;
+        return;
+    }
+
+    log_.add("There is nothing here to pick up.", {120, 110, 100, 255});
+}
+
+void Engine::handle_inventory_action(InvAction action) {
+    if (action == InvAction::CLOSE) {
+        inventory_screen_.close();
+        return;
+    }
+
+    Entity item_e = inventory_screen_.get_selected_item(world_);
+    if (item_e == NULL_ENTITY) return;
+    if (!world_.has<Item>(item_e)) return;
+
+    auto& inv = world_.get<Inventory>(player_);
+    auto& item = world_.get<Item>(item_e);
+
+    switch (action) {
+        case InvAction::EQUIP: {
+            if (item.slot == EquipSlot::NONE) {
+                log_.add("You can't equip that.", {150, 120, 120, 255});
+                break;
+            }
+            if (inv.is_equipped(item_e)) {
+                // Unequip
+                inv.unequip(item.slot);
+                char buf[128];
+                snprintf(buf, sizeof(buf), "You remove the %s.", item.display_name().c_str());
+                log_.add(buf, {170, 165, 160, 255});
+            } else {
+                // Unequip existing item in that slot
+                Entity prev = inv.get_equipped(item.slot);
+                if (prev != NULL_ENTITY) {
+                    inv.unequip(item.slot);
+                }
+                inv.equip(item.slot, item_e);
+                char buf[128];
+                snprintf(buf, sizeof(buf), "You equip the %s.", item.display_name().c_str());
+                log_.add(buf, {170, 180, 160, 255});
+                item.identified = true; // equipping identifies
+            }
+            break;
+        }
+        case InvAction::USE: {
+            if (item.type == ItemType::POTION || item.type == ItemType::FOOD) {
+                if (item.heal_amount > 0 && world_.has<Stats>(player_)) {
+                    auto& stats = world_.get<Stats>(player_);
+                    int healed = std::min(item.heal_amount, stats.hp_max - stats.hp);
+                    stats.hp += healed;
+                    char buf[128];
+                    snprintf(buf, sizeof(buf), "You consume the %s. Healed %d.",
+                             item.display_name().c_str(), healed);
+                    log_.add(buf, {100, 200, 100, 255});
+                    item.identified = true;
+                }
+                // Remove consumed item
+                inv.remove(item_e);
+                world_.destroy(item_e);
+                player_acted_ = true;
+            } else {
+                log_.add("You can't use that.", {150, 120, 120, 255});
+            }
+            break;
+        }
+        case InvAction::DROP: {
+            auto& pos = world_.get<Position>(player_);
+            if (inv.is_equipped(item_e)) {
+                inv.unequip(item.slot);
+            }
+            inv.remove(item_e);
+            // Put back on ground
+            world_.add<Position>(item_e, {pos.x, pos.y});
+            if (!world_.has<Renderable>(item_e)) {
+                // Re-add renderable (we removed it on pickup)
+                world_.add<Renderable>(item_e, {SHEET_ITEMS, 0, 0, {255, 255, 255, 255}, 1});
+            }
+            char buf[128];
+            snprintf(buf, sizeof(buf), "You drop the %s.", item.display_name().c_str());
+            log_.add(buf, {160, 155, 150, 255});
+            player_acted_ = true;
+            break;
+        }
+        default: break;
+    }
+}
+
 void Engine::handle_input() {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
@@ -297,6 +431,15 @@ void Engine::handle_input() {
         }
 
         if (event.type == SDL_KEYDOWN) {
+            // Inventory mode intercepts input
+            if (inventory_screen_.is_open()) {
+                InvAction act = inventory_screen_.handle_input(event);
+                if (act != InvAction::NONE) {
+                    handle_inventory_action(act);
+                }
+                return;
+            }
+
             // Esc always quits
             if (event.key.keysym.sym == SDLK_ESCAPE) {
                 state_ = GameState::QUIT;
@@ -307,16 +450,20 @@ void Engine::handle_input() {
             if (event.key.keysym.sym == SDLK_PAGEUP) { log_.scroll_up(); return; }
             if (event.key.keysym.sym == SDLK_PAGEDOWN) { log_.scroll_down(); return; }
 
-            // Dead state — any key restarts? For now just quit
+            // Dead state
             if (state_ == GameState::DEAD) {
                 return;
             }
 
             switch (event.key.keysym.sym) {
-                case SDLK_UP:    case SDLK_k: case SDLK_KP_8: try_move_player(0, -1); break;
-                case SDLK_DOWN:  case SDLK_j: case SDLK_KP_2: try_move_player(0, 1);  break;
-                case SDLK_LEFT:  case SDLK_h: case SDLK_KP_4: try_move_player(-1, 0); break;
-                case SDLK_RIGHT: case SDLK_l: case SDLK_KP_6: try_move_player(1, 0);  break;
+                case SDLK_UP:    case SDLK_KP_8: try_move_player(0, -1); break;
+                case SDLK_DOWN:  case SDLK_KP_2: try_move_player(0, 1);  break;
+                case SDLK_LEFT:  case SDLK_KP_4: try_move_player(-1, 0); break;
+                case SDLK_RIGHT: case SDLK_KP_6: try_move_player(1, 0);  break;
+                case SDLK_k: try_move_player(0, -1); break;
+                case SDLK_j: try_move_player(0, 1);  break;
+                case SDLK_h: try_move_player(-1, 0); break;
+                case SDLK_l: try_move_player(1, 0);  break;
                 case SDLK_y: case SDLK_KP_7: try_move_player(-1, -1); break;
                 case SDLK_u: case SDLK_KP_9: try_move_player(1, -1);  break;
                 case SDLK_b: case SDLK_KP_1: try_move_player(-1, 1);  break;
@@ -324,6 +471,17 @@ void Engine::handle_input() {
 
                 case SDLK_PERIOD: case SDLK_KP_5:
                     player_acted_ = true;
+                    break;
+
+                // Pickup
+                case SDLK_g:
+                case SDLK_COMMA:
+                    try_pickup();
+                    break;
+
+                // Inventory
+                case SDLK_i:
+                    inventory_screen_.open(player_);
                     break;
 
                 case SDLK_GREATER: {
@@ -403,9 +561,30 @@ void Engine::render_hud() {
         SDL_FreeSurface(surf);
     }
 
-    // Dungeon level + turn
-    char info[64];
-    snprintf(info, sizeof(info), "Depth: %d  Turn: %d", dungeon_level_, game_turn_);
+    // XP bar
+    int xp_bar_x = bar_x + bar_w + 80;
+    SDL_Rect xp_bg = {xp_bar_x, bar_y, 80, bar_h};
+    SDL_SetRenderDrawColor(renderer_, 15, 15, 40, 255);
+    SDL_RenderFillRect(renderer_, &xp_bg);
+    int xp_fill = (stats.xp * 80) / std::max(1, stats.xp_next);
+    SDL_Rect xp_fill_r = {xp_bar_x, bar_y, xp_fill, bar_h};
+    SDL_SetRenderDrawColor(renderer_, 80, 80, 180, 255);
+    SDL_RenderFillRect(renderer_, &xp_fill_r);
+
+    char lvl_text[32];
+    snprintf(lvl_text, sizeof(lvl_text), "Lv %d", stats.level);
+    surf = TTF_RenderText_Blended(font_, lvl_text, white);
+    if (surf) {
+        SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer_, surf);
+        SDL_Rect dst = {xp_bar_x + 84, bar_y - 1, surf->w, surf->h};
+        SDL_RenderCopy(renderer_, tex, nullptr, &dst);
+        SDL_DestroyTexture(tex);
+        SDL_FreeSurface(surf);
+    }
+
+    // Dungeon depth + gold + turn
+    char info[96];
+    snprintf(info, sizeof(info), "Depth: %d  Gold: %d  Turn: %d", dungeon_level_, gold_, game_turn_);
     surf = TTF_RenderText_Blended(font_, info, white);
     if (surf) {
         SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer_, surf);
@@ -434,6 +613,9 @@ void Engine::render() {
 
     // Message log
     log_.render(renderer_, font_, 0, SCREEN_H - LOG_HEIGHT, SCREEN_W, LOG_HEIGHT);
+
+    // Inventory screen
+    inventory_screen_.render(renderer_, font_, sprites_, world_, SCREEN_W, SCREEN_H);
 
     // Death overlay
     if (state_ == GameState::DEAD && font_) {

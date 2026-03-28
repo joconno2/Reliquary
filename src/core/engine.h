@@ -8,6 +8,7 @@
 #include "systems/render.h"
 #include "ui/message_log.h"
 #include "generation/dungeon.h"
+#include "ui/inventory_screen.h"
 #include <vector>
 
 enum class GameState {
@@ -46,7 +47,11 @@ private:
     // Player
     Entity player_ = NULL_ENTITY;
     int game_turn_ = 0;
-    bool player_acted_ = false; // flag to trigger AI/energy tick
+    int gold_ = 0;
+    bool player_acted_ = false;
+
+    // UI
+    InventoryScreen inventory_screen_;
 
     // Window config
     static constexpr int SCREEN_W = 1280;
@@ -59,6 +64,8 @@ private:
     void try_move_player(int dx, int dy);
     void open_door(int x, int y);
     void process_turn();
+    void try_pickup();
+    void handle_inventory_action(InvAction action);
     void render();
     void render_hud();
     void generate_level();

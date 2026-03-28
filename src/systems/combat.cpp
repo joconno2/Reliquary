@@ -6,8 +6,27 @@
 #include "components/energy.h"
 #include "components/player.h"
 #include "components/corpse.h"
+#include "components/inventory.h"
+#include "components/item.h"
 #include "core/spritesheet.h"
 #include <cstdio>
+
+// Calculate total equipment bonuses for an entity
+static void get_equip_bonuses(World& world, Entity e,
+                                int& dmg, int& armor, int& atk, int& dodge) {
+    dmg = armor = atk = dodge = 0;
+    if (!world.has<Inventory>(e)) return;
+    auto& inv = world.get<Inventory>(e);
+    for (int s = 0; s < EQUIP_SLOT_COUNT; s++) {
+        Entity eq = inv.equipped[s];
+        if (eq == NULL_ENTITY || !world.has<Item>(eq)) continue;
+        auto& item = world.get<Item>(eq);
+        dmg += item.damage_bonus;
+        armor += item.armor_bonus;
+        atk += item.attack_bonus;
+        dodge += item.dodge_bonus;
+    }
+}
 
 namespace combat {
 
@@ -33,26 +52,31 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
     auto& atk = world.get<Stats>(attacker);
     auto& def = world.get<Stats>(defender);
 
-    // Attack roll: attacker's melee_attack vs defender's dodge_value
-    int attack_roll = rng.range(1, 20) + atk.melee_attack();
-    int defense_roll = 10 + def.dodge_value();
+    // Equipment bonuses
+    int atk_eq_dmg, atk_eq_arm, atk_eq_atk, atk_eq_dodge;
+    int def_eq_dmg, def_eq_arm, def_eq_atk, def_eq_dodge;
+    get_equip_bonuses(world, attacker, atk_eq_dmg, atk_eq_arm, atk_eq_atk, atk_eq_dodge);
+    get_equip_bonuses(world, defender, def_eq_dmg, def_eq_arm, def_eq_atk, def_eq_dodge);
 
-    // Critical: natural 20 on the d20
-    bool natural_20 = (attack_roll - atk.melee_attack()) == 20;
+    // Attack roll: d20 + melee_attack + equip bonus vs 10 + dodge + equip bonus
+    int raw_roll = rng.range(1, 20);
+    int attack_roll = raw_roll + atk.melee_attack() + atk_eq_atk;
+    int defense_roll = 10 + def.dodge_value() + def_eq_dodge;
+
+    bool natural_20 = (raw_roll == 20);
 
     if (attack_roll >= defense_roll || natural_20) {
         result.hit = true;
 
-        // Damage: base melee damage - defender protection, minimum 1
-        int dmg = atk.melee_damage();
+        // Damage: base + equip - defender protection - equip armor, minimum 1
+        int dmg = atk.melee_damage() + atk_eq_dmg;
 
-        // Critical hit: double damage
         if (natural_20 || rng.range(1, 100) <= atk.attr(Attr::PER)) {
             dmg *= 2;
             result.critical = true;
         }
 
-        dmg -= def.protection();
+        dmg -= (def.protection() + def_eq_arm);
         if (dmg < 1) dmg = 1;
 
         result.damage = dmg;
@@ -99,7 +123,17 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
                     "The %s crumples to the ground.", def.name.c_str());
                 log.add(buf, {180, 160, 140, 255});
             }
-            kill(world, defender, log);
+            int xp = kill(world, defender, log);
+            // Grant XP to attacker if they're the player
+            if (attacker_is_player && world.has<Stats>(attacker) && xp > 0) {
+                auto& atk_stats = world.get<Stats>(attacker);
+                if (atk_stats.grant_xp(xp)) {
+                    char lvl_buf[64];
+                    snprintf(lvl_buf, sizeof(lvl_buf),
+                        "You reach level %d.", atk_stats.level);
+                    log.add(lvl_buf, {255, 220, 100, 255});
+                }
+            }
         }
     } else {
         // Miss
@@ -120,30 +154,28 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
     return result;
 }
 
-void kill(World& world, Entity e, [[maybe_unused]] MessageLog& log) {
+int kill(World& world, Entity e, [[maybe_unused]] MessageLog& log) {
     std::string name = "something";
+    int xp = 0;
     if (world.has<Stats>(e)) {
         name = world.get<Stats>(e).name;
+        xp = world.get<Stats>(e).xp_value;
     }
 
-    // Turn into a corpse: remove AI, energy, stats; add corpse component
-    // Keep position and change renderable to corpse sprite
     if (world.has<AI>(e)) world.remove<AI>(e);
     if (world.has<Energy>(e)) world.remove<Energy>(e);
 
-    // Change sprite to bones (tiles.png row 21, col 0-1)
     if (world.has<Renderable>(e)) {
         auto& rend = world.get<Renderable>(e);
         rend.sprite_sheet = SHEET_TILES;
-        rend.sprite_x = 0; // corpse bones 1
+        rend.sprite_x = 0;
         rend.sprite_y = 21;
-        rend.z_order = -1; // render under living entities
+        rend.z_order = -1;
     }
 
     world.add<Corpse>(e, {name});
-
-    // Remove stats last (corpse doesn't have stats)
     world.remove<Stats>(e);
+    return xp;
 }
 
 } // namespace combat
