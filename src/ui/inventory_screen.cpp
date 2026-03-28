@@ -1,4 +1,5 @@
 #include "ui/inventory_screen.h"
+#include "ui/ui_draw.h"
 #include "components/inventory.h"
 #include "components/item.h"
 #include "components/renderable.h"
@@ -81,11 +82,7 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     int panel_y = 20;
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_Rect bg = {panel_x, panel_y, panel_w, panel_h};
-    SDL_SetRenderDrawColor(renderer, 12, 10, 16, 240);
-    SDL_RenderFillRect(renderer, &bg);
-    SDL_SetRenderDrawColor(renderer, 80, 65, 90, 255);
-    SDL_RenderDrawRect(renderer, &bg);
+    ui::draw_panel(renderer, panel_x, panel_y, panel_w, panel_h);
 
     int y = panel_y + 8;
     int line_h = TTF_FontLineSkip(font);
@@ -96,21 +93,11 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     SDL_Color hint_col = {120, 110, 100, 255};
 
     // Title
-    auto draw_text = [&](const char* text, SDL_Color col, int tx, int ty) {
-        SDL_Surface* surf = TTF_RenderText_Blended(font, text, col);
-        if (!surf) return;
-        SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
-        SDL_Rect dst = {tx, ty, surf->w, surf->h};
-        SDL_RenderCopy(renderer, tex, nullptr, &dst);
-        SDL_DestroyTexture(tex);
-        SDL_FreeSurface(surf);
-    };
-
-    draw_text("INVENTORY", title_col, panel_x + 10, y);
+    ui::draw_text(renderer, font, "INVENTORY", title_col, panel_x + 10, y);
     y += line_h + 4;
 
     // Equipment summary
-    draw_text("--- Equipped ---", hint_col, panel_x + 10, y);
+    ui::draw_text(renderer, font, "--- Equipped ---", hint_col, panel_x + 10, y);
     y += line_h;
 
     for (int s = 0; s < EQUIP_SLOT_COUNT; s++) {
@@ -120,20 +107,20 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
             auto& item = world.get<Item>(eq);
             snprintf(buf, sizeof(buf), "  %s: %s", slot_name(static_cast<EquipSlot>(s)),
                      item.display_name().c_str());
-            draw_text(buf, equip_col, panel_x + 10, y);
+            ui::draw_text(renderer, font, buf, equip_col, panel_x + 10, y);
         } else {
             snprintf(buf, sizeof(buf), "  %s: (empty)", slot_name(static_cast<EquipSlot>(s)));
-            draw_text(buf, hint_col, panel_x + 10, y);
+            ui::draw_text(renderer, font, buf, hint_col, panel_x + 10, y);
         }
         y += line_h;
     }
 
     y += 4;
-    draw_text("--- Carried ---", hint_col, panel_x + 10, y);
+    ui::draw_text(renderer, font, "--- Carried ---", hint_col, panel_x + 10, y);
     y += line_h;
 
     if (inv.items.empty()) {
-        draw_text("  (nothing)", hint_col, panel_x + 10, y);
+        ui::draw_text(renderer, font, "  (nothing)", hint_col, panel_x + 10, y);
         y += line_h;
     }
 
@@ -173,7 +160,7 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
                                 panel_x + 10, y, 1);
         }
 
-        draw_text(buf, col, panel_x + 44, y + 8);
+        ui::draw_text(renderer, font, buf, col, panel_x + 44, y + 8);
         y += std::max(line_h, 32);
 
         if (y > panel_y + panel_h - line_h * 3) break;
@@ -184,7 +171,7 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     SDL_Rect sep = {panel_x + 8, y - 2, panel_w - 16, 1};
     SDL_SetRenderDrawColor(renderer, 60, 50, 70, 255);
     SDL_RenderFillRect(renderer, &sep);
-    draw_text("[e]quip  [u]se  [d]rop  [i/esc]close", hint_col, panel_x + 10, y);
+    ui::draw_text(renderer, font, "[e]quip  [u]se  [d]rop  [i/esc]close", hint_col, panel_x + 10, y);
 
     // Item description
     if (sel >= 0 && sel < static_cast<int>(inv.items.size())) {
@@ -192,7 +179,7 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
         if (world.has<Item>(item_e)) {
             auto& item = world.get<Item>(item_e);
             if (!item.description.empty()) {
-                draw_text(item.description.c_str(), hint_col, panel_x + 10, y + line_h);
+                ui::draw_text(renderer, font, item.description.c_str(), hint_col, panel_x + 10, y + line_h);
             }
         }
     }

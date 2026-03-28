@@ -1,4 +1,5 @@
 #include "ui/spell_screen.h"
+#include "ui/ui_draw.h"
 #include "components/stats.h"
 #include <cstdio>
 
@@ -53,11 +54,7 @@ void SpellScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     int panel_y = 20;
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_Rect bg = {panel_x, panel_y, panel_w, panel_h};
-    SDL_SetRenderDrawColor(renderer, 12, 10, 20, 240);
-    SDL_RenderFillRect(renderer, &bg);
-    SDL_SetRenderDrawColor(renderer, 70, 55, 90, 255);
-    SDL_RenderDrawRect(renderer, &bg);
+    ui::draw_panel(renderer, panel_x, panel_y, panel_w, panel_h);
 
     int y = panel_y + 8;
     int line_h = TTF_FontLineSkip(font);
@@ -67,29 +64,19 @@ void SpellScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     SDL_Color dim_col = {100, 95, 110, 255};
     SDL_Color cost_col = {120, 120, 180, 255};
 
-    auto draw_text = [&](const char* text, SDL_Color col, int tx, int ty) {
-        SDL_Surface* surf = TTF_RenderText_Blended(font, text, col);
-        if (!surf) return;
-        SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
-        SDL_Rect dst = {tx, ty, surf->w, surf->h};
-        SDL_RenderCopy(renderer, tex, nullptr, &dst);
-        SDL_DestroyTexture(tex);
-        SDL_FreeSurface(surf);
-    };
-
     // Title + MP
     if (has_stats) {
         auto& stats = world.get<Stats>(player_);
         char title[64];
         snprintf(title, sizeof(title), "Spells  (MP: %d/%d)", stats.mp, stats.mp_max);
-        draw_text(title, title_col, panel_x + 10, y);
+        ui::draw_text(renderer, font, title, title_col, panel_x + 10, y);
     } else {
-        draw_text("Spells", title_col, panel_x + 10, y);
+        ui::draw_text(renderer, font, "Spells", title_col, panel_x + 10, y);
     }
     y += line_h + 6;
 
     if (book.known_spells.empty()) {
-        draw_text("You know no spells.", dim_col, panel_x + 10, y);
+        ui::draw_text(renderer, font, "You know no spells.", dim_col, panel_x + 10, y);
     }
 
     int sel = selected_;
@@ -109,11 +96,11 @@ void SpellScreen::render(SDL_Renderer* renderer, TTF_Font* font,
         char letter = 'a' + static_cast<char>(i);
         char buf[128];
         snprintf(buf, sizeof(buf), "%c) %s", letter, info.name);
-        draw_text(buf, is_sel ? sel_col : normal_col, panel_x + 10, y);
+        ui::draw_text(renderer, font, buf, is_sel ? sel_col : normal_col, panel_x + 10, y);
 
         char cost[16];
         snprintf(cost, sizeof(cost), "%d mp", info.mp_cost);
-        draw_text(cost, cost_col, panel_x + panel_w - 60, y);
+        ui::draw_text(renderer, font, cost, cost_col, panel_x + panel_w - 60, y);
 
         y += line_h + 2;
     }
@@ -128,17 +115,10 @@ void SpellScreen::render(SDL_Renderer* renderer, TTF_Font* font,
         y += 6;
 
         // Flavor text
-        SDL_Surface* surf = TTF_RenderText_Blended_Wrapped(font, info.description,
-                                                            dim_col, static_cast<Uint32>(panel_w - 20));
-        if (surf) {
-            SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
-            SDL_Rect dst = {panel_x + 10, y, surf->w, surf->h};
-            SDL_RenderCopy(renderer, tex, nullptr, &dst);
-            SDL_DestroyTexture(tex);
-            SDL_FreeSurface(surf);
-        }
+        ui::draw_text_wrapped(renderer, font, info.description, dim_col,
+                              panel_x + 10, y, panel_w - 20);
     }
 
     // Hints
-    draw_text("[c/enter]cast  [z/esc]close", dim_col, panel_x + 10, panel_y + panel_h - line_h - 8);
+    ui::draw_text(renderer, font, "[c/enter]cast  [z/esc]close", dim_col, panel_x + 10, panel_y + panel_h - line_h - 8);
 }

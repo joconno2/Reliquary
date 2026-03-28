@@ -12,6 +12,7 @@
 #include "components/god.h"
 #include "components/class_def.h"
 #include "components/spellbook.h"
+#include "components/npc.h"
 #include "systems/magic.h"
 #include "components/background.h"
 #include "components/traits.h"
@@ -55,8 +56,8 @@ bool Engine::init() {
     window_ = SDL_CreateWindow(
         "Reliquary",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-        SCREEN_W, SCREEN_H,
-        SDL_WINDOW_SHOWN
+        width_, height_,
+        SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE
     );
     if (!window_) {
         fprintf(stderr, "Window creation error: %s\n", SDL_GetError());
@@ -75,26 +76,39 @@ bool Engine::init() {
         return false;
     }
 
-    // Load bundled fonts
-    font_ = TTF_OpenFont("assets/fonts/PrStart.ttf", 8);
-    if (!font_) {
-        fprintf(stderr, "Warning: Could not load Press Start font: %s\n", TTF_GetError());
-        // Fallback to system font
-        font_ = TTF_OpenFont("/usr/share/fonts/TTF/DejaVuSansMono.ttf", 12);
-    }
+    // Load fonts at current UI scale
+    reload_fonts();
 
-    font_title_ = TTF_OpenFont("assets/fonts/Jacquard12-Regular.ttf", 24);
-    if (!font_title_) {
-        fprintf(stderr, "Warning: Could not load Jacquard font: %s\n", TTF_GetError());
-        font_title_ = font_; // fallback to body font
-    }
-
-    camera_.viewport_w = SCREEN_W;
-    camera_.viewport_h = SCREEN_H - LOG_HEIGHT - HUD_HEIGHT;
+    camera_.viewport_w = width_;
+    camera_.viewport_h = height_ - LOG_HEIGHT - HUD_HEIGHT;
+    camera_.tile_size = 48; // 32 * 1.5 — tiles rendered 50% bigger than native
 
     creation_screen_.reset();
 
     return true;
+}
+
+void Engine::reload_fonts() {
+    // Close existing fonts
+    if (font_title_ && font_title_ != font_) TTF_CloseFont(font_title_);
+    if (font_) TTF_CloseFont(font_);
+    font_ = nullptr;
+    font_title_ = nullptr;
+
+    int body_size = static_cast<int>(12 * ui_scale_);
+    int title_size = static_cast<int>(32 * ui_scale_);
+
+    font_ = TTF_OpenFont("assets/fonts/PrStart.ttf", body_size);
+    if (!font_) {
+        fprintf(stderr, "Warning: Could not load Press Start font: %s\n", TTF_GetError());
+        font_ = TTF_OpenFont("/usr/share/fonts/TTF/DejaVuSansMono.ttf", body_size);
+    }
+
+    font_title_ = TTF_OpenFont("assets/fonts/Jacquard12-Regular.ttf", title_size);
+    if (!font_title_) {
+        fprintf(stderr, "Warning: Could not load Jacquard font: %s\n", TTF_GetError());
+        font_title_ = font_;
+    }
 }
 
 void Engine::clear_entities_except_player() {
@@ -123,12 +137,62 @@ void Engine::generate_level() {
     int start_x, start_y;
 
     if (dungeon_level_ == 0) {
-        // Village — starting area
-        auto vresult = village::generate(rng_);
-        map_ = std::move(vresult.map);
-        rooms_ = std::move(vresult.buildings);
-        start_x = vresult.start_x;
-        start_y = vresult.start_y;
+        // Village — loaded from hand-authored map file
+        auto mresult = mapfile::load("data/maps/thornwall.map");
+        map_ = std::move(mresult.map);
+        rooms_.clear();
+        start_x = mresult.start_x;
+        start_y = mresult.start_y;
+
+        // Spawn NPCs from map entities
+        for (auto& me : mresult.entities) {
+            Entity npc = world_.create();
+            world_.add<Position>(npc, {me.x, me.y});
+
+            NPC npc_comp;
+            int sx = 0, sy = 0; // sprite coords in rogues.png
+            switch (me.glyph) {
+                case 'S':
+                    npc_comp.role = NPCRole::SHOPKEEPER;
+                    npc_comp.name = "Shopkeeper";
+                    npc_comp.dialogue = "Browse, if you like. I don't haggle.";
+                    sx = 2; sy = 6; // shopkeep sprite
+                    break;
+                case 'B':
+                    npc_comp.role = NPCRole::BLACKSMITH;
+                    npc_comp.name = "Blacksmith";
+                    npc_comp.dialogue = "Iron holds. Steel bites. That's all you need to know.";
+                    sx = 4; sy = 6; // blacksmith sprite
+                    break;
+                case 'P':
+                    npc_comp.role = NPCRole::PRIEST;
+                    npc_comp.name = "Scholar";
+                    npc_comp.dialogue = "The deeper you go, the older things get. Be careful what you read.";
+                    sx = 5; sy = 6; // scholar sprite
+                    break;
+                case 'F':
+                    npc_comp.role = NPCRole::FARMER;
+                    npc_comp.name = "Farmer";
+                    npc_comp.dialogue = "Used to be quiet here. Before they opened the barrow.";
+                    sx = 0; sy = 6; // farmer sprite
+                    break;
+                case 'G':
+                    npc_comp.role = NPCRole::GUARD;
+                    npc_comp.name = "Guard";
+                    npc_comp.dialogue = "Keep your blade sheathed in town.";
+                    sx = 0; sy = 1; // knight sprite
+                    break;
+            }
+            world_.add<NPC>(npc, std::move(npc_comp));
+            world_.add<Renderable>(npc, {SHEET_ROGUES, sx, sy, {255, 255, 255, 255}, 5});
+
+            // NPCs have stats but aren't killable (no AI component = won't fight)
+            Stats npc_stats;
+            npc_stats.name = world_.get<NPC>(npc).name;
+            npc_stats.hp = 999;
+            npc_stats.hp_max = 999;
+            world_.add<Stats>(npc, std::move(npc_stats));
+        }
     } else {
         // Dungeon zones
         struct ZoneTheme {
@@ -179,7 +243,7 @@ void Engine::generate_level() {
         auto& bg  = get_background_info(build.background);
 
         Stats player_stats;
-        player_stats.name = "you";
+        player_stats.name = build.name;
         player_stats.hp = cls.hp + god.bonus_hp + bg.bonus_hp;
         player_stats.hp_max = cls.hp + god.bonus_hp + bg.bonus_hp;
         player_stats.mp = cls.mp + god.bonus_mp;
@@ -287,9 +351,18 @@ void Engine::try_move_player(int dx, int dy) {
         return;
     }
 
-    // Check for attackable entity
+    // Check for entity at target tile
     Entity target = combat::entity_at(world_, nx, ny, player_);
     if (target != NULL_ENTITY) {
+        // NPC — talk instead of fight
+        if (world_.has<NPC>(target)) {
+            auto& npc = world_.get<NPC>(target);
+            char buf[256];
+            snprintf(buf, sizeof(buf), "%s: \"%s\"", npc.name.c_str(), npc.dialogue.c_str());
+            log_.add(buf, {180, 180, 140, 255});
+            return; // talking doesn't cost a turn
+        }
+        // Hostile — attack
         combat::melee_attack(world_, player_, target, rng_, log_);
         player_acted_ = true;
         return;
@@ -518,6 +591,71 @@ void Engine::handle_input() {
             return;
         }
 
+        // Handle window resize
+        if (event.type == SDL_WINDOWEVENT &&
+            event.window.event == SDL_WINDOWEVENT_RESIZED) {
+            width_ = event.window.data1;
+            height_ = event.window.data2;
+            camera_.viewport_w = width_;
+            camera_.viewport_h = height_ - LOG_HEIGHT - HUD_HEIGHT;
+            continue;
+        }
+
+        // F11 fullscreen toggle — works in any state
+        if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_F11) {
+            fullscreen_ = !fullscreen_;
+            if (fullscreen_) {
+                SDL_SetWindowFullscreen(window_, SDL_WINDOW_FULLSCREEN_DESKTOP);
+            } else {
+                SDL_SetWindowFullscreen(window_, 0);
+            }
+            // Dimensions update via SDL_WINDOWEVENT_RESIZED
+            continue;
+        }
+
+        // Main menu state
+        if (state_ == GameState::MAIN_MENU) {
+            MenuChoice choice = main_menu_.handle_input(event);
+            switch (choice) {
+                case MenuChoice::NEW_GAME:
+                    creation_screen_.reset();
+                    state_ = GameState::CREATING;
+                    break;
+                case MenuChoice::CONTINUE:
+                    state_ = GameState::PLAYING;
+                    break;
+                case MenuChoice::SETTINGS:
+                    settings_.reset();
+                    return_from_settings_ = GameState::MAIN_MENU;
+                    state_ = GameState::SETTINGS;
+                    break;
+                case MenuChoice::QUIT:
+                    state_ = GameState::QUIT;
+                    break;
+                default: break;
+            }
+            continue;
+        }
+
+        // Settings state
+        if (state_ == GameState::SETTINGS) {
+            settings_.handle_input(event, window_);
+            // Check if UI scale changed
+            if (settings_.scale_changed()) {
+                ui_scale_ = settings_.get_ui_scale();
+                reload_fonts();
+                settings_.clear_scale_changed();
+            }
+            if (settings_.should_close()) {
+                state_ = return_from_settings_;
+                // If returning to PLAYING, reopen the pause menu
+                if (return_from_settings_ == GameState::PLAYING) {
+                    pause_menu_.open();
+                }
+            }
+            continue;
+        }
+
         // Character creation state
         if (state_ == GameState::CREATING) {
             if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE
@@ -534,6 +672,37 @@ void Engine::handle_input() {
         }
 
         if (event.type == SDL_KEYDOWN) {
+            // Pause menu intercepts all input when open
+            if (pause_menu_.is_open()) {
+                PauseChoice choice = pause_menu_.handle_input(event);
+                switch (choice) {
+                    case PauseChoice::CONTINUE:
+                        pause_menu_.close();
+                        break;
+                    case PauseChoice::SAVE:
+                        log_.add("Game saved.", {100, 200, 100, 255});
+                        pause_menu_.close();
+                        break;
+                    case PauseChoice::LOAD:
+                        log_.add("Game loaded.", {100, 200, 100, 255});
+                        pause_menu_.close();
+                        break;
+                    case PauseChoice::SETTINGS:
+                        pause_menu_.close();
+                        settings_.reset();
+                        return_from_settings_ = GameState::PLAYING;
+                        state_ = GameState::SETTINGS;
+                        break;
+                    case PauseChoice::EXIT_TO_MENU:
+                        pause_menu_.close();
+                        main_menu_.set_can_continue(true);
+                        state_ = GameState::MAIN_MENU;
+                        break;
+                    default: break;
+                }
+                return;
+            }
+
             // Inventory mode intercepts input
             if (inventory_screen_.is_open()) {
                 InvAction act = inventory_screen_.handle_input(event);
@@ -560,9 +729,9 @@ void Engine::handle_input() {
                 return;
             }
 
-            // Esc always quits
+            // Esc opens pause menu instead of quitting
             if (event.key.keysym.sym == SDLK_ESCAPE) {
-                state_ = GameState::QUIT;
+                pause_menu_.open();
                 return;
             }
 
@@ -621,7 +790,7 @@ void Engine::handle_input() {
 
                 // Screenshot
                 case SDLK_F12: {
-                    SDL_Surface* sshot = SDL_CreateRGBSurface(0, SCREEN_W, SCREEN_H, 32,
+                    SDL_Surface* sshot = SDL_CreateRGBSurface(0, width_, height_, 32,
                         0x00ff0000, 0x0000ff00, 0x000000ff, 0xff000000);
                     SDL_RenderReadPixels(renderer_, nullptr, SDL_PIXELFORMAT_ARGB8888,
                                          sshot->pixels, sshot->pitch);
@@ -642,95 +811,65 @@ void Engine::render_hud() {
     if (!world_.has<Stats>(player_)) return;
 
     auto& stats = world_.get<Stats>(player_);
+    SDL_Color white = {200, 200, 200, 255};
 
     // HUD background
-    SDL_Rect hud_bg = {0, 0, SCREEN_W, HUD_HEIGHT};
+    SDL_Rect hud_bg = {0, 0, width_, HUD_HEIGHT};
     SDL_SetRenderDrawColor(renderer_, 15, 12, 18, 240);
     SDL_RenderFillRect(renderer_, &hud_bg);
     SDL_SetRenderDrawColor(renderer_, 60, 50, 70, 255);
-    SDL_RenderDrawLine(renderer_, 0, HUD_HEIGHT, SCREEN_W, HUD_HEIGHT);
+    SDL_RenderDrawLine(renderer_, 0, HUD_HEIGHT, width_, HUD_HEIGHT);
 
-    // HP bar
-    int bar_w = 120;
-    int bar_h = 12;
-    int bar_x = 8;
-    int bar_y = 6;
+    int bar_h = 14;
+    int bar_y = (HUD_HEIGHT - bar_h) / 2;
+    int cursor = 8; // running x position — everything flows left to right
 
-    // Background
-    SDL_Rect bar_bg = {bar_x, bar_y, bar_w, bar_h};
-    SDL_SetRenderDrawColor(renderer_, 40, 10, 10, 255);
-    SDL_RenderFillRect(renderer_, &bar_bg);
+    // Helper: draw a stat bar + label, advance cursor
+    auto draw_bar = [&](const char* label, int val, int max_val,
+                         SDL_Color bg_col, SDL_Color fill_col, int bar_w) {
+        // Bar
+        SDL_Rect bg = {cursor, bar_y, bar_w, bar_h};
+        SDL_SetRenderDrawColor(renderer_, bg_col.r, bg_col.g, bg_col.b, 255);
+        SDL_RenderFillRect(renderer_, &bg);
+        int fill = (val * bar_w) / std::max(1, max_val);
+        SDL_Rect fill_r = {cursor, bar_y, fill, bar_h};
+        SDL_SetRenderDrawColor(renderer_, fill_col.r, fill_col.g, fill_col.b, 255);
+        SDL_RenderFillRect(renderer_, &fill_r);
+        cursor += bar_w + 4;
 
-    // Fill
-    int fill = (stats.hp * bar_w) / std::max(1, stats.hp_max);
-    SDL_Rect bar_fill = {bar_x, bar_y, fill, bar_h};
-    if (stats.hp > stats.hp_max / 2) {
-        SDL_SetRenderDrawColor(renderer_, 140, 40, 40, 255);
-    } else if (stats.hp > stats.hp_max / 4) {
-        SDL_SetRenderDrawColor(renderer_, 160, 100, 30, 255);
-    } else {
-        SDL_SetRenderDrawColor(renderer_, 200, 50, 50, 255);
-    }
-    SDL_RenderFillRect(renderer_, &bar_fill);
-
-    // HP text
-    char hp_text[32];
-    snprintf(hp_text, sizeof(hp_text), "HP: %d/%d", stats.hp, stats.hp_max);
-    SDL_Color white = {200, 200, 200, 255};
-    SDL_Surface* surf = TTF_RenderText_Blended(font_, hp_text, white);
-    if (surf) {
-        SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer_, surf);
-        SDL_Rect dst = {bar_x + bar_w + 8, bar_y - 1, surf->w, surf->h};
-        SDL_RenderCopy(renderer_, tex, nullptr, &dst);
-        SDL_DestroyTexture(tex);
-        SDL_FreeSurface(surf);
-    }
-
-    // MP bar (only if player has MP)
-    if (stats.mp_max > 0) {
-        int mp_x = bar_x + bar_w + 90;
-        SDL_Rect mp_bg = {mp_x, bar_y, 80, bar_h};
-        SDL_SetRenderDrawColor(renderer_, 10, 10, 40, 255);
-        SDL_RenderFillRect(renderer_, &mp_bg);
-        int mp_fill = (stats.mp * 80) / std::max(1, stats.mp_max);
-        SDL_Rect mp_fill_r = {mp_x, bar_y, mp_fill, bar_h};
-        SDL_SetRenderDrawColor(renderer_, 60, 60, 160, 255);
-        SDL_RenderFillRect(renderer_, &mp_fill_r);
-
-        char mp_text[32];
-        snprintf(mp_text, sizeof(mp_text), "MP:%d/%d", stats.mp, stats.mp_max);
-        surf = TTF_RenderText_Blended(font_, mp_text, white);
+        // Label
+        SDL_Surface* surf = TTF_RenderText_Blended(font_, label, white);
         if (surf) {
             SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer_, surf);
-            SDL_Rect dst = {mp_x + 84, bar_y - 1, surf->w, surf->h};
+            SDL_Rect dst = {cursor, bar_y, surf->w, surf->h};
             SDL_RenderCopy(renderer_, tex, nullptr, &dst);
+            cursor += surf->w + 12;
             SDL_DestroyTexture(tex);
             SDL_FreeSurface(surf);
         }
+    };
+
+    // HP bar
+    char hp_text[32];
+    snprintf(hp_text, sizeof(hp_text), "HP:%d/%d", stats.hp, stats.hp_max);
+    SDL_Color hp_fill = stats.hp > stats.hp_max / 2 ? SDL_Color{140, 40, 40, 255}
+                      : stats.hp > stats.hp_max / 4 ? SDL_Color{160, 100, 30, 255}
+                                                      : SDL_Color{200, 50, 50, 255};
+    draw_bar(hp_text, stats.hp, stats.hp_max, {40, 10, 10, 255}, hp_fill, 100);
+
+    // MP bar (only if has MP)
+    if (stats.mp_max > 0) {
+        char mp_text[32];
+        snprintf(mp_text, sizeof(mp_text), "MP:%d/%d", stats.mp, stats.mp_max);
+        draw_bar(mp_text, stats.mp, stats.mp_max, {10, 10, 40, 255}, {60, 60, 160, 255}, 80);
     }
 
     // XP bar
-    int xp_bar_x = bar_x + bar_w + 260;
-    SDL_Rect xp_bg = {xp_bar_x, bar_y, 80, bar_h};
-    SDL_SetRenderDrawColor(renderer_, 15, 15, 40, 255);
-    SDL_RenderFillRect(renderer_, &xp_bg);
-    int xp_fill = (stats.xp * 80) / std::max(1, stats.xp_next);
-    SDL_Rect xp_fill_r = {xp_bar_x, bar_y, xp_fill, bar_h};
-    SDL_SetRenderDrawColor(renderer_, 80, 80, 180, 255);
-    SDL_RenderFillRect(renderer_, &xp_fill_r);
-
     char lvl_text[32];
-    snprintf(lvl_text, sizeof(lvl_text), "Lv %d", stats.level);
-    surf = TTF_RenderText_Blended(font_, lvl_text, white);
-    if (surf) {
-        SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer_, surf);
-        SDL_Rect dst = {xp_bar_x + 84, bar_y - 1, surf->w, surf->h};
-        SDL_RenderCopy(renderer_, tex, nullptr, &dst);
-        SDL_DestroyTexture(tex);
-        SDL_FreeSurface(surf);
-    }
+    snprintf(lvl_text, sizeof(lvl_text), "Lv%d", stats.level);
+    draw_bar(lvl_text, stats.xp, stats.xp_next, {15, 15, 40, 255}, {80, 80, 180, 255}, 60);
 
-    // God name + depth + gold + turn
+    // Right side: god + location + gold + turn
     const char* god_name = "";
     if (world_.has<GodAlignment>(player_)) {
         auto& ga = world_.get<GodAlignment>(player_);
@@ -738,16 +877,16 @@ void Engine::render_hud() {
     }
     char info[128];
     if (dungeon_level_ <= 0) {
-        snprintf(info, sizeof(info), "%s  Thornwall  Gold: %d  Turn: %d",
+        snprintf(info, sizeof(info), "%s  Thornwall  Gold:%d  T:%d",
                  god_name, gold_, game_turn_);
     } else {
-        snprintf(info, sizeof(info), "%s  Depth: %d  Gold: %d  Turn: %d",
+        snprintf(info, sizeof(info), "%s  Depth:%d  Gold:%d  T:%d",
                  god_name, dungeon_level_, gold_, game_turn_);
     }
-    surf = TTF_RenderText_Blended(font_, info, white);
+    SDL_Surface* surf = TTF_RenderText_Blended(font_, info, white);
     if (surf) {
         SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer_, surf);
-        SDL_Rect dst = {SCREEN_W - surf->w - 8, bar_y - 1, surf->w, surf->h};
+        SDL_Rect dst = {width_ - surf->w - 8, bar_y - 1, surf->w, surf->h};
         SDL_RenderCopy(renderer_, tex, nullptr, &dst);
         SDL_DestroyTexture(tex);
         SDL_FreeSurface(surf);
@@ -755,9 +894,23 @@ void Engine::render_hud() {
 }
 
 void Engine::render() {
+    // Main menu screen
+    if (state_ == GameState::MAIN_MENU) {
+        main_menu_.render(renderer_, font_, font_title_, width_, height_);
+        SDL_RenderPresent(renderer_);
+        return;
+    }
+
+    // Settings screen
+    if (state_ == GameState::SETTINGS) {
+        settings_.render(renderer_, font_, width_, height_);
+        SDL_RenderPresent(renderer_);
+        return;
+    }
+
     // Character creation screen
     if (state_ == GameState::CREATING) {
-        creation_screen_.render(renderer_, font_, font_title_, sprites_, SCREEN_W, SCREEN_H);
+        creation_screen_.render(renderer_, font_, font_title_, sprites_, width_, height_);
         SDL_RenderPresent(renderer_);
         return;
     }
@@ -778,17 +931,20 @@ void Engine::render() {
     render_hud();
 
     // Message log
-    log_.render(renderer_, font_, 0, SCREEN_H - LOG_HEIGHT, SCREEN_W, LOG_HEIGHT);
+    log_.render(renderer_, font_, 0, height_ - LOG_HEIGHT, width_, LOG_HEIGHT);
 
     // Overlay screens
-    inventory_screen_.render(renderer_, font_, sprites_, world_, SCREEN_W, SCREEN_H);
-    spell_screen_.render(renderer_, font_, world_, SCREEN_W, SCREEN_H);
+    inventory_screen_.render(renderer_, font_, sprites_, world_, width_, height_);
+    spell_screen_.render(renderer_, font_, world_, width_, height_);
+
+    // Pause menu overlay
+    pause_menu_.render(renderer_, font_, font_title_, width_, height_);
 
     // Death overlay
     if (state_ == GameState::DEAD && font_) {
         // Darken screen
         SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
-        SDL_Rect overlay = {0, 0, SCREEN_W, SCREEN_H};
+        SDL_Rect overlay = {0, 0, width_, height_};
         SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 150);
         SDL_RenderFillRect(renderer_, &overlay);
 
@@ -797,7 +953,7 @@ void Engine::render() {
         SDL_Surface* surf = TTF_RenderText_Blended(death_font, "You have died.", red);
         if (surf) {
             SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer_, surf);
-            SDL_Rect dst = {SCREEN_W / 2 - surf->w / 2, SCREEN_H / 2 - surf->h / 2,
+            SDL_Rect dst = {width_ / 2 - surf->w / 2, height_ / 2 - surf->h / 2,
                             surf->w, surf->h};
             SDL_RenderCopy(renderer_, tex, nullptr, &dst);
             SDL_DestroyTexture(tex);

@@ -79,6 +79,23 @@ void SpriteManager::draw_sprite(SDL_Renderer* renderer, int sheet, int col, int 
     SDL_SetTextureAlphaMod(s.texture, 255);
 }
 
+void SpriteManager::draw_sprite_sized(SDL_Renderer* renderer, int sheet, int col, int row,
+                                       int dest_x, int dest_y, int dest_size,
+                                       SDL_Color tint) const {
+    if (sheet < 0 || sheet >= static_cast<int>(sheets_.size())) return;
+    auto& s = sheets_[sheet];
+    if (!s.texture) return;
+
+    SDL_Rect src = {col * TILE_SIZE, row * TILE_SIZE, TILE_SIZE, TILE_SIZE};
+    SDL_Rect dst = {dest_x, dest_y, dest_size, dest_size};
+
+    SDL_SetTextureColorMod(s.texture, tint.r, tint.g, tint.b);
+    SDL_SetTextureAlphaMod(s.texture, tint.a);
+    SDL_RenderCopy(renderer, s.texture, &src, &dst);
+    SDL_SetTextureColorMod(s.texture, 255, 255, 255);
+    SDL_SetTextureAlphaMod(s.texture, 255);
+}
+
 int SpriteManager::sheet_cols(int sheet) const {
     if (sheet < 0 || sheet >= static_cast<int>(sheets_.size())) return 0;
     return sheets_[sheet].pixel_w / TILE_SIZE;

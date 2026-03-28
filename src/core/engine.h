@@ -9,12 +9,18 @@
 #include "ui/message_log.h"
 #include "generation/dungeon.h"
 #include "generation/village.h"
+#include "generation/mapfile.h"
 #include "ui/inventory_screen.h"
 #include "ui/creation_screen.h"
 #include "ui/spell_screen.h"
+#include "ui/main_menu.h"
+#include "ui/settings_screen.h"
+#include "ui/pause_menu.h"
 #include <vector>
 
 enum class GameState {
+    MAIN_MENU,
+    SETTINGS,
     CREATING,
     PLAYING,
     DEAD,
@@ -43,7 +49,7 @@ private:
     RNG rng_;
     Camera camera_;
     MessageLog log_;
-    GameState state_ = GameState::CREATING;
+    GameState state_ = GameState::MAIN_MENU;
 
     // Level data
     std::vector<Room> rooms_;
@@ -59,15 +65,24 @@ private:
     InventoryScreen inventory_screen_;
     CreationScreen creation_screen_;
     SpellScreen spell_screen_;
+    MainMenu main_menu_;
+    SettingsScreen settings_;
+    PauseMenu pause_menu_;
 
-    // Window config
-    static constexpr int SCREEN_W = 1280;
-    static constexpr int SCREEN_H = 800;
-    static constexpr int LOG_HEIGHT = 160;
-    static constexpr int HUD_HEIGHT = 24;
+    // Track where Settings should return to
+    GameState return_from_settings_ = GameState::MAIN_MENU;
+
+    // Window config — dynamic resolution
+    int width_ = 1280;
+    int height_ = 800;
+    bool fullscreen_ = false;
+    float ui_scale_ = 1.0f;
+    static constexpr int LOG_HEIGHT = 180;
+    static constexpr int HUD_HEIGHT = 32;
 
     // Methods
     void handle_input();
+    void reload_fonts();
     void try_move_player(int dx, int dy);
     void open_door(int x, int y);
     void process_turn();

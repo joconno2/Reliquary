@@ -64,6 +64,7 @@ SpriteRef tile_sprite(TileType type, [[maybe_unused]] uint8_t variant) {
         case TileType::STAIRS_UP:         return {SHEET_TILES, 8, 16};
         case TileType::WATER:             return {SHEET_TILES, 0, 12};
         case TileType::TREE:              return {SHEET_TILES, 2, 25};
+        case TileType::BRUSH:             return {SHEET_TILES, 0, 25}; // sapling/small bush
 
         // Floors handled by floor_sprite(), but provide fallback
         default:
@@ -76,12 +77,15 @@ SpriteRef tile_sprite(TileType type, [[maybe_unused]] uint8_t variant) {
 
 void draw_map(SDL_Renderer* renderer, const SpriteManager& sprites,
               const TileMap& map, const Camera& cam, int y_offset) {
-    constexpr int TS = SpriteManager::TILE_SIZE;
+    int TS = cam.tile_size;
+    // Scale factor for draw_sprite (how many times to multiply the 32px base)
+    // Since draw_sprite takes an integer scale, we use a custom dest rect instead
+    // when tile_size != 32
 
     int start_x = std::max(0, cam.x);
     int start_y = std::max(0, cam.y);
-    int end_x = std::min(map.width(), cam.x + cam.tiles_wide() + 1);
-    int end_y = std::min(map.height(), cam.y + cam.tiles_high() + 1);
+    int end_x = std::min(map.width(), cam.x + cam.tiles_wide() + 2);
+    int end_y = std::min(map.height(), cam.y + cam.tiles_high() + 2);
 
     for (int y = start_y; y < end_y; y++) {
         for (int x = start_x; x < end_x; x++) {
@@ -90,26 +94,26 @@ void draw_map(SDL_Renderer* renderer, const SpriteManager& sprites,
             int screen_x = (x - cam.x) * TS;
             int screen_y = (y - cam.y) * TS + y_offset;
 
+            auto draw_sprite_scaled = [&](int sheet, int col, int row, SDL_Color tint) {
+                sprites.draw_sprite_sized(renderer, sheet, col, row,
+                                          screen_x, screen_y, TS, tint);
+            };
+
             auto draw_tile = [&](SDL_Color tint) {
                 if (is_floor_type(tile.type)) {
                     auto fs = floor_sprite(tile.type, tile.variant);
-                    sprites.draw_sprite(renderer, fs.base.sheet, fs.base.col, fs.base.row,
-                                        screen_x, screen_y, 1, tint);
+                    draw_sprite_scaled(fs.base.sheet, fs.base.col, fs.base.row, tint);
                     if (fs.has_overlay) {
-                        sprites.draw_sprite(renderer, fs.overlay.sheet, fs.overlay.col,
-                                            fs.overlay.row, screen_x, screen_y, 1, tint);
+                        draw_sprite_scaled(fs.overlay.sheet, fs.overlay.col,
+                                           fs.overlay.row, tint);
                     }
-                } else if (tile.type == TileType::TREE) {
-                    // Grass base + tree sprite on top
-                    sprites.draw_sprite(renderer, SHEET_TILES, 0, 7,
-                                        screen_x, screen_y, 1, tint);
+                } else if (tile.type == TileType::TREE || tile.type == TileType::BRUSH) {
+                    draw_sprite_scaled(SHEET_TILES, 0, 7, tint);
                     auto ref = tile_sprite(tile.type, tile.variant);
-                    sprites.draw_sprite(renderer, ref.sheet, ref.col, ref.row,
-                                        screen_x, screen_y, 1, tint);
+                    draw_sprite_scaled(ref.sheet, ref.col, ref.row, tint);
                 } else {
                     auto ref = tile_sprite(tile.type, tile.variant);
-                    sprites.draw_sprite(renderer, ref.sheet, ref.col, ref.row,
-                                        screen_x, screen_y, 1, tint);
+                    draw_sprite_scaled(ref.sheet, ref.col, ref.row, tint);
                 }
             };
 
@@ -125,9 +129,8 @@ void draw_map(SDL_Renderer* renderer, const SpriteManager& sprites,
 void draw_entities(SDL_Renderer* renderer, const SpriteManager& sprites,
                    World& world, const TileMap& map, const Camera& cam,
                    int y_offset) {
-    constexpr int TS = SpriteManager::TILE_SIZE;
+    int TS = cam.tile_size;
 
-    // Collect visible entities and sort by z_order
     struct DrawCmd {
         int z_order;
         int sheet, sx, sy;
@@ -154,13 +157,12 @@ void draw_entities(SDL_Renderer* renderer, const SpriteManager& sprites,
                          screen_x, screen_y, rend.tint});
     }
 
-    // Sort: lower z_order drawn first (corpses under creatures)
     std::sort(cmds.begin(), cmds.end(),
               [](const DrawCmd& a, const DrawCmd& b) { return a.z_order < b.z_order; });
 
     for (auto& cmd : cmds) {
-        sprites.draw_sprite(renderer, cmd.sheet, cmd.sx, cmd.sy,
-                            cmd.dx, cmd.dy, 1, cmd.tint);
+        sprites.draw_sprite_sized(renderer, cmd.sheet, cmd.sx, cmd.sy,
+                                   cmd.dx, cmd.dy, TS, cmd.tint);
     }
 }
 

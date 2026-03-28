@@ -21,6 +21,7 @@ enum class TileType : uint8_t {
     STAIRS_UP,
     WATER,
     TREE,
+    BRUSH,       // walkable vegetation — looks like forest but passable
     COUNT
 };
 

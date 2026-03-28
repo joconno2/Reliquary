@@ -6,9 +6,10 @@
 struct Camera {
     int x = 0, y = 0; // top-left tile coordinate
     int viewport_w = 0, viewport_h = 0; // in pixels
+    int tile_size = 48; // rendered tile size (base 32 * scale)
 
-    int tiles_wide() const { return viewport_w / SpriteManager::TILE_SIZE; }
-    int tiles_high() const { return viewport_h / SpriteManager::TILE_SIZE; }
+    int tiles_wide() const { return viewport_w / tile_size; }
+    int tiles_high() const { return viewport_h / tile_size; }
 
     void center_on(int tx, int ty) {
         x = tx - tiles_wide() / 2;
@@ -18,27 +19,23 @@ struct Camera {
 
 namespace render {
 
-// Get the sprite coordinates for a tile type
 struct SpriteRef {
     int sheet;
     int col;
     int row;
 };
 
-// Floor tiles can have two layers: base (solid color) + overlay (detail)
 struct FloorSprite {
-    SpriteRef base;    // blank colored floor
-    SpriteRef overlay; // no-bg detail sprite (or {-1,0,0} for none)
+    SpriteRef base;
+    SpriteRef overlay;
     bool has_overlay;
 };
 
 SpriteRef tile_sprite(TileType type, uint8_t variant);
 
-// Render the visible tilemap
 void draw_map(SDL_Renderer* renderer, const SpriteManager& sprites,
               const TileMap& map, const Camera& cam, int y_offset = 0);
 
-// Render all entities with Position + Renderable
 void draw_entities(SDL_Renderer* renderer, const SpriteManager& sprites,
                    World& world, const TileMap& map, const Camera& cam,
                    int y_offset = 0);

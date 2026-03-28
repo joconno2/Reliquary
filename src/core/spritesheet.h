@@ -28,10 +28,15 @@ public:
 
     bool load_all(SDL_Renderer* renderer, const std::string& asset_dir);
 
-    // Render a single 32x32 tile from a spritesheet
+    // Render a single 32x32 tile from a spritesheet (integer scale multiplier)
     void draw_sprite(SDL_Renderer* renderer, int sheet, int col, int row,
                      int dest_x, int dest_y, int scale = 1,
                      SDL_Color tint = {255, 255, 255, 255}) const;
+
+    // Render a 32x32 source tile to an arbitrary destination size
+    void draw_sprite_sized(SDL_Renderer* renderer, int sheet, int col, int row,
+                            int dest_x, int dest_y, int dest_size,
+                            SDL_Color tint = {255, 255, 255, 255}) const;
 
     // Get dimensions of a sheet in tiles
     int sheet_cols(int sheet) const;

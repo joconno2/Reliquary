@@ -1,29 +1,6 @@
 #include "ui/background_select.h"
+#include "ui/ui_draw.h"
 #include <cstdio>
-
-static void bg_draw_text(SDL_Renderer* renderer, TTF_Font* font,
-                          const char* text, SDL_Color col, int x, int y) {
-    if (!font || !text || !text[0]) return;
-    SDL_Surface* surf = TTF_RenderText_Blended(font, text, col);
-    if (!surf) return;
-    SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
-    SDL_Rect dst = {x, y, surf->w, surf->h};
-    SDL_RenderCopy(renderer, tex, nullptr, &dst);
-    SDL_DestroyTexture(tex);
-    SDL_FreeSurface(surf);
-}
-
-static void bg_draw_text_wrapped(SDL_Renderer* renderer, TTF_Font* font,
-                                  const char* text, SDL_Color col, int x, int y, int wrap_w) {
-    if (!font || !text || !text[0]) return;
-    SDL_Surface* surf = TTF_RenderText_Blended_Wrapped(font, text, col, static_cast<Uint32>(wrap_w));
-    if (!surf) return;
-    SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
-    SDL_Rect dst = {x, y, surf->w, surf->h};
-    SDL_RenderCopy(renderer, tex, nullptr, &dst);
-    SDL_DestroyTexture(tex);
-    SDL_FreeSurface(surf);
-}
 
 bool BackgroundSelectScreen::handle_input(SDL_Event& event) {
     if (event.type != SDL_KEYDOWN) return false;
@@ -66,7 +43,7 @@ void BackgroundSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     SDL_Color desc_col   = {140, 130, 120, 255};
     SDL_Color green_col  = {120, 200, 120, 255};
 
-    bg_draw_text(renderer, font, "Choose your background.", title_col, 40, 30);
+    ui::draw_text(renderer, font, "Choose your background.", title_col, 40, 30);
 
     int list_x = 40;
     int list_y = 60;
@@ -82,7 +59,7 @@ void BackgroundSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
             SDL_RenderFillRect(renderer, &hl);
         }
 
-        bg_draw_text(renderer, font, bg.name,
+        ui::draw_text(renderer, font, bg.name,
                      is_sel ? sel_col : normal_col, list_x, list_y);
         list_y += row_h;
     }
@@ -94,30 +71,26 @@ void BackgroundSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
 
     const BackgroundInfo& sel = get_background_info(static_cast<BackgroundId>(selected_));
 
-    SDL_Rect panel = {detail_x - 10, detail_y - 10, detail_w + 20, h - detail_y - 20};
-    SDL_SetRenderDrawColor(renderer, 20, 16, 26, 255);
-    SDL_RenderFillRect(renderer, &panel);
-    SDL_SetRenderDrawColor(renderer, 60, 50, 70, 255);
-    SDL_RenderDrawRect(renderer, &panel);
+    ui::draw_panel(renderer, detail_x - 10, detail_y - 10, detail_w + 20, h - detail_y - 20);
 
-    bg_draw_text(renderer, font, sel.name, sel_col, detail_x, detail_y);
+    ui::draw_text(renderer, font, sel.name, sel_col, detail_x, detail_y);
     detail_y += line_h + 6;
 
-    bg_draw_text_wrapped(renderer, font, sel.description, desc_col,
+    ui::draw_text_wrapped(renderer, font, sel.description, desc_col,
                          detail_x, detail_y, detail_w);
     detail_y += line_h * 2 + 10;
 
     // Passive
-    bg_draw_text(renderer, font, "Passive:", dim_col, detail_x, detail_y);
+    ui::draw_text(renderer, font, "Passive:", dim_col, detail_x, detail_y);
     detail_y += line_h + 2;
-    bg_draw_text(renderer, font, sel.passive_name, sel_col, detail_x + 8, detail_y);
+    ui::draw_text(renderer, font, sel.passive_name, sel_col, detail_x + 8, detail_y);
     detail_y += line_h + 2;
-    bg_draw_text_wrapped(renderer, font, sel.passive_desc, desc_col,
+    ui::draw_text_wrapped(renderer, font, sel.passive_desc, desc_col,
                          detail_x + 8, detail_y, detail_w - 8);
     detail_y += line_h * 2 + 10;
 
     // Stat bonuses
-    bg_draw_text(renderer, font, "Bonuses:", dim_col, detail_x, detail_y);
+    ui::draw_text(renderer, font, "Bonuses:", dim_col, detail_x, detail_y);
     detail_y += line_h + 2;
 
     struct BonusPair { const char* label; int val; };
@@ -136,16 +109,16 @@ void BackgroundSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
         SDL_Color col = b.val > 0
             ? SDL_Color{120, 200, 120, 255}
             : SDL_Color{200, 120, 120, 255};
-        bg_draw_text(renderer, font, buf, col, detail_x, detail_y);
+        ui::draw_text(renderer, font, buf, col, detail_x, detail_y);
         detail_y += line_h;
     }
     if (!any_bonus) {
-        bg_draw_text(renderer, font, "  (none)", dim_col, detail_x, detail_y);
+        ui::draw_text(renderer, font, "  (none)", dim_col, detail_x, detail_y);
         detail_y += line_h;
     }
 
     // Controls hint
-    bg_draw_text(renderer, font,
+    ui::draw_text(renderer, font,
                  "[Enter] select   [Up/Down] browse   [Esc] back",
                  dim_col, 40, h - 30);
 

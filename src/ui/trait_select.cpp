@@ -1,30 +1,7 @@
 #include "ui/trait_select.h"
+#include "ui/ui_draw.h"
 #include <algorithm>
 #include <cstdio>
-
-static void tr_draw_text(SDL_Renderer* renderer, TTF_Font* font,
-                          const char* text, SDL_Color col, int x, int y) {
-    if (!font || !text || !text[0]) return;
-    SDL_Surface* surf = TTF_RenderText_Blended(font, text, col);
-    if (!surf) return;
-    SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
-    SDL_Rect dst = {x, y, surf->w, surf->h};
-    SDL_RenderCopy(renderer, tex, nullptr, &dst);
-    SDL_DestroyTexture(tex);
-    SDL_FreeSurface(surf);
-}
-
-static void tr_draw_text_wrapped(SDL_Renderer* renderer, TTF_Font* font,
-                                  const char* text, SDL_Color col, int x, int y, int wrap_w) {
-    if (!font || !text || !text[0]) return;
-    SDL_Surface* surf = TTF_RenderText_Blended_Wrapped(font, text, col, static_cast<Uint32>(wrap_w));
-    if (!surf) return;
-    SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
-    SDL_Rect dst = {x, y, surf->w, surf->h};
-    SDL_RenderCopy(renderer, tex, nullptr, &dst);
-    SDL_DestroyTexture(tex);
-    SDL_FreeSurface(surf);
-}
 
 void TraitSelectScreen::reset() {
     cursor_ = 0;
@@ -130,12 +107,12 @@ void TraitSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     SDL_Color section_col = {180, 160, 100, 255};
 
     // Title + counter
-    tr_draw_text(renderer, font, "Choose your traits.", title_col, 40, 15);
+    ui::draw_text(renderer, font, "Choose your traits.", title_col, 40, 15);
 
     char count_buf[64];
     snprintf(count_buf, sizeof(count_buf), "Positive: %d/3   Negative: %d/2",
              positive_selected_count(), negative_selected_count());
-    tr_draw_text(renderer, font, count_buf, dim_col, 40, 15 + line_h + 2);
+    ui::draw_text(renderer, font, count_buf, dim_col, 40, 15 + line_h + 2);
 
     // List: positives first, then negatives
     int list_x = 40;
@@ -143,7 +120,7 @@ void TraitSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     int row_h  = line_h + 4;
 
     // Section header: Positive
-    tr_draw_text(renderer, font, "-- Positive Traits --", section_col, list_x, list_y);
+    ui::draw_text(renderer, font, "-- Positive Traits --", section_col, list_x, list_y);
     list_y += line_h + 4;
 
     for (int i = 0; i < POSITIVE_TRAIT_COUNT; i++) {
@@ -167,14 +144,14 @@ void TraitSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
         else if (is_cursor) text_col = sel_col;
         else text_col = normal_col;
 
-        tr_draw_text(renderer, font, buf, text_col, list_x, list_y);
+        ui::draw_text(renderer, font, buf, text_col, list_x, list_y);
         list_y += row_h;
     }
 
     list_y += 6;
 
     // Section header: Negative
-    tr_draw_text(renderer, font, "-- Negative Traits --", section_col, list_x, list_y);
+    ui::draw_text(renderer, font, "-- Negative Traits --", section_col, list_x, list_y);
     list_y += line_h + 4;
 
     for (int i = POSITIVE_TRAIT_COUNT; i < TRAIT_COUNT; i++) {
@@ -197,7 +174,7 @@ void TraitSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
         else if (is_cursor) text_col = sel_col;
         else text_col = normal_col;
 
-        tr_draw_text(renderer, font, buf, text_col, list_x, list_y);
+        ui::draw_text(renderer, font, buf, text_col, list_x, list_y);
         list_y += row_h;
     }
 
@@ -206,24 +183,20 @@ void TraitSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     int detail_y = 40;
     int detail_w = w - detail_x - 40;
 
-    SDL_Rect panel = {detail_x - 10, detail_y - 10, detail_w + 20, h - detail_y - 20};
-    SDL_SetRenderDrawColor(renderer, 20, 16, 26, 255);
-    SDL_RenderFillRect(renderer, &panel);
-    SDL_SetRenderDrawColor(renderer, 60, 50, 70, 255);
-    SDL_RenderDrawRect(renderer, &panel);
+    ui::draw_panel(renderer, detail_x - 10, detail_y - 10, detail_w + 20, h - detail_y - 20);
 
     const TraitInfo& cur = get_trait_info(static_cast<TraitId>(cursor_));
 
     SDL_Color name_col = cur.is_positive ? chosen_col : neg_col;
-    tr_draw_text(renderer, font, cur.name, name_col, detail_x, detail_y);
+    ui::draw_text(renderer, font, cur.name, name_col, detail_x, detail_y);
     detail_y += line_h + 6;
 
-    tr_draw_text_wrapped(renderer, font, cur.description, desc_col,
+    ui::draw_text_wrapped(renderer, font, cur.description, desc_col,
                          detail_x, detail_y, detail_w);
     detail_y += line_h * 2 + 10;
 
     // Stat modifiers
-    tr_draw_text(renderer, font, "Modifiers:", dim_col, detail_x, detail_y);
+    ui::draw_text(renderer, font, "Modifiers:", dim_col, detail_x, detail_y);
     detail_y += line_h + 2;
 
     struct ModPair { const char* label; int val; };
@@ -242,43 +215,43 @@ void TraitSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
         SDL_Color col = m.val > 0
             ? SDL_Color{120, 200, 120, 255}
             : SDL_Color{200, 120, 120, 255};
-        tr_draw_text(renderer, font, buf, col, detail_x, detail_y);
+        ui::draw_text(renderer, font, buf, col, detail_x, detail_y);
         detail_y += line_h;
     }
     if (!any_mod) {
-        tr_draw_text(renderer, font, "  (no stat changes)", dim_col, detail_x, detail_y);
+        ui::draw_text(renderer, font, "  (no stat changes)", dim_col, detail_x, detail_y);
         detail_y += line_h;
     }
 
     // Special flags
     detail_y += 4;
     if (cur.see_invisible) {
-        tr_draw_text(renderer, font, "  * Can see invisible", chosen_col, detail_x, detail_y);
+        ui::draw_text(renderer, font, "  * Can see invisible", chosen_col, detail_x, detail_y);
         detail_y += line_h;
     }
     if (cur.immune_poison) {
-        tr_draw_text(renderer, font, "  * Immune to poison", chosen_col, detail_x, detail_y);
+        ui::draw_text(renderer, font, "  * Immune to poison", chosen_col, detail_x, detail_y);
         detail_y += line_h;
     }
     if (cur.immune_disease) {
-        tr_draw_text(renderer, font, "  * Immune to disease", chosen_col, detail_x, detail_y);
+        ui::draw_text(renderer, font, "  * Immune to disease", chosen_col, detail_x, detail_y);
         detail_y += line_h;
     }
     if (cur.fear_resist) {
-        tr_draw_text(renderer, font, "  * Resists fear", chosen_col, detail_x, detail_y);
+        ui::draw_text(renderer, font, "  * Resists fear", chosen_col, detail_x, detail_y);
         detail_y += line_h;
     }
     if (cur.extra_fov) {
-        tr_draw_text(renderer, font, "  * +2 sight radius", chosen_col, detail_x, detail_y);
+        ui::draw_text(renderer, font, "  * +2 sight radius", chosen_col, detail_x, detail_y);
         detail_y += line_h;
     }
 
     // Confirm hint
     if (can_confirm()) {
-        tr_draw_text(renderer, font, "[Enter/Space] CONFIRM SELECTION",
+        ui::draw_text(renderer, font, "[Enter/Space] CONFIRM SELECTION",
                      sel_col, 40, h - 30);
     } else {
-        tr_draw_text(renderer, font,
+        ui::draw_text(renderer, font,
                      "[Enter] toggle   [Up/Down] browse   [Esc] back",
                      dim_col, 40, h - 30);
     }
