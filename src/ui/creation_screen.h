@@ -36,7 +36,7 @@ public:
     // Returns true if input was consumed
     bool handle_input(SDL_Event& event);
 
-    void render(SDL_Renderer* renderer, TTF_Font* font,
+    void render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_title,
                 const SpriteManager& sprites, int screen_w, int screen_h) const;
 
 private:
@@ -47,8 +47,8 @@ private:
     BackgroundSelectScreen bg_screen_;
     TraitSelectScreen trait_screen_;
 
-    void render_god_select(SDL_Renderer* renderer, TTF_Font* font,
+    void render_god_select(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_title,
                             const SpriteManager& sprites, int w, int h) const;
-    void render_class_select(SDL_Renderer* renderer, TTF_Font* font,
+    void render_class_select(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_title,
                               const SpriteManager& sprites, int w, int h) const;
 };

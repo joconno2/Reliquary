@@ -10,6 +10,7 @@
 #include "generation/dungeon.h"
 #include "ui/inventory_screen.h"
 #include "ui/creation_screen.h"
+#include "ui/spell_screen.h"
 #include <vector>
 
 enum class GameState {
@@ -31,7 +32,8 @@ private:
     // SDL
     SDL_Window* window_ = nullptr;
     SDL_Renderer* renderer_ = nullptr;
-    TTF_Font* font_ = nullptr;
+    TTF_Font* font_ = nullptr;        // Press Start 2P — body text, UI, messages
+    TTF_Font* font_title_ = nullptr;  // Jacquard 12 — titles, god names, decorative
 
     // Core systems
     World world_;
@@ -55,6 +57,7 @@ private:
     // UI
     InventoryScreen inventory_screen_;
     CreationScreen creation_screen_;
+    SpellScreen spell_screen_;
 
     // Window config
     static constexpr int SCREEN_W = 1280;

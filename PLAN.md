@@ -66,6 +66,22 @@ Full game design: `~/Documents/Work/Games/Development/Roguelike Project.md`
 - [ ] God tenets
 - [ ] NPC god affiliations
 
+### Phase 7: Magic & Spells — IN PROGRESS
+- [x] 15 spells across 6 schools (Conjuration, Transmutation, Divination, Healing, Nature, Dark Arts)
+- [x] Spellbook component, spell learning
+- [x] Spell casting system (MP cost, INT scaling, auto-targeting, area effects)
+- [x] Spell screen UI (z key — browse, cast, MP display, descriptions)
+- [x] MP bar in HUD
+- [x] Class starting spells (Wizard: Spark/Force Bolt/Identify, Ranger: Detect Monsters, others: Minor Heal)
+- [x] Implemented: Spark, Force Bolt, Fireball, Drain Life, Fear, Minor Heal, Major Heal, Harden Skin, Reveal Map, Detect Monsters, Entangle
+- [ ] Spellbooks as findable items
+- [ ] Spell failure rate (armor penalty)
+
 ## Next Up
 
-Backgrounds + traits, then favor/prayer mechanics.
+Favor/prayer system, then look/examine mode, then save/load.
+
+## Fonts
+
+- **Press Start 2P** (PrStart.ttf, 8px) — all body text, UI, messages, stats
+- **Jacquard 12** (Jacquard12-Regular.ttf, 24px) — title, god names, class names, death screen (mixed case only, not all caps)

@@ -11,6 +11,8 @@
 #include "components/inventory.h"
 #include "components/god.h"
 #include "components/class_def.h"
+#include "components/spellbook.h"
+#include "systems/magic.h"
 #include "components/background.h"
 #include "components/traits.h"
 #include "systems/fov.h"
@@ -25,6 +27,7 @@
 Engine::Engine() {}
 
 Engine::~Engine() {
+    if (font_title_ && font_title_ != font_) TTF_CloseFont(font_title_);
     if (font_) TTF_CloseFont(font_);
     if (renderer_) SDL_DestroyRenderer(renderer_);
     if (window_) SDL_DestroyWindow(window_);
@@ -72,23 +75,18 @@ bool Engine::init() {
         return false;
     }
 
-    const char* font_paths[] = {
-        "/usr/share/fonts/TTF/DejaVuSansMono.ttf",
-        "/usr/share/fonts/dejavu/DejaVuSansMono.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
-        "/usr/share/fonts/liberation-mono/LiberationMono-Regular.ttf",
-        "/usr/share/fonts/TTF/LiberationMono-Regular.ttf",
-        "/usr/share/fonts/noto/NotoSansMono-Regular.ttf",
-        nullptr
-    };
-
-    for (int i = 0; font_paths[i]; i++) {
-        font_ = TTF_OpenFont(font_paths[i], 14);
-        if (font_) break;
+    // Load bundled fonts
+    font_ = TTF_OpenFont("assets/fonts/PrStart.ttf", 8);
+    if (!font_) {
+        fprintf(stderr, "Warning: Could not load Press Start font: %s\n", TTF_GetError());
+        // Fallback to system font
+        font_ = TTF_OpenFont("/usr/share/fonts/TTF/DejaVuSansMono.ttf", 12);
     }
 
-    if (!font_) {
-        fprintf(stderr, "Warning: Could not load any system font\n");
+    font_title_ = TTF_OpenFont("assets/fonts/Jacquard12-Regular.ttf", 24);
+    if (!font_title_) {
+        fprintf(stderr, "Warning: Could not load Jacquard font: %s\n", TTF_GetError());
+        font_title_ = font_; // fallback to body font
     }
 
     camera_.viewport_w = SCREEN_W;
@@ -196,6 +194,23 @@ void Engine::generate_level() {
         }
 
         world_.add<Stats>(player_, std::move(player_stats));
+
+        // Starting spells based on class
+        Spellbook book;
+        switch (build.class_id) {
+            case ClassId::WIZARD:
+                book.learn(SpellId::SPARK);
+                book.learn(SpellId::FORCE_BOLT);
+                book.learn(SpellId::IDENTIFY);
+                break;
+            case ClassId::RANGER:
+                book.learn(SpellId::DETECT_MONSTERS);
+                break;
+            default:
+                book.learn(SpellId::MINOR_HEAL); // everyone gets minor heal
+                break;
+        }
+        world_.add<Spellbook>(player_, std::move(book));
     } else {
         world_.get<Position>(player_) = {result.start_x, result.start_y};
     }
@@ -500,6 +515,23 @@ void Engine::handle_input() {
                 return;
             }
 
+            // Spell screen intercepts input
+            if (spell_screen_.is_open()) {
+                SpellAction act = spell_screen_.handle_input(event);
+                if (act == SpellAction::CLOSE) {
+                    spell_screen_.close();
+                } else if (act == SpellAction::CAST) {
+                    SpellId spell = spell_screen_.get_selected_spell(world_);
+                    if (spell != SpellId::COUNT) {
+                        auto result = magic::cast(world_, player_, spell,
+                                                   map_, rng_, log_);
+                        if (result.consumed_turn) player_acted_ = true;
+                        spell_screen_.close();
+                    }
+                }
+                return;
+            }
+
             // Esc always quits
             if (event.key.keysym.sym == SDLK_ESCAPE) {
                 state_ = GameState::QUIT;
@@ -542,6 +574,11 @@ void Engine::handle_input() {
                 // Inventory
                 case SDLK_i:
                     inventory_screen_.open(player_);
+                    break;
+
+                // Spells
+                case SDLK_z:
+                    spell_screen_.open(player_);
                     break;
 
                 case SDLK_GREATER: {
@@ -621,8 +658,31 @@ void Engine::render_hud() {
         SDL_FreeSurface(surf);
     }
 
+    // MP bar (only if player has MP)
+    if (stats.mp_max > 0) {
+        int mp_x = bar_x + bar_w + 90;
+        SDL_Rect mp_bg = {mp_x, bar_y, 80, bar_h};
+        SDL_SetRenderDrawColor(renderer_, 10, 10, 40, 255);
+        SDL_RenderFillRect(renderer_, &mp_bg);
+        int mp_fill = (stats.mp * 80) / std::max(1, stats.mp_max);
+        SDL_Rect mp_fill_r = {mp_x, bar_y, mp_fill, bar_h};
+        SDL_SetRenderDrawColor(renderer_, 60, 60, 160, 255);
+        SDL_RenderFillRect(renderer_, &mp_fill_r);
+
+        char mp_text[32];
+        snprintf(mp_text, sizeof(mp_text), "MP:%d/%d", stats.mp, stats.mp_max);
+        surf = TTF_RenderText_Blended(font_, mp_text, white);
+        if (surf) {
+            SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer_, surf);
+            SDL_Rect dst = {mp_x + 84, bar_y - 1, surf->w, surf->h};
+            SDL_RenderCopy(renderer_, tex, nullptr, &dst);
+            SDL_DestroyTexture(tex);
+            SDL_FreeSurface(surf);
+        }
+    }
+
     // XP bar
-    int xp_bar_x = bar_x + bar_w + 80;
+    int xp_bar_x = bar_x + bar_w + 260;
     SDL_Rect xp_bg = {xp_bar_x, bar_y, 80, bar_h};
     SDL_SetRenderDrawColor(renderer_, 15, 15, 40, 255);
     SDL_RenderFillRect(renderer_, &xp_bg);
@@ -664,7 +724,7 @@ void Engine::render_hud() {
 void Engine::render() {
     // Character creation screen
     if (state_ == GameState::CREATING) {
-        creation_screen_.render(renderer_, font_, sprites_, SCREEN_W, SCREEN_H);
+        creation_screen_.render(renderer_, font_, font_title_, sprites_, SCREEN_W, SCREEN_H);
         SDL_RenderPresent(renderer_);
         return;
     }
@@ -686,8 +746,9 @@ void Engine::render() {
     // Message log
     log_.render(renderer_, font_, 0, SCREEN_H - LOG_HEIGHT, SCREEN_W, LOG_HEIGHT);
 
-    // Inventory screen
+    // Overlay screens
     inventory_screen_.render(renderer_, font_, sprites_, world_, SCREEN_W, SCREEN_H);
+    spell_screen_.render(renderer_, font_, world_, SCREEN_W, SCREEN_H);
 
     // Death overlay
     if (state_ == GameState::DEAD && font_) {
@@ -698,7 +759,8 @@ void Engine::render() {
         SDL_RenderFillRect(renderer_, &overlay);
 
         SDL_Color red = {200, 50, 50, 255};
-        SDL_Surface* surf = TTF_RenderText_Blended(font_, "YOU HAVE DIED", red);
+        TTF_Font* death_font = font_title_ ? font_title_ : font_;
+        SDL_Surface* surf = TTF_RenderText_Blended(death_font, "You have died.", red);
         if (surf) {
             SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer_, surf);
             SDL_Rect dst = {SCREEN_W / 2 - surf->w / 2, SCREEN_H / 2 - surf->h / 2,

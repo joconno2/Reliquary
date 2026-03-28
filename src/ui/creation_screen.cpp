@@ -116,16 +116,16 @@ static void draw_text_wrapped(SDL_Renderer* renderer, TTF_Font* font,
     SDL_FreeSurface(surf);
 }
 
-void CreationScreen::render(SDL_Renderer* renderer, TTF_Font* font,
+void CreationScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_title,
                              const SpriteManager& sprites, int w, int h) const {
     // Dark background
     SDL_SetRenderDrawColor(renderer, 8, 6, 10, 255);
     SDL_RenderClear(renderer);
 
     if (phase_ == CreationPhase::GOD_SELECT) {
-        render_god_select(renderer, font, sprites, w, h);
+        render_god_select(renderer, font, font_title, sprites, w, h);
     } else if (phase_ == CreationPhase::CLASS_SELECT) {
-        render_class_select(renderer, font, sprites, w, h);
+        render_class_select(renderer, font, font_title, sprites, w, h);
     } else if (phase_ == CreationPhase::BACKGROUND_SELECT) {
         bg_screen_.render(renderer, font, w, h);
     } else if (phase_ == CreationPhase::TRAIT_SELECT) {
@@ -134,19 +134,21 @@ void CreationScreen::render(SDL_Renderer* renderer, TTF_Font* font,
 }
 
 void CreationScreen::render_god_select(SDL_Renderer* renderer, TTF_Font* font,
+                                        TTF_Font* font_title,
                                         [[maybe_unused]] const SpriteManager& sprites,
                                         int w, int h) const {
     if (!font) return;
     int line_h = TTF_FontLineSkip(font);
+    int title_h = font_title ? TTF_FontLineSkip(font_title) : line_h;
     SDL_Color title_col = {200, 180, 160, 255};
     SDL_Color sel_col = {255, 220, 140, 255};
     SDL_Color normal_col = {160, 155, 150, 255};
     SDL_Color dim_col = {100, 95, 90, 255};
     SDL_Color desc_col = {140, 130, 120, 255};
 
-    // Title
-    draw_text(renderer, font, "RELIQUARY", title_col, w / 2 - 50, 30);
-    draw_text(renderer, font, "Choose your god.", dim_col, w / 2 - 70, 30 + line_h + 4);
+    // Title — Jacquard font
+    draw_text(renderer, font_title, "Reliquary", title_col, w / 2 - 80, 20);
+    draw_text(renderer, font, "Choose your god.", dim_col, w / 2 - 70, 20 + title_h + 4);
 
     // God list on the left
     int list_x = 40;
@@ -186,10 +188,11 @@ void CreationScreen::render_god_select(SDL_Renderer* renderer, TTF_Font* font,
     SDL_SetRenderDrawColor(renderer, 60, 50, 70, 255);
     SDL_RenderDrawRect(renderer, &panel);
 
+    // God name in Jacquard
     char title_buf[128];
     snprintf(title_buf, sizeof(title_buf), "%s, %s", god.name, god.title);
-    draw_text(renderer, font, title_buf, sel_col, detail_x, detail_y);
-    detail_y += line_h + 8;
+    draw_text(renderer, font_title, title_buf, sel_col, detail_x, detail_y);
+    detail_y += (font_title ? TTF_FontLineSkip(font_title) : line_h) + 8;
 
     draw_text_wrapped(renderer, font, god.description, desc_col, detail_x, detail_y, detail_w);
     detail_y += line_h * 3 + 8;
@@ -221,6 +224,7 @@ void CreationScreen::render_god_select(SDL_Renderer* renderer, TTF_Font* font,
 }
 
 void CreationScreen::render_class_select(SDL_Renderer* renderer, TTF_Font* font,
+                                          TTF_Font* font_title,
                                           const SpriteManager& sprites, int w, int h) const {
     if (!font) return;
     int line_h = TTF_FontLineSkip(font);
@@ -230,13 +234,13 @@ void CreationScreen::render_class_select(SDL_Renderer* renderer, TTF_Font* font,
     SDL_Color dim_col = {100, 95, 90, 255};
     SDL_Color desc_col = {140, 130, 120, 255};
 
-    // Show chosen god
+    // Show chosen god — Jacquard
     auto& god = get_god_info(build_.god);
     char god_buf[128];
     snprintf(god_buf, sizeof(god_buf), "Servant of %s", god.name);
-    draw_text(renderer, font, god_buf, dim_col, 40, 15);
+    draw_text(renderer, font_title, god_buf, dim_col, 40, 10);
 
-    draw_text(renderer, font, "Choose your class.", title_col, 40, 35);
+    draw_text(renderer, font, "Choose your class.", title_col, 40, 38);
 
     int list_x = 40;
     int list_y = 70;
@@ -280,8 +284,8 @@ void CreationScreen::render_class_select(SDL_Renderer* renderer, TTF_Font* font,
                         detail_x + detail_w / 2 - 32, detail_y, 2);
     detail_y += 72;
 
-    draw_text(renderer, font, cls.name, sel_col, detail_x, detail_y);
-    detail_y += line_h + 4;
+    draw_text(renderer, font_title, cls.name, sel_col, detail_x, detail_y);
+    detail_y += (font_title ? TTF_FontLineSkip(font_title) : line_h) + 4;
     draw_text_wrapped(renderer, font, cls.description, desc_col, detail_x, detail_y, detail_w);
     detail_y += line_h * 2 + 8;
 
