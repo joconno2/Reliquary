@@ -62,6 +62,7 @@ static json item_to_json(const Item& item) {
     j["heal_amount"] = item.heal_amount; j["gold_value"] = item.gold_value;
     j["identified"] = item.identified; j["unid_name"] = item.unid_name;
     j["stack"] = item.stack; j["stackable"] = item.stackable;
+    j["quest_id"] = item.quest_id;
     return j;
 }
 
@@ -81,6 +82,7 @@ static Item json_to_item(const json& j) {
     item.unid_name = j.value("unid_name", "");
     item.stack = j.value("stack", 1);
     item.stackable = j.value("stackable", false);
+    item.quest_id = j.value("quest_id", -1);
     return item;
 }
 

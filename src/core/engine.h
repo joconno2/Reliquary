@@ -26,6 +26,14 @@
 #include "ui/help_screen.h"
 #include "ui/world_map.h"
 #include <vector>
+#include <string>
+
+struct DungeonEntry {
+    std::string name;
+    int x = 0, y = 0;
+    std::string zone;
+    std::string quest; // empty = generic dungeon
+};
 
 enum class GameState {
     MAIN_MENU,
@@ -66,6 +74,8 @@ private:
     int dungeon_level_ = -1; // incremented to 0 for village, 1+ for dungeons
     int overworld_return_x_ = 0; // position to return to on overworld when ascending
     int overworld_return_y_ = 0;
+    std::vector<DungeonEntry> dungeon_registry_;
+    int current_dungeon_idx_ = -1; // which dungeon we're in (-1 = none/overworld)
 
     // Player
     Entity player_ = NULL_ENTITY;

@@ -51,14 +51,20 @@ The game is playable from character creation through dungeon crawling. A 17-step
 ### World & Content
 - [x] 2000x1500 tile overworld (hand-editable text map format)
 - [x] 20 towns with buildings, NPCs (shopkeeper, blacksmith, scholar, guard, farmer, herbalist, merchant, elder)
-- [x] 30 dungeon entrances, 5 climate zones (ice/cold/temperate/warm/desert)
-- [x] Rivers, lakes, ruins, forests, rocky areas, roads connecting towns
+- [x] 27 dungeon entrances (9 named quest-linked + 18 generic), 5 climate zones
+- [x] Named dungeons near quest towns: The Barrow, Ashford Ruins, Stonekeep, Frostmere Depths, The Catacombs, The Molten Depths, The Sunken Halls, The Hollowgate, The Sepulchre
+- [x] Dungeon registry (data/dungeons.json) — zone themes and quest links loaded at runtime
+- [x] Rivers, lakes, ruins, forests, rocky areas, roads connecting towns and quest dungeons
 - [x] World map overview (M key) with labeled towns, dungeon markers, region names
 - [x] 6 dungeon zones with depth limits (Warrens 1-3, Stonekeep 4-6, etc.)
+- [x] Zone theming from dungeon registry (each named dungeon has its own tile theme)
 - [x] Proper stairs navigation (up/down within dungeons, return to overworld at entrance point)
 
 ### Quests
 - [x] 17-step main quest chain spanning all regions (Barrow Wight → Reliquary)
+- [x] Quest chaining: each main quest requires the previous one to be FINISHED before offering
+- [x] NPCs in 8 quest towns wired to main quests (MQ_01-MQ_14) by proximity + role
+- [x] The Sepulchre (MQ_15-17): depth-triggered quests (entry, depth 4+, depth 6)
 - [x] 7 static side quests (rat cellar, lost amulet, undead patrol, kill bear, deliver weapon, herbs, missing person)
 - [x] Dynamic side quest generation (2-3 per town, based on NPC role)
 - [x] Quest log (q key), quest offer modal (accept/decline), quest completion on NPC turn-in
@@ -79,7 +85,7 @@ The game is playable from character creation through dungeon crawling. A 17-step
 
 ### Tier 1 — Makes it a game
 - [ ] God prayers + favor mechanics (tenets, gain/loss, prayer abilities)
-- [ ] The Barrow mega-dungeon (6 levels, final zone)
+- [ ] The Sepulchre mega-dungeon (6 levels, final zone — structure/content)
 - [ ] Reliquary Vault endgame + god-flavored endings
 - [ ] Atmospheric combat messages ("Your blade finds the orc's flank" not "You hit orc for 5")
 - [ ] Examine/look mode (essential for lore delivery)

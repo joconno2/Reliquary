@@ -62,6 +62,9 @@ struct Item {
     // Value
     int gold_value = 0;
 
+    // Quest
+    int quest_id = -1; // if >= 0, picking this up completes this quest
+
     // Stacking
     int stack = 1;
     bool stackable = false;

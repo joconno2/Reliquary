@@ -25,6 +25,8 @@
 #include "generation/dungeon.h"
 #include "generation/populate.h"
 #include <SDL2/SDL_image.h>
+#include <nlohmann/json.hpp>
+#include <fstream>
 #include <cstdio>
 #include <algorithm>
 
@@ -88,6 +90,26 @@ bool Engine::init() {
     camera_.tile_size = 48; // 32 * 1.5 — tiles rendered 50% bigger than native
 
     creation_screen_.reset();
+
+    // Load dungeon registry
+    {
+        std::ifstream f("data/dungeons.json");
+        if (f.is_open()) {
+            auto j = nlohmann::json::parse(f, nullptr, false);
+            if (!j.is_discarded() && j.is_array()) {
+                for (auto& entry : j) {
+                    DungeonEntry de;
+                    de.name = entry.value("name", "");
+                    de.x = entry.value("x", 0);
+                    de.y = entry.value("y", 0);
+                    de.zone = entry.value("zone", "warrens");
+                    if (entry.contains("quest") && !entry["quest"].is_null())
+                        de.quest = entry["quest"].get<std::string>();
+                    dungeon_registry_.push_back(std::move(de));
+                }
+            }
+        }
+    }
 
     return true;
 }
@@ -239,12 +261,37 @@ void Engine::generate_level() {
             return pool[h % pool_size];
         };
 
-        // Thornwall center for quest assignment proximity check
-        constexpr int THORNWALL_CX = 1000;
-        constexpr int THORNWALL_CY = 750;
-        bool farmer_quest_assigned = false;
-        bool guard_quest_assigned = false;
-        bool blacksmith_quest_assigned = false;
+        // Quest town centers for proximity-based quest assignment
+        struct QuestTown { int x, y; const char* name; };
+        static constexpr QuestTown QUEST_TOWNS[] = {
+            {1000, 750, "Thornwall"},
+            { 750, 650, "Ashford"},
+            {1300, 670, "Greywatch"},
+            {1050, 450, "Frostmere"},
+            {1400, 750, "Ironhearth"},
+            {1450, 500, "Candlemere"},
+            { 550, 550, "Hollowgate"},
+            { 850, 950, "Millhaven"},
+        };
+        static constexpr int QUEST_TOWN_COUNT = sizeof(QUEST_TOWNS) / sizeof(QUEST_TOWNS[0]);
+        constexpr int TOWN_RADIUS = 30;
+
+        // Helper: find which quest town an NPC is near (-1 if none)
+        auto near_quest_town = [&](int mx, int my) -> int {
+            for (int i = 0; i < QUEST_TOWN_COUNT; i++) {
+                if (std::abs(mx - QUEST_TOWNS[i].x) < TOWN_RADIUS &&
+                    std::abs(my - QUEST_TOWNS[i].y) < TOWN_RADIUS)
+                    return i;
+            }
+            return -1;
+        };
+
+        // Track which main quest slots have been assigned so each is assigned once
+        bool mq_assigned[17] = {};
+        // Side quest assignment tracking (for Thornwall side quests)
+        bool sq_farmer_assigned = false;
+        bool sq_guard_assigned = false;
+        bool sq_blacksmith_assigned = false;
 
         // Spawn NPCs from map entities
         for (auto& me : mresult.entities) {
@@ -253,42 +300,97 @@ void Engine::generate_level() {
 
             NPC npc_comp;
             int sx = 0, sy = 0; // sprite coords in rogues.png
-
-            // Check if this NPC is near Thornwall (within ~30 tiles of center)
-            bool near_thornwall = (std::abs(me.x - THORNWALL_CX) < 30 &&
-                                   std::abs(me.y - THORNWALL_CY) < 30);
+            int town_idx = near_quest_town(me.x, me.y);
 
             switch (me.glyph) {
                 case 'S':
                     npc_comp.role = NPCRole::SHOPKEEPER;
                     npc_comp.name = "Shopkeeper";
                     npc_comp.dialogue = "Browse, if you like. I don't haggle.";
-                    sx = 2; sy = 6; // shopkeep sprite
+                    sx = 2; sy = 6;
                     break;
                 case 'B':
                     npc_comp.role = NPCRole::BLACKSMITH;
                     npc_comp.name = "Blacksmith";
                     npc_comp.dialogue = pick_dialogue(BLACKSMITH_DIALOGUE, 3, me.x, me.y);
-                    sx = 4; sy = 6; // blacksmith sprite
-                    if (near_thornwall && !blacksmith_quest_assigned) {
+                    sx = 4; sy = 6;
+                    // Side quest: Thornwall blacksmith
+                    if (town_idx == 0 && !sq_blacksmith_assigned) {
                         npc_comp.quest_id = static_cast<int>(QuestId::SQ_DELIVER_WEAPON);
-                        blacksmith_quest_assigned = true;
+                        sq_blacksmith_assigned = true;
+                    }
+                    // MQ_10: Ironhearth blacksmith
+                    if (town_idx == 4 && !mq_assigned[9]) {
+                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_10_IRONHEARTH_FORGE);
+                        npc_comp.name = "Master Smith Brynn";
+                        npc_comp.dialogue = "Bring me something worth studying and I'll tell you what it is.";
+                        mq_assigned[9] = true;
                     }
                     break;
                 case 'P':
                     npc_comp.role = NPCRole::PRIEST;
                     npc_comp.name = "Scholar";
                     npc_comp.dialogue = pick_dialogue(SCHOLAR_DIALOGUE, 3, me.x, me.y);
-                    sx = 5; sy = 6; // scholar sprite
+                    sx = 5; sy = 6;
+                    // MQ_02: Thornwall scholar
+                    if (town_idx == 0 && !mq_assigned[1]) {
+                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_02_SCHOLAR_CLUE);
+                        npc_comp.name = "Scholar Aldric";
+                        npc_comp.dialogue = "The old texts speak of things that should stay buried.";
+                        mq_assigned[1] = true;
+                    }
+                    // MQ_05: Greywatch scholar
+                    else if (town_idx == 2 && !mq_assigned[4]) {
+                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_05_STONEKEEP_DEPTHS);
+                        npc_comp.name = "Scholar Erynn";
+                        npc_comp.dialogue = "Stonekeep holds inscriptions no one alive can read.";
+                        mq_assigned[4] = true;
+                    }
+                    // MQ_06: Frostmere scholar (ice sage)
+                    else if (town_idx == 3 && !mq_assigned[5]) {
+                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_06_FROSTMERE_SAGE);
+                        npc_comp.name = "Sage Yeva";
+                        npc_comp.dialogue = "Some names should stay frozen.";
+                        mq_assigned[5] = true;
+                    }
+                    // MQ_08+MQ_09: Millhaven scholar (Catacombs area)
+                    else if (town_idx == 7 && !mq_assigned[7]) {
+                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_08_CATACOMBS_GATE);
+                        npc_comp.name = "Scholar Maren";
+                        npc_comp.dialogue = "The Catacombs gate has stood sealed since before this town was built.";
+                        mq_assigned[7] = true;
+                    }
+                    // MQ_12: Candlemere scholar (binding ritual)
+                    else if (town_idx == 5 && !mq_assigned[11]) {
+                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_12_CANDLEMERE_RITUAL);
+                        npc_comp.name = "Priest Solara";
+                        npc_comp.dialogue = "The old rituals are preserved here. The gods tried to make everyone forget.";
+                        mq_assigned[11] = true;
+                    }
+                    // MQ_14: Hollowgate scholar (break the seal)
+                    else if (town_idx == 6 && !mq_assigned[13]) {
+                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_14_HOLLOWGATE_SEAL);
+                        npc_comp.name = "Scholar Daven";
+                        npc_comp.dialogue = "The seal here is the last one. Beyond it lies the oldest place in the world.";
+                        mq_assigned[13] = true;
+                    }
                     break;
                 case 'F':
                     npc_comp.role = NPCRole::FARMER;
                     npc_comp.name = "Farmer";
                     npc_comp.dialogue = pick_dialogue(FARMER_DIALOGUE, 3, me.x, me.y);
-                    sx = 0; sy = 6; // farmer sprite
-                    if (near_thornwall && !farmer_quest_assigned) {
+                    sx = 0; sy = 6;
+                    // Side quest: Thornwall farmer
+                    if (town_idx == 0 && !sq_farmer_assigned) {
                         npc_comp.quest_id = static_cast<int>(QuestId::SQ_MISSING_PERSON);
-                        farmer_quest_assigned = true;
+                        sq_farmer_assigned = true;
+                    }
+                    // MQ_03: Ashford farmer
+                    if (town_idx == 1 && !mq_assigned[2]) {
+                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_03_ASHFORD_TABLET);
+                        npc_comp.name = "Farmer Galen";
+                        npc_comp.dialogue = "There's a stone tablet in the ruins nearby. The dead don't want it found.";
+                        mq_assigned[2] = true;
                     }
                     break;
                 case 'G':
@@ -296,16 +398,45 @@ void Engine::generate_level() {
                     npc_comp.name = "Guard";
                     npc_comp.dialogue = pick_dialogue(GUARD_DIALOGUE, 3, me.x, me.y);
                     sx = 0; sy = 1;
-                    if (near_thornwall && !guard_quest_assigned) {
+                    // Side quest: Thornwall guard
+                    if (town_idx == 0 && !sq_guard_assigned) {
                         npc_comp.quest_id = static_cast<int>(QuestId::SQ_KILL_BEAR);
-                        guard_quest_assigned = true;
+                        sq_guard_assigned = true;
+                    }
+                    // MQ_04: Greywatch guard (receives tablet)
+                    if (town_idx == 2 && !mq_assigned[3]) {
+                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_04_GREYWATCH_WARNING);
+                        npc_comp.name = "Captain Voss";
+                        npc_comp.dialogue = "I command the largest garrison in the region. Speak plainly.";
+                        mq_assigned[3] = true;
+                    }
+                    // MQ_07: Frostmere guard (frozen key location)
+                    else if (town_idx == 3 && !mq_assigned[6]) {
+                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_07_FROZEN_KEY);
+                        npc_comp.name = "Guard Osric";
+                        npc_comp.dialogue = "The ice dungeon north of here holds things that stopped being human long ago.";
+                        mq_assigned[6] = true;
+                    }
+                    // MQ_11: Ironhearth guard (Molten Depths)
+                    else if (town_idx == 4 && !mq_assigned[10]) {
+                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_11_MOLTEN_TRIAL);
+                        npc_comp.name = "Guard Holt";
+                        npc_comp.dialogue = "The volcanic tunnels beneath us run deep. The heat kills anything that isn't already dead.";
+                        mq_assigned[10] = true;
+                    }
+                    // MQ_13: Candlemere guard (Sunken Halls)
+                    else if (town_idx == 5 && !mq_assigned[12]) {
+                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_13_SUNKEN_FRAGMENT);
+                        npc_comp.name = "Guard Thane";
+                        npc_comp.dialogue = "The Sunken Halls flood more each year. The water there remembers.";
+                        mq_assigned[12] = true;
                     }
                     break;
                 case 'W':
                     npc_comp.role = NPCRole::FARMER;
                     npc_comp.name = "Villager";
                     npc_comp.dialogue = pick_dialogue(FARMER_DIALOGUE, 3, me.x, me.y);
-                    sx = 1; sy = 6; // villager sprite
+                    sx = 1; sy = 6;
                     break;
                 case 'H':
                     npc_comp.role = NPCRole::PRIEST; // herbalist uses priest role
@@ -317,7 +448,7 @@ void Engine::generate_level() {
                     npc_comp.role = NPCRole::SHOPKEEPER;
                     npc_comp.name = "Merchant";
                     npc_comp.dialogue = "I trade in what the road provides. Take a look.";
-                    sx = 2; sy = 6; // merchant uses shopkeep sprite
+                    sx = 2; sy = 6;
                     break;
                 case 'E':
                     npc_comp.role = NPCRole::ELDER;
@@ -325,7 +456,8 @@ void Engine::generate_level() {
                     npc_comp.dialogue = "A wight has risen in the barrow east of here. "
                                         "People have died. Will you put it down?";
                     npc_comp.quest_id = static_cast<int>(QuestId::MQ_01_BARROW_WIGHT);
-                    sx = 4; sy = 6; // elderly sprite
+                    mq_assigned[0] = true;
+                    sx = 4; sy = 6;
                     break;
             }
             world_.add<NPC>(npc, std::move(npc_comp));
@@ -367,13 +499,14 @@ void Engine::generate_level() {
             quest_gen::generate_town_quests(world_, map_, rng_, t.x, t.y, t.name);
         }
     } else {
-        // Dungeon zones — each zone spans 3 depths
+        // Dungeon zone themes — keyed by name for registry lookup
         struct ZoneTheme {
             TileType wall, floor;
             const char* name;
             int max_depth; // deepest level in this zone
         };
-        static const ZoneTheme ZONES[] = {
+        // Default depth-based zones
+        static const ZoneTheme DEPTH_ZONES[] = {
             {TileType::WALL_DIRT,        TileType::FLOOR_DIRT,      "The Warrens",       3},
             {TileType::WALL_STONE_ROUGH, TileType::FLOOR_STONE,     "Stonekeep",         6},
             {TileType::WALL_STONE_BRICK, TileType::FLOOR_STONE,     "The Deep Halls",    9},
@@ -381,10 +514,34 @@ void Engine::generate_level() {
             {TileType::WALL_IGNEOUS,     TileType::FLOOR_RED_STONE, "The Molten Depths",15},
             {TileType::WALL_LARGE_STONE, TileType::FLOOR_STONE,     "The Sunken Halls", 18},
         };
-        constexpr int ZONE_COUNT = sizeof(ZONES) / sizeof(ZONES[0]);
-        // Map depth to zone: depths 1-3 = zone 0, 4-6 = zone 1, etc.
-        int zone_idx = std::min((dungeon_level_ - 1) / 3, ZONE_COUNT - 1);
-        auto& zone = ZONES[zone_idx];
+        constexpr int DEPTH_ZONE_COUNT = sizeof(DEPTH_ZONES) / sizeof(DEPTH_ZONES[0]);
+
+        // Named zone string -> theme mapping
+        struct NamedZone { const char* key; int theme_idx; };
+        static const NamedZone ZONE_MAP[] = {
+            {"warrens",    0},
+            {"stonekeep",  1},
+            {"deep_halls", 2},
+            {"catacombs",  3},
+            {"molten",     4},
+            {"sunken",     5},
+            {"sepulchre",  2}, // The Sepulchre uses Deep Halls theme (ancient stone)
+        };
+        constexpr int ZONE_MAP_COUNT = sizeof(ZONE_MAP) / sizeof(ZONE_MAP[0]);
+
+        // Determine zone from dungeon registry or fall back to depth
+        int zone_idx = std::min((dungeon_level_ - 1) / 3, DEPTH_ZONE_COUNT - 1);
+        if (current_dungeon_idx_ >= 0 &&
+            current_dungeon_idx_ < static_cast<int>(dungeon_registry_.size())) {
+            auto& dentry = dungeon_registry_[current_dungeon_idx_];
+            for (int zi = 0; zi < ZONE_MAP_COUNT; zi++) {
+                if (dentry.zone == ZONE_MAP[zi].key) {
+                    zone_idx = ZONE_MAP[zi].theme_idx;
+                    break;
+                }
+            }
+        }
+        auto& zone = DEPTH_ZONES[zone_idx];
 
         // Don't place stairs down at the bottom of a zone
         bool at_zone_bottom = (dungeon_level_ >= zone.max_depth);
@@ -486,6 +643,150 @@ void Engine::generate_level() {
                 world_.add<QuestTarget>(wight, {QuestId::MQ_01_BARROW_WIGHT, true});
             }
         }
+
+        // The Sepulchre depth-triggered quests (MQ_15/16/17)
+        bool in_sepulchre = false;
+        if (current_dungeon_idx_ >= 0 &&
+            current_dungeon_idx_ < static_cast<int>(dungeon_registry_.size())) {
+            in_sepulchre = (dungeon_registry_[current_dungeon_idx_].zone == "sepulchre");
+        }
+        if (in_sepulchre) {
+            // MQ_15: auto-activate on entering The Sepulchre
+            if (dungeon_level_ == 1 && !journal_.has_quest(QuestId::MQ_15_THE_SEPULCHRE)) {
+                auto prereq = QuestId::MQ_14_HOLLOWGATE_SEAL;
+                if (journal_.has_quest(prereq) && journal_.get_state(prereq) == QuestState::FINISHED) {
+                    journal_.add_quest(QuestId::MQ_15_THE_SEPULCHRE);
+                    log_.add("Quest started: Enter The Sepulchre", {220, 200, 100, 255});
+                    log_.add("Your god is screaming.", {180, 80, 80, 255});
+                }
+            }
+            // MQ_16: auto-activate at depth 4+
+            if (dungeon_level_ >= 4 && !journal_.has_quest(QuestId::MQ_16_THE_DESCENT)) {
+                if (journal_.has_quest(QuestId::MQ_15_THE_SEPULCHRE) &&
+                    journal_.get_state(QuestId::MQ_15_THE_SEPULCHRE) == QuestState::ACTIVE) {
+                    journal_.set_state(QuestId::MQ_15_THE_SEPULCHRE, QuestState::COMPLETE);
+                    journal_.set_state(QuestId::MQ_15_THE_SEPULCHRE, QuestState::FINISHED);
+                    journal_.add_quest(QuestId::MQ_16_THE_DESCENT);
+                    log_.add("Quest started: The Descent", {220, 200, 100, 255});
+                    log_.add("The architecture stops making sense. You hear other footsteps.", {180, 80, 80, 255});
+                }
+            }
+            // MQ_17: auto-activate at depth 6 (the bottom)
+            if (dungeon_level_ >= 6 && !journal_.has_quest(QuestId::MQ_17_CLAIM_RELIQUARY)) {
+                if (journal_.has_quest(QuestId::MQ_16_THE_DESCENT) &&
+                    journal_.get_state(QuestId::MQ_16_THE_DESCENT) == QuestState::ACTIVE) {
+                    journal_.set_state(QuestId::MQ_16_THE_DESCENT, QuestState::COMPLETE);
+                    journal_.set_state(QuestId::MQ_16_THE_DESCENT, QuestState::FINISHED);
+                    journal_.add_quest(QuestId::MQ_17_CLAIM_RELIQUARY);
+                    log_.add("Quest started: Claim the Reliquary", {220, 200, 100, 255});
+                    log_.add("You see it. A vessel of light that hurts to look at.", {255, 220, 100, 255});
+                }
+            }
+        }
+
+        // Spawn quest items at the bottom of their respective dungeons
+        if (current_dungeon_idx_ >= 0 &&
+            current_dungeon_idx_ < static_cast<int>(dungeon_registry_.size())) {
+            auto& dentry = dungeon_registry_[current_dungeon_idx_];
+
+            // Helper: spawn a quest item in the last room
+            auto spawn_quest_item = [&](const char* name, const char* desc,
+                                        int sprite_x, int sprite_y,
+                                        QuestId qid,
+                                        SDL_Color tint = {255,255,255,255}) {
+                if (rooms_.size() < 2) return;
+                auto& room = rooms_.back();
+                int x = room.cx();
+                int y = room.cy() + 1;
+                Entity e = world_.create();
+                world_.add<Position>(e, {x, y});
+                world_.add<Renderable>(e, {SHEET_ITEMS, sprite_x, sprite_y, tint, 2});
+                Item item;
+                item.name = name;
+                item.description = desc;
+                item.type = ItemType::KEY;
+                item.identified = true;
+                item.quest_id = static_cast<int>(qid);
+                item.gold_value = 0;
+                world_.add<Item>(e, std::move(item));
+            };
+
+            // Determine the zone's max depth to know if we're at the bottom
+            struct ZoneMax { const char* key; int max_depth; };
+            static const ZoneMax ZONE_DEPTHS[] = {
+                {"warrens", 3}, {"stonekeep", 6}, {"deep_halls", 9},
+                {"catacombs", 12}, {"molten", 15}, {"sunken", 18},
+                {"sepulchre", 6}, // Sepulchre has 6 levels
+            };
+            int zone_max = 3; // default
+            for (auto& zd : ZONE_DEPTHS) {
+                if (dentry.zone == zd.key) { zone_max = zd.max_depth; break; }
+            }
+            bool is_bottom = (dungeon_level_ >= zone_max);
+
+            if (is_bottom) {
+                // MQ_03: Stone Tablet in Ashford Ruins
+                if (dentry.quest == "MQ_03") {
+                    spawn_quest_item("Stone Tablet",
+                        "A heavy stone tablet. The inscriptions shift when you aren't looking.",
+                        0, 21, QuestId::MQ_03_ASHFORD_TABLET);
+                }
+                // MQ_05: Ancient Inscription in Stonekeep
+                if (dentry.quest == "MQ_05") {
+                    spawn_quest_item("Ancient Inscription",
+                        "A page of burned stone. The words are too heavy for the rock.",
+                        7, 21, QuestId::MQ_05_STONEKEEP_DEPTHS);
+                }
+                // MQ_07: Frozen Key in Frostmere Depths
+                if (dentry.quest == "MQ_07") {
+                    spawn_quest_item("Frozen Key",
+                        "A key of impossible cold. It burns your hand.",
+                        2, 22, QuestId::MQ_07_FROZEN_KEY);
+                }
+                // MQ_09: Reliquary Fragment in The Catacombs
+                if (dentry.quest == "MQ_08") {
+                    spawn_quest_item("Reliquary Fragment",
+                        "A shard of solidified memory. It hums with warmth.",
+                        2, 16, QuestId::MQ_09_OSSUARY_FRAGMENT);
+                }
+                // MQ_11: Molten Fragment in The Molten Depths
+                if (dentry.quest == "MQ_11") {
+                    spawn_quest_item("Molten Fragment",
+                        "Cold even in the heart of the furnace. Two of three.",
+                        2, 16, QuestId::MQ_11_MOLTEN_TRIAL,
+                        {255, 120, 80, 255}); // red tint
+                }
+                // MQ_13: Sunken Fragment in The Sunken Halls
+                if (dentry.quest == "MQ_13") {
+                    spawn_quest_item("Sunken Fragment",
+                        "The water remembers. Three fragments. They pull toward each other.",
+                        2, 16, QuestId::MQ_13_SUNKEN_FRAGMENT,
+                        {100, 160, 255, 255}); // blue tint
+                }
+                // MQ_14: Seal Stone in The Hollowgate
+                if (dentry.quest == "MQ_14") {
+                    spawn_quest_item("Seal Stone",
+                        "The fragments resonate near it. Break the seal.",
+                        5, 16, QuestId::MQ_14_HOLLOWGATE_SEAL);
+                }
+                // MQ_17: The Reliquary in The Sepulchre (depth 6)
+                if (dentry.quest == "MQ_15" && dungeon_level_ >= 6) {
+                    spawn_quest_item("The Reliquary",
+                        "A vessel of light that hurts to look at. It was here before the gods.",
+                        6, 16, QuestId::MQ_17_CLAIM_RELIQUARY,
+                        {255, 220, 100, 255}); // golden tint
+
+                    // Spawn The Keeper — final boss guarding the Reliquary
+                    Entity keeper = populate::spawn_boss(world_, map_, rooms_,
+                        "The Keeper", SHEET_MONSTERS, 0, 11,
+                        150, 24, 14, 20, 20, 5, 85, 500);
+                    if (keeper != NULL_ENTITY) {
+                        // Give the Keeper a golden tint to match the Reliquary's glow
+                        world_.get<Renderable>(keeper).tint = {255, 220, 100, 255};
+                    }
+                }
+            }
+        }
     }
 
     // Compute initial FOV
@@ -516,8 +817,15 @@ void Engine::generate_level() {
         constexpr int MSG_COUNT = sizeof(ZONE_NAMES) / sizeof(ZONE_NAMES[0]);
         int idx = std::min((dungeon_level_ - 1) / 3, MSG_COUNT - 1);
 
+        // Use registry dungeon name if available, otherwise zone name
+        const char* dungeon_name = ZONE_NAMES[idx];
+        if (current_dungeon_idx_ >= 0 &&
+            current_dungeon_idx_ < static_cast<int>(dungeon_registry_.size())) {
+            dungeon_name = dungeon_registry_[current_dungeon_idx_].name.c_str();
+        }
+
         char buf[128];
-        snprintf(buf, sizeof(buf), "%s — Depth %d", ZONE_NAMES[idx], dungeon_level_);
+        snprintf(buf, sizeof(buf), "%s — Depth %d", dungeon_name, dungeon_level_);
         log_.add(buf, {180, 170, 160, 255});
         log_.add(ZONE_MESSAGES[idx], {120, 110, 100, 255});
 
@@ -574,10 +882,23 @@ void Engine::try_move_player(int dx, int dy) {
             snprintf(buf, sizeof(buf), "%s: \"%s\"", npc.name.c_str(), npc.dialogue.c_str());
             log_.add(buf, {180, 180, 140, 255});
 
-            // Quest giving — static quests
+            // Quest giving — static quests with prerequisite chaining
             if (npc.quest_id >= 0) {
                 auto qid = static_cast<QuestId>(npc.quest_id);
-                if (!journal_.has_quest(qid)) {
+
+                // Check prerequisite: for main quests, the previous quest must be FINISHED
+                auto quest_prereq = [](QuestId id) -> QuestId {
+                    int idx = static_cast<int>(id);
+                    if (idx <= 0 || idx > static_cast<int>(QuestId::MQ_17_CLAIM_RELIQUARY))
+                        return QuestId::COUNT; // no prereq
+                    return static_cast<QuestId>(idx - 1);
+                };
+                auto prereq = quest_prereq(qid);
+                bool prereq_met = (prereq == QuestId::COUNT) ||
+                                  (journal_.has_quest(prereq) &&
+                                   journal_.get_state(prereq) == QuestState::FINISHED);
+
+                if (prereq_met && !journal_.has_quest(qid)) {
                     // Show quest offer modal
                     quest_offer_.show(qid, npc.name);
                     pending_quest_npc_ = target;
@@ -594,10 +915,6 @@ void Engine::try_move_player(int dx, int dy) {
                             pending_levelup_ = true;
                             levelup_screen_.open(player_, rng_);
                         }
-                    }
-                    // Chain main quests
-                    if (qid == QuestId::MQ_01_BARROW_WIGHT) {
-                        npc.dialogue = "Something stirred when it fell. The scholar may know more.";
                     }
                 }
             }
@@ -790,6 +1107,26 @@ void Engine::try_pickup() {
         // Remove from ground (remove Position only — keep Renderable for paper doll)
         world_.remove<Position>(e);
         inv.add(e);
+
+        // Quest item pickup — mark quest complete
+        if (item.quest_id >= 0) {
+            auto qid = static_cast<QuestId>(item.quest_id);
+            auto& qinfo = get_quest_info(qid);
+            if (journal_.has_quest(qid) && journal_.get_state(qid) == QuestState::ACTIVE) {
+                journal_.set_state(qid, QuestState::COMPLETE);
+                char qbuf[128];
+                snprintf(qbuf, sizeof(qbuf), "Quest complete: %s", qinfo.name);
+                log_.add(qbuf, {220, 200, 100, 255});
+            } else if (!journal_.has_quest(qid)) {
+                // Auto-accept and complete if we pick up a quest item without the quest
+                journal_.add_quest(qid);
+                journal_.set_state(qid, QuestState::COMPLETE);
+                char qbuf[128];
+                snprintf(qbuf, sizeof(qbuf), "Quest complete: %s", qinfo.name);
+                log_.add(qbuf, {220, 200, 100, 255});
+            }
+        }
+
         player_acted_ = true;
         return;
     }
@@ -1301,6 +1638,18 @@ void Engine::handle_input() {
                         if (dungeon_level_ == 0) {
                             overworld_return_x_ = pos.x;
                             overworld_return_y_ = pos.y;
+                            // Find nearest dungeon from registry
+                            current_dungeon_idx_ = -1;
+                            int best_dist = 9999;
+                            for (int di = 0; di < static_cast<int>(dungeon_registry_.size()); di++) {
+                                int dx = pos.x - dungeon_registry_[di].x;
+                                int dy = pos.y - dungeon_registry_[di].y;
+                                int d = dx * dx + dy * dy;
+                                if (d < best_dist) {
+                                    best_dist = d;
+                                    current_dungeon_idx_ = di;
+                                }
+                            }
                         }
                         generate_level(); // increments dungeon_level_
                     } else if (tile_type == TileType::STAIRS_UP &&
@@ -1312,6 +1661,7 @@ void Engine::handle_input() {
                         } else if (dungeon_level_ == 1) {
                             // Return to overworld from depth 1
                             dungeon_level_ = -1; // will increment to 0
+                            current_dungeon_idx_ = -1;
                             generate_level();
                             // Place player at the dungeon entrance they used
                             if (overworld_return_x_ != 0 || overworld_return_y_ != 0) {

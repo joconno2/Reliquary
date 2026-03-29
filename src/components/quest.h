@@ -25,8 +25,8 @@ enum class QuestId : int {
     MQ_12_CANDLEMERE_RITUAL,      // Travel to Candlemere — the Soleth priests know the binding ritual
     MQ_13_SUNKEN_FRAGMENT,        // Retrieve the third fragment from the Sunken Halls
     MQ_14_HOLLOWGATE_SEAL,        // Travel to Hollowgate — break the final seal
-    MQ_15_THE_BARROW,             // Enter The Barrow — the deepest mega-dungeon (6 levels)
-    MQ_16_RELIQUARY_VAULT,        // Reach the Reliquary Vault at the bottom of The Barrow
+    MQ_15_THE_SEPULCHRE,           // Enter The Sepulchre — the deepest mega-dungeon (6 levels)
+    MQ_16_THE_DESCENT,             // The Sepulchre goes deeper than it should
     MQ_17_CLAIM_RELIQUARY,        // Claim the Reliquary — the game's climax
 
     // Side quests
@@ -184,38 +184,37 @@ inline const QuestInfo& get_quest_info(QuestId id) {
         // MQ_14_HOLLOWGATE_SEAL
         {"The Final Seal",
          "Hollowgate marks the entrance to the oldest place in the world. "
-         "A seal bars the way — the last thing standing between you and The Barrow. "
+         "A seal bars the way — the last thing standing between you and The Sepulchre. "
          "The fragments resonate when you hold them near the gate.",
          "Travel to Hollowgate and break the final seal.",
          "The seal shattered. The fragments fused into a key that fits no door "
          "you can see. But the way is open. Down.",
          true, 360, 0},
 
-        // MQ_15_THE_BARROW
-        {"Into the Barrow",
-         "The Barrow is not a tomb. It is older than death. Six levels deep, "
-         "it descends through ages the world has forgotten. "
-         "At the bottom lies the Reliquary Vault — and whatever guards it.",
-         "Enter The Barrow and descend to its depths.",
+        // MQ_15_THE_SEPULCHRE
+        {"Enter The Sepulchre",
+         "The final seal is broken. Beneath Hollowgate, a passage opens into "
+         "something older than any dungeon you've seen. The walls are not stone. "
+         "The air is not air. Your god is screaming.",
+         "Enter The Sepulchre and descend to its depths.",
          "Each level is older than the last. The walls stop being stone. "
          "The floor stops being solid. But you keep going down.",
          true, 400, 0},
 
-        // MQ_16_RELIQUARY_VAULT
-        {"The Vault",
-         "The Reliquary Vault. You can feel it before you see it. "
-         "The air tastes like iron and endings. "
-         "Every god is watching. Every paragon who ever lived stands between you "
-         "and what waits inside.",
-         "Reach the Reliquary Vault at the bottom of The Barrow.",
+        // MQ_16_THE_DESCENT
+        {"The Descent",
+         "The Sepulchre goes deeper than it should. Each level is older than "
+         "the last. The architecture stops making sense after the third floor. "
+         "You hear other footsteps.",
+         "Descend past the fourth floor of The Sepulchre.",
          "The Vault is open. The Reliquary is here. It has been waiting.",
          true, 450, 0},
 
         // MQ_17_CLAIM_RELIQUARY
-        {"The Reliquary",
-         "You stand before the Reliquary. It is not what you expected. "
-         "It is not what anyone expected. The gods are silent for the first time "
-         "since the world was made. Your hand reaches out.",
+        {"Claim the Reliquary",
+         "You see it. A vessel of light that hurts to look at. Something that "
+         "was here before the gods. Your god reaches through you. Other paragons "
+         "are close. Take it.",
          "Claim the Reliquary.",
          "You hold the Reliquary. The world changes.",
          true, 500, 0},

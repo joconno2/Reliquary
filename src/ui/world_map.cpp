@@ -178,17 +178,20 @@ void WorldMap::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_tit
         ui::draw_text(renderer, font, TOWNS[i].name, town_label, sx + 4, sy - line_h / 2);
     }
 
-    // Dungeon markers (subset)
+    // Dungeon markers — named quest dungeons
     struct DungeonMarker {
         int tx, ty;
     };
     static const DungeonMarker DUNGEONS[] = {
-        {1060, 750},   // Barrow near Thornwall
-        {1120, 550},   // North of center
-        { 800, 900},   // Southwest
-        {1300, 850},   // East
-        { 900, 500},   // North
-        {1200, 1050},  // South-east
+        {1060,  750},  // The Barrow (intro)
+        { 800,  650},  // Ashford Ruins
+        {1200,  640},  // Stonekeep
+        {1100,  500},  // Frostmere Depths
+        { 850,  900},  // The Catacombs
+        {1450,  800},  // The Molten Depths
+        {1500,  550},  // The Sunken Halls
+        { 600,  550},  // The Hollowgate
+        {1000,  150},  // The Sepulchre
     };
     constexpr int DUNGEON_COUNT = sizeof(DUNGEONS) / sizeof(DUNGEONS[0]);
 

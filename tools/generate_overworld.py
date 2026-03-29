@@ -3,13 +3,16 @@
 
 Run: python3 tools/generate_overworld.py
 Output: data/maps/overworld.map
+        data/dungeons.json
 
 2000x1500 — dense, interesting, Daggerfall-style open world.
+Named dungeons placed near quest towns + generic exploration dungeons.
 """
 
 import random
 import math
 import os
+import json
 
 W = 2000
 H = 1500
@@ -190,31 +193,82 @@ for tx, ty, name, is_start in towns:
     if 25 < tx < W - 25 and 25 < ty < H - 25:
         place_town(tx, ty, is_start)
 
-# === DUNGEONS (30) ===
+# === NAMED QUEST DUNGEONS + GENERIC DUNGEONS ===
 print("Placing dungeons...", flush=True)
-dungeon_spots = []
-# Barrow near Thornwall (first quest dungeon)
-barrow_x, barrow_y = CX + 60, CY
-dungeon_spots.append((barrow_x, barrow_y))
 
-# Others spread around
-for i in range(29):
-    angle = (i / 29) * 2 * math.pi
-    dist = 120 + (i % 5) * 120
-    dx = int(math.cos(angle) * dist * 1.3)
-    dy = int(math.sin(angle) * dist)
-    dungeon_spots.append((CX + dx, CY + dy))
+# Named quest-linked dungeons: (x, y, name, zone, quest_id)
+named_dungeons = [
+    (CX + 60,   CY,      "The Barrow",        "warrens",      "MQ_01"),
+    (CX - 200,  CY - 100, "Ashford Ruins",    "warrens",      "MQ_03"),  # near Ashford (CX-250, CY-100)
+    (CX + 200,  CY - 110, "Stonekeep",        "stonekeep",    "MQ_05"),  # near Ravenshold/Greywatch area
+    (CX + 100,  CY - 250, "Frostmere Depths", "deep_halls",   "MQ_07"),  # near Frostmere (CX+50, CY-300)
+    (CX - 150,  CY + 150, "The Catacombs",    "catacombs",    "MQ_08"),  # near Millhaven/Bramblewood
+    (CX + 450,  CY + 50,  "The Molten Depths", "molten",      "MQ_11"),  # near Ironhearth (CX+400, CY)
+    (CX + 500,  CY - 200, "The Sunken Halls", "sunken",       "MQ_13"),  # near Candlemere (CX+450, CY-250)
+    (CX - 400,  CY - 200, "The Hollowgate",   "deep_halls",   "MQ_14"),  # near Hollowgate (CX-450, CY-200)
+    (CX,        CY - 600, "The Sepulchre",    "sepulchre",    "MQ_15"),  # far north, final mega-dungeon
+]
 
-for dx_pos, dy_pos in dungeon_spots:
+# Generic exploration dungeons spread across the map
+generic_dungeons = []
+generic_rng = random.Random(123)  # separate seed so named dungeon changes don't shift generics
+placed_positions = [(d[0], d[1]) for d in named_dungeons]
+
+def too_close(x, y, min_dist=80):
+    for px, py in placed_positions:
+        if abs(x - px) < min_dist and abs(y - py) < min_dist:
+            return True
+    # Also don't place on top of towns
+    for tx, ty, _, _ in towns:
+        if abs(x - tx) < 40 and abs(y - ty) < 40:
+            return True
+    return False
+
+# Place 18 generic dungeons spread across the map
+generic_zones = ["warrens", "stonekeep", "deep_halls", "catacombs", "molten", "sunken"]
+for i in range(18):
+    for _ in range(50):  # retry to find valid position
+        gx = generic_rng.randint(60, W - 60)
+        gy = generic_rng.randint(60, H - 60)
+        if not too_close(gx, gy, 70):
+            zone = generic_zones[i % len(generic_zones)]
+            generic_dungeons.append((gx, gy, None, zone, None))
+            placed_positions.append((gx, gy))
+            break
+
+all_dungeons = named_dungeons + generic_dungeons
+
+def place_dungeon(dx_pos, dy_pos, is_sepulchre=False):
     dx_pos = max(15, min(W - 15, dx_pos))
     dy_pos = max(15, min(H - 15, dy_pos))
-    for dy in range(-3, 4):
-        for dx in range(-3, 4):
-            set_tile(dx_pos + dx, dy_pos + dy, '.')
-    fill_rect(dx_pos - 2, dy_pos - 2, dx_pos + 3, dy_pos + 3, '#')
-    fill_rect(dx_pos - 1, dy_pos - 1, dx_pos + 2, dy_pos + 2, ':')
-    set_tile(dx_pos - 2, dy_pos, '+')
-    set_tile(dx_pos, dy_pos, '>')
+    if is_sepulchre:
+        # Larger stone structure surrounded by ruins
+        for dy in range(-8, 9):
+            for dx in range(-8, 9):
+                set_tile(dx_pos + dx, dy_pos + dy, '.')
+        # Outer ruin ring
+        for dy in range(-7, 8):
+            for dx in range(-7, 8):
+                dist = math.sqrt(dx * dx + dy * dy)
+                if 5.5 < dist < 7.5 and random.random() < 0.5:
+                    set_tile(dx_pos + dx, dy_pos + dy, '#')
+        # Inner structure
+        fill_rect(dx_pos - 4, dy_pos - 4, dx_pos + 5, dy_pos + 5, '#')
+        fill_rect(dx_pos - 3, dy_pos - 3, dx_pos + 4, dy_pos + 4, ':')
+        set_tile(dx_pos - 4, dy_pos, '+')
+        set_tile(dx_pos, dy_pos, '>')
+    else:
+        for dy in range(-3, 4):
+            for dx in range(-3, 4):
+                set_tile(dx_pos + dx, dy_pos + dy, '.')
+        fill_rect(dx_pos - 2, dy_pos - 2, dx_pos + 3, dy_pos + 3, '#')
+        fill_rect(dx_pos - 1, dy_pos - 1, dx_pos + 2, dy_pos + 2, ':')
+        set_tile(dx_pos - 2, dy_pos, '+')
+        set_tile(dx_pos, dy_pos, '>')
+
+for dx_pos, dy_pos, name, zone, quest in all_dungeons:
+    is_sep = (name == "The Sepulchre")
+    place_dungeon(dx_pos, dy_pos, is_sep)
 
 # === ROADS ===
 print("Drawing roads...", flush=True)
@@ -254,8 +308,20 @@ for _ in range(8):
     a, b = random.sample(range(len(town_coords)), 2)
     draw_road(*town_coords[a], *town_coords[b])
 
-# Road from Thornwall to the barrow
-draw_road(CX, CY, barrow_x, barrow_y)
+# Roads from towns to their nearby quest dungeons
+for dx_pos, dy_pos, name, zone, quest in named_dungeons:
+    if name == "The Sepulchre":
+        continue  # no road to the final dungeon — must find it
+    # Find nearest town and draw road
+    best_dist = float('inf')
+    best_town = None
+    for tx, ty, tname, _ in towns:
+        d = math.hypot(dx_pos - tx, dy_pos - ty)
+        if d < best_dist:
+            best_dist = d
+            best_town = (tx, ty)
+    if best_town:
+        draw_road(best_town[0], best_town[1], dx_pos, dy_pos)
 
 # === RUINS ===
 print("Placing ruins...", flush=True)
@@ -281,13 +347,35 @@ for x in range(W):
 # === PLAYER START (last, can't be overwritten) ===
 set_tile(CX, CY, '@')
 
-# === OUTPUT ===
+# === OUTPUT MAP ===
 print("Writing map...", flush=True)
-out_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                         'data', 'maps', 'overworld.map')
+base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+out_path = os.path.join(base_dir, 'data', 'maps', 'overworld.map')
 with open(out_path, 'w') as f:
     for row in grid:
         f.write(''.join(row) + '\n')
 
+# === OUTPUT DUNGEON REGISTRY ===
+print("Writing dungeon registry...", flush=True)
+registry = []
+for dx_pos, dy_pos, name, zone, quest in all_dungeons:
+    dx_pos = max(15, min(W - 15, dx_pos))
+    dy_pos = max(15, min(H - 15, dy_pos))
+    entry = {
+        "name": name if name else f"Dungeon ({dx_pos}, {dy_pos})",
+        "x": dx_pos,
+        "y": dy_pos,
+        "zone": zone,
+        "quest": quest,
+    }
+    registry.append(entry)
+
+json_path = os.path.join(base_dir, 'data', 'dungeons.json')
+with open(json_path, 'w') as f:
+    json.dump(registry, f, indent=2)
+
 print(f"Done: {W}x{H} = {W * H:,} tiles")
-print(f"Towns: {len(towns)}, Dungeons: {len(dungeon_spots)}")
+print(f"Towns: {len(towns)}, Named dungeons: {len(named_dungeons)}, "
+      f"Generic dungeons: {len(generic_dungeons)}, Total dungeons: {len(all_dungeons)}")
+print(f"Map: {out_path}")
+print(f"Registry: {json_path}")
