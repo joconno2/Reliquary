@@ -8,6 +8,7 @@
 #include "components/inventory.h"
 #include "components/item.h"
 #include "components/spellbook.h"
+#include "components/disease.h"
 #include <cstdio>
 #include <algorithm>
 
@@ -302,7 +303,7 @@ void CharacterSheet::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* fo
         auto& inv = world.get<Inventory>(player_);
         const char* slot_names[] = {
             "Weapon", "Off Hand", "Head", "Chest", "Hands", "Feet",
-            "Amulet", "Ring 1", "Ring 2"
+            "Amulet", "Ring 1", "Ring 2", "Pet"
         };
         for (int s = 0; s < EQUIP_SLOT_COUNT; s++) {
             Entity eq = inv.equipped[s];
@@ -334,6 +335,23 @@ void CharacterSheet::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* fo
                 ui::draw_text(renderer, font, buf, mp_col, rx, ry);
                 ry += line_h;
                 if (ry > panel_y + panel_h - line_h * 2) break;
+            }
+        }
+    }
+
+    // Diseases (permanent conditions)
+    if (world.has<Diseases>(player_)) {
+        auto& diseases = world.get<Diseases>(player_);
+        if (!diseases.empty()) {
+            ry += 8;
+            SDL_Color disease_col = {180, 120, 200, 255};
+            ui::draw_text(renderer, font, "-- Afflictions --", disease_col, rx, ry);
+            ry += line_h + 2;
+            for (auto did : diseases.active) {
+                auto& dinfo = get_disease_info(did);
+                ui::draw_text(renderer, font, dinfo.name, disease_col, rx + 8, ry);
+                ry += line_h;
+                if (ry > panel_y + panel_h - line_h * 3) break;
             }
         }
     }

@@ -204,9 +204,9 @@ void SettingsScreen::render_keybinds(SDL_Renderer* renderer, TTF_Font* font,
 
     ui::draw_text_centered(renderer, font, "Keybinds", title_col, cx, 30);
 
-    int panel_w = 600;
+    int panel_w = std::min(w * 2 / 3, 900);
     int panel_x = cx - panel_w / 2;
-    int panel_y = 60;
+    int panel_y = h / 12;
     int panel_h = h - 110;
 
     ui::draw_panel(renderer, panel_x, panel_y, panel_w, panel_h);

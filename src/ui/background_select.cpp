@@ -43,31 +43,38 @@ void BackgroundSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     SDL_Color desc_col   = {140, 130, 120, 255};
     SDL_Color green_col  = {120, 200, 120, 255};
 
-    ui::draw_text(renderer, font, "Choose your background.", title_col, 40, 30);
+    int margin = w / 30;
 
-    int list_x = 40;
-    int list_y = 60;
-    int row_h  = line_h + 6;
+    ui::draw_text_centered(renderer, font, "Choose your background.", title_col, w / 2, margin);
+
+    // Centered two-column layout — 80% of screen
+    int content_w = w * 4 / 5;
+    int content_x = (w - content_w) / 2;
+    int list_w = content_w * 2 / 5;
+    int detail_w = content_w * 3 / 5 - margin;
+    int list_x = content_x;
+    int detail_x_bg = content_x + list_w + margin;
+
+    int list_top = margin + line_h + 12;
+    int list_bottom = h - line_h * 2;
+    int row_h = std::min((list_bottom - list_top) / BACKGROUND_COUNT, line_h * 3);
 
     for (int i = 0; i < BACKGROUND_COUNT; i++) {
         const BackgroundInfo& bg = get_background_info(static_cast<BackgroundId>(i));
         bool is_sel = (i == selected_);
+        int iy = list_top + i * row_h;
 
         if (is_sel) {
-            SDL_Rect hl = {list_x - 4, list_y, 300, row_h};
-            SDL_SetRenderDrawColor(renderer, 30, 25, 40, 255);
-            SDL_RenderFillRect(renderer, &hl);
+            ui::draw_panel(renderer, list_x - 4, iy - 2, list_w + 8, row_h - 2);
         }
 
         ui::draw_text(renderer, font, bg.name,
-                     is_sel ? sel_col : normal_col, list_x, list_y);
-        list_y += row_h;
+                     is_sel ? sel_col : normal_col, list_x + 6, iy + 4);
     }
 
-    // Detail panel on the right
-    int detail_x = 380;
-    int detail_y = 40;
-    int detail_w = w - detail_x - 40;
+    // Detail panel
+    int detail_x = detail_x_bg;
+    int detail_y = list_top;
 
     const BackgroundInfo& sel = get_background_info(static_cast<BackgroundId>(selected_));
 

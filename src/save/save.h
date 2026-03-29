@@ -21,6 +21,9 @@ struct SaveData {
     // RNG state for reproducibility
     uint64_t rng_seed = 0;
 
+    // Hardcore mode — save deleted on death, one-shot loads
+    bool hardcore = false;
+
     bool valid = false;
 };
 

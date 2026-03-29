@@ -135,6 +135,31 @@ void draw_map(SDL_Renderer* renderer, const SpriteManager& sprites,
                     // Rock on dirt base
                     draw_sprite_scaled(SHEET_TILES, 0, 8, tint);
                     draw_sprite_scaled(SHEET_TILES, 0, 18, tint); // large rock sprite
+                } else if ((tile.type >= TileType::WALL_DIRT && tile.type <= TileType::WALL_CATACOMB)
+                           || tile.type == TileType::WALL_WOOD) {
+                    // Walls: side view if tile below is not a wall (player sees the face)
+                    // top view if tile below is also a wall (looking down at it)
+                    int top_col = 0, side_col = 1, wall_row = 0;
+                    switch (tile.type) {
+                        case TileType::WALL_DIRT:        wall_row = 0; break;
+                        case TileType::WALL_STONE_ROUGH: wall_row = 1; break;
+                        case TileType::WALL_STONE_BRICK: wall_row = 2; break;
+                        case TileType::WALL_IGNEOUS:     wall_row = 3; break;
+                        case TileType::WALL_LARGE_STONE: wall_row = 4; break;
+                        case TileType::WALL_CATACOMB:    wall_row = 5; break;
+                        case TileType::WALL_WOOD:        wall_row = 1; top_col = 2; side_col = 3; break;
+                        default: wall_row = 2; break;
+                    }
+                    auto is_any_wall = [](TileType t) {
+                        return (t >= TileType::WALL_DIRT && t <= TileType::WALL_CATACOMB)
+                               || t == TileType::WALL_WOOD;
+                    };
+                    bool show_side = true;
+                    if (y + 1 < map.height()) {
+                        if (is_any_wall(map.at(x, y + 1).type))
+                            show_side = false;
+                    }
+                    draw_sprite_scaled(SHEET_TILES, show_side ? side_col : top_col, wall_row, tint);
                 } else {
                     auto ref = tile_sprite(tile.type, tile.variant);
                     draw_sprite_scaled(ref.sheet, ref.col, ref.row, tint);
@@ -143,6 +168,12 @@ void draw_map(SDL_Renderer* renderer, const SpriteManager& sprites,
 
             if (tile.visible) {
                 draw_tile({255, 255, 255, 255});
+                // Animated water overlay
+                if (tile.type == TileType::WATER) {
+                    int wf = static_cast<int>((SDL_GetTicks() / 200 + x * 3 + y * 7) % 6);
+                    sprites.draw_sprite_sized(renderer, SHEET_ANIMATED, wf, 10,
+                                              screen_x, screen_y, TS, {255, 255, 255, 120});
+                }
             } else if (tile.explored) {
                 draw_tile({100, 100, 120, 255});
             }
@@ -185,9 +216,29 @@ void draw_entities(SDL_Renderer* renderer, const SpriteManager& sprites,
     std::sort(cmds.begin(), cmds.end(),
               [](const DrawCmd& a, const DrawCmd& b) { return a.z_order < b.z_order; });
 
+    int anim_frame = static_cast<int>((SDL_GetTicks() / 150) % 6);
+
     for (auto& cmd : cmds) {
-        sprites.draw_sprite_sized(renderer, cmd.sheet, cmd.sx, cmd.sy,
+        int sx = cmd.sx, sy = cmd.sy;
+        // Animated sprites: cycle columns as frames
+        if (cmd.sheet == SHEET_ANIMATED) {
+            sx = anim_frame;
+        }
+        sprites.draw_sprite_sized(renderer, cmd.sheet, sx, sy,
                                    cmd.dx, cmd.dy, TS, cmd.tint, cmd.flip_h);
+
+        // Warm glow around light sources (torches, braziers, fire pits)
+        if (cmd.sheet == SHEET_ANIMATED && (sy == 1 || sy == 3 || sy == 5 || sy == 7)) {
+            // Lit variants: brazier(1), fire pit(3), torch(5), lamp(7)
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+            int glow_r = TS * 2;
+            SDL_Rect glow = {cmd.dx - glow_r / 2 + TS / 2, cmd.dy - glow_r / 2 + TS / 2,
+                              glow_r, glow_r};
+            // Flickering alpha
+            int flicker = 15 + (anim_frame % 3) * 5;
+            SDL_SetRenderDrawColor(renderer, 255, 180, 80, static_cast<Uint8>(flicker));
+            SDL_RenderFillRect(renderer, &glow);
+        }
     }
 }
 

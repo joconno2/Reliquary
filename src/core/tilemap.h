@@ -25,6 +25,7 @@ enum class TileType : uint8_t {
     FLOOR_SAND,  // desert terrain
     FLOOR_ICE,   // frozen terrain
     ROCK,        // impassable rocky outcrop (blocks movement, not sight)
+    WALL_WOOD,   // wooden wall (houses, cabins)
     COUNT
 };
 

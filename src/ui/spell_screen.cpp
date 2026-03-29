@@ -2,6 +2,7 @@
 #include "ui/ui_draw.h"
 #include "components/stats.h"
 #include <cstdio>
+#include <algorithm>
 
 SpellAction SpellScreen::handle_input(SDL_Event& event) {
     if (!open_) return SpellAction::NONE;
@@ -48,10 +49,12 @@ void SpellScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     auto& book = world.get<Spellbook>(player_);
     bool has_stats = world.has<Stats>(player_);
 
-    int panel_w = 460;
-    int panel_h = screen_h - 40;
-    int panel_x = (screen_w - panel_w) / 2;
-    int panel_y = 20;
+    int count = static_cast<int>(book.known_spells.size());
+    int line_h_est = TTF_FontLineSkip(font);
+    int panel_w = std::min(screen_w / 3, 500);
+    int panel_h = std::min(screen_h - 60, 50 + (count + 1) * (line_h_est + 2) + 40);
+    int panel_x = screen_w - panel_w - 12;
+    int panel_y = 40;
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     ui::draw_panel(renderer, panel_x, panel_y, panel_w, panel_h);
@@ -80,7 +83,6 @@ void SpellScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     }
 
     int sel = selected_;
-    int count = static_cast<int>(book.known_spells.size());
     if (sel >= count && count > 0) sel = count - 1;
 
     for (int i = 0; i < count; i++) {
@@ -105,20 +107,6 @@ void SpellScreen::render(SDL_Renderer* renderer, TTF_Font* font,
         y += line_h + 2;
     }
 
-    // Description of selected spell
-    if (sel >= 0 && sel < count) {
-        auto& info = get_spell_info(book.known_spells[sel]);
-        y += 8;
-        SDL_Rect sep = {panel_x + 8, y, panel_w - 16, 1};
-        SDL_SetRenderDrawColor(renderer, 60, 50, 70, 255);
-        SDL_RenderFillRect(renderer, &sep);
-        y += 6;
-
-        // Flavor text
-        ui::draw_text_wrapped(renderer, font, info.description, dim_col,
-                              panel_x + 10, y, panel_w - 20);
-    }
-
-    // Hints
-    ui::draw_text(renderer, font, "[c/enter]cast  [z/esc]close", dim_col, panel_x + 10, panel_y + panel_h - line_h - 8);
+    // Compact hint
+    ui::draw_text(renderer, font, "[enter]cast [esc]close", dim_col, panel_x + 10, panel_y + panel_h - line_h - 6);
 }

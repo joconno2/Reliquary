@@ -21,7 +21,7 @@ void HelpScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_t
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 190);
     SDL_RenderFillRect(renderer, &overlay);
 
-    int panel_w = 700;
+    int panel_w = std::min(w * 3 / 4, 1100);
     int panel_h = h - 50;
     int px = (w - panel_w) / 2;
     int py = 25;

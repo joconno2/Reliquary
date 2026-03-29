@@ -106,18 +106,23 @@ void TraitSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     SDL_Color neg_col     = {200, 120, 120, 255};
     SDL_Color section_col = {180, 160, 100, 255};
 
+    int margin = w / 30;
+
     // Title + counter
-    ui::draw_text(renderer, font, "Choose your traits.", title_col, 40, 15);
+    ui::draw_text_centered(renderer, font, "Choose your traits.", title_col, w / 2, margin);
 
     char count_buf[64];
     snprintf(count_buf, sizeof(count_buf), "Positive: %d/3   Negative: %d/2",
              positive_selected_count(), negative_selected_count());
-    ui::draw_text(renderer, font, count_buf, dim_col, 40, 15 + line_h + 2);
+    ui::draw_text_centered(renderer, font, count_buf, dim_col, w / 2, margin + line_h + 2);
 
-    // List: positives first, then negatives
-    int list_x = 40;
-    int list_y = 15 + line_h * 2 + 10;
-    int row_h  = line_h + 4;
+    // Centered two-column layout — 80% of screen
+    int content_w = w * 4 / 5;
+    int content_x = (w - content_w) / 2;
+    int list_w = content_w * 2 / 5;
+    int list_x = content_x;
+    int list_y = margin + line_h * 2 + 10;
+    int row_h  = line_h + 6;
 
     // Section header: Positive
     ui::draw_text(renderer, font, "-- Positive Traits --", section_col, list_x, list_y);
@@ -130,7 +135,7 @@ void TraitSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
         bool is_picked = is_selected(id);
 
         if (is_cursor) {
-            SDL_Rect hl = {list_x - 4, list_y, 310, row_h};
+            SDL_Rect hl = {list_x - 4, list_y - 1, list_w + 8, row_h};
             SDL_SetRenderDrawColor(renderer, 30, 25, 40, 255);
             SDL_RenderFillRect(renderer, &hl);
         }
@@ -161,7 +166,7 @@ void TraitSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
         bool is_picked = is_selected(id);
 
         if (is_cursor) {
-            SDL_Rect hl = {list_x - 4, list_y, 310, row_h};
+            SDL_Rect hl = {list_x - 4, list_y - 1, list_w + 8, row_h};
             SDL_SetRenderDrawColor(renderer, 30, 25, 40, 255);
             SDL_RenderFillRect(renderer, &hl);
         }
@@ -179,9 +184,9 @@ void TraitSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     }
 
     // Detail panel on right
-    int detail_x = 380;
-    int detail_y = 40;
-    int detail_w = w - detail_x - 40;
+    int detail_x = content_x + list_w + margin;
+    int detail_w = content_w * 3 / 5 - margin;
+    int detail_y = margin + line_h * 2 + 10;
 
     ui::draw_panel(renderer, detail_x - 10, detail_y - 10, detail_w + 20, h - detail_y - 20);
 

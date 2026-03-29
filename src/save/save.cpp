@@ -8,6 +8,8 @@
 #include "components/energy.h"
 #include "components/god.h"
 #include "components/spellbook.h"
+#include "components/status_effect.h"
+#include "components/disease.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <cstdio>
@@ -63,6 +65,10 @@ static json item_to_json(const Item& item) {
     j["identified"] = item.identified; j["unid_name"] = item.unid_name;
     j["stack"] = item.stack; j["stackable"] = item.stackable;
     j["quest_id"] = item.quest_id;
+    j["range"] = item.range;
+    j["curse_state"] = item.curse_state;
+    j["teaches_spell"] = item.teaches_spell;
+    j["pet_id"] = item.pet_id;
     return j;
 }
 
@@ -83,6 +89,10 @@ static Item json_to_item(const json& j) {
     item.stack = j.value("stack", 1);
     item.stackable = j.value("stackable", false);
     item.quest_id = j.value("quest_id", -1);
+    item.range = j.value("range", 0);
+    item.curse_state = j.value("curse_state", 0);
+    item.teaches_spell = j.value("teaches_spell", -1);
+    item.pet_id = j.value("pet_id", -1);
     return item;
 }
 
@@ -99,6 +109,7 @@ bool save_game(const std::string& path, const SaveData& data,
     root["rng_seed"] = data.rng_seed;
     root["overworld_return_x"] = data.overworld_return_x;
     root["overworld_return_y"] = data.overworld_return_y;
+    root["hardcore"] = data.hardcore;
 
     // Quest journal
     json quests = json::array();
@@ -135,6 +146,18 @@ bool save_game(const std::string& path, const SaveData& data,
         root["energy"] = e.current;
         root["speed"] = e.speed;
     }
+    if (world.has<StatusEffects>(player)) {
+        auto& fx = world.get<StatusEffects>(player);
+        json effects = json::array();
+        for (auto& eff : fx.effects) {
+            json e;
+            e["type"] = static_cast<int>(eff.type);
+            e["damage"] = eff.damage;
+            e["turns"] = eff.turns_remaining;
+            effects.push_back(e);
+        }
+        root["status_effects"] = effects;
+    }
 
     // Spellbook
     if (world.has<Spellbook>(player)) {
@@ -142,6 +165,14 @@ bool save_game(const std::string& path, const SaveData& data,
         for (auto s : world.get<Spellbook>(player).known_spells)
             spells.push_back(static_cast<int>(s));
         root["spells"] = spells;
+    }
+
+    // Diseases
+    if (world.has<Diseases>(player)) {
+        json diseases = json::array();
+        for (auto d : world.get<Diseases>(player).active)
+            diseases.push_back(static_cast<int>(d));
+        root["diseases"] = diseases;
     }
 
     // Inventory items
@@ -208,6 +239,7 @@ SaveData load_game(const std::string& path, World& world, TileMap& map) {
     data.rng_seed = root.value("rng_seed", static_cast<uint64_t>(0));
     data.overworld_return_x = root.value("overworld_return_x", 0);
     data.overworld_return_y = root.value("overworld_return_y", 0);
+    data.hardcore = root.value("hardcore", false);
 
     // Quests
     if (root.contains("quests")) {
@@ -264,12 +296,34 @@ SaveData load_game(const std::string& path, World& world, TileMap& map) {
     }
     world.add<Energy>(player, {root.value("energy", 0), root.value("speed", 100)});
 
+    // Status effects
+    {
+        StatusEffects fx;
+        if (root.contains("status_effects")) {
+            for (auto& e : root["status_effects"]) {
+                fx.add(static_cast<StatusType>(e.value("type", 0)),
+                       e.value("damage", 1), e.value("turns", 1));
+            }
+        }
+        world.add<StatusEffects>(player, std::move(fx));
+    }
+
     // Spellbook
     if (root.contains("spells")) {
         Spellbook book;
         for (auto& s : root["spells"])
             book.learn(static_cast<SpellId>(s.get<int>()));
         world.add<Spellbook>(player, std::move(book));
+    }
+
+    // Diseases
+    {
+        Diseases dis;
+        if (root.contains("diseases")) {
+            for (auto& d : root["diseases"])
+                dis.active.push_back(static_cast<DiseaseId>(d.get<int>()));
+        }
+        world.add<Diseases>(player, std::move(dis));
     }
 
     // Inventory

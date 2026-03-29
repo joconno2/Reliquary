@@ -7,22 +7,43 @@
 
 namespace quest_gen {
 
-// Town names used for cross-town delivery quests
-static const char* TOWN_NAMES[] = {
-    "Thornwall", "Ashford", "Greywatch", "Millhaven", "Stonehollow",
-    "Frostmere", "Bramblewood", "Ironhearth", "Dustfall", "Whitepeak",
-    "Drywell", "Hollowgate", "Candlemere", "Sandmoor", "Glacierveil",
-    "Tanglewood", "Redrock", "Ravenshold", "Fenwatch", "Endgate",
+// Town registry with coordinates — used for cross-town delivery quests
+struct TownRef {
+    const char* name;
+    int x, y;
 };
-static constexpr int TOWN_COUNT = sizeof(TOWN_NAMES) / sizeof(TOWN_NAMES[0]);
 
-// Pick a random town name that isn't the current one
-static const char* other_town(RNG& rng, const std::string& current) {
+static const TownRef ALL_TOWNS[] = {
+    {"Thornwall",    1000, 750},
+    {"Ashford",       750, 650},
+    {"Greywatch",    1300, 670},
+    {"Millhaven",     850, 950},
+    {"Stonehollow",  1200, 930},
+    {"Frostmere",    1050, 450},
+    {"Bramblewood",   650, 800},
+    {"Ironhearth",   1400, 750},
+    {"Dustfall",     1000, 1100},
+    {"Whitepeak",     800, 400},
+    {"Drywell",      1250, 1100},
+    {"Hollowgate",    550, 550},
+    {"Candlemere",   1450, 500},
+    {"Sandmoor",      900, 1200},
+    {"Glacierveil",  1100, 300},
+    {"Tanglewood",    700, 1050},
+    {"Redrock",      1350, 1000},
+    {"Ravenshold",   1150, 550},
+    {"Fenwatch",      600, 700},
+    {"Endgate",      1500, 850},
+};
+static constexpr int TOWN_REF_COUNT = sizeof(ALL_TOWNS) / sizeof(ALL_TOWNS[0]);
+
+// Pick a random town that isn't the current one
+static const TownRef& other_town(RNG& rng, const std::string& current) {
     for (int i = 0; i < 20; i++) {
-        const char* pick = TOWN_NAMES[rng.range(0, TOWN_COUNT - 1)];
-        if (current != pick) return pick;
+        int pick = rng.range(0, TOWN_REF_COUNT - 1);
+        if (current != ALL_TOWNS[pick].name) return ALL_TOWNS[pick];
     }
-    return "a distant settlement";
+    return ALL_TOWNS[0]; // fallback
 }
 
 static DynamicQuest make_farmer_quest(RNG& rng, const std::string& town) {
@@ -47,6 +68,8 @@ static DynamicQuest make_farmer_quest(RNG& rng, const std::string& town) {
     q.complete_text = buf;
     q.xp_reward = 25 + rng.range(0, 15);
     q.gold_reward = 10 + rng.range(0, 10);
+    // Must spend time in the wilderness
+    q.min_turns = 40 + rng.range(0, 30);
     return q;
 }
 
@@ -69,19 +92,24 @@ static DynamicQuest make_guard_quest(RNG& rng, const std::string& town) {
         q.complete_text = "The guard nods. One less thing to worry about.";
         q.xp_reward = 30 + rng.range(0, 20);
         q.gold_reward = 15 + rng.range(0, 15);
+        q.requires_dungeon = true;
     } else if (variant == 1) {
-        snprintf(buf, sizeof(buf), "Patrol the Road to %s", other_town(rng, town));
+        auto& dest = other_town(rng, town);
+        snprintf(buf, sizeof(buf), "Patrol the Road to %s", dest.name);
         q.name = buf;
         snprintf(buf, sizeof(buf),
             "The roads near %s have grown dangerous. "
-            "The guard needs someone to patrol the route and report what they find.",
-            town.c_str());
+            "The guard needs someone to patrol the route to %s and report what they find.",
+            town.c_str(), dest.name);
         q.description = buf;
-        snprintf(buf, sizeof(buf), "Patrol the road near %s and return.", town.c_str());
+        snprintf(buf, sizeof(buf), "Travel to %s and return.", dest.name);
         q.objective = buf;
         q.complete_text = "The guard marks your report. The road is a little safer.";
         q.xp_reward = 20 + rng.range(0, 15);
         q.gold_reward = 10 + rng.range(0, 10);
+        // Must actually travel to the destination town
+        q.target_town_x = dest.x;
+        q.target_town_y = dest.y;
     } else {
         snprintf(buf, sizeof(buf), "Bandit Trouble near %s", town.c_str());
         q.name = buf;
@@ -95,6 +123,7 @@ static DynamicQuest make_guard_quest(RNG& rng, const std::string& town) {
         q.complete_text = "The bandits have scattered. For now.";
         q.xp_reward = 35 + rng.range(0, 15);
         q.gold_reward = 20 + rng.range(0, 15);
+        q.min_turns = 30 + rng.range(0, 20);
     }
     return q;
 }
@@ -105,19 +134,22 @@ static DynamicQuest make_blacksmith_quest(RNG& rng, const std::string& town) {
     char buf[256];
 
     if (variant == 0) {
-        const char* dest = other_town(rng, town);
-        snprintf(buf, sizeof(buf), "Delivery to %s", dest);
+        auto& dest = other_town(rng, town);
+        snprintf(buf, sizeof(buf), "Delivery to %s", dest.name);
         q.name = buf;
         snprintf(buf, sizeof(buf),
             "The blacksmith in %s has a commission to deliver to %s. "
             "The roads are too dangerous for a smith to travel alone.",
-            town.c_str(), dest);
+            town.c_str(), dest.name);
         q.description = buf;
-        snprintf(buf, sizeof(buf), "Deliver the smithwork to %s.", dest);
+        snprintf(buf, sizeof(buf), "Deliver the smithwork to %s.", dest.name);
         q.objective = buf;
         q.complete_text = "The delivery is made. The smith will be pleased.";
         q.xp_reward = 25 + rng.range(0, 10);
         q.gold_reward = 20 + rng.range(0, 15);
+        // Must travel to destination town
+        q.target_town_x = dest.x;
+        q.target_town_y = dest.y;
     } else {
         static const char* ORES[] = {"dark iron", "moonstone ore", "red copper", "deep tin"};
         int oi = rng.range(0, 3);
@@ -134,6 +166,7 @@ static DynamicQuest make_blacksmith_quest(RNG& rng, const std::string& town) {
         q.complete_text = buf;
         q.xp_reward = 30 + rng.range(0, 15);
         q.gold_reward = 15 + rng.range(0, 10);
+        q.requires_dungeon = true;
     }
     return q;
 }
@@ -160,6 +193,7 @@ static DynamicQuest make_scholar_quest(RNG& rng, const std::string& town) {
         q.complete_text = "The scholar examines the artifact with trembling hands. Knowledge has a price.";
         q.xp_reward = 35 + rng.range(0, 15);
         q.gold_reward = 10 + rng.range(0, 10);
+        q.requires_dungeon = true;
     } else {
         snprintf(buf, sizeof(buf), "Inscriptions of %s", town.c_str());
         q.name = buf;
@@ -173,6 +207,7 @@ static DynamicQuest make_scholar_quest(RNG& rng, const std::string& town) {
         q.complete_text = "The transcription is complete. The scholar reads in silence.";
         q.xp_reward = 30 + rng.range(0, 10);
         q.gold_reward = 5 + rng.range(0, 10);
+        q.requires_dungeon = true;
     }
     return q;
 }
@@ -198,26 +233,31 @@ static DynamicQuest make_herbalist_quest(RNG& rng, const std::string& town) {
     q.complete_text = buf;
     q.xp_reward = 20 + rng.range(0, 10);
     q.gold_reward = 10 + rng.range(0, 10);
+    // Must spend time in the wilderness
+    q.min_turns = 30 + rng.range(0, 20);
     return q;
 }
 
 static DynamicQuest make_merchant_quest(RNG& rng, const std::string& town) {
-    const char* dest = other_town(rng, town);
+    auto& dest = other_town(rng, town);
     DynamicQuest q;
     char buf[256];
 
-    snprintf(buf, sizeof(buf), "Trade Route to %s", dest);
+    snprintf(buf, sizeof(buf), "Trade Route to %s", dest.name);
     q.name = buf;
     snprintf(buf, sizeof(buf),
         "The merchant in %s wants to establish a trade route to %s. "
         "Someone needs to make the journey and negotiate terms.",
-        town.c_str(), dest);
+        town.c_str(), dest.name);
     q.description = buf;
-    snprintf(buf, sizeof(buf), "Travel to %s and negotiate a trade agreement.", dest);
+    snprintf(buf, sizeof(buf), "Travel to %s and negotiate a trade agreement.", dest.name);
     q.objective = buf;
     q.complete_text = "The route is established. Goods will flow. Coin will follow.";
     q.xp_reward = 25 + rng.range(0, 10);
     q.gold_reward = 25 + rng.range(0, 20);
+    // Must travel to destination
+    q.target_town_x = dest.x;
+    q.target_town_y = dest.y;
     return q;
 }
 

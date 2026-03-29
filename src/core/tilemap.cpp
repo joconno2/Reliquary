@@ -31,6 +31,7 @@ bool TileMap::is_walkable(int x, int y) const {
         case TileType::DOOR_CLOSED:
         case TileType::TREE:
         case TileType::ROCK:
+        case TileType::WALL_WOOD:
             return false;
         default:
             return true;
@@ -50,6 +51,7 @@ bool TileMap::is_opaque(int x, int y) const {
         case TileType::WALL_CATACOMB:
         case TileType::DOOR_CLOSED:
         case TileType::TREE:
+        case TileType::WALL_WOOD:
             return true;
         default:
             return false;

@@ -17,6 +17,7 @@ enum class CreationPhase {
     GOD_SELECT,
     BACKGROUND_SELECT,
     TRAIT_SELECT,
+    HARDCORE_SELECT,
     DONE
 };
 
@@ -26,6 +27,7 @@ struct CharacterBuild {
     GodId god = GodId::VETHRIK;
     BackgroundId background = BackgroundId::FARMER;
     std::vector<TraitId> traits;
+    bool hardcore = false;
 };
 
 class CreationScreen {
@@ -35,6 +37,8 @@ public:
     void reset();
     bool is_done() const { return phase_ == CreationPhase::DONE; }
     CharacterBuild get_build() const { return build_; }
+    void set_unlocked(const bool* unlocks, int count); // called before rendering
+    void set_unlock_progress(int class_idx, const char* progress); // "32/50 kills"
 
     bool handle_input(SDL_Event& event);
 
@@ -50,6 +54,8 @@ private:
 
     BackgroundSelectScreen bg_screen_;
     TraitSelectScreen trait_screen_;
+    bool class_unlocked_[CLASS_COUNT] = {}; // true = available
+    std::string unlock_progress_[CLASS_COUNT]; // progress text for locked classes
 
     void randomize_name();
 

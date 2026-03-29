@@ -5,97 +5,97 @@
 
 2.a. chimpanzee
 2.b. gorilla
-3.c. orangutan
+2.c. orangutan
 
-4.a. aye aye
-4.b. gibbon
-4.c. mandrill
-4.d. capuchin
-4.e. langur
+3.a. aye aye
+3.b. gibbon
+3.c. mandrill
+3.d. capuchin
+3.e. langur
 
-5.a. cat
-5.b. bobcat
-5.c. cougar
-5.d. cheetah
-5.e. lynx
-5.f. ocelot
-5.g. male lion
-5.h. female lion
+4.a. cat
+4.b. bobcat
+4.c. cougar
+4.d. cheetah
+4.e. lynx
+4.f. ocelot
+4.g. male lion
+4.h. female lion
 
-6.a. dog
-6.b. puppy
-6.c. hyena
-6.d. fox
-6.e. jackal
-6.f. coyote
-6.g. wolf
+5.a. dog
+5.b. puppy
+5.c. hyena
+5.d. fox
+5.e. jackal
+5.f. coyote
+5.g. wolf
 
-7.a. capybara
-7.b. beaver 
-7.c. mink
-7.d. mongoose
-7.e. marmot
-7.f. groundhog
-7.g. chinchilla
-7.h. echidna
+6.a. capybara
+6.b. beaver
+6.c. mink
+6.d. mongoose
+6.e. marmot
+6.f. groundhog
+6.g. chinchilla
+6.h. echidna
 
-8.a. aardvark
-8.b. armadillo
-8.c. badger
-8.d. honeybadger
-8.e. coati
-8.f. opossum
-8.g. rabbit
-8.h. hare
-8.i. rat
+7.a. aardvark
+7.b. armadillo
+7.c. badger
+7.d. honeybadger
+7.e. coati
+7.f. opossum
+7.g. rabbit
+7.h. hare
+7.i. rat
 
-9.a. snake
-9.b. cobra
-9.c. kingsnake
-9.d. black mamba
+8.a. snake
+8.b. cobra
+8.c. kingsnake
+8.d. black mamba
 
-10.a. alligator
-10.b. monitor lizard
-10.c. iguana
-10.d. tortoise
-10.e. snapping turtle
-10.f. alligator snapping turtle
+9.a. alligator
+9.b. monitor lizard
+9.c. iguana
+9.d. tortoise
+9.e. snapping turtle
+9.f. alligator snapping turtle
 
-11.a. cow
-11.b. horse
-11.c. donkey
-11.d. mule
-11.e. alpaca
-11.f. llama
-11.g. pig
-11.h. boar
-12.a. camel
-12.b. reindeer/caribou
-12.c. water buffalo
-12.d. yak
+10.a. cow
+10.b. horse
+10.c. donkey
+10.d. mule
+10.e. alpaca
+10.f. llama
+10.g. pig
+10.h. boar
+11.a. camel
+11.b. reindeer/caribou
+11.c. water buffalo
+11.d. yak
 
-13.a. seagull
-13.b. barn owl
-13.c. common buzzard
+12.a. seagull
+12.b. barn owl
+12.c. common buzzard
 
-14.a. kangaroo
-14.b. koala
+13.a. kangaroo
+13.b. koala
 
-15.a. penguin
-15.b. little penguin
-15.c. cassowary
-15.d. emu
+14.a. penguin
+14.b. little penguin
+14.c. cassowary
+14.d. emu
 
-16.a. chicken
-16.b. rooster
-16.c. mallard duck
-16.d. swan
-16.e. turkey
-16.f. guineafowl
-16.g. peacock
+15.a. chicken
+15.b. rooster
+15.c. mallard duck
+15.d. swan
+15.e. turkey
+15.f. guineafowl
+15.g. peacock
 
-17.a. goat
-17.b. mountain goat
-17.c. ibex
-17.d. sheep (ram)
+16.a. goat
+16.b. mountain goat
+16.c. ibex
+16.d. sheep (ram)
 16.e. sheep (ewe)

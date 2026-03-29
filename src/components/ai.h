@@ -12,4 +12,6 @@ struct AI {
     int last_seen_y = -1;
     int alert_turns = 0;   // turns since last seeing player (hunting memory)
     int flee_threshold = 20; // HP% below which monster flees
+    int ranged_range = 0;  // >0 = can shoot at this range
+    int ranged_damage = 0; // base ranged damage
 };

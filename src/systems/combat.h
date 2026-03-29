@@ -17,6 +17,10 @@ struct AttackResult {
 AttackResult melee_attack(World& world, Entity attacker, Entity defender,
                            RNG& rng, MessageLog& log);
 
+// Resolve a ranged attack (uses DEX instead of STR)
+AttackResult ranged_attack(World& world, Entity attacker, Entity defender,
+                            int weapon_damage, RNG& rng, MessageLog& log);
+
 // Check if there's an attackable entity at position
 Entity entity_at(World& world, int x, int y, Entity ignore = 0);
 

@@ -11,7 +11,7 @@
 static const char* slot_label(int slot) {
     static const char* names[] = {
         "Weapon", "Off Hand", "Head", "Chest", "Hands",
-        "Feet", "Amulet", "Ring 1", "Ring 2"
+        "Feet", "Amulet", "Ring 1", "Ring 2", "Pet"
     };
     if (slot >= 0 && slot < EQUIP_SLOT_COUNT) return names[slot];
     return "?";
@@ -152,12 +152,12 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     SDL_RenderFillRect(renderer, &overlay);
 
     // Layout: left panel = paper doll, right panel = carried items
-    int total_w = std::min(screen_w - 40, 900);
+    int total_w = std::min(screen_w * 3 / 4, 1200);
     int total_h = screen_h - 50;
     int base_x = (screen_w - total_w) / 2;
     int base_y = 25;
 
-    int doll_w = 340;
+    int doll_w = total_w * 2 / 5;
     int list_w = total_w - doll_w - 12;
     int doll_x = base_x;
     int list_x = base_x + doll_w + 12;
@@ -200,6 +200,7 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
         {col_r, r0},  // 6: amulet
         {col_l, r3},  // 7: ring 1
         {col_r, r3},  // 8: ring 2
+        {col_c, r3},  // 9: pet
     };
 
     for (int s = 0; s < EQUIP_SLOT_COUNT; s++) {
@@ -321,10 +322,31 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
             // Item stats
             char stats_buf[128];
             if (item.type == ItemType::WEAPON) {
-                snprintf(stats_buf, sizeof(stats_buf), "Damage: +%d  Attack: +%d",
-                         item.damage_bonus, item.attack_bonus);
-                ui::draw_text(renderer, font, stats_buf, stat_col, list_x + 10, info_y);
-                info_y += line_h + 2;
+                if (item.range > 0) {
+                    // Ranged weapon — effective damage uses DEX
+                    int eff_dmg = item.damage_bonus;
+                    if (world.has<Stats>(player_))
+                        eff_dmg += world.get<Stats>(player_).attr(Attr::DEX) / 3;
+                    snprintf(stats_buf, sizeof(stats_buf), "Dmg: +%d  Atk: +%d  Range: %d",
+                             item.damage_bonus, item.attack_bonus, item.range);
+                    ui::draw_text(renderer, font, stats_buf, stat_col, list_x + 10, info_y);
+                    info_y += line_h + 2;
+                    snprintf(stats_buf, sizeof(stats_buf), "Effective: %d dmg (DEX)", eff_dmg);
+                    ui::draw_text(renderer, font, stats_buf, SDL_Color{120, 200, 180, 255}, list_x + 10, info_y);
+                    info_y += line_h + 2;
+                } else {
+                    // Melee weapon — effective damage uses STR
+                    int eff_dmg = item.damage_bonus;
+                    if (world.has<Stats>(player_))
+                        eff_dmg += world.get<Stats>(player_).melee_damage();
+                    snprintf(stats_buf, sizeof(stats_buf), "Dmg: +%d  Atk: +%d",
+                             item.damage_bonus, item.attack_bonus);
+                    ui::draw_text(renderer, font, stats_buf, stat_col, list_x + 10, info_y);
+                    info_y += line_h + 2;
+                    snprintf(stats_buf, sizeof(stats_buf), "Effective: %d dmg (STR)", eff_dmg);
+                    ui::draw_text(renderer, font, stats_buf, SDL_Color{120, 200, 180, 255}, list_x + 10, info_y);
+                    info_y += line_h + 2;
+                }
             } else if (item.type == ItemType::ARMOR_HEAD || item.type == ItemType::ARMOR_CHEST ||
                        item.type == ItemType::ARMOR_HANDS || item.type == ItemType::ARMOR_FEET ||
                        item.type == ItemType::SHIELD) {

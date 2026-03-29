@@ -4,6 +4,8 @@
 
 2.a. rough stone wall (top)
 2.b. rough stone wall (side)
+2.c. wood wall (top)
+2.d. wood wall (side)
 
 3.a. stone brick wall (top)
 3.b. stone brick wall (side 1)

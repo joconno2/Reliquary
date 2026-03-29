@@ -15,6 +15,7 @@ enum class ItemType : int {
     FOOD,
     KEY,
     GOLD,
+    PET,
     COUNT
 };
 
@@ -29,6 +30,7 @@ enum class EquipSlot : int {
     AMULET,
     RING_1,
     RING_2,
+    PET,
     SLOT_COUNT
 };
 
@@ -64,6 +66,18 @@ struct Item {
 
     // Quest
     int quest_id = -1; // if >= 0, picking this up completes this quest
+
+    // Ranged
+    int range = 0; // 0 = melee, >0 = ranged weapon with this range
+
+    // Curse state: 0 = normal, 1 = cursed (can't unequip), 2 = blessed (+1 primary bonus)
+    int curse_state = 0;
+
+    // Spellbook — if >= 0, using this teaches this spell
+    int teaches_spell = -1;
+
+    // Pet type (-1 = not a pet, else PetId)
+    int pet_id = -1;
 
     // Stacking
     int stack = 1;

@@ -3,8 +3,12 @@
 #include "components/stats.h"
 #include "components/player.h"
 #include "components/ai.h"
+#include "components/inventory.h"
+#include "components/item.h"
 #include "systems/combat.h"
+#include "components/status_effect.h"
 #include <cmath>
+#include <algorithm>
 #include <cstdio>
 
 namespace magic {
@@ -61,6 +65,29 @@ CastResult cast(World& world, Entity caster, SpellId spell,
         }
         result.consumed_turn = false;
         return result;
+    }
+
+    // Spell failure from heavy armor (player only)
+    if (world.has<Player>(caster) && world.has<Inventory>(caster)) {
+        auto& inv = world.get<Inventory>(caster);
+        int fail_chance = 0;
+        // Check chest and head armor for failure penalty
+        for (auto slot : {EquipSlot::CHEST, EquipSlot::HEAD, EquipSlot::FEET}) {
+            Entity eq = inv.get_equipped(slot);
+            if (eq == NULL_ENTITY || !world.has<Item>(eq)) continue;
+            auto& eq_item = world.get<Item>(eq);
+            // Heavy armor: armor_bonus >= 4 adds failure chance
+            if (eq_item.armor_bonus >= 6) fail_chance += 25;      // plate
+            else if (eq_item.armor_bonus >= 4) fail_chance += 15;  // chain
+            else if (eq_item.armor_bonus >= 3) fail_chance += 8;   // medium
+        }
+        if (fail_chance > 0 && rng.chance(fail_chance)) {
+            stats.mp -= info.mp_cost; // still costs MP
+            log.add("Your armor interferes. The spell fizzles.", {180, 130, 130, 255});
+            result.consumed_turn = true;
+            result.success = false;
+            return result;
+        }
     }
 
     // Spend MP
@@ -255,6 +282,49 @@ CastResult cast(World& world, Entity caster, SpellId spell,
                 log.add(buf, {80, 160, 80, 255});
             }
             result.success = count > 0;
+            break;
+        }
+
+        case SpellId::IDENTIFY: {
+            // Identify the first unidentified item in inventory
+            if (!world.has<Inventory>(caster)) break;
+            auto& inv = world.get<Inventory>(caster);
+            bool found = false;
+            for (Entity ie : inv.items) {
+                if (!world.has<Item>(ie)) continue;
+                auto& itm = world.get<Item>(ie);
+                if (!itm.identified) {
+                    itm.identified = true;
+                    if (is_player) {
+                        char buf[128];
+                        snprintf(buf, sizeof(buf), "You identify the %s.", itm.name.c_str());
+                        log.add(buf, {180, 200, 220, 255});
+                    }
+                    found = true;
+                    break;
+                }
+            }
+            if (is_player && !found) {
+                log.add("Everything you carry is already identified.", {140, 130, 120, 255});
+                stats.mp += info.mp_cost; // refund
+                result.consumed_turn = false;
+                break;
+            }
+            result.success = found;
+            break;
+        }
+
+        case SpellId::CURE_POISON: {
+            // Cure all poison effects
+            if (world.has<StatusEffects>(caster)) {
+                auto& fx = world.get<StatusEffects>(caster);
+                fx.effects.erase(
+                    std::remove_if(fx.effects.begin(), fx.effects.end(),
+                        [](const StatusEffect& e) { return e.type == StatusType::POISON; }),
+                    fx.effects.end());
+            }
+            if (is_player) log.add("The poison fades from your blood.", {100, 200, 100, 255});
+            result.success = true;
             break;
         }
 

@@ -42,8 +42,8 @@ void PauseMenu::render(SDL_Renderer* renderer, TTF_Font* body, TTF_Font* title,
     SDL_RenderFillRect(renderer, &overlay);
 
     // Panel
-    int panel_w = 340;
-    int panel_h = 300;
+    int panel_w = std::min(w / 3, 500);
+    int panel_h = std::min(h / 2, 400);
     int panel_x = (w - panel_w) / 2;
     int panel_y = (h - panel_h) / 2;
 

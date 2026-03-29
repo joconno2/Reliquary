@@ -2,6 +2,7 @@
 #include "core/ecs.h"
 #include "core/tilemap.h"
 #include "core/rng.h"
+#include "components/god.h"
 #include "generation/dungeon.h"
 #include <vector>
 
@@ -23,5 +24,17 @@ Entity spawn_boss(World& world, const TileMap& map,
                    int sheet, int sx, int sy,
                    int hp, int str, int dex, int con,
                    int dmg, int armor, int speed, int xp_value);
+
+// Spawn dungeon doodads (chests, jars, mushrooms, coffins, blood splatters)
+void spawn_doodads(World& world, const TileMap& map,
+                    const std::vector<Room>& rooms, RNG& rng,
+                    int dungeon_level, const std::string& zone = "");
+
+// Spawn a rival paragon (PC-like enemy with god affiliation).
+// Returns the entity, or NULL_ENTITY if no suitable room/spawn.
+// player_god: don't spawn a paragon of the player's own god.
+Entity spawn_paragon(World& world, const TileMap& map,
+                      const std::vector<Room>& rooms, RNG& rng,
+                      int dungeon_level, GodId player_god);
 
 } // namespace populate

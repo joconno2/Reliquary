@@ -1,10 +1,10 @@
 # Reliquary — Project Plan
 
-> Last updated: 2026-03-28
+> Last updated: 2026-03-29
 
-## Current Status: Playable Alpha — Full Quest Chain Implemented
+## Current Status: Feature-Complete Alpha
 
-The game is playable from character creation through a 17-step main quest chain ending with claiming The Reliquary in The Sepulchre. All quest items, targets, and NPCs are wired up. 20 towns, 27 dungeons (9 named quest-linked), 5 climate zones.
+The game is fully playable from character creation through a 17-step main quest chain. 17 classes (4 base + 13 unlockable), 7 gods, 15 backgrounds, 22 traits, 7 permanent diseases, 8 pets, 7 rival paragons. Full audio system with 19 music tracks, 12 ambient loops, 24 SFX. Animated torches/braziers/water. 20 towns + 4 hamlets + 6 cabins + 3 outposts, 27 dungeons, wilderness POIs, wandering NPCs. Meta-save progression, hardcore mode, persistent bestiary/potion IDs. Resolution scaling for ultrawide/4K.
 
 **Repo:** https://github.com/joconno2/Reliquary.git
 **Location:** ~/Reliquary
@@ -19,34 +19,49 @@ The game is playable from character creation through a 17-step main quest chain 
 ### Core Engine
 - SDL2/C++20/CMake, custom ECS, tilemap, spritesheet loading (32rogues + pre-flipped copies for sprite mirroring)
 - BSP dungeon generation, 6 themed zones (Warrens, Stonekeep, Deep Halls, Catacombs, Molten Depths, Sunken Halls)
-- FOV (recursive shadowcasting), camera (48px tiles), energy/speed turn system
-- Message log (top-down, color-coded), dynamic resolution, fullscreen (F11)
-- Bundled fonts: Press Start (body 12px), Jacquard (title 32px, menu 96px)
-- Pixel-art panel borders (SNES-style), UI scale system (1.0x-2.0x)
+- FOV (recursive shadowcasting), camera (resolution-scaled tiles), energy/speed turn system
+- Message log (top-down, color-coded), fullscreen by default, F11 toggle, resolution scaling (1080p baseline, auto-scales fonts/tiles/UI for ultrawide/4K)
+- Bundled fonts: Press Start (body), Jacquard (titles)
+- Pixel-art panel borders (SNES-style), proportional UI layouts
+- Animated tiles: flickering torches/braziers with warm glow, animated water waves
 - Save/load (JSON — full world state, player, inventory, quests, map, return position)
+- Full audio system: 24 real SFX (pixel combat pack), 19 music tracks (Ifness — title/overworld/dungeon/boss/death/victory/sepulchre), 12 ambient loops (Fantasy SFX — cave/forest/interior/fire/rain/river). Title screen: Gethsemane + fire crackle + rain. Music/ambient crossfade on location change.
 
 ### Combat & Creatures
-- Melee combat (d20 + attack vs dodge, crits, equipment bonuses, depth scaling)
+- Melee combat with atmospheric messages (weapon-aware, body parts, damage in parens)
+- Ranged combat (f key — bows/crossbows, DEX-based, auto-target nearest visible enemy)
+- Status effects: poison (spider/naga 25%), burn (dragon 30%), bleed (ghoul 20%) — tick damage, HUD indicators (PSN/BRN/BLD)
+- Permanent diseases: 7 Daggerfall-style diseases (lycanthropy, vampirism, stonescale, mindfire, sporebloom, hollow bones, blackblood) — contracted from monster hits, CON resist, permanent stat trade-offs, HUD + character sheet display
+- Rival paragons: 7 god-affiliated PC-like enemies (Osric/Mirael/Dain/Sera/Theron/Lucan/The Unnamed), depth 4+ in named dungeons, 15% spawn rate, depth-scaled, class-based sprites with god-colored tints
 - 18+ monster types, HP/damage scale with depth (+20%/+15% per level)
-- Monster AI: idle/wander, LOS hunting, flee at low HP
+- 9 overworld enemy types: wolves, wild boars, highwaymen, giant spiders, bears, bandits, snakes, dire wolves, wandering skeletons
+- Monster AI: idle/wander, LOS hunting, flee at low HP, ranged attacks (goblin archers)
 - Death → corpse, XP, level-up choice screen (attribute/HP/MP/speed/damage picks)
 - Rest system (r key — 25% HP/MP, 10 turns, 30% interruption in dungeons)
 - Sprite mirroring on horizontal movement (pre-flipped spritesheets, no SDL_RenderCopyEx)
+- Examine mode (x key) — cursor to inspect tiles, creatures (with HP), items, NPCs, corpses
 
 ### Items & Equipment
-- 9+ weapon types, 11+ armor types, potions, food, gold, quest items
+- 9+ melee weapon types, 4 ranged weapons (short/hunting/long bow, crossbow), 11+ armor types, potions, food, gold, quest items, spellbooks
+- Cursed items (can't unequip, bait stats), blessed items (+1 bonus), revealed on equip/identify
+- Pet system: 8 pets (rat/dog/cat/owl/snake/bat/imp/crow), PET equip slot, invincible sprite follows behind player, passive bonuses (crow scavenges gold)
 - Paper doll inventory with mouse support, item sprites in equip slots
 - Item quality tiers: Fine (+1), Superior (+2), Masterwork (+3) at depth 5/10/15
-- Item stats visible on selection (damage, armor, dodge, heal, gold value)
+- Item stats visible on selection + effective damage display ("Effective: X dmg (STR/DEX)")
+- 9 consumables: healing/strong healing/mana potions, antidote, speed draught, strength elixir, bread, cheese, dried meat
 - Shops: buy (random stock, sprites, stats), sell (half price)
 - Identification system (potions have unid color names)
 - Quest items with pickup-triggered quest completion
 
 ### Character System
-- 4 classes (Fighter, Rogue, Wizard, Ranger) with sprites and starting spells
-- 7 gods with stat bonuses and lore (favor component exists but mechanics not active)
+- 17 classes: 4 base (Fighter, Rogue, Wizard, Ranger) + 13 unlockable with meta-save progression
+- 7 gods with stat bonuses, lore, favor system, and 2 prayers each (p key)
+- God favor: +1 per kill, +5 per quest, god-specific bonuses/penalties (undead, animals, exploration, rest)
+- Prayers: favor-costed abilities (heals, damage, teleport, MP restore, map reveal, AoE, blood sacrifice)
 - 15 backgrounds with unique passives, 22 traits (12 positive, 10 negative)
-- Character creation: Class (128px sprite) → Name (random+editable) → God → Background → Traits
+- Character creation: Class grid (all 17 visible, SNES-bordered selection) → Name → God → Background → Traits → Hardcore toggle
+- Pet naming dialog on pickup
+- All classes start with appropriate gear (weapon + armor per archetype)
 - Character sheet (c key) with 40+ derived stats, 3-column layout
 - ~~Custom class creation~~ REMOVED from scope
 - ~~Hunger clock~~ REMOVED from scope
@@ -54,18 +69,27 @@ The game is playable from character creation through a 17-step main quest chain 
 ### Magic
 - 15 spells across 6 schools (Conjuration, Transmutation, Divination, Healing, Nature, Dark Arts)
 - Spell screen (z key), MP system, INT scaling, auto-targeting
+- Spell failure from heavy armor (chain 15%, plate 25% per piece)
+- Spellbooks drop in dungeons — "Tome of X" teaches spell on use
 - Class starting spells (Wizard 3, Ranger 1, others Minor Heal)
 
 ### World
-- 2000x1500 tile overworld (hand-editable text map: data/maps/overworld.map)
-- Generator script: tools/generate_overworld.py
-- 20 towns with buildings and NPCs (shopkeeper, blacksmith, scholar, guard, farmer, herbalist, merchant, elder, villager)
+- 2000x1500 tile overworld (hand-editable text map + programmatic decoration pass)
+- 20 towns with buildings and wandering NPCs + herbalists/merchants at every town
+- 4 hamlets (Thornbrook, Icewind Post, Dry Creek, Mosshaven) — wood cabin clusters with villagers
+- 6 isolated cabins with hermit NPCs (Woodsman, Recluse, Swamp Hermit, Retired Soldier, Old Hunter, Cartographer)
+- 3 road outposts with guards at crossroads
+- 18+ wandering wilderness NPCs (travelers, pilgrims, hunters, hermits, refugees, sellswords, field scholars)
+- Points of interest: 3 standing stones with ancient lore, graveyard, old battlefield, ancient shrine, watchtower ruins, witch's hut
+- 5 small lakes, 3 river segments, animated water with wave overlay
+- Town doodads (barrels, log piles against walls), overworld vegetation by climate zone, mushrooms near forests
+- Dungeon doodads: lootable chests/jars, mushrooms, blood splatters, coffins, barrels, animated torches/braziers with warm glow
+- Wood wall tile type for cabins and hamlets
 - 27 dungeons: 9 named quest-linked + 18 generic exploration
-- Dungeon registry: data/dungeons.json (zone themes, quest links, loaded at runtime)
-- 5 climate zones (ice/cold/temperate/warm/desert) with tinted floor tiles
-- Rivers, lakes, ruins, forests, rocky areas, roads connecting towns to dungeons
-- World map overview (M key) with labeled towns, dungeon markers, region names
-- Proper stairs: up/down within dungeons, return to overworld at entrance point
+- 5 climate zones (ice/cold/temperate/warm/desert) with tinted floor tiles and region-appropriate plants
+- Wall rendering: correct top/side view based on wall depth (bottom row = side face, upper rows = top view)
+- Town/boss music triggers based on proximity and enemy presence
+- The Sepulchre: atmospheric entry messages per depth, ambient text every ~18 turns
 
 ### Quests — Fully Wired
 - **17-step main quest chain** with chaining (each requires previous FINISHED):
@@ -86,7 +110,8 @@ The game is playable from character creation through a 17-step main quest chain 
   15. MQ_15 The Sepulchre — auto-trigger on entry (far north)
   16. MQ_16 The Descent — auto-trigger at depth 4
   17. MQ_17 Claim Reliquary — find The Reliquary (golden ankh) at Sepulchre depth 6, guarded by The Keeper (final boss, HP 150, STR 24)
-- 7 static side quests + dynamic side quest generation (2-3 per town)
+- 7 static side quests (all wired: rat cellar, lost amulet, undead patrol, kill bear, deliver weapon, herb gathering, missing person)
+- Dynamic side quest generation (2-3 per town, requires actual travel/dungeon entry/minimum turns)
 - Quest log (q key), quest offer modal (accept/decline with mouse/keyboard)
 
 ### UI Screens
@@ -102,50 +127,63 @@ The game is playable from character creation through a 17-step main quest chain 
 - Shop screen: buy/sell tabs with item sprites and stats
 - Level-up choice screen: 3 random options per level
 - Quest offer modal: accept/decline with rewards shown
+- Victory screen: god-flavored ending text (8 variants + heretic), any key to return to menu
 
 ### Keybinds
 Movement: arrows/hjkl/numpad (+ diagonals yubn) | Wait: ./numpad5
-Actions: g/, pickup | Enter/>/< stairs | r rest | ? help
-Screens: i inventory | c character | z spells | q quests | M world map | Esc pause
+Actions: g/, pickup | Enter/>/< stairs | r rest | f fire ranged | p pray | x examine | ? help
+Screens: i inventory | c character | z spells | q quests | M world map | Tab bestiary | Esc pause
 F11 fullscreen | F12 screenshot
 
 ---
 
 ## What's NOT Built (Priority Order)
 
-### Tier 1 — Core gameplay gaps
-- [ ] God prayers + favor mechanics (tenets, gain/loss, prayer abilities, sacred/profane)
-- [ ] Atmospheric combat messages ("Your blade finds the orc's flank" not "You hit orc for 5")
-- [ ] Examine/look mode (x key — describe tiles, items, creatures)
-- [ ] Ranged combat (bows, crossbows, throwing — Rangers need this)
-- [ ] Status effects (poison, burn, bleed, freeze tick system)
-- [ ] The Sepulchre needs unique content/feel (currently just another themed dungeon)
-- [ ] Game ending screen when claiming The Reliquary (god-flavored text)
+### Tier 1 — COMPLETE
+- [x] God prayers + favor mechanics — 2 prayers per god (p key), favor from kills/quests/tenets
+- [x] Ranged combat — bows/crossbows drop in dungeons, f key to fire, goblin archers shoot back
+- [x] Atmospheric combat messages — weapon-aware hit/miss/crit/death with damage in parens
+- [x] Examine/look mode (x key) — cursor movement, describes tiles/creatures/items/NPCs with HP
+- [x] Status effects — poison (spider/naga), burn (dragon), bleed (ghoul), tick damage, HUD indicators
+- [x] Sepulchre unique content — entry messages per depth, ambient text every ~18 turns
+- [x] Game ending screen — 8 god-flavored victory texts + heretic ending on claiming The Reliquary
 
-### Tier 2 — Depth
-- [ ] Cursed/blessed items
-- [ ] Spell failure rate (armor penalty)
-- [ ] Blood magic (Yashkhet HP-for-MP)
-- [ ] Spellbooks as findable dungeon items
-- [ ] God-aware NPC reactions (hostile to rival followers)
-- [ ] Monster spells/abilities (liches should cast, etc.)
+### Tier 2 — COMPLETE
+- [x] Cursed/blessed items — 10% cursed (can't unequip, revealed on equip), 8% blessed (+1 bonus), depth 3+
+- [x] Spell failure rate — heavy armor (chain 15%, plate 25%) causes spell fizzle, still costs MP
+- [x] Blood magic (Yashkhet HP-for-MP) — implemented as Yashkhet prayer "Blood Offering"
+- [x] Spellbooks as findable dungeon items — "Tome of X" teaches spells on use, ~5% of loot, depth-scaled
+- [x] God-aware NPC reactions — priests react to Ixuul/Yashkhet/faithless negatively, high favor positively
+- [x] Monster spells/abilities — lich drains life at range, dragon breathes fire (+ burn), death knight fear aura
 
 ### Tier 3 — Polish
-- [ ] Sound/music (dark ambient, environmental ambience)
-- [ ] God-flavored death screens
-- [ ] 8 static text endings (one per god + heretic)
-- [ ] Bestiary system
-- [ ] Ground lore items (journals, inscriptions)
-- [ ] Ambient text cues in dungeons
-- [ ] Particle effects
+- [x] Sound effects (24 sfx via sox synthesis + SDL_mixer) — combat, spells, items, prayer, UI, status ticks
+- [x] God-flavored death screens — unique death text per god + heretic
+- [x] 8 static text endings (one per god + heretic) — victory screen from Tier 1
+- [x] Bestiary system (Tab key) — tracks kills with HP/dmg/armor/speed stats
+- [x] Ground lore items — 10 journals/inscriptions/notes with world-building text, ~4% of loot
+- [x] Ambient text cues in dungeons — zone-specific messages (warrens/stonekeep/catacombs/molten/sunken/deep halls/sepulchre)
+- [x] Particle effects — blood splatter, crit flash, death burst, arrow trails, spell bursts, heal/poison/burn/bleed effects, god-colored prayers, gold sparkle, level-up glow
 
-### Tier 4 — Complete
-- [ ] Permanent diseases (Daggerfall-style)
-- [ ] Pets (equip slot, passive bonus)
-- [ ] Rival paragons (PC-like enemies in late dungeons)
-- [ ] Meta-progression (class unlocks, bestiary persistence)
-- [ ] Hardcore/permadeath mode
-- [ ] Unlockable classes (10+ from design doc)
+### Tier 4 — COMPLETE
+- [x] Permanent diseases (Daggerfall-style) — 7 diseases (lycanthropy/vampirism/stonescale/mindfire/sporebloom/hollow bones/blackblood), contracted from monster hits with CON resist check, permanent stat modifiers, HUD indicators, character sheet display, save/load. Vampirism blocks rest HP regen + surface damage, blackblood poison immunity + retaliation, sporebloom dungeon regen.
+- [x] Pets (equip slot, passive bonus) — 8 pets (rat/dog/cat/owl/snake/bat/imp/crow), PET equip slot, invincible visual entity follows player 1 tile behind, sprites from animals.png/monsters.png, crow scavenges gold on kills. Found in dungeons depth 2+ (~3% drop). Save/load recreates visual on load.
+- [x] Rival paragons — 7 god-affiliated PC-like enemies (one per god, never player's own god). Spawn depth 4+ in named dungeons, 15% chance. Class-based stats/sprites, god-colored tints, depth scaling. +10 favor on kill, unique death message. Examine shows "Paragon of [god]".
+- [x] Dynamic quest improvements — quests now require actual gameplay: delivery quests need travel to target town (bump NPC there), dungeon quests need dungeon entry, wilderness quests need minimum turns. Herbalist + Merchant NPCs added to all 20 towns.
+- [x] Unlockable classes — 13 classes (Barbarian, Knight, Monk, Templar, Druid, War Cleric, Warlock, Dwarf, Elf, Bandit, Necromancer, Schema Monk, Heretic) with unique stats/sprites/starting spells. Meta-save persists across runs (save/meta.json). Tracks kills, undead kills, HP healed, Dark Arts casts, quests, depth, gold, god completions. Locked classes shown grayed with unlock hints in creation screen.
+- [x] Meta-progression polish — persistent bestiary (monster stats + kill counts survive across runs, pre-populated on new game) and potion identification (consumed potions auto-identified in future runs on pickup)
+- [x] Hardcore/permadeath mode — toggle in character creation after traits. Save deleted on death + one-shot load (save removed after loading). Red "HC" indicator on HUD. Meta-save still persists.
+
+### Polish (post-Tier 4)
+- [x] All 7 static side quests now reachable — SQ_RAT_CELLAR (Ashford shopkeeper, kill 5 rats), SQ_LOST_AMULET (Millhaven farmer, find amulet in dungeon), SQ_UNDEAD_PATROL (Greywatch guard, kill 10 undead)
+- [x] Town + boss music — overworld switches to town tracks near settlements, boss/paragon levels get combat music, periodic proximity check
+- [x] 5 new consumables — mana potion (restores 15 MP), antidote (clears poison), speed draught (3 bonus actions), strength elixir (+4 STR), dried meat. All potions have unid color names.
+- [x] Identify spell implemented — identifies first unidentified item in inventory. Cure Poison spell also implemented.
+- [x] Monster ranged attacks now show arrow trail + sound (was silent). Goblin archer nerfed (range 6->5, damage 3->2).
+- [x] All 17 classes start with appropriate gear (weapons + armor per class archetype)
+- [x] Weapon efficacy display — inventory shows "Effective: X dmg (STR/DEX)" for at-a-glance comparison
+- [x] Overworld world-building — 8 wandering travelers, 3 pilgrims, 3 hunters, 4 hermits on roads and wilderness. 4 encampments (deserter camp, mercenary camp, scholar camp, refugee camp). Points of interest: 3 standing stones with pre-god lore, graveyard, old battlefield, ancient shrine ruins, watchtower ruins, witch's hut. 5 small lakes, 3 river segments. 9 overworld enemy types (up from 4: added bear, bandit, snake, dire wolf, wandering skeleton).
+- [x] Class unlock notifications on death/victory + progress display in creation screen
 
 ### Tier 5 — Ship
 - [ ] Steamworks integration

@@ -194,7 +194,7 @@ void ShopScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     SDL_RenderFillRect(renderer, &overlay);
 
     // Panel
-    int panel_w = std::min(600, screen_w - 40);
+    int panel_w = std::min(screen_w * 2 / 3, 900);
     int panel_h = screen_h - 60;
     int px = (screen_w - panel_w) / 2;
     int py = 30;

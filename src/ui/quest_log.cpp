@@ -45,7 +45,7 @@ void QuestLog::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_tit
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 180);
     SDL_RenderFillRect(renderer, &overlay);
 
-    int panel_w = 600;
+    int panel_w = std::min(w * 2 / 3, 900);
     int panel_h = h - 60;
     int panel_x = (w - panel_w) / 2;
     int panel_y = 30;

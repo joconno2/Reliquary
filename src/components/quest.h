@@ -278,6 +278,63 @@ inline const QuestInfo& get_quest_info(QuestId id) {
     return QUESTS[static_cast<int>(id)];
 }
 
+// "Talk to" quests auto-complete on acceptance (the conversation IS the objective)
+inline bool is_auto_complete_quest(QuestId id) {
+    switch (id) {
+        case QuestId::MQ_02_SCHOLAR_CLUE:
+        case QuestId::MQ_04_GREYWATCH_WARNING:
+        case QuestId::MQ_06_FROSTMERE_SAGE:
+        case QuestId::MQ_08_CATACOMBS_GATE:
+        case QuestId::MQ_10_IRONHEARTH_FORGE:
+        case QuestId::MQ_12_CANDLEMERE_RITUAL:
+            return true;
+        default:
+            return false;
+    }
+}
+
+// Direction hints shown when bumping a quest NPC while their quest is active
+inline const char* get_quest_hint(QuestId id) {
+    switch (id) {
+        // Main quests — dungeon directions
+        case QuestId::MQ_01_BARROW_WIGHT:
+            return "The barrow is east of town. Look for the stairs down among the old stones.";
+        case QuestId::MQ_03_ASHFORD_TABLET:
+            return "The Warrens lie just east of here, in the old ruins. The tablet should be on the lowest level.";
+        case QuestId::MQ_05_STONEKEEP_DEPTHS:
+            return "Stonekeep is west of Greywatch. An old fortress in the hills — you can't miss it.";
+        case QuestId::MQ_07_FROZEN_KEY:
+            return "The ice dungeon is southeast of Frostmere. The cold gets worse the deeper you go.";
+        case QuestId::MQ_09_OSSUARY_FRAGMENT:
+            return "The Catacombs are north of Millhaven. The fragment lies deep — search the lowest level.";
+        case QuestId::MQ_11_MOLTEN_TRIAL:
+            return "The Molten Depths are southeast of Ironhearth. Follow the heat.";
+        case QuestId::MQ_13_SUNKEN_FRAGMENT:
+            return "The Sunken Halls are southeast of Candlemere. The water there doesn't behave naturally.";
+        case QuestId::MQ_14_HOLLOWGATE_SEAL:
+            return "The seal is east of town. The fragments will guide you.";
+
+        // Side quests
+        case QuestId::SQ_RAT_CELLAR:
+            return "The dungeon entrance is nearby. The rats are on the first level.";
+        case QuestId::SQ_LOST_AMULET:
+            return "Try the Warrens — the nearest dungeon. My grandmother's amulet... she'd want it back.";
+        case QuestId::SQ_UNDEAD_PATROL:
+            return "The Catacombs, south of here. Ten undead should thin their numbers.";
+        case QuestId::SQ_KILL_BEAR:
+            return "The bear's been seen east of town. Watch yourself.";
+        case QuestId::SQ_DELIVER_WEAPON:
+            return "Captain Voss is in Greywatch, to the northeast. He's expecting it.";
+        case QuestId::SQ_HERB_GATHERING:
+            return "The herbs grow in the wilderness outside town. Look in the brush and grass.";
+        case QuestId::SQ_MISSING_PERSON:
+            return "He went into the Warrens nearby. Please, bring him back.";
+
+        default:
+            return nullptr;
+    }
+}
+
 // Player's quest journal
 struct QuestJournal {
     struct Entry {

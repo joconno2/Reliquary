@@ -18,6 +18,7 @@
 #include "ui/quest_offer.h"
 #include "components/quest.h"
 #include "save/save.h"
+#include "save/meta.h"
 #include "ui/main_menu.h"
 #include "ui/settings_screen.h"
 #include "ui/pause_menu.h"
@@ -25,8 +26,17 @@
 #include "ui/shop_screen.h"
 #include "ui/help_screen.h"
 #include "ui/world_map.h"
+#include "systems/particles.h"
+#include "core/audio.h"
 #include <vector>
 #include <string>
+#include <map>
+
+struct BestiaryEntry {
+    std::string name;
+    int hp = 0, damage = 0, armor = 0, speed = 0;
+    int kills = 0;
+};
 
 struct DungeonEntry {
     std::string name;
@@ -41,6 +51,7 @@ enum class GameState {
     CREATING,
     PLAYING,
     DEAD,
+    VICTORY,
     QUIT
 };
 
@@ -65,6 +76,8 @@ private:
     TileMap map_;
     SpriteManager sprites_;
     RNG rng_;
+    Audio audio_;
+    ParticleSystem particles_;
     Camera camera_;
     MessageLog log_;
     GameState state_ = GameState::MAIN_MENU;
@@ -79,9 +92,18 @@ private:
 
     // Player
     Entity player_ = NULL_ENTITY;
+    Entity pet_entity_ = NULL_ENTITY; // visual pet that follows player
     int game_turn_ = 0;
     int gold_ = 0;
     bool player_acted_ = false;
+    MetaSave meta_; // persistent cross-run progression
+    int run_kills_ = 0; // kills this run (for tracking)
+    bool hardcore_ = false; // permadeath mode
+    Uint32 end_screen_time_ = 0; // SDL_GetTicks when death/victory screen appeared
+    bool pet_naming_ = false; // currently naming a pet
+    std::string pet_name_buf_; // pet name being typed
+    Entity pet_naming_item_ = NULL_ENTITY; // the pet item being named
+    std::vector<std::string> newly_unlocked_; // classes unlocked this run (for display)
 
     // UI
     InventoryScreen inventory_screen_;
@@ -97,6 +119,10 @@ private:
     PauseMenu pause_menu_;
     LevelUpScreen levelup_screen_;
     bool pending_levelup_ = false;
+    bool prayer_mode_ = false;
+    bool look_mode_ = false;
+    int look_x_ = 0, look_y_ = 0;
+    std::map<std::string, BestiaryEntry> bestiary_;
     ShopScreen shop_screen_;
     HelpScreen help_screen_;
     WorldMap world_map_;
@@ -109,8 +135,8 @@ private:
     int height_ = 800;
     bool fullscreen_ = false;
     float ui_scale_ = 1.0f;
-    static constexpr int LOG_HEIGHT = 180;
-    static constexpr int HUD_HEIGHT = 32;
+    int LOG_HEIGHT = 180;
+    int HUD_HEIGHT = 32;
 
     // Methods
     void handle_input();
@@ -125,6 +151,21 @@ private:
     void generate_level();
     void clear_entities_except_player();
     void try_rest();
+    void process_npc_wander();
+    void try_spawn_overworld_enemy();
+    void execute_prayer(int prayer_idx);
+    void adjust_favor(int amount);
+    void fire_ranged();
+    void describe_tile(int x, int y);
+    void process_status_effects();
+    void sepulchre_ambient();
+    void spawn_pet_visual(int pet_id);
+    void despawn_pet_visual();
+    void populate_overworld();
+    bool is_class_unlocked(ClassId id) const;
+    void update_meta_on_end();
+    void update_music_for_location();
+    void render_victory();
     void do_save();
     void do_load();
 };
