@@ -8,6 +8,7 @@
 #include "components/corpse.h"
 #include "components/inventory.h"
 #include "components/item.h"
+#include "components/quest_target.h"
 #include "core/spritesheet.h"
 #include <cstdio>
 
@@ -124,6 +125,12 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
                 snprintf(buf, sizeof(buf),
                     "The %s crumples to the ground.", def.name.c_str());
                 log.add(buf, {180, 160, 140, 255});
+
+                // Check quest target before kill removes components
+                if (world.has<QuestTarget>(defender)) {
+                    result.quest_target_id = static_cast<int>(
+                        world.get<QuestTarget>(defender).quest_id);
+                }
 
                 int xp = kill(world, defender, log);
                 // Grant XP to attacker if they're the player

@@ -23,6 +23,7 @@
 #include "ui/pause_menu.h"
 #include "ui/levelup_screen.h"
 #include "ui/shop_screen.h"
+#include "ui/help_screen.h"
 #include <vector>
 
 enum class GameState {
@@ -84,6 +85,7 @@ private:
     LevelUpScreen levelup_screen_;
     bool pending_levelup_ = false;
     ShopScreen shop_screen_;
+    HelpScreen help_screen_;
 
     // Track where Settings should return to
     GameState return_from_settings_ = GameState::MAIN_MENU;

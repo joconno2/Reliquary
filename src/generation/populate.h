@@ -17,4 +17,11 @@ void spawn_items(World& world, const TileMap& map,
                   const std::vector<Room>& rooms, RNG& rng,
                   int dungeon_level = 1);
 
+// Spawn a boss monster in the last room. Returns the entity.
+Entity spawn_boss(World& world, const TileMap& map,
+                   const std::vector<Room>& rooms, const char* name,
+                   int sheet, int sx, int sy,
+                   int hp, int str, int dex, int con,
+                   int dmg, int armor, int speed, int xp_value);
+
 } // namespace populate

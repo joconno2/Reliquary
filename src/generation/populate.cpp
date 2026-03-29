@@ -261,4 +261,38 @@ void spawn_items(World& world, const TileMap& map,
     }
 }
 
+Entity spawn_boss(World& world, [[maybe_unused]] const TileMap& map,
+                   const std::vector<Room>& rooms, const char* name,
+                   int sheet, int sx, int sy,
+                   int hp, int str, int dex, int con,
+                   int dmg, int armor, int speed, int xp_value) {
+    if (rooms.size() < 2) return NULL_ENTITY;
+
+    // Spawn in the last room center
+    auto& room = rooms.back();
+    int x = room.cx();
+    int y = room.cy();
+
+    Entity e = world.create();
+    world.add<Position>(e, {x, y});
+    world.add<Renderable>(e, {sheet, sx, sy, {255, 255, 255, 255}, 5});
+
+    Stats stats;
+    stats.name = name;
+    stats.hp = hp;
+    stats.hp_max = hp;
+    stats.set_attr(Attr::STR, str);
+    stats.set_attr(Attr::DEX, dex);
+    stats.set_attr(Attr::CON, con);
+    stats.base_damage = dmg;
+    stats.natural_armor = armor;
+    stats.base_speed = speed;
+    stats.xp_value = xp_value;
+    world.add<Stats>(e, std::move(stats));
+
+    world.add<AI>(e, {AIState::IDLE, -1, -1, 0, 0}); // bosses don't flee
+    world.add<Energy>(e, {0, speed});
+    return e;
+}
+
 } // namespace populate

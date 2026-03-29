@@ -13,6 +13,7 @@
 #include "components/class_def.h"
 #include "components/spellbook.h"
 #include "components/npc.h"
+#include "components/quest_target.h"
 #include "systems/magic.h"
 #include "components/background.h"
 #include "components/traits.h"
@@ -369,6 +370,18 @@ void Engine::generate_level() {
     if (dungeon_level_ > 0) {
         populate::spawn_monsters(world_, map_, rooms_, rng_, dungeon_level_);
         populate::spawn_items(world_, map_, rooms_, rng_, dungeon_level_);
+
+        // Spawn quest bosses at specific depths
+        if (dungeon_level_ == 3) {
+            // Barrow Wight — bottom of The Warrens (first dungeon)
+            // Uses death knight sprite (row 4 col 3) for a menacing undead look
+            Entity wight = populate::spawn_boss(world_, map_, rooms_,
+                "Barrow Wight", SHEET_MONSTERS, 3, 4,
+                45, 16, 12, 14, 8, 3, 90, 100);
+            if (wight != NULL_ENTITY) {
+                world_.add<QuestTarget>(wight, {QuestId::MQ_BARROW_WIGHT, true});
+            }
+        }
     }
 
     // Compute initial FOV
@@ -479,8 +492,22 @@ void Engine::try_move_player(int dx, int dy) {
         }
         // Hostile — attack
         int level_before = world_.has<Stats>(player_) ? world_.get<Stats>(player_).level : 0;
-        combat::melee_attack(world_, player_, target, rng_, log_);
+        auto atk_result = combat::melee_attack(world_, player_, target, rng_, log_);
         player_acted_ = true;
+
+        // Quest target killed?
+        if (atk_result.quest_target_id >= 0) {
+            auto qid = static_cast<QuestId>(atk_result.quest_target_id);
+            if (journal_.has_quest(qid) && journal_.get_state(qid) == QuestState::ACTIVE) {
+                journal_.set_state(qid, QuestState::COMPLETE);
+                auto& qinfo = get_quest_info(qid);
+                char qbuf[128];
+                snprintf(qbuf, sizeof(qbuf), "Quest objective complete: %s", qinfo.name);
+                log_.add(qbuf, {120, 220, 120, 255});
+                log_.add("Return to the quest giver.", {160, 155, 140, 255});
+            }
+        }
+
         // Check for level-up
         if (world_.has<Stats>(player_) && world_.get<Stats>(player_).level > level_before) {
             pending_levelup_ = true;
@@ -613,9 +640,8 @@ void Engine::try_pickup() {
         snprintf(buf, sizeof(buf), "You pick up the %s.", item.display_name().c_str());
         log_.add(buf, {180, 175, 160, 255});
 
-        // Remove from ground (remove Position), add to inventory
+        // Remove from ground (remove Position only — keep Renderable for paper doll)
         world_.remove<Position>(e);
-        if (world_.has<Renderable>(e)) world_.remove<Renderable>(e);
         inv.add(e);
         player_acted_ = true;
         return;
@@ -963,6 +989,12 @@ void Engine::handle_input() {
                 return;
             }
 
+            // Help screen intercepts everything
+            if (help_screen_.is_open()) {
+                help_screen_.handle_input(event);
+                return;
+            }
+
             // Quest offer modal intercepts everything
             if (quest_offer_.is_open()) {
                 auto choice = quest_offer_.handle_input(event);
@@ -1085,6 +1117,14 @@ void Engine::handle_input() {
                     quest_log_.open();
                     break;
 
+                // Help / keybinds
+                case SDLK_QUESTION:
+                case SDLK_SLASH:
+                    if (event.key.keysym.mod & KMOD_SHIFT || event.key.keysym.sym == SDLK_QUESTION) {
+                        help_screen_.open();
+                    }
+                    break;
+
                 // Stairs — Enter on any stairs, > to descend, < to ascend
                 case SDLK_GREATER:
                 case SDLK_LESS:
@@ -1190,6 +1230,19 @@ void Engine::render_hud() {
     snprintf(lvl_text, sizeof(lvl_text), "Lv%d", stats.level);
     draw_bar(lvl_text, stats.xp, stats.xp_next, {15, 15, 40, 255}, {80, 80, 180, 255}, 60);
 
+    // Help hint
+    {
+        SDL_Color hint = {65, 60, 55, 255};
+        SDL_Surface* hs = TTF_RenderText_Blended(font_, "? help", hint);
+        if (hs) {
+            SDL_Texture* ht = SDL_CreateTextureFromSurface(renderer_, hs);
+            SDL_Rect hd = {cursor + 4, bar_y, hs->w, hs->h};
+            SDL_RenderCopy(renderer_, ht, nullptr, &hd);
+            SDL_DestroyTexture(ht);
+            SDL_FreeSurface(hs);
+        }
+    }
+
     // Right side: god + location + gold + turn
     const char* god_name = "";
     if (world_.has<GodAlignment>(player_)) {
@@ -1260,6 +1313,7 @@ void Engine::render() {
     char_sheet_.render(renderer_, font_, font_title_, sprites_, world_, width_, height_);
     quest_log_.render(renderer_, font_, font_title_, journal_, width_, height_);
     quest_offer_.render(renderer_, font_, font_title_, width_, height_);
+    help_screen_.render(renderer_, font_, font_title_, width_, height_);
     levelup_screen_.render(renderer_, font_, width_, height_);
     shop_screen_.render(renderer_, font_, sprites_, world_, width_, height_);
 

@@ -10,6 +10,7 @@ struct AttackResult {
     int damage = 0;
     bool critical = false;
     bool killed = false;
+    int quest_target_id = -1; // QuestId if killed entity was a quest target, else -1
 };
 
 // Resolve a melee attack from attacker to defender
