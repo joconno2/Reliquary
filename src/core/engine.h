@@ -24,6 +24,7 @@
 #include "ui/levelup_screen.h"
 #include "ui/shop_screen.h"
 #include "ui/help_screen.h"
+#include "ui/world_map.h"
 #include <vector>
 
 enum class GameState {
@@ -63,6 +64,8 @@ private:
     // Level data
     std::vector<Room> rooms_;
     int dungeon_level_ = -1; // incremented to 0 for village, 1+ for dungeons
+    int overworld_return_x_ = 0; // position to return to on overworld when ascending
+    int overworld_return_y_ = 0;
 
     // Player
     Entity player_ = NULL_ENTITY;
@@ -86,6 +89,7 @@ private:
     bool pending_levelup_ = false;
     ShopScreen shop_screen_;
     HelpScreen help_screen_;
+    WorldMap world_map_;
 
     // Track where Settings should return to
     GameState return_from_settings_ = GameState::MAIN_MENU;

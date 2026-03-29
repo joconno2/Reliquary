@@ -171,7 +171,7 @@ bool ShopScreen::execute(World& world, int* gold) {
 }
 
 void ShopScreen::render(SDL_Renderer* renderer, TTF_Font* font,
-                         [[maybe_unused]] const SpriteManager& sprites, World& world,
+                         const SpriteManager& sprites, World& world,
                          int screen_w, int screen_h) const {
     if (!open_ || !font) return;
 
@@ -229,27 +229,45 @@ void ShopScreen::render(SDL_Renderer* renderer, TTF_Font* font,
         }
 
         for (int i = 0; i < count; i++) {
+            int row_h = std::max(line_h + 8, 36);
             if (y > py + panel_h - line_h * 6) break;
             auto& si = stock_[i];
             bool is_sel = (i == sel);
             bool can_afford = gold_ && *gold_ >= si.item.gold_value;
 
             if (is_sel) {
-                SDL_Rect sel_rect = {px + 8, y - 2, panel_w - 16, line_h + 4};
+                SDL_Rect sel_rect = {px + 8, y - 2, panel_w - 16, row_h};
                 SDL_SetRenderDrawColor(renderer, 35, 30, 48, 255);
                 SDL_RenderFillRect(renderer, &sel_rect);
             }
 
+            // Item sprite (32x32)
+            sprites.draw_sprite(renderer, SHEET_ITEMS, si.sprite_x, si.sprite_y,
+                               px + 20, y, 1);
+
+            // Item name
             char buf[128];
             snprintf(buf, sizeof(buf), "%s", si.item.name.c_str());
-            ui::draw_text(renderer, font, buf, is_sel ? sel_col : item_col, px + 20, y);
+            ui::draw_text(renderer, font, buf, is_sel ? sel_col : item_col, px + 56, y + 2);
 
+            // Inline stats
+            char stat_buf[64];
+            if (si.item.type == ItemType::WEAPON) {
+                snprintf(stat_buf, sizeof(stat_buf), "+%d dmg", si.item.damage_bonus);
+            } else if (si.item.type == ItemType::POTION || si.item.type == ItemType::FOOD) {
+                snprintf(stat_buf, sizeof(stat_buf), "heal %d", si.item.heal_amount);
+            } else {
+                snprintf(stat_buf, sizeof(stat_buf), "+%d arm", si.item.armor_bonus);
+            }
+            ui::draw_text(renderer, font, stat_buf, stat_col, px + 56, y + 2 + line_h);
+
+            // Price right-aligned
             char price[32];
             snprintf(price, sizeof(price), "%dg", si.item.gold_value);
             ui::draw_text(renderer, font, price, can_afford ? price_col : cant_col,
-                         px + panel_w - 80, y);
+                         px + panel_w - 80, y + 8);
 
-            y += line_h + 4;
+            y += row_h;
         }
 
         // Show selected item stats

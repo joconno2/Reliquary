@@ -174,19 +174,20 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
 
     // Equipment slots — 3-column grid layout
     slot_rects_.clear();
-    int slot_size = 44;
-    int slot_gap = 6;
+    int slot_size = 40;
+    int slot_gap = 10;
     int dcx = doll_x + doll_w / 2;
     int slots_y = base_y + 120;
 
-    int col_l = dcx - slot_size - slot_gap * 2;
-    int col_c = dcx - slot_size / 2;
-    int col_r = dcx + slot_gap * 2;
+    int col_l = dcx - 80;
+    int col_c = dcx - 20;
+    int col_r = dcx + 40;
 
+    int row_step = slot_size + slot_gap + line_h + 4;
     int r0 = slots_y;
-    int r1 = slots_y + slot_size + slot_gap + line_h;
-    int r2 = r1 + slot_size + slot_gap + line_h;
-    int r3 = r2 + slot_size + slot_gap + line_h;
+    int r1 = slots_y + row_step;
+    int r2 = r1 + row_step;
+    int r3 = r2 + row_step;
 
     struct SL { int x, y; };
     SL positions[] = {
@@ -218,10 +219,11 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
             auto& rend = world.get<Renderable>(eq);
             sprites.draw_sprite_sized(renderer, rend.sprite_sheet, rend.sprite_x, rend.sprite_y,
                                        sx + 4, sy + 4, slot_size - 8);
+        } else {
+            // Label inside slot (centered, small text) when empty
+            ui::draw_text_centered(renderer, font, slot_label(s), empty_col,
+                                    sx + slot_size / 2, sy + (slot_size - line_h) / 2);
         }
-
-        // Label below slot
-        ui::draw_text(renderer, font, slot_label(s), empty_col, sx, sy + slot_size + 1);
     }
 
     // Carried items panel
@@ -249,7 +251,7 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
         bool is_equipped = inv.is_equipped(item_e);
         bool is_sel = (i == sel);
 
-        int row_h = std::max(line_h + 4, 36);
+        int row_h = std::max(line_h + 8, 36);
         SDL_Rect row_rect = {list_x + 6, y, list_w - 12, row_h};
         item_rects_.push_back({row_rect, i});
 

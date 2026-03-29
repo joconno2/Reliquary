@@ -54,7 +54,7 @@ struct Stats {
             xp -= xp_next;
             xp_next = level * level * 50 + 50; // scaling curve
             // Small HP/MP boost on level (real gains come from level-up choices)
-            int hp_gain = 2;
+            int hp_gain = 1;
             int mp_gain = 1;
             hp_max += hp_gain;
             hp += hp_gain;

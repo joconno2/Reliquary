@@ -29,6 +29,9 @@
 //   P  priest/scholar
 //   F  farmer
 //   G  guard
+//   W  wandering villager
+//   H  herbalist
+//   M  merchant
 //
 //   SPACE or anything else = void (impassable, invisible)
 

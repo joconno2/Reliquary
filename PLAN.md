@@ -1,87 +1,157 @@
 # Reliquary — Project Plan
 
-## Current Status
+> Last updated: 2026-03-28
 
-**Phase 4/5: Character System & Gods — IN PROGRESS**
+## Current Status: Playable Alpha
 
-### Phase 1: Core Engine — COMPLETE
-- [x] CMake build, SDL2, spritesheet loading, ECS, tilemap, dungeon gen, FOV, camera, message log
+The game is playable from character creation through dungeon crawling. A 17-step main quest chain spans all regions. 20 towns, 30 dungeons, 5 climate zones.
 
-### Phase 2: Combat & Creatures — COMPLETE
-- [x] Stats (7 attributes, HP/MP, derived stats), energy/speed turns, monster AI (idle/hunt/flee)
-- [x] Melee combat (d20 + attack vs 10 + dodge, crits, damage - armor, equipment bonuses)
-- [x] Death → corpse, 18 monster types with depth scaling, HUD, death screen, z-ordered rendering
-- [x] XP system with scaling curve, level-up HP/MP gains
+---
 
-### Phase 3: Items & Inventory — IN PROGRESS
-- [x] Item component (weapons, armor, shields, potions, food, gold, rings, amulets)
-- [x] Inventory component (26 slots, 9 equip slots)
-- [x] Item spawning in dungeons (weapons, armor, consumables, gold — depth-scaled)
-- [x] Pickup system (g/comma key, auto-collect gold)
-- [x] Inventory UI screen (i key — list items, equipment summary, select/scroll, descriptions)
-- [x] Equip/unequip (e key in inventory)
-- [x] Use consumables (u key — potions heal, food heals)
-- [x] Drop items (d key — returns to ground)
-- [x] Equipment affects combat (damage bonus, armor bonus, attack bonus, dodge bonus)
-- [x] Item identification (equipping/using identifies, unid potions show color names)
-- [x] 6 weapon types, 7 armor types, 4 consumable types, gold piles
-- [ ] Shops
+## What's Built
+
+### Core Engine
+- [x] SDL2/C++20/CMake, ECS, tilemap, spritesheet loading (32rogues + pre-flipped copies)
+- [x] BSP dungeon generation with 6 themed zones (3 levels each = 18 dungeon levels)
+- [x] FOV (recursive shadowcasting), camera, energy/speed turn system
+- [x] Message log (top-down, color-coded), dynamic resolution, fullscreen (F11)
+- [x] Bundled fonts: Press Start (body 12px), Jacquard (title 32px, menu 96px)
+- [x] Pixel-art panel borders (SNES-style beveled), UI scale system (1.0x-2.0x)
+- [x] Tiles rendered at 48px (1.5x native), sprite mirroring on horizontal movement
+
+### Combat & Creatures
+- [x] Melee combat (d20 + attack vs 10 + dodge, crits, equipment bonuses, depth scaling)
+- [x] 18+ monster types with HP/damage scaling per depth (+20%/+15% per level)
+- [x] Monster AI: idle/wander, LOS-based hunting, flee at low HP
+- [x] Death → corpse, XP system, level-up choice screen (attribute/HP/MP/speed/damage picks)
+- [x] Rest system (r key — 25% HP/MP, 10 turns, 30% interruption chance in dungeons)
+
+### Items & Equipment
+- [x] 9+ weapon types, 11+ armor types, potions, food, gold
+- [x] Paper doll inventory with mouse support, item sprites in equip slots
+- [x] Item quality tiers: Fine (+1), Superior (+2), Masterwork (+3) at depth 5/10/15
+- [x] Item stats visible on selection (damage, armor, dodge, heal, gold value)
+- [x] Shops: buy (random stock, sprites, stats), sell (half price)
+- [x] Identification system (potions have unid color names)
+
+### Character System
+- [x] 4 classes (Fighter, Rogue, Wizard, Ranger) with sprites, stats, starting spells
+- [x] 7 gods with stat bonuses, domain descriptions, lore
+- [x] 15 backgrounds with unique passives and stat bonuses
+- [x] 22 traits (12 positive, 10 negative) with stat modifiers
+- [x] Character creation: Class (big sprite) → Name (random + editable) → God → Background → Traits
+- [x] Character sheet (c key) with 40+ derived stats in 3-column layout
+- [x] Name entry with random fantasy name pool (32 names)
+
+### Magic
+- [x] 15 spells across 6 schools with atmospheric Dark Souls-style descriptions
+- [x] Spell screen (z key), MP system, INT scaling, auto-targeting
+- [x] Class starting spells (Wizard 3, Ranger 1, others Minor Heal)
+
+### World & Content
+- [x] 2000x1500 tile overworld (hand-editable text map format)
+- [x] 20 towns with buildings, NPCs (shopkeeper, blacksmith, scholar, guard, farmer, herbalist, merchant, elder)
+- [x] 30 dungeon entrances, 5 climate zones (ice/cold/temperate/warm/desert)
+- [x] Rivers, lakes, ruins, forests, rocky areas, roads connecting towns
+- [x] World map overview (M key) with labeled towns, dungeon markers, region names
+- [x] 6 dungeon zones with depth limits (Warrens 1-3, Stonekeep 4-6, etc.)
+- [x] Proper stairs navigation (up/down within dungeons, return to overworld at entrance point)
+
+### Quests
+- [x] 17-step main quest chain spanning all regions (Barrow Wight → Reliquary)
+- [x] 7 static side quests (rat cellar, lost amulet, undead patrol, kill bear, deliver weapon, herbs, missing person)
+- [x] Dynamic side quest generation (2-3 per town, based on NPC role)
+- [x] Quest log (q key), quest offer modal (accept/decline), quest completion on NPC turn-in
+- [x] Barrow Wight boss on depth 3 with quest target component
+
+### UI & Polish
+- [x] Main menu (animated campfire, New Game/Continue/Load/Settings/Quit)
+- [x] Pause menu (Esc — Continue/Save/Load/Settings/Exit to Menu)
+- [x] Settings (resolution, volume, UI scale, keybinds)
+- [x] Help screen (? key — all keybinds)
+- [x] Save/load (JSON — full world state, player, inventory, quests, map)
+- [x] Death returns to main menu with full state reset
+- [x] NPC lore dialogue (randomized pools per role, position-deterministic)
+
+---
+
+## What's NOT Built (Priority Order)
+
+### Tier 1 — Makes it a game
+- [ ] God prayers + favor mechanics (tenets, gain/loss, prayer abilities)
+- [ ] The Barrow mega-dungeon (6 levels, final zone)
+- [ ] Reliquary Vault endgame + god-flavored endings
+- [ ] Atmospheric combat messages ("Your blade finds the orc's flank" not "You hit orc for 5")
+- [ ] Examine/look mode (essential for lore delivery)
+- [ ] Ranged combat (bows, crossbows, throwing)
+
+### Tier 2 — Makes it deep
+- [ ] Status effects (poison, burn, bleed, freeze ticking system)
 - [ ] Cursed/blessed items
-- [ ] More item variety and special items
+- [ ] Spell failure rate (armor penalty)
+- [ ] Blood magic (Yashkhet HP-for-MP casting)
+- [ ] Spellbooks as findable dungeon items
+- [ ] God-aware NPC reactions (hostile to rival god followers)
+
+### Tier 3 — Makes it polished
+- [ ] Sound/music (dark ambient, environmental ambience)
+- [ ] God-flavored death screens (per the design doc — Vethrik, Thessarka, etc.)
+- [ ] 8 static text endings (Fear & Hunger style)
+- [ ] Bestiary system (persistent across runs)
+- [ ] Ground lore items (journals, letters, inscriptions)
+- [ ] Ambient text cues in dungeons
+- [ ] Particle effects (blood, sparks, spell impacts)
+
+### Tier 4 — Makes it complete
+- [ ] Permanent diseases (Daggerfall-style stat trade-offs)
+- [ ] Pets (equip slot, invincible, small passive)
+- [ ] Rival paragons (PC-like NPCs in late-game dungeons)
+- [ ] Meta-progression (class unlocks, bestiary persistence)
+- [ ] Hardcore/permadeath mode
+- [ ] Unlockable classes (10+ from design doc)
+- [ ] Heretic class (complete game with all 7 gods)
+- [ ] Achievement system
+
+### Tier 5 — Steam release
+- [ ] Steamworks integration (achievements, cloud saves)
+- [ ] Windows/Mac cross-compile
+- [ ] Store page, capsule art, screenshots
+- [ ] Balance pass
+- [ ] Playtesting
+
+---
+
+## Removed from Scope
+- ~~Custom class creation~~ (current 4 classes + god + background + traits provides enough depth)
+- ~~Hunger clock~~ (rest system serves the resource pressure role better)
+- ~~32-skill Morrowind-style system~~ (7 attributes + level-up choices is simpler and sufficient)
+
+---
 
 ## Architecture
 
 ```
 src/
-├── core/       — engine, ecs, tilemap, spritesheet, rng
-├── components/ — position, renderable, player, blocker, stats, ai, energy, corpse, item, inventory
-├── systems/    — render, fov, combat, ai
-├── generation/ — dungeon, populate
-└── ui/         — message_log, inventory_screen
+├── core/          — engine, ecs, tilemap, spritesheet, rng
+├── components/    — position, renderable, player, blocker, stats, ai, energy,
+│                    corpse, item, inventory, god, class_def, background, traits,
+│                    spellbook, npc, quest, quest_target, dynamic_quest
+├── systems/       — render, fov, combat, ai, magic
+├── generation/    — dungeon, populate, mapfile, village, quest_gen
+├── ui/            — message_log, inventory_screen, character_sheet, spell_screen,
+│                    creation_screen, background_select, trait_select,
+│                    main_menu, pause_menu, settings_screen, help_screen,
+│                    quest_log, quest_offer, levelup_screen, shop_screen, world_map,
+│                    ui_draw (shared panel/text helpers)
+├── save/          — save, load (JSON)
+data/
+├── maps/          — overworld.map (2000x1500), thornwall.map (legacy)
+tools/
+├── generate_overworld.py
+assets/
+├── 32rogues/      — all spritesheets
+├── fonts/         — PrStart.ttf, Jacquard12-Regular.ttf
 ```
 
 ## Design Doc
-
 Full game design: `~/Documents/Work/Games/Development/Roguelike Project.md`
-
-### Phase 4/5: Character System & Gods — IN PROGRESS
-- [x] God definitions (7 gods with names, titles, domains, descriptions, stat bonuses)
-- [x] GodAlignment component (god ID + favor tracking)
-- [x] Class definitions (4 starting classes with stats, sprites, descriptions)
-- [x] Character creation screen — God select → Class select, with stat preview
-- [x] God + class stats combine at player creation
-- [x] Player sprite matches chosen class
-- [x] God name in HUD
-- [x] 6 dungeon zone themes (Warrens, Stonekeep, Deep Halls, Catacombs, Molten Depths, Sunken Halls)
-- [x] Atmospheric zone entry messages
-- [x] Depth-scaled room count
-- [x] 15 backgrounds with stat bonuses + unique passives (Gravedigger, Alchemist's Apprentice, Deserter, Noble Exile, Pit Fighter, Hedge Witch, Tomb Robber, Heretic Priest, Shipwreck Survivor, Ratcatcher, Blacksmith's Child, Disgraced Scholar, Plague Doctor, Executioner, Farmer)
-- [x] 22 traits (12 positive, 10 negative) with stat modifiers + special flags
-- [x] Background selection screen (browse + confirm)
-- [x] Trait selection screen (pick 3 positive + 2 negative, toggle selection)
-- [x] Full 4-screen creation flow: God → Class → Background → Traits → play
-- [x] All bonuses (god + class + background + traits) applied to player stats
-- [ ] Favor mechanics (gain/lose from actions)
-- [ ] Prayer abilities
-- [ ] God tenets
-- [ ] NPC god affiliations
-
-### Phase 7: Magic & Spells — IN PROGRESS
-- [x] 15 spells across 6 schools (Conjuration, Transmutation, Divination, Healing, Nature, Dark Arts)
-- [x] Spellbook component, spell learning
-- [x] Spell casting system (MP cost, INT scaling, auto-targeting, area effects)
-- [x] Spell screen UI (z key — browse, cast, MP display, descriptions)
-- [x] MP bar in HUD
-- [x] Class starting spells (Wizard: Spark/Force Bolt/Identify, Ranger: Detect Monsters, others: Minor Heal)
-- [x] Implemented: Spark, Force Bolt, Fireball, Drain Life, Fear, Minor Heal, Major Heal, Harden Skin, Reveal Map, Detect Monsters, Entangle
-- [ ] Spellbooks as findable items
-- [ ] Spell failure rate (armor penalty)
-
-## Next Up
-
-Favor/prayer system, then look/examine mode, then save/load.
-
-## Fonts
-
-- **Press Start 2P** (PrStart.ttf, 8px) — all body text, UI, messages, stats
-- **Jacquard 12** (Jacquard12-Regular.ttf, 24px) — title, god names, class names, death screen (mixed case only, not all caps)

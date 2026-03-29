@@ -95,6 +95,8 @@ bool save_game(const std::string& path, const SaveData& data,
     root["game_turn"] = data.game_turn;
     root["gold"] = data.gold;
     root["rng_seed"] = data.rng_seed;
+    root["overworld_return_x"] = data.overworld_return_x;
+    root["overworld_return_y"] = data.overworld_return_y;
 
     // Quest journal
     json quests = json::array();
@@ -202,6 +204,8 @@ SaveData load_game(const std::string& path, World& world, TileMap& map) {
     data.game_turn = root.value("game_turn", 0);
     data.gold = root.value("gold", 0);
     data.rng_seed = root.value("rng_seed", static_cast<uint64_t>(0));
+    data.overworld_return_x = root.value("overworld_return_x", 0);
+    data.overworld_return_y = root.value("overworld_return_y", 0);
 
     // Quests
     if (root.contains("quests")) {

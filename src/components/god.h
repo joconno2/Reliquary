@@ -42,19 +42,19 @@ inline const GodInfo& get_god_info(GodId id) {
          2, 0, 2, 0, 0, 0, 0,  5, 0, 0},
         // YASHKHET
         {"Yashkhet", "the Wound", "Blood, sacrifice, pain",
-         "Pain is the only honest currency. Not evil — ascetic, extreme, unsettling.",
+         "Pain is the only honest currency. Not evil, but ascetic, extreme, and unsettling.",
          0, 0, 0, 0, 2, 0, 0,  0, 5, 0},
         // KHAEL
         {"Khael", "the Green Watcher", "Nature, beasts, rot",
-         "Not kind. The wolf eating the deer, the fungus consuming the log.",
+         "The wolf eating the deer, the fungus consuming the log.",
          0, 0, 0, 0, 0, 2, 0,  0, 0, 0},
         // SOLETH
         {"Soleth", "the Pale Flame", "Fire, purification, zealotry",
-         "The burning light that scours corruption. Not warm — searing.",
+         "The burning light that scours corruption. Searing.",
          0, 0, 0, 0, 2, 0, 0,  0, 0, 2},
         // IXUUL
         {"Ixuul", "the Formless", "Chaos, mutation, the void",
-         "Not a god. What leaks through the cracks between things.",
+         "Protean. What leaks through the cracks between things.",
          0, 0, 0, 3, 0, 0, -2, 0, 5, 0},
     };
     int idx = static_cast<int>(id);

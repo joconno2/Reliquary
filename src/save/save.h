@@ -14,6 +14,10 @@ struct SaveData {
     int gold = 0;
     QuestJournal journal;
 
+    // Overworld return position (where to place player when ascending from depth 1)
+    int overworld_return_x = 0;
+    int overworld_return_y = 0;
+
     // RNG state for reproducibility
     uint64_t rng_seed = 0;
 

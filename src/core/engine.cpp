@@ -14,7 +14,9 @@
 #include "components/spellbook.h"
 #include "components/npc.h"
 #include "components/quest_target.h"
+#include "components/dynamic_quest.h"
 #include "systems/magic.h"
+#include "generation/quest_gen.h"
 #include "components/background.h"
 #include "components/traits.h"
 #include "systems/fov.h"
@@ -127,6 +129,8 @@ void Engine::do_save() {
     data.gold = gold_;
     data.journal = journal_;
     data.rng_seed = rng_.get_seed();
+    data.overworld_return_x = overworld_return_x_;
+    data.overworld_return_y = overworld_return_y_;
 
     if (save::save_game(save::default_path(), data, world_, player_, map_)) {
         log_.add("Game saved.", {100, 200, 100, 255});
@@ -152,6 +156,8 @@ void Engine::do_load() {
     gold_ = data.gold;
     journal_ = data.journal;
     rng_.reseed(data.rng_seed);
+    overworld_return_x_ = data.overworld_return_x;
+    overworld_return_y_ = data.overworld_return_y;
 
     // Find the player entity
     player_ = NULL_ENTITY;
@@ -205,6 +211,41 @@ void Engine::generate_level() {
         start_x = mresult.start_x;
         start_y = mresult.start_y;
 
+        // Dialogue pools — deterministic selection via position hash
+        static const char* FARMER_DIALOGUE[] = {
+            "Used to be quiet here. Before they opened the barrow.",
+            "My grandfather said there were older things than gods buried in these hills.",
+            "The scholar knows more than he lets on. Always reading those old texts.",
+        };
+        static const char* GUARD_DIALOGUE[] = {
+            "Keep your blade sheathed in town.",
+            "Something's been killing livestock east of here. Stay sharp.",
+            "The barrow's been sealed for generations. Now it's open.",
+        };
+        static const char* SCHOLAR_DIALOGUE[] = {
+            "The Reliquary predates the gods we know. What made it? I don't think we want to know.",
+            "Each god claims the Reliquary is theirs by right. They're all wrong.",
+            "The inscriptions in the deep places are in no language I recognize.",
+        };
+        static const char* BLACKSMITH_DIALOGUE[] = {
+            "Iron holds. Steel bites. That's all you need to know.",
+            "I can repair anything made by human hands. What's down there... I'm not sure.",
+            "The ore from the deep mines has a strange color. I don't like working with it.",
+        };
+
+        // Helper: deterministic dialogue pick from position hash
+        auto pick_dialogue = [](const char* pool[], int pool_size, int x, int y) -> const char* {
+            unsigned h = static_cast<unsigned>(x * 31 + y * 17 + x * y * 7);
+            return pool[h % pool_size];
+        };
+
+        // Thornwall center for quest assignment proximity check
+        constexpr int THORNWALL_CX = 1000;
+        constexpr int THORNWALL_CY = 750;
+        bool farmer_quest_assigned = false;
+        bool guard_quest_assigned = false;
+        bool blacksmith_quest_assigned = false;
+
         // Spawn NPCs from map entities
         for (auto& me : mresult.entities) {
             Entity npc = world_.create();
@@ -212,6 +253,11 @@ void Engine::generate_level() {
 
             NPC npc_comp;
             int sx = 0, sy = 0; // sprite coords in rogues.png
+
+            // Check if this NPC is near Thornwall (within ~30 tiles of center)
+            bool near_thornwall = (std::abs(me.x - THORNWALL_CX) < 30 &&
+                                   std::abs(me.y - THORNWALL_CY) < 30);
+
             switch (me.glyph) {
                 case 'S':
                     npc_comp.role = NPCRole::SHOPKEEPER;
@@ -222,33 +268,63 @@ void Engine::generate_level() {
                 case 'B':
                     npc_comp.role = NPCRole::BLACKSMITH;
                     npc_comp.name = "Blacksmith";
-                    npc_comp.dialogue = "Iron holds. Steel bites. That's all you need to know.";
+                    npc_comp.dialogue = pick_dialogue(BLACKSMITH_DIALOGUE, 3, me.x, me.y);
                     sx = 4; sy = 6; // blacksmith sprite
+                    if (near_thornwall && !blacksmith_quest_assigned) {
+                        npc_comp.quest_id = static_cast<int>(QuestId::SQ_DELIVER_WEAPON);
+                        blacksmith_quest_assigned = true;
+                    }
                     break;
                 case 'P':
                     npc_comp.role = NPCRole::PRIEST;
                     npc_comp.name = "Scholar";
-                    npc_comp.dialogue = "The deeper you go, the older things get. Be careful what you read.";
+                    npc_comp.dialogue = pick_dialogue(SCHOLAR_DIALOGUE, 3, me.x, me.y);
                     sx = 5; sy = 6; // scholar sprite
                     break;
                 case 'F':
                     npc_comp.role = NPCRole::FARMER;
                     npc_comp.name = "Farmer";
-                    npc_comp.dialogue = "Used to be quiet here. Before they opened the barrow.";
+                    npc_comp.dialogue = pick_dialogue(FARMER_DIALOGUE, 3, me.x, me.y);
                     sx = 0; sy = 6; // farmer sprite
+                    if (near_thornwall && !farmer_quest_assigned) {
+                        npc_comp.quest_id = static_cast<int>(QuestId::SQ_MISSING_PERSON);
+                        farmer_quest_assigned = true;
+                    }
                     break;
                 case 'G':
                     npc_comp.role = NPCRole::GUARD;
                     npc_comp.name = "Guard";
-                    npc_comp.dialogue = "Keep your blade sheathed in town.";
+                    npc_comp.dialogue = pick_dialogue(GUARD_DIALOGUE, 3, me.x, me.y);
                     sx = 0; sy = 1;
+                    if (near_thornwall && !guard_quest_assigned) {
+                        npc_comp.quest_id = static_cast<int>(QuestId::SQ_KILL_BEAR);
+                        guard_quest_assigned = true;
+                    }
+                    break;
+                case 'W':
+                    npc_comp.role = NPCRole::FARMER;
+                    npc_comp.name = "Villager";
+                    npc_comp.dialogue = pick_dialogue(FARMER_DIALOGUE, 3, me.x, me.y);
+                    sx = 1; sy = 6; // villager sprite
+                    break;
+                case 'H':
+                    npc_comp.role = NPCRole::PRIEST; // herbalist uses priest role
+                    npc_comp.name = "Herbalist";
+                    npc_comp.dialogue = "The wilds hold remedies for every ill, if you know where to look.";
+                    sx = 3; sy = 6;
+                    break;
+                case 'M':
+                    npc_comp.role = NPCRole::SHOPKEEPER;
+                    npc_comp.name = "Merchant";
+                    npc_comp.dialogue = "I trade in what the road provides. Take a look.";
+                    sx = 2; sy = 6; // merchant uses shopkeep sprite
                     break;
                 case 'E':
                     npc_comp.role = NPCRole::ELDER;
                     npc_comp.name = "Elder Maren";
                     npc_comp.dialogue = "A wight has risen in the barrow east of here. "
                                         "People have died. Will you put it down?";
-                    npc_comp.quest_id = static_cast<int>(QuestId::MQ_BARROW_WIGHT);
+                    npc_comp.quest_id = static_cast<int>(QuestId::MQ_01_BARROW_WIGHT);
                     sx = 4; sy = 6; // elderly sprite
                     break;
             }
@@ -261,6 +337,34 @@ void Engine::generate_level() {
             npc_stats.hp = 999;
             npc_stats.hp_max = 999;
             world_.add<Stats>(npc, std::move(npc_stats));
+        }
+
+        // Generate dynamic side quests for each town's NPCs
+        struct TownInfo { int x, y; const char* name; };
+        static const TownInfo TOWNS[] = {
+            {1000, 750, "Thornwall"},
+            {750, 650, "Ashford"},
+            {1300, 670, "Greywatch"},
+            {850, 950, "Millhaven"},
+            {1200, 930, "Stonehollow"},
+            {1050, 450, "Frostmere"},
+            {650, 800, "Bramblewood"},
+            {1400, 750, "Ironhearth"},
+            {1000, 1100, "Dustfall"},
+            {800, 400, "Whitepeak"},
+            {1250, 1100, "Drywell"},
+            {550, 550, "Hollowgate"},
+            {1450, 500, "Candlemere"},
+            {900, 1200, "Sandmoor"},
+            {1100, 300, "Glacierveil"},
+            {700, 1050, "Tanglewood"},
+            {1350, 1000, "Redrock"},
+            {1150, 550, "Ravenshold"},
+            {600, 700, "Fenwatch"},
+            {1500, 850, "Endgate"},
+        };
+        for (auto& t : TOWNS) {
+            quest_gen::generate_town_quests(world_, map_, rng_, t.x, t.y, t.name);
         }
     } else {
         // Dungeon zones — each zone spans 3 depths
@@ -379,7 +483,7 @@ void Engine::generate_level() {
                 "Barrow Wight", SHEET_MONSTERS, 3, 4,
                 45, 16, 12, 14, 8, 3, 90, 100);
             if (wight != NULL_ENTITY) {
-                world_.add<QuestTarget>(wight, {QuestId::MQ_BARROW_WIGHT, true});
+                world_.add<QuestTarget>(wight, {QuestId::MQ_01_BARROW_WIGHT, true});
             }
         }
     }
@@ -451,17 +555,26 @@ void Engine::try_move_player(int dx, int dy) {
         if (world_.has<NPC>(target)) {
             auto& npc = world_.get<NPC>(target);
 
-            // Shopkeeper — open shop screen
-            if (npc.role == NPCRole::SHOPKEEPER) {
+            // Shopkeeper — open shop screen (unless they have a dynamic quest to offer)
+            if (npc.role == NPCRole::SHOPKEEPER && !world_.has<DynamicQuest>(target)) {
                 shop_screen_.open(player_, world_, rng_, &gold_);
                 return;
+            }
+            // Merchant with dynamic quest: show dialogue + quest, then can shop next time
+            if (npc.role == NPCRole::SHOPKEEPER && world_.has<DynamicQuest>(target)) {
+                auto& dq = world_.get<DynamicQuest>(target);
+                if (dq.completed) {
+                    // Quest done, revert to shop behavior
+                    shop_screen_.open(player_, world_, rng_, &gold_);
+                    return;
+                }
             }
 
             char buf[256];
             snprintf(buf, sizeof(buf), "%s: \"%s\"", npc.name.c_str(), npc.dialogue.c_str());
             log_.add(buf, {180, 180, 140, 255});
 
-            // Quest giving
+            // Quest giving — static quests
             if (npc.quest_id >= 0) {
                 auto qid = static_cast<QuestId>(npc.quest_id);
                 if (!journal_.has_quest(qid)) {
@@ -483,8 +596,42 @@ void Engine::try_move_player(int dx, int dy) {
                         }
                     }
                     // Chain main quests
-                    if (qid == QuestId::MQ_BARROW_WIGHT) {
+                    if (qid == QuestId::MQ_01_BARROW_WIGHT) {
                         npc.dialogue = "Something stirred when it fell. The scholar may know more.";
+                    }
+                }
+            }
+
+            // Dynamic quest handling
+            if (world_.has<DynamicQuest>(target)) {
+                auto& dq = world_.get<DynamicQuest>(target);
+                if (!dq.accepted) {
+                    // Offer the quest
+                    char qbuf[256];
+                    snprintf(qbuf, sizeof(qbuf), "[Quest] %s", dq.name.c_str());
+                    log_.add(qbuf, {220, 200, 100, 255});
+                    log_.add(dq.description.c_str(), {180, 170, 140, 255});
+                    snprintf(qbuf, sizeof(qbuf), "Objective: %s", dq.objective.c_str());
+                    log_.add(qbuf, {160, 160, 130, 255});
+                    snprintf(qbuf, sizeof(qbuf), "Reward: %d XP, %d gold", dq.xp_reward, dq.gold_reward);
+                    log_.add(qbuf, {160, 160, 130, 255});
+                    dq.accepted = true;
+                    log_.add("Quest accepted.", {120, 220, 120, 255});
+                } else if (!dq.completed) {
+                    // Auto-complete when returning to the NPC
+                    // (simple trigger — revisiting the NPC counts as completing it)
+                    dq.completed = true;
+                    char qbuf[256];
+                    snprintf(qbuf, sizeof(qbuf), "Quest complete: %s (+%dxp, +%dgold)",
+                             dq.name.c_str(), dq.xp_reward, dq.gold_reward);
+                    log_.add(qbuf, {120, 220, 120, 255});
+                    log_.add(dq.complete_text.c_str(), {180, 170, 140, 255});
+                    gold_ += dq.gold_reward;
+                    if (world_.has<Stats>(player_) && dq.xp_reward > 0) {
+                        if (world_.get<Stats>(player_).grant_xp(dq.xp_reward)) {
+                            pending_levelup_ = true;
+                            levelup_screen_.open(player_, rng_);
+                        }
                     }
                 }
             }
@@ -980,6 +1127,12 @@ void Engine::handle_input() {
                 return;
             }
 
+            // World map intercepts input
+            if (world_map_.is_open()) {
+                world_map_.handle_input(event);
+                return;
+            }
+
             // Inventory mode intercepts input
             if (inventory_screen_.is_open()) {
                 InvAction act = inventory_screen_.handle_input(event);
@@ -1060,6 +1213,8 @@ void Engine::handle_input() {
                 game_turn_ = 0;
                 gold_ = 0;
                 journal_ = {};
+                overworld_return_x_ = 0;
+                overworld_return_y_ = 0;
                 // Clear all entities
                 world_ = World();
                 state_ = GameState::MAIN_MENU;
@@ -1117,6 +1272,15 @@ void Engine::handle_input() {
                     quest_log_.open();
                     break;
 
+                // World map (overworld only)
+                case SDLK_m:
+                    if (dungeon_level_ <= 0) {
+                        world_map_.toggle();
+                    } else {
+                        log_.add("You can't see the world map underground.", {150, 140, 130, 255});
+                    }
+                    break;
+
                 // Help / keybinds
                 case SDLK_QUESTION:
                 case SDLK_SLASH:
@@ -1133,13 +1297,29 @@ void Engine::handle_input() {
                     auto tile_type = map_.at(pos.x, pos.y).type;
                     if (tile_type == TileType::STAIRS_DOWN &&
                         event.key.keysym.sym != SDLK_LESS) {
-                        generate_level();
+                        // Save overworld position before first descent
+                        if (dungeon_level_ == 0) {
+                            overworld_return_x_ = pos.x;
+                            overworld_return_y_ = pos.y;
+                        }
+                        generate_level(); // increments dungeon_level_
                     } else if (tile_type == TileType::STAIRS_UP &&
                                event.key.keysym.sym != SDLK_GREATER) {
-                        if (dungeon_level_ > 0) {
-                            // Go back to overworld (level 0)
+                        if (dungeon_level_ > 1) {
+                            // Go up one dungeon level: -2 because generate_level increments by 1
+                            dungeon_level_ -= 2;
+                            generate_level();
+                        } else if (dungeon_level_ == 1) {
+                            // Return to overworld from depth 1
                             dungeon_level_ = -1; // will increment to 0
                             generate_level();
+                            // Place player at the dungeon entrance they used
+                            if (overworld_return_x_ != 0 || overworld_return_y_ != 0) {
+                                world_.get<Position>(player_) = {overworld_return_x_, overworld_return_y_};
+                                auto& stats = world_.get<Stats>(player_);
+                                fov::compute(map_, overworld_return_x_, overworld_return_y_, stats.fov_radius());
+                                camera_.center_on(overworld_return_x_, overworld_return_y_);
+                            }
                         } else {
                             log_.add("You're already on the surface.", {150, 140, 130, 255});
                         }
@@ -1316,6 +1496,12 @@ void Engine::render() {
     help_screen_.render(renderer_, font_, font_title_, width_, height_);
     levelup_screen_.render(renderer_, font_, width_, height_);
     shop_screen_.render(renderer_, font_, sprites_, world_, width_, height_);
+
+    // World map overlay — needs player position and tilemap
+    if (world_map_.is_open() && world_.has<Position>(player_)) {
+        auto& pos = world_.get<Position>(player_);
+        world_map_.render(renderer_, font_, font_title_, map_, pos.x, pos.y, width_, height_);
+    }
 
     // Pause menu overlay
     pause_menu_.render(renderer_, font_, font_title_, width_, height_);
