@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "generation/dungeon.h"
 
 namespace dungeon {

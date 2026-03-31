@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "ui/background_select.h"
 #include "ui/ui_draw.h"
 #include <cstdio>

@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "ui/settings_screen.h"
 #include "ui/ui_draw.h"
 #include <cstdio>

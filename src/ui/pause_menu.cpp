@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "ui/pause_menu.h"
 #include "ui/ui_draw.h"
 

@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "systems/ai.h"
 #include "components/ai.h"
 #include "components/position.h"

@@ -3,6 +3,7 @@
 #include "components/prayer.h"
 #include "components/tenet.h"
 #include <cstdio>
+#include <cmath>
 #include <algorithm>
 
 static const char* RANDOM_NAMES[] = {

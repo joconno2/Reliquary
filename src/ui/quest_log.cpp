@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "ui/quest_log.h"
 #include "ui/ui_draw.h"
 #include <cstdio>

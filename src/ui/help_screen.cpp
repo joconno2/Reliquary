@@ -1,5 +1,6 @@
 #include "ui/help_screen.h"
 #include "ui/ui_draw.h"
+#include <algorithm>
 
 bool HelpScreen::handle_input(SDL_Event& event) {
     if (!open_) return false;
