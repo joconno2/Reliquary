@@ -28,6 +28,9 @@ struct SaveData {
     // Player traits (for runtime checks like Bloodlust)
     std::vector<TraitId> traits;
 
+    // Dungeon persistence
+    int current_dungeon_idx = -1;
+
     bool valid = false;
 };
 

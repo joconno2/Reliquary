@@ -11,6 +11,9 @@
 #include "components/status_effect.h"
 #include "components/disease.h"
 #include "components/buff.h"
+#include "components/ai.h"
+#include "components/container.h"
+#include "components/corpse.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <cstdio>
@@ -251,6 +254,65 @@ bool save_game(const std::string& path, const SaveData& data,
     root["tile_variants"] = tile_variants;
     root["tile_explored"] = tile_explored;
 
+    // Floor entities (monsters, items on ground, containers, doodads)
+    json floor_entities = json::array();
+    auto& positions = world.pool<Position>();
+    for (size_t i = 0; i < positions.size(); i++) {
+        Entity e = positions.entity_at(i);
+        if (e == player) continue; // skip player
+        if (!world.has<Renderable>(e)) continue;
+
+        json ej;
+        auto& pos = positions.at_index(i);
+        auto& rend = world.get<Renderable>(e);
+        ej["x"] = pos.x; ej["y"] = pos.y;
+        ej["sheet"] = rend.sprite_sheet; ej["sx"] = rend.sprite_x; ej["sy"] = rend.sprite_y;
+        ej["tint"] = {rend.tint.r, rend.tint.g, rend.tint.b, rend.tint.a};
+        ej["z"] = rend.z_order; ej["flip"] = rend.flip_h;
+
+        if (world.has<Stats>(e)) {
+            auto& s = world.get<Stats>(e);
+            ej["stats"] = stats_to_json(s);
+        }
+        if (world.has<AI>(e)) {
+            auto& ai = world.get<AI>(e);
+            ej["ai_state"] = static_cast<int>(ai.state);
+            ej["ai_range"] = ai.ranged_range;
+            ej["ai_rdmg"] = ai.ranged_damage;
+            ej["ai_flee"] = ai.flee_threshold;
+            ej["ai_forget"] = ai.forget_player;
+        }
+        if (world.has<Energy>(e)) {
+            auto& en = world.get<Energy>(e);
+            ej["energy"] = en.current; ej["espeed"] = en.speed;
+        }
+        if (world.has<Item>(e)) {
+            ej["item"] = item_to_json(world.get<Item>(e));
+        }
+        if (world.has<Container>(e)) {
+            auto& c = world.get<Container>(e);
+            ej["container_opened"] = c.opened;
+            ej["container_osx"] = c.open_sprite_x;
+            ej["container_osy"] = c.open_sprite_y;
+            if (!c.opened) ej["container_item"] = item_to_json(c.contents);
+        }
+        if (world.has<GodAlignment>(e)) {
+            auto& g = world.get<GodAlignment>(e);
+            ej["god"] = static_cast<int>(g.god);
+            ej["gfavor"] = g.favor;
+        }
+        if (world.has<StatusEffects>(e)) {
+            json fxj = json::array();
+            for (auto& eff : world.get<StatusEffects>(e).effects)
+                fxj.push_back({{"t", static_cast<int>(eff.type)}, {"d", eff.damage}, {"r", eff.turns_remaining}});
+            if (!fxj.empty()) ej["sfx"] = fxj;
+        }
+
+        floor_entities.push_back(ej);
+    }
+    root["floor_entities"] = floor_entities;
+    root["current_dungeon_idx"] = data.current_dungeon_idx;
+
     std::ofstream file(path);
     if (!file.is_open()) {
         fprintf(stderr, "Failed to save: %s\n", path.c_str());
@@ -279,6 +341,7 @@ SaveData load_game(const std::string& path, World& world, TileMap& map) {
     data.overworld_return_x = root.value("overworld_return_x", 0);
     data.overworld_return_y = root.value("overworld_return_y", 0);
     data.hardcore = root.value("hardcore", false);
+    data.current_dungeon_idx = root.value("current_dungeon_idx", -1);
 
     // Traits
     if (root.contains("traits")) {
@@ -417,6 +480,60 @@ SaveData load_game(const std::string& path, World& world, TileMap& map) {
         }
     }
     world.add<Inventory>(player, std::move(inv));
+
+    // Restore floor entities (monsters, items, containers, doodads)
+    if (root.contains("floor_entities")) {
+        for (auto& ej : root["floor_entities"]) {
+            Entity e = world.create();
+            world.add<Position>(e, {ej.value("x", 0), ej.value("y", 0)});
+
+            SDL_Color tint = {255, 255, 255, 255};
+            if (ej.contains("tint")) {
+                auto& t = ej["tint"];
+                tint = {static_cast<Uint8>(t[0].get<int>()), static_cast<Uint8>(t[1].get<int>()),
+                         static_cast<Uint8>(t[2].get<int>()), static_cast<Uint8>(t[3].get<int>())};
+            }
+            world.add<Renderable>(e, {ej.value("sheet", 0), ej.value("sx", 0), ej.value("sy", 0),
+                                       tint, ej.value("z", 0), ej.value("flip", false)});
+
+            if (ej.contains("stats")) {
+                world.add<Stats>(e, json_to_stats(ej["stats"]));
+            }
+            if (ej.contains("ai_state")) {
+                AI ai;
+                ai.state = static_cast<AIState>(ej.value("ai_state", 0));
+                ai.ranged_range = ej.value("ai_range", 0);
+                ai.ranged_damage = ej.value("ai_rdmg", 0);
+                ai.flee_threshold = ej.value("ai_flee", 20);
+                ai.forget_player = ej.value("ai_forget", false);
+                world.add<AI>(e, ai);
+            }
+            if (ej.contains("energy")) {
+                world.add<Energy>(e, {ej.value("energy", 0), ej.value("espeed", 100)});
+            }
+            if (ej.contains("item")) {
+                world.add<Item>(e, json_to_item(ej["item"]));
+            }
+            if (ej.contains("container_opened")) {
+                Container c;
+                c.opened = ej.value("container_opened", false);
+                c.open_sprite_x = ej.value("container_osx", 0);
+                c.open_sprite_y = ej.value("container_osy", 0);
+                if (ej.contains("container_item"))
+                    c.contents = json_to_item(ej["container_item"]);
+                world.add<Container>(e, std::move(c));
+            }
+            if (ej.contains("god")) {
+                world.add<GodAlignment>(e, {static_cast<GodId>(ej.value("god", 0)), ej.value("gfavor", 0)});
+            }
+            if (ej.contains("sfx")) {
+                StatusEffects fx;
+                for (auto& f : ej["sfx"])
+                    fx.add(static_cast<StatusType>(f.value("t", 0)), f.value("d", 0), f.value("r", 0));
+                world.add<StatusEffects>(e, std::move(fx));
+            }
+        }
+    }
 
     data.valid = true;
     return data;

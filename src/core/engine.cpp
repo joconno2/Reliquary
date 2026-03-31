@@ -202,6 +202,9 @@ void Engine::reload_fonts() {
 }
 
 void Engine::do_save() {
+    // Cache current floor before saving so it's in the floor_cache_
+    if (dungeon_level_ > 0) cache_current_floor();
+
     SaveData data;
     data.dungeon_level = dungeon_level_;
     data.game_turn = game_turn_;
@@ -212,8 +215,11 @@ void Engine::do_save() {
     data.overworld_return_y = overworld_return_y_;
     data.hardcore = hardcore_;
     data.traits = build_traits_;
+    data.current_dungeon_idx = current_dungeon_idx_;
 
     if (save::save_game(save::default_path(), data, world_, player_, map_)) {
+        // Save floor cache as separate file
+        save_floor_cache("save/floors.dat");
         log_.add("Game saved.", {100, 200, 100, 255});
     } else {
         log_.add("Failed to save.", {200, 100, 100, 255});
@@ -241,6 +247,9 @@ void Engine::do_load() {
     overworld_return_y_ = data.overworld_return_y;
     hardcore_ = data.hardcore;
     build_traits_ = data.traits;
+    current_dungeon_idx_ = data.current_dungeon_idx;
+    floor_cache_.clear();
+    load_floor_cache("save/floors.dat"); // restore all cached dungeon floors
 
     // Hardcore: one-shot load — delete save after loading
     if (hardcore_) {
@@ -338,7 +347,7 @@ void Engine::cache_current_floor() {
     }
 }
 
-bool Engine::restore_floor(int level) {
+bool Engine::restore_floor(int level, bool ascending) {
     auto it = floor_cache_.find(level);
     if (it == floor_cache_.end()) return false;
 
@@ -363,14 +372,186 @@ bool Engine::restore_floor(int level) {
         if (ce.has_container) world_.add<Container>(e, ce.container);
     }
 
-    // Restore player position to where they were on this floor
+    // Place player at appropriate stairs
     if (world_.has<Position>(player_)) {
         auto& pp = world_.get<Position>(player_);
-        pp.x = fs.player_x;
-        pp.y = fs.player_y;
+        TileType target_tile = ascending ? TileType::STAIRS_DOWN : TileType::STAIRS_UP;
+        bool found_stairs = false;
+        // Search the map for the target stair tile
+        for (int sy = 0; sy < map_.height() && !found_stairs; sy++) {
+            for (int sx = 0; sx < map_.width() && !found_stairs; sx++) {
+                if (map_.at(sx, sy).type == target_tile) {
+                    pp.x = sx;
+                    pp.y = sy;
+                    found_stairs = true;
+                }
+            }
+        }
+        // Fallback to cached position if no stairs found
+        if (!found_stairs) {
+            pp.x = fs.player_x;
+            pp.y = fs.player_y;
+        }
     }
 
     return true;
+}
+
+void Engine::save_floor_cache(const std::string& path) {
+    nlohmann::json root = nlohmann::json::array();
+    for (auto& [level, fs] : floor_cache_) {
+        nlohmann::json fj;
+        fj["level"] = level;
+        fj["player_x"] = fs.player_x;
+        fj["player_y"] = fs.player_y;
+        // Map tiles
+        int w = fs.map.width(), h = fs.map.height();
+        fj["map_w"] = w; fj["map_h"] = h;
+        std::string types, variants, explored;
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                auto& t = fs.map.at(x, y);
+                types += static_cast<char>(static_cast<int>(t.type) + 32);
+                variants += static_cast<char>(t.variant + 32);
+                explored += t.explored ? '1' : '0';
+            }
+        }
+        fj["types"] = types; fj["variants"] = variants; fj["explored"] = explored;
+        // Entities
+        nlohmann::json ents = nlohmann::json::array();
+        for (auto& ce : fs.entities) {
+            nlohmann::json ej;
+            ej["x"] = ce.x; ej["y"] = ce.y;
+            ej["sheet"] = ce.sheet; ej["sx"] = ce.sprite_x; ej["sy"] = ce.sprite_y;
+            ej["tint"] = {ce.tint_r, ce.tint_g, ce.tint_b, ce.tint_a};
+            ej["z"] = ce.z_order; ej["flip"] = ce.flip_h;
+            if (ce.has_stats) {
+                ej["sname"] = ce.stats.name; ej["shp"] = ce.stats.hp; ej["shpm"] = ce.stats.hp_max;
+                ej["sdmg"] = ce.stats.base_damage; ej["sarm"] = ce.stats.natural_armor;
+                ej["sspd"] = ce.stats.base_speed; ej["sxp"] = ce.stats.xp_value;
+                nlohmann::json attrs = nlohmann::json::array();
+                for (int a = 0; a < ATTR_COUNT; a++) attrs.push_back(ce.stats.attributes[a]);
+                ej["sattr"] = attrs;
+            }
+            if (ce.has_ai) {
+                ej["ai"] = static_cast<int>(ce.ai.state);
+                ej["ai_rr"] = ce.ai.ranged_range; ej["ai_rd"] = ce.ai.ranged_damage;
+                ej["ai_ft"] = ce.ai.flee_threshold; ej["ai_fg"] = ce.ai.forget_player;
+            }
+            if (ce.has_stats || ce.has_ai) { ej["ec"] = ce.energy_current; ej["es"] = ce.energy_speed; }
+            if (ce.has_item) {
+                ej["iname"] = ce.item.name; ej["itype"] = static_cast<int>(ce.item.type);
+                ej["islot"] = static_cast<int>(ce.item.slot);
+                ej["idmg"] = ce.item.damage_bonus; ej["iarm"] = ce.item.armor_bonus;
+                ej["iatk"] = ce.item.attack_bonus; ej["idodge"] = ce.item.dodge_bonus;
+                ej["iheal"] = ce.item.heal_amount; ej["igold"] = ce.item.gold_value;
+                ej["imat"] = static_cast<int>(ce.item.material); ej["itags"] = ce.item.tags;
+                ej["iid"] = ce.item.identified; ej["icurse"] = ce.item.curse_state;
+            }
+            if (ce.has_god) { ej["god"] = static_cast<int>(ce.god_align.god); ej["gfav"] = ce.god_align.favor; }
+            if (ce.has_container) {
+                ej["cont_open"] = ce.container.opened;
+                ej["cont_osx"] = ce.container.open_sprite_x;
+                ej["cont_osy"] = ce.container.open_sprite_y;
+            }
+            ents.push_back(ej);
+        }
+        fj["entities"] = ents;
+        root.push_back(fj);
+    }
+    std::ofstream f(path);
+    if (f.is_open()) f << root.dump();
+}
+
+void Engine::load_floor_cache(const std::string& path) {
+    std::ifstream f(path);
+    if (!f.is_open()) return;
+    nlohmann::json root;
+    try { root = nlohmann::json::parse(f); } catch (...) { return; }
+    if (!root.is_array()) return;
+
+    floor_cache_.clear();
+    for (auto& fj : root) {
+        int level = fj.value("level", -1);
+        if (level < 0) continue;
+        FloorState& fs = floor_cache_[level];
+        fs.player_x = fj.value("player_x", 0);
+        fs.player_y = fj.value("player_y", 0);
+        // Map
+        int w = fj.value("map_w", 0), h = fj.value("map_h", 0);
+        if (w > 0 && h > 0) {
+            fs.map = TileMap(w, h);
+            std::string types = fj.value("types", "");
+            std::string variants = fj.value("variants", "");
+            std::string explored = fj.value("explored", "");
+            for (int y = 0; y < h; y++) {
+                for (int x = 0; x < w; x++) {
+                    int idx = y * w + x;
+                    if (idx < static_cast<int>(types.size())) {
+                        auto& t = fs.map.at(x, y);
+                        t.type = static_cast<TileType>(static_cast<int>(types[idx]) - 32);
+                        if (idx < static_cast<int>(variants.size())) t.variant = static_cast<uint8_t>(variants[idx] - 32);
+                        if (idx < static_cast<int>(explored.size())) t.explored = (explored[idx] == '1');
+                    }
+                }
+            }
+        }
+        // Entities
+        if (fj.contains("entities")) {
+            for (auto& ej : fj["entities"]) {
+                CachedEntity ce;
+                ce.x = ej.value("x", 0); ce.y = ej.value("y", 0);
+                ce.sheet = ej.value("sheet", 0); ce.sprite_x = ej.value("sx", 0); ce.sprite_y = ej.value("sy", 0);
+                if (ej.contains("tint")) {
+                    auto& t = ej["tint"];
+                    ce.tint_r = t[0].get<uint8_t>(); ce.tint_g = t[1].get<uint8_t>();
+                    ce.tint_b = t[2].get<uint8_t>(); ce.tint_a = t[3].get<uint8_t>();
+                } else { ce.tint_r = ce.tint_g = ce.tint_b = ce.tint_a = 255; }
+                ce.z_order = ej.value("z", 0); ce.flip_h = ej.value("flip", false);
+                if (ej.contains("sname")) {
+                    ce.has_stats = true;
+                    ce.stats.name = ej.value("sname", ""); ce.stats.hp = ej.value("shp", 1);
+                    ce.stats.hp_max = ej.value("shpm", 1); ce.stats.base_damage = ej.value("sdmg", 1);
+                    ce.stats.natural_armor = ej.value("sarm", 0); ce.stats.base_speed = ej.value("sspd", 100);
+                    ce.stats.xp_value = ej.value("sxp", 0);
+                    if (ej.contains("sattr")) {
+                        int ai = 0;
+                        for (auto& a : ej["sattr"]) { if (ai < ATTR_COUNT) ce.stats.attributes[ai++] = a.get<int>(); }
+                    }
+                }
+                if (ej.contains("ai")) {
+                    ce.has_ai = true;
+                    ce.ai.state = static_cast<AIState>(ej.value("ai", 0));
+                    ce.ai.ranged_range = ej.value("ai_rr", 0); ce.ai.ranged_damage = ej.value("ai_rd", 0);
+                    ce.ai.flee_threshold = ej.value("ai_ft", 20); ce.ai.forget_player = ej.value("ai_fg", false);
+                }
+                ce.energy_current = ej.value("ec", 0); ce.energy_speed = ej.value("es", 100);
+                if (ej.contains("iname")) {
+                    ce.has_item = true;
+                    ce.item.name = ej.value("iname", ""); ce.item.type = static_cast<ItemType>(ej.value("itype", 0));
+                    ce.item.slot = static_cast<EquipSlot>(ej.value("islot", -1));
+                    ce.item.damage_bonus = ej.value("idmg", 0); ce.item.armor_bonus = ej.value("iarm", 0);
+                    ce.item.attack_bonus = ej.value("iatk", 0); ce.item.dodge_bonus = ej.value("idodge", 0);
+                    ce.item.heal_amount = ej.value("iheal", 0); ce.item.gold_value = ej.value("igold", 0);
+                    ce.item.material = static_cast<MaterialType>(ej.value("imat", 0));
+                    ce.item.tags = ej.value("itags", (uint32_t)0);
+                    ce.item.identified = ej.value("iid", false); ce.item.curse_state = ej.value("icurse", 0);
+                }
+                if (ej.contains("god")) {
+                    ce.has_god = true;
+                    ce.god_align.god = static_cast<GodId>(ej.value("god", 0));
+                    ce.god_align.favor = ej.value("gfav", 0);
+                }
+                if (ej.contains("cont_open")) {
+                    ce.has_container = true;
+                    ce.container.opened = ej.value("cont_open", false);
+                    ce.container.open_sprite_x = ej.value("cont_osx", 0);
+                    ce.container.open_sprite_y = ej.value("cont_osy", 0);
+                }
+                fs.entities.push_back(std::move(ce));
+            }
+        }
+    }
 }
 
 void Engine::clear_entities_except_player() {
@@ -457,7 +638,7 @@ void Engine::generate_level() {
     }
 
     // Try to restore cached floor
-    if (dungeon_level_ > 0 && restore_floor(dungeon_level_)) {
+    if (dungeon_level_ > 0 && restore_floor(dungeon_level_, ascending_)) {
         // Floor restored from cache — skip generation
         if (world_.has<Position>(player_) && world_.has<Stats>(player_)) {
             auto& pos = world_.get<Position>(player_);
@@ -588,7 +769,7 @@ void Engine::generate_level() {
                     npc_comp.role = NPCRole::PRIEST;
                     npc_comp.name = "Scholar";
                     npc_comp.dialogue = pick_dialogue(SCHOLAR_DIALOGUE, 3, me.x, me.y);
-                    sx = 5; sy = 6;
+                    sx = 3; sy = 4; // desert sage sprite (scholar sprite is empty)
                     // MQ_02: Thornwall scholar
                     if (town_idx == 0 && !mq_assigned[1]) {
                         npc_comp.quest_id = static_cast<int>(QuestId::MQ_02_SCHOLAR_CLUE);
@@ -732,8 +913,11 @@ void Engine::generate_level() {
             }
             npc_comp.home_x = me.x;
             npc_comp.home_y = me.y;
+            bool has_quest = (npc_comp.quest_id >= 0);
             world_.add<NPC>(npc, std::move(npc_comp));
-            world_.add<Renderable>(npc, {SHEET_ROGUES, sx, sy, {255, 255, 255, 255}, 5});
+            // Quest NPCs get gold tint so they stand out
+            SDL_Color npc_tint = has_quest ? SDL_Color{255, 230, 140, 255} : SDL_Color{255, 255, 255, 255};
+            world_.add<Renderable>(npc, {SHEET_ROGUES, sx, sy, npc_tint, 5});
 
             // NPCs have stats but aren't killable (no AI component = won't fight)
             Stats npc_stats;
@@ -2069,6 +2253,9 @@ void Engine::process_turn() {
                 auto& pp = world_.get<Position>(player_);
                 if (mresult.critical) particles_.crit_flash(pp.x, pp.y);
                 else particles_.blood(pp.x, pp.y);
+                // Track what hit us for death screen
+                if (world_.has<Stats>(e))
+                    death_cause_ = world_.get<Stats>(e).name;
             }
             // Status effects from monster hits
             if (mresult.hit && world_.has<Stats>(e) && world_.has<StatusEffects>(player_)) {
@@ -2232,6 +2419,7 @@ void Engine::process_turn() {
                    map_.in_bounds(mpos.x, mpos.y) && map_.at(mpos.x, mpos.y).visible) {
             // Monster special abilities at range
             auto& mstats = world_.get<Stats>(e);
+            death_cause_ = mstats.name; // track for death screen
             if (mstats.name == "lich" && rng_.chance(40)) {
                 // Lich casts drain life
                 int dmg = 8 + rng_.range(0, 6);
@@ -3401,6 +3589,14 @@ void Engine::process_status_effects() {
         }
         if (dmg < 0) dmg = 0;
         stats.hp -= dmg;
+        if (dmg > 0 && stats.hp <= 0) {
+            switch (eff.type) {
+                case StatusType::POISON: death_cause_ = "poison"; break;
+                case StatusType::BURN:   death_cause_ = "fire"; break;
+                case StatusType::BLEED:  death_cause_ = "bleeding"; break;
+                default: death_cause_ = "an affliction"; break;
+            }
+        }
         char buf[128];
         if (dmg > 0) {
             switch (eff.type) {
@@ -3566,6 +3762,7 @@ void Engine::process_status_effects() {
             if (ga.favor <= -60 && game_turn_ % 20 == 0) {
                 int dmg = 1 + (-ga.favor) / 30;
                 stats.hp -= dmg;
+                if (stats.hp <= 0) death_cause_ = std::string(ginfo.name) + "'s wrath";
                 if (game_turn_ % 60 == 0) {
                     char buf[128];
                     snprintf(buf, sizeof(buf), "%s punishes your faithlessness. (%d)", ginfo.name, dmg);
@@ -3605,6 +3802,9 @@ void Engine::process_status_effects() {
 
     if (stats.hp <= 0) {
         state_ = GameState::DEAD;
+        end_screen_time_ = SDL_GetTicks();
+        audio_.stop_all_ambient(500);
+        audio_.play_music(MusicId::DEATH, 1500);
     }
 }
 
@@ -5164,6 +5364,7 @@ void Engine::handle_input() {
                 overworld_return_x_ = 0;
                 overworld_return_y_ = 0;
                 floor_cache_.clear();
+                std::filesystem::remove("save/floors.dat");
                 overworld_loaded_ = false;
                 current_dungeon_idx_ = -1;
                 build_traits_.clear();
@@ -5376,23 +5577,11 @@ void Engine::handle_input() {
                     }
 
                     if (is_auto_complete_quest(qid)) {
-                        // "Talk to" quests — the conversation IS the objective
+                        // "Talk to" quests — mark COMPLETE, player talks again to finish
                         journal_.set_state(qid, QuestState::COMPLETE);
-                        journal_.set_state(qid, QuestState::FINISHED);
                         log_.add(qinfo.complete_text, {180, 170, 140, 255});
-                        char buf[128];
-                        snprintf(buf, sizeof(buf), "Quest complete: %s (+%dxp, +%dgold)",
-                                 qinfo.name, qinfo.xp_reward, qinfo.gold_reward);
-                        log_.add(buf, {120, 220, 120, 255});
+                        log_.add("Speak to them again.", {160, 155, 140, 255});
                         audio_.play(SfxId::QUEST);
-                        gold_ += qinfo.gold_reward;
-                        if (world_.has<Stats>(player_) && qinfo.xp_reward > 0) {
-                            if (world_.get<Stats>(player_).grant_xp(qinfo.xp_reward)) {
-                                pending_levelup_ = true;
-                                levelup_screen_.open(player_, rng_);
-                                audio_.play(SfxId::LEVELUP);
-                            }
-                        }
                     } else {
                         char buf[128];
                         snprintf(buf, sizeof(buf), "Quest accepted: %s", qinfo.name);
@@ -5523,7 +5712,7 @@ void Engine::handle_input() {
 
             // Dead state — any key returns to main menu (after a delay)
             if (state_ == GameState::DEAD) {
-                if (SDL_GetTicks() - end_screen_time_ < 1500) return; // ignore input briefly
+                if (SDL_GetTicks() - end_screen_time_ < 3000) return; // 3 second delay
                 // Hardcore: delete save on death
                 if (hardcore_) {
                     std::filesystem::remove(save::default_path());
@@ -5745,6 +5934,7 @@ void Engine::handle_input() {
                                 floor_cache_.clear();
                         }
                         cache_current_floor(); // persist current floor before leaving
+                        ascending_ = false; // going down
                         generate_level(); // increments dungeon_level_
                         audio_.play(SfxId::STAIRS);
                     } else if (tile_type == TileType::STAIRS_UP &&
@@ -5752,12 +5942,15 @@ void Engine::handle_input() {
                         if (dungeon_level_ > 1) {
                             // Go up one dungeon level: -2 because generate_level increments by 1
                             cache_current_floor(); // persist current floor before leaving
+                            ascending_ = true; // going up — place at down-stairs on restored floor
                             dungeon_level_ -= 2;
                             generate_level();
+                            ascending_ = false;
                             audio_.play(SfxId::STAIRS);
                         } else if (dungeon_level_ == 1) {
                             // Return to overworld from depth 1 — keep cache for re-entry
                             cache_current_floor();
+                            ascending_ = false;
                             dungeon_level_ = -1; // will increment to 0
                             generate_level();
                             audio_.play(SfxId::STAIRS);
@@ -5778,6 +5971,14 @@ void Engine::handle_input() {
                 }
 
                 // Screenshot
+                case SDLK_F5:
+                    do_save();
+                    log_.add("Quick save.", {100, 200, 100, 255});
+                    break;
+                case SDLK_F6:
+                    do_load();
+                    log_.add("Quick load.", {100, 200, 100, 255});
+                    break;
                 case SDLK_F12: {
                     SDL_Surface* sshot = SDL_CreateRGBSurface(0, width_, height_, 32,
                         0x00ff0000, 0x0000ff00, 0x000000ff, 0xff000000);
@@ -6183,6 +6384,32 @@ void Engine::render() {
     // Draw entities
     render::draw_entities(renderer_, sprites_, world_, map_, render_cam, HUD_HEIGHT);
 
+    // Quest NPC indicators — gold "!" above their heads
+    {
+        int TS = render_cam.tile_size;
+        SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+        auto& npc_pool = world_.pool<NPC>();
+        for (size_t i = 0; i < npc_pool.size(); i++) {
+            Entity e = npc_pool.entity_at(i);
+            auto& npc = npc_pool.at_index(i);
+            if (npc.quest_id < 0) continue;
+            if (!world_.has<Position>(e)) continue;
+            auto& np = world_.get<Position>(e);
+            if (!map_.in_bounds(np.x, np.y) || !map_.at(np.x, np.y).visible) continue;
+            int sx = (np.x - render_cam.x) * TS;
+            int sy = (np.y - render_cam.y) * TS + HUD_HEIGHT;
+            // Gold exclamation mark indicator
+            Uint32 blink = (SDL_GetTicks() / 500) % 2;
+            if (blink) {
+                SDL_SetRenderDrawColor(renderer_, 255, 220, 80, 220);
+                SDL_Rect mark = {sx + TS / 2 - 2, sy - TS / 4, 4, TS / 4};
+                SDL_RenderFillRect(renderer_, &mark);
+                SDL_Rect dot = {sx + TS / 2 - 2, sy - 2, 4, 3};
+                SDL_RenderFillRect(renderer_, &dot);
+            }
+        }
+    }
+
     // God visual effects on player (rendered every frame)
     render_god_visuals(render_cam, HUD_HEIGHT);
 
@@ -6211,53 +6438,84 @@ void Engine::render() {
     // Pause menu overlay
     pause_menu_.render(renderer_, font_, font_title_, width_, height_);
 
-    // Death overlay
+    // Death overlay — fades in over 2 seconds, accepts input after 3 seconds
     if (state_ == GameState::DEAD && font_) {
+        Uint32 elapsed = SDL_GetTicks() - end_screen_time_;
+        // Fade-in: 0→255 alpha over 2 seconds
+        int fade_alpha = std::min(255, static_cast<int>(elapsed * 255 / 2000));
+
         SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
         SDL_Rect overlay = {0, 0, width_, height_};
-        SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 180);
+        SDL_SetRenderDrawColor(renderer_, 0, 0, 0, static_cast<Uint8>(std::min(200, fade_alpha)));
         SDL_RenderFillRect(renderer_, &overlay);
 
-        SDL_Color red = {200, 50, 50, 255};
-        TTF_Font* death_font = font_title_ ? font_title_ : font_;
-        SDL_Surface* surf = TTF_RenderText_Blended(death_font, "You have died.", red);
-        if (surf) {
-            SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer_, surf);
-            SDL_Rect dst = {width_ / 2 - surf->w / 2, height_ / 3, surf->w, surf->h};
-            SDL_RenderCopy(renderer_, tex, nullptr, &dst);
-            SDL_DestroyTexture(tex);
-            SDL_FreeSurface(surf);
+        // Text fades in after 500ms
+        int text_alpha = std::max(0, std::min(255, static_cast<int>((elapsed - 500) * 255 / 1500)));
+        if (elapsed >= 500) {
+            // "You have died." — large, red
+            SDL_Color red = {200, 50, 50, static_cast<Uint8>(text_alpha)};
+            TTF_Font* death_font = font_title_ ? font_title_ : font_;
+            SDL_Surface* surf = TTF_RenderText_Blended(death_font, "You have died.", red);
+            if (surf) {
+                SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer_, surf);
+                SDL_SetTextureAlphaMod(tex, static_cast<Uint8>(text_alpha));
+                SDL_Rect dst = {width_ / 2 - surf->w / 2, height_ / 3 - 20, surf->w, surf->h};
+                SDL_RenderCopy(renderer_, tex, nullptr, &dst);
+                SDL_DestroyTexture(tex);
+                SDL_FreeSurface(surf);
+            }
         }
 
-        // God-flavored death text
-        const char* death_line = nullptr;
-        GodId dgod = GodId::NONE;
-        if (world_.has<GodAlignment>(player_))
-            dgod = world_.get<GodAlignment>(player_).god;
-        switch (dgod) {
-            case GodId::VETHRIK:  death_line = "Vethrik adds your bones to the collection."; break;
-            case GodId::THESSARKA: death_line = "Thessarka records your death. She forgets nothing."; break;
-            case GodId::MORRETH:  death_line = "Morreth found you wanting."; break;
-            case GodId::YASHKHET: death_line = "Yashkhet accepts the offering."; break;
-            case GodId::KHAEL:    death_line = "Your body feeds the roots."; break;
-            case GodId::SOLETH:   death_line = "The flame goes out."; break;
-            case GodId::IXUUL:    death_line = "Ixuul is already making something new from the pieces."; break;
-            case GodId::ZHAVEK:   death_line = "You vanish. No one notices."; break;
-            case GodId::THALARA:  death_line = "The sea takes you back."; break;
-            case GodId::OSSREN:   death_line = "You were not built to last."; break;
-            case GodId::LETHIS:   death_line = "You fall asleep. You do not wake up."; break;
-            case GodId::GATHRUUN: death_line = "The stone closes over you."; break;
-            case GodId::SYTHARA:  death_line = "Rot takes you before you hit the ground."; break;
-            default:              death_line = "You die alone."; break;
+        // Killed-by line — fades in after 1 second
+        int cause_alpha = std::max(0, std::min(255, static_cast<int>((elapsed - 1000) * 255 / 1000)));
+        if (elapsed >= 1000 && !death_cause_.empty()) {
+            char cause_buf[128];
+            snprintf(cause_buf, sizeof(cause_buf), "Killed by %s.", death_cause_.c_str());
+            SDL_Color cause_col = {180, 140, 140, static_cast<Uint8>(cause_alpha)};
+            SDL_Surface* csurf = TTF_RenderText_Blended(font_, cause_buf, cause_col);
+            if (csurf) {
+                SDL_Texture* ctex = SDL_CreateTextureFromSurface(renderer_, csurf);
+                SDL_SetTextureAlphaMod(ctex, static_cast<Uint8>(cause_alpha));
+                SDL_Rect cdst = {width_ / 2 - csurf->w / 2, height_ / 3 + 30, csurf->w, csurf->h};
+                SDL_RenderCopy(renderer_, ctex, nullptr, &cdst);
+                SDL_DestroyTexture(ctex);
+                SDL_FreeSurface(csurf);
+            }
         }
-        SDL_Color dim = {160, 120, 120, 255};
-        SDL_Surface* dsurf = TTF_RenderText_Blended(font_, death_line, dim);
-        if (dsurf) {
-            SDL_Texture* dtex = SDL_CreateTextureFromSurface(renderer_, dsurf);
-            SDL_Rect ddst = {width_ / 2 - dsurf->w / 2, height_ / 3 + 50, dsurf->w, dsurf->h};
-            SDL_RenderCopy(renderer_, dtex, nullptr, &ddst);
-            SDL_DestroyTexture(dtex);
-            SDL_FreeSurface(dsurf);
+
+        // God-flavored death text — fades in after 1.5 seconds
+        int god_alpha = std::max(0, std::min(255, static_cast<int>((elapsed - 1500) * 255 / 1000)));
+        if (elapsed >= 1500) {
+            const char* death_line = nullptr;
+            GodId dgod = GodId::NONE;
+            if (world_.has<GodAlignment>(player_))
+                dgod = world_.get<GodAlignment>(player_).god;
+            switch (dgod) {
+                case GodId::VETHRIK:  death_line = "Vethrik adds your bones to the collection."; break;
+                case GodId::THESSARKA: death_line = "Thessarka records your death. She forgets nothing."; break;
+                case GodId::MORRETH:  death_line = "Morreth found you wanting."; break;
+                case GodId::YASHKHET: death_line = "Yashkhet accepts the offering."; break;
+                case GodId::KHAEL:    death_line = "Your body feeds the roots."; break;
+                case GodId::SOLETH:   death_line = "The flame goes out."; break;
+                case GodId::IXUUL:    death_line = "Ixuul is already making something new from the pieces."; break;
+                case GodId::ZHAVEK:   death_line = "You vanish. No one notices."; break;
+                case GodId::THALARA:  death_line = "The sea takes you back."; break;
+                case GodId::OSSREN:   death_line = "You were not built to last."; break;
+                case GodId::LETHIS:   death_line = "You fall asleep. You do not wake up."; break;
+                case GodId::GATHRUUN: death_line = "The stone closes over you."; break;
+                case GodId::SYTHARA:  death_line = "Rot takes you before you hit the ground."; break;
+                default:              death_line = "You die alone."; break;
+            }
+            SDL_Color dim = {160, 120, 120, static_cast<Uint8>(god_alpha)};
+            SDL_Surface* dsurf = TTF_RenderText_Blended(font_, death_line, dim);
+            if (dsurf) {
+                SDL_Texture* dtex = SDL_CreateTextureFromSurface(renderer_, dsurf);
+                SDL_SetTextureAlphaMod(dtex, static_cast<Uint8>(god_alpha));
+                SDL_Rect ddst = {width_ / 2 - dsurf->w / 2, height_ / 3 + 60, dsurf->w, dsurf->h};
+                SDL_RenderCopy(renderer_, dtex, nullptr, &ddst);
+                SDL_DestroyTexture(dtex);
+                SDL_FreeSurface(dsurf);
+            }
         }
 
         // Newly unlocked classes
@@ -6273,8 +6531,10 @@ void Engine::render() {
             }
         }
 
-        ui::draw_text_centered(renderer_, font_, "Press any key.",
-                                {100, 95, 90, 255}, width_ / 2, height_ - 40);
+        if (elapsed >= 3000) {
+            ui::draw_text_centered(renderer_, font_, "Press any key.",
+                                    {100, 95, 90, 255}, width_ / 2, height_ - 40);
+        }
     }
 
     if (state_ == GameState::VICTORY) {

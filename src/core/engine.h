@@ -135,7 +135,9 @@ private:
     };
     std::map<int, FloorState> floor_cache_;
     void cache_current_floor();
-    bool restore_floor(int level);
+    bool restore_floor(int level, bool ascending = false);
+    void save_floor_cache(const std::string& path);
+    void load_floor_cache(const std::string& path);
 
     // Player
     Entity player_ = NULL_ENTITY;
@@ -149,7 +151,9 @@ private:
     bool hardcore_ = false; // permadeath mode
     PlayerActions turn_actions_; // action flags for tenet checking
     bool rested_this_floor_ = false; // Lethis tenet tracking
+    bool ascending_ = false; // set before generate_level to indicate stair direction
     Uint32 end_screen_time_ = 0; // SDL_GetTicks when death/victory screen appeared
+    std::string death_cause_; // what killed the player
     bool pet_naming_ = false; // currently naming a pet
     std::string pet_name_buf_; // pet name being typed
     Entity pet_naming_item_ = NULL_ENTITY; // the pet item being named

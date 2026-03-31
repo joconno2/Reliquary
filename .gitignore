@@ -10,3 +10,4 @@ save/meta.json
 build-release/
 reliquary-*.tar.gz
 reliquary-*.zip
+save/floors.dat

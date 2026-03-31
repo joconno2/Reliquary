@@ -248,7 +248,8 @@ def place_town(tx, ty, is_start, town_rng):
             set_tile(ax + bw // 2, ay + bh // 2, npcs[idx])
 
     if is_start:
-        set_tile(tx + 3, ty + 2, 'E')
+        # Elder quest giver right next to player spawn (@=tx,ty)
+        set_tile(tx + 1, ty, 'E')
 
 for i, (tx, ty, name, is_start) in enumerate(towns):
     if 25 < tx < W - 25 and 25 < ty < H - 25:
