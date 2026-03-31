@@ -46,11 +46,28 @@ jobs:
           TAG="${GITHUB_REF_NAME}"
           DIR="dist/reliquary-linux-x64-${TAG}"
           mkdir -p "$DIR/save"
-          cp build-linux/reliquary "$DIR/"
-          cp -r build-linux/assets "$DIR/"
+
+          EXE=$(find build-linux -name "reliquary" -type f -executable | head -1)
+          if [ -z "$EXE" ]; then
+            echo "ERROR: reliquary binary not found"
+            find build-linux -type f -executable || true
+            exit 1
+          fi
+          echo "Found binary: $EXE"
+          cp "$EXE" "$DIR/"
+
+          if [ -d build-linux/assets ]; then
+            cp -r build-linux/assets "$DIR/"
+          else
+            cp -r assets "$DIR/"
+          fi
           cp -r data "$DIR/"
           printf '#!/bin/bash\ncd "$(dirname "$0")"\n./reliquary\n' > "$DIR/run.sh"
           chmod +x "$DIR/run.sh"
+
+          echo "Package contents:"
+          ls -la "$DIR/"
+
           cd dist && tar czf "reliquary-linux-x64-${TAG}.tar.gz" "reliquary-linux-x64-${TAG}/"
 
       - name: Build Windows
@@ -84,8 +101,24 @@ jobs:
           TAG="${GITHUB_REF_NAME}"
           DIR="dist/reliquary-windows-x64-${TAG}"
           mkdir -p "$DIR/save"
-          cp build-windows/reliquary.exe "$DIR/"
-          cp -r build-windows/assets "$DIR/"
+
+          # Find the exe — might be in build-windows/ or a subdirectory
+          EXE=$(find build-windows -name "reliquary.exe" -type f | head -1)
+          if [ -z "$EXE" ]; then
+            echo "ERROR: reliquary.exe not found in build-windows/"
+            find build-windows -type f -name "*.exe" || true
+            ls -la build-windows/ || true
+            exit 1
+          fi
+          echo "Found exe: $EXE"
+          cp "$EXE" "$DIR/"
+
+          # Assets — might be in build dir or need copying from source
+          if [ -d build-windows/assets ]; then
+            cp -r build-windows/assets "$DIR/"
+          else
+            cp -r assets "$DIR/"
+          fi
           cp -r data "$DIR/"
 
           # Bundle all required DLLs
@@ -94,12 +127,16 @@ jobs:
             find "${SDL2_DIR}/${prefix}/x86_64-w64-mingw32/bin" -name "*.dll" -exec cp {} "$DIR/" \; 2>/dev/null || true
           done
 
-          # Bundle MinGW runtime DLLs
-          MINGW_BIN="/usr/lib/gcc/x86_64-w64-mingw32"
+          # Bundle MinGW runtime DLLs (posix variant)
           for dll in libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll; do
             found=$(find /usr -name "$dll" 2>/dev/null | head -1)
             [ -n "$found" ] && cp "$found" "$DIR/"
           done
+
+          # Verify contents
+          echo "Package contents:"
+          ls -la "$DIR/"
+          echo "DLL count: $(ls "$DIR/"*.dll 2>/dev/null | wc -l)"
 
           cd dist && zip -rq "reliquary-windows-x64-${TAG}.zip" "reliquary-windows-x64-${TAG}/"
 
