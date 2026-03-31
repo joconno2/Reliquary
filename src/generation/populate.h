@@ -37,4 +37,9 @@ Entity spawn_paragon(World& world, const TileMap& map,
                       const std::vector<Room>& rooms, RNG& rng,
                       int dungeon_level, GodId player_god);
 
+// Spawn a legendary item on the bottom floor of a named dungeon.
+// Returns the entity, or NULL_ENTITY if this dungeon has no legendary.
+Entity spawn_legendary(World& world, const std::vector<Room>& rooms, RNG& rng,
+                        const std::string& dungeon_name);
+
 } // namespace populate

@@ -10,8 +10,9 @@ static TileType char_to_tile(char c) {
         case ',': return TileType::FLOOR_DIRT;
         case ':': return TileType::FLOOR_STONE;
         case '#': return TileType::WALL_STONE_BRICK;
+        case 'w': return TileType::WALL_WOOD;
         case 'T': return TileType::TREE;
-        case 't': case '"': return TileType::BRUSH;
+        case 't': case '"': case 'b': case 'c': return TileType::BRUSH;
         case '~': return TileType::WATER;
         case 's': return TileType::FLOOR_SAND;
         case 'i': return TileType::FLOOR_ICE;
@@ -63,6 +64,12 @@ MapFileResult load(const std::string& path) {
             auto& tile = result.map.at(x, y);
             tile.type = char_to_tile(c);
             tile.variant = 0;
+
+            // Brush variants: t=0 (small bush), b=1 (tall grass), c=2 (flowers)
+            if (tile.type == TileType::BRUSH) {
+                if (c == 'b') tile.variant = 1;
+                else if (c == 'c') tile.variant = 2;
+            }
 
             // Add some floor variation
             if (tile.type == TileType::FLOOR_GRASS || tile.type == TileType::FLOOR_DIRT ||

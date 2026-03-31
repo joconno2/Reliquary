@@ -44,91 +44,91 @@ inline const GodInfo& get_god_info(GodId id) {
     static const GodInfo GODS[] = {
         // VETHRIK — Death, bone, endings
         {"Vethrik", "the Ossuary Lord", "Death, bone, endings",
-         "God of proper death. Despises undead. Collects bones because bones are honest.",
+         "God of death and burial. Hates undead. Keeps the dead in the ground.",
          "+15% damage to undead. Bone weapons +2 damage.",
          0, 0, 2, 0, 0, 0, 0,  5, 0, 0,
          {160, 160, 200}},
 
         // THESSARKA — Knowledge, secrets, madness
         {"Thessarka", "the Eyeless", "Knowledge, secrets, madness",
-         "Tore out her own eyes to see truth. Her followers seek forbidden knowledge.",
+         "Goddess of forbidden knowledge. Blinded herself to see further.",
          "+3 FOV. Auto-identify one item per floor.",
          0, 0, 0, 2, 0, 2, 0,  0, 5, 3,
          {140, 140, 220}},
 
         // MORRETH — War, iron, honor
         {"Morreth", "the Iron Father", "War, iron, honor",
-         "The old soldier-god. Respects strength tested, not displayed.",
+         "God of war and iron. Favors those who fight and endure.",
          "+2 damage with blunt and axe weapons.",
          2, 0, 2, 0, 0, 0, 0,  5, 0, 0,
          {200, 180, 140}},
 
         // YASHKHET — Blood, sacrifice, pain
         {"Yashkhet", "the Wound", "Blood, sacrifice, pain",
-         "Pain is the only honest currency. Not evil, but ascetic, extreme, and unsettling.",
+         "God of blood sacrifice. Power through suffering.",
          "Blood magic: spells cost HP, not MP. +15% damage below 50% HP. +1 with daggers. Healing -50%.",
          0, 0, 0, 0, 2, 0, 0,  0, 5, 0,
          {200, 60, 60}},
 
         // KHAEL — Nature, beasts, rot
         {"Khael", "the Green Watcher", "Nature, beasts, rot",
-         "The wolf eating the deer, the fungus consuming the log.",
+         "God of the wild. Nature is not kind.",
          "Animals never aggro first. 25% poison resistance.",
          0, 0, 0, 0, 0, 2, 0,  0, 0, 0,
          {80, 200, 80}},
 
         // SOLETH — Fire, purification, zealotry
         {"Soleth", "the Pale Flame", "Fire, purification, zealotry",
-         "The burning light that scours corruption. Searing.",
+         "God of fire and purification. Burns away corruption.",
          "30% fire resistance. +2 damage vs undead. Undead take 1 dmg/turn adjacent to you.",
          0, 0, 0, 0, 2, 0, 0,  0, 0, 2,
          {255, 220, 100}},
 
         // IXUUL — Chaos, mutation, the void
         {"Ixuul", "the Formless", "Chaos, mutation, the void",
-         "Protean. What leaks through the cracks between things.",
+         "God of chaos and the void. Not worshipped — contracted.",
          "Slimes and aberrations ignore you. +3 INT, -2 CHA.",
          0, 0, 0, 3, 0, 0, -2, 0, 5, 0,
          {180, 100, 255}},
 
         // ZHAVEK — Shadow, silence, theft
         {"Zhavek", "the Unseen", "Shadow, silence, secrets",
-         "Not darkness — absence. The space between a candle and its shadow.",
+         "God of shadow and silence. Patron of thieves and assassins.",
          "First strike from stealth 2x damage. Enemies forget you after 3 turns. Light -2.",
          0, 2, 0, 0, 0, 2, 0,  0, 0, -2,
          {60, 60, 100}},
 
         // THALARA — Sea, storms, drowning
         {"Thalara", "the Drowned Queen", "Sea, storms, drowning",
-         "She walked into the sea and something walked back out.",
+         "Goddess of the sea and storms. Drowned and returned.",
          "Poison immune. Fire weakness (-20%). Molten zones deal damage. +5 HP.",
          0, 0, 0, 0, 2, 0, 0,  5, 0, 0,
          {80, 180, 200}},
 
         // OSSREN — Craft, forge, permanence
         {"Ossren", "the Hammer Unworn", "Craft, forge, permanence",
-         "Not a smith-god — a god of things that endure.",
+         "God of craft and permanence. What he makes does not break.",
          "+1 damage with all weapons. Temper prayer upgrades items permanently.",
          0, 0, 2, 0, 0, 0, 0,  0, 0, 0,
          {220, 180, 80}},
 
         // LETHIS — Sleep, dreams, memory
         {"Lethis", "the Dreaming Wound", "Sleep, dreams, memory",
-         "What you see when you close your eyes and something sees you back.",
+         "God of sleep and dreams. The boundary between living and dead.",
          "Rest heals 50% (not 25%). Once per floor, survive lethal damage at 1 HP.",
          0, 0, 0, 0, 2, -2, 0,  0, 5, 0,
          {160, 120, 200}},
 
         // GATHRUUN — Stone, earth, depth
         {"Gathruun", "the Root Below", "Stone, earth, depth",
-         "The pressure that makes diamonds. The deeper you go, the closer you are.",
+         "God of stone and the deep earth. Strongest underground.",
          "+3 natural armor. +2 damage underground. Tremor scales with WIL and level.",
          2, 0, 2, 0, 0, 0, 0,  5, 0, 0,
          {160, 130, 90}},
 
         // SYTHARA — Plague, decay, entropy
         {"Sythara", "the Pallid Mother", "Plague, decay, entropy",
-         "Her love is mold on bread, moss on stone, the slow softening of all hard things.",
+         "Goddess of plague and decay. Everything rots. She helps it along.",
          "Poison immune. 15% chance to poison enemies on hit. Healing -30%.",
          0, 0, 0, 2, 0, 0, -2, 0, 0, 0,
          {120, 180, 60}},

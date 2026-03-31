@@ -7,3 +7,6 @@ compile_commands.json
 .idea/
 save/*.sav
 save/meta.json
+build-release/
+reliquary-*.tar.gz
+reliquary-*.zip

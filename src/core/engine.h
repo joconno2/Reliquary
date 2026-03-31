@@ -28,11 +28,13 @@
 #include "ui/world_map.h"
 #include "systems/particles.h"
 #include "components/tenet.h"
+#include "components/traits.h"
 #include "components/stats.h"
 #include "components/ai.h"
 #include "components/item.h"
 #include "components/status_effect.h"
 #include "components/god.h"
+#include "components/container.h"
 #include "core/audio.h"
 #include <vector>
 #include <string>
@@ -49,6 +51,8 @@ struct DungeonEntry {
     int x = 0, y = 0;
     std::string zone;
     std::string quest; // empty = generic dungeon
+    int zone_difficulty = 0; // 0-8, based on distance from Thornwall
+    int max_depth = 3;       // how many floors this dungeon has
 };
 
 enum class GameState {
@@ -96,6 +100,10 @@ private:
     std::vector<DungeonEntry> dungeon_registry_;
     int current_dungeon_idx_ = -1; // which dungeon we're in (-1 = none/overworld)
 
+    // Overworld cache — loaded once, reused on return from dungeons
+    bool overworld_loaded_ = false;
+    MapFileResult overworld_cache_;
+
     // Floor persistence — cache floor state when changing levels
     struct CachedEntity {
         int x, y;
@@ -116,6 +124,8 @@ private:
         // Item fields (valid if has_item)
         bool has_item = false;
         Item item;
+        bool has_container = false;
+        Container container;
     };
     struct FloorState {
         TileMap map;
@@ -135,6 +145,7 @@ private:
     bool player_acted_ = false;
     MetaSave meta_; // persistent cross-run progression
     int run_kills_ = 0; // kills this run (for tracking)
+    std::vector<TraitId> build_traits_; // player's chosen traits (for runtime checks)
     bool hardcore_ = false; // permadeath mode
     PlayerActions turn_actions_; // action flags for tenet checking
     bool rested_this_floor_ = false; // Lethis tenet tracking

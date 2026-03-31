@@ -1,0 +1,137 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux-windows:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y \
+            cmake ninja-build zip \
+            libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev libsdl2-mixer-dev \
+            g++-mingw-w64-x86-64 mingw-w64
+
+      - name: Fetch Windows SDL2 packages
+        run: |
+          mkdir -p deps/windows && cd deps/windows
+          wget -q "https://github.com/libsdl-org/SDL/releases/download/release-2.32.4/SDL2-devel-2.32.4-mingw.tar.gz"
+          wget -q "https://github.com/libsdl-org/SDL_image/releases/download/release-2.8.8/SDL2_image-devel-2.8.8-mingw.tar.gz"
+          wget -q "https://github.com/libsdl-org/SDL_ttf/releases/download/release-2.24.0/SDL2_ttf-devel-2.24.0-mingw.tar.gz"
+          wget -q "https://github.com/libsdl-org/SDL_mixer/releases/download/release-2.8.1/SDL2_mixer-devel-2.8.1-mingw.tar.gz"
+          for f in *.tar.gz; do tar xf "$f"; done
+
+      - name: Build Linux
+        run: |
+          cmake -S . -B build-linux -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-linux --parallel $(nproc)
+          strip build-linux/reliquary
+
+      - name: Package Linux
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          DIR="dist/reliquary-linux-x64-${TAG}"
+          mkdir -p "$DIR/save"
+          cp build-linux/reliquary "$DIR/"
+          cp -r build-linux/assets "$DIR/"
+          cp -r data "$DIR/"
+          printf '#!/bin/bash\ncd "$(dirname "$0")"\n./reliquary\n' > "$DIR/run.sh"
+          chmod +x "$DIR/run.sh"
+          cd dist && tar czf "reliquary-linux-x64-${TAG}.tar.gz" "reliquary-linux-x64-${TAG}/"
+
+      - name: Build Windows
+        run: |
+          # Set up SDL2 paths for MinGW
+          SDL2_DIR="$(pwd)/deps/windows"
+          SDL2_PREFIX="${SDL2_DIR}/SDL2-2.32.4/x86_64-w64-mingw32"
+          SDL2_IMAGE_PREFIX="${SDL2_DIR}/SDL2_image-2.8.8/x86_64-w64-mingw32"
+          SDL2_TTF_PREFIX="${SDL2_DIR}/SDL2_ttf-2.24.0/x86_64-w64-mingw32"
+          SDL2_MIXER_PREFIX="${SDL2_DIR}/SDL2_mixer-2.8.1/x86_64-w64-mingw32"
+
+          cmake -S . -B build-windows -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=tools/mingw-toolchain.cmake \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="${SDL2_PREFIX};${SDL2_IMAGE_PREFIX};${SDL2_TTF_PREFIX};${SDL2_MIXER_PREFIX}" \
+            -DSDL2_INCLUDE_DIRS="${SDL2_PREFIX}/include/SDL2" \
+            -DSDL2_LIBRARIES="-L${SDL2_PREFIX}/lib -lmingw32 -lSDL2main -lSDL2" \
+            -DSDL2_IMAGE_INCLUDE_DIRS="${SDL2_IMAGE_PREFIX}/include/SDL2" \
+            -DSDL2_IMAGE_LIBRARIES="-L${SDL2_IMAGE_PREFIX}/lib -lSDL2_image" \
+            -DSDL2_TTF_INCLUDE_DIRS="${SDL2_TTF_PREFIX}/include/SDL2" \
+            -DSDL2_TTF_LIBRARIES="-L${SDL2_TTF_PREFIX}/lib -lSDL2_ttf" \
+            -DSDL2_MIXER_INCLUDE_DIRS="${SDL2_MIXER_PREFIX}/include/SDL2" \
+            -DSDL2_MIXER_LIBRARIES="-L${SDL2_MIXER_PREFIX}/lib -lSDL2_mixer"
+          cmake --build build-windows --parallel $(nproc)
+          x86_64-w64-mingw32-strip build-windows/reliquary.exe
+
+      - name: Package Windows
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          DIR="dist/reliquary-windows-x64-${TAG}"
+          mkdir -p "$DIR/save"
+          cp build-windows/reliquary.exe "$DIR/"
+          cp -r build-windows/assets "$DIR/"
+          cp -r data "$DIR/"
+
+          # Bundle all required DLLs
+          SDL2_DIR="$(pwd)/deps/windows"
+          for prefix in SDL2-2.32.4 SDL2_image-2.8.8 SDL2_ttf-2.24.0 SDL2_mixer-2.8.1; do
+            find "${SDL2_DIR}/${prefix}/x86_64-w64-mingw32/bin" -name "*.dll" -exec cp {} "$DIR/" \; 2>/dev/null || true
+          done
+
+          # Bundle MinGW runtime DLLs
+          MINGW_BIN="/usr/lib/gcc/x86_64-w64-mingw32"
+          for dll in libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll; do
+            found=$(find /usr -name "$dll" 2>/dev/null | head -1)
+            [ -n "$found" ] && cp "$found" "$DIR/"
+          done
+
+          cd dist && zip -rq "reliquary-windows-x64-${TAG}.zip" "reliquary-windows-x64-${TAG}/"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-artifacts
+          path: dist/*
+
+  release:
+    needs: [build-linux-windows]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-files
+          merge-multiple: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Reliquary ${{ github.ref_name }}"
+          body: |
+            ## Reliquary ${{ github.ref_name }}
+
+            Traditional turn-based roguelike. 13 gods, 50 spells, 78 items, 17 classes.
+
+            | Platform | File | Notes |
+            |---|---|---|
+            | Windows (x64) | `reliquary-windows-x64-${{ github.ref_name }}.zip` | Extract and run `reliquary.exe` — all DLLs included |
+            | Linux (x64) | `reliquary-linux-x64-${{ github.ref_name }}.tar.gz` | Requires SDL2: `apt install libsdl2-2.0-0 libsdl2-image-2.0-0 libsdl2-mixer-2.0-0 libsdl2-ttf-2.0-0` |
+
+            See RELEASE_NOTES.md for full feature list, controls, and known issues.
+          files: release-files/**
+          draft: false
+          prerelease: true

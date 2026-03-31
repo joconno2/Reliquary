@@ -9,6 +9,7 @@
 #include "components/pet.h"
 #include "components/god.h"
 #include "components/tenet.h"
+#include "components/container.h"
 #include "core/spritesheet.h"
 #include <algorithm>
 #include <string>
@@ -81,8 +82,8 @@ void spawn_monsters(World& world, const TileMap& map,
             auto& def = MONSTER_TABLE[idx];
 
             // Scale HP and damage with depth
-            float hp_scale = 1.0f + dungeon_level * 0.2f;
-            float dmg_scale = 1.0f + dungeon_level * 0.15f;
+            float hp_scale = 1.0f + dungeon_level * 0.3f;
+            float dmg_scale = 1.0f + dungeon_level * 0.2f;
             int scaled_hp = static_cast<int>(def.hp * hp_scale);
             int scaled_dmg = static_cast<int>(def.base_damage * dmg_scale);
 
@@ -130,54 +131,128 @@ struct ItemDef {
 };
 
 static const ItemDef WEAPON_TABLE[] = {
+    // Ordered weakest to strongest — depth gating uses min index
     //                                                                                  sx  sy  dmg arm atk dge heal gold unid
-    {"dagger",         "A short, sharp blade.",           ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 0,  2, 0, 1, 0, 0,  15, ""}, // 1.a
-    {"short sword",    "A reliable sidearm.",             ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 0,  3, 0, 0, 0, 0,  30, ""}, // 1.b
-    {"mace",           "Blunt and merciless.",            ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 5,  4, 0, 0, 0, 0,  40, ""}, // 6.a
-    {"spear",          "Long reach. Keeps them at bay.",  ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 6,  4, 0, 1, 0, 0,  35, ""}, // 7.a
-    {"long sword",     "A well-balanced blade.",          ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 0,  5, 0, 0, 0, 0,  60, ""}, // 1.d
-    {"battle axe",     "Heavy. Splits bone.",             ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 3,  6, 0,-1, 0, 0,  55, ""}, // 4.b
-    {"bastard sword",  "Long blade. Versatile grip.",     ItemType::WEAPON, EquipSlot::MAIN_HAND, 4, 0,  7, 0, 0, 0, 0,  80, ""}, // 1.e
-    {"great axe",      "Two-handed devastation.",         ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 3,  9, 0,-2, 0, 0, 100, ""}, // 4.d
-    {"war hammer",     "Crushes plate like parchment.",   ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 4,  8, 0,-1, 0, 0,  90, ""}, // 5.b
+    {"club",           "+1 dmg.",                        ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 8,  1, 0, 0, 0, 0,   5, ""},
+    {"dagger",         "+2 dmg, +2 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 0,  2, 0, 2, 0, 0,  15, ""},
+    {"short sword",    "+3 dmg.",                         ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 0,  3, 0, 0, 0, 0,  30, ""},
+    {"hand axe",       "+3 dmg, +1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 3,  3, 0, 1, 0, 0,  25, ""},
+    {"short spear",    "+3 dmg, +1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 6,  3, 0, 1, 0, 0,  28, ""},
+    {"mace",           "+4 dmg.",                         ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 5,  4, 0, 0, 0, 0,  40, ""},
+    {"spear",          "+4 dmg, +1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 6,  4, 0, 1, 0, 0,  35, ""},
+    {"scimitar",       "+4 dmg, +1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 2,  4, 0, 1, 0, 0,  45, ""},
+    {"rapier",         "+3 dmg, +3 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 2, 1,  3, 0, 3, 0, 0,  50, ""},
+    {"spiked club",    "+5 dmg, -1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 8,  5, 0,-1, 0, 0,  35, ""},
+    {"flail",          "+5 dmg, -1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 7,  5, 0,-1, 0, 0,  42, ""},
+    {"long sword",     "+5 dmg.",                         ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 0,  5, 0, 0, 0, 0,  60, ""},
+    {"battle axe",     "+6 dmg, -1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 3,  6, 0,-1, 0, 0,  55, ""},
+    {"war mace",       "+6 dmg.",                         ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 5,  6, 0, 0, 0, 0,  55, ""},
+    {"trident",        "+5 dmg, +1 atk, +1 dodge.",      ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 6,  5, 0, 1, 1, 0,  60, ""},
+    {"halberd",        "+7 dmg, -1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 2, 3,  7, 0,-1, 0, 0,  65, ""},
+    {"kukri",          "+5 dmg, +2 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 4, 2,  5, 0, 2, 0, 0,  55, ""},
+    {"bastard sword",  "+7 dmg.",                         ItemType::WEAPON, EquipSlot::MAIN_HAND, 4, 0,  7, 0, 0, 0, 0,  80, ""},
+    {"war hammer",     "+8 dmg, -1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 4,  8, 0,-1, 0, 0,  90, ""},
+    {"great mace",     "+8 dmg, -2 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 2, 5,  8, 0,-2, 0, 0,  85, ""},
+    {"long rapier",    "+5 dmg, +4 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 1,  5, 0, 4, 0, 0,  90, ""},
+    {"great scimitar", "+7 dmg, +1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 2,  7, 0, 1, 0, 0,  80, ""},
+    {"great axe",      "+9 dmg, -2 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 3,  9, 0,-2, 0, 0, 100, ""},
+};
+
+// Legendary weapons — NOT in random drop tables. Placed in specific locations only.
+static const ItemDef LEGENDARY_WEAPON_TABLE[] = {
+    {"Bonecleaver",    "+10 dmg, -2 atk. Unique.",       ItemType::WEAPON, EquipSlot::MAIN_HAND, 5, 0, 10, 0,-2, 0, 0, 0, ""},  // zweihander
+    {"Earthsplitter",  "+10 dmg, -3 atk. Unique.",       ItemType::WEAPON, EquipSlot::MAIN_HAND, 4, 4, 10, 0,-3, 0, 0, 0, ""},  // great hammer
+    {"The Rending",    "+11 dmg, -3 atk. Unique.",       ItemType::WEAPON, EquipSlot::MAIN_HAND, 4, 3, 11, 0,-3, 0, 0, 0, ""},  // giant axe
+    {"Serpent's Tooth", "+9 dmg, +1 atk. Unique.",       ItemType::WEAPON, EquipSlot::MAIN_HAND, 4, 1,  9, 0, 1, 0, 0, 0, ""},  // flamberge
+    {"The Old Growth", "+8 dmg, -2 atk. Unique.",        ItemType::WEAPON, EquipSlot::MAIN_HAND, 2, 8,  8, 0,-2, 0, 0, 0, ""},  // great club
 };
 
 //                                                                                            sx sy dmg arm atk dge heal gold unid          range
 static const ItemDef RANGED_TABLE[] = {
-    {"short bow",   "Light and quick.",              ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 9,  3, 0, 1, 0, 0,  25, "",  6}, // 10.b
-    {"hunting bow", "A woodsman's bow. Reliable.",   ItemType::WEAPON, EquipSlot::MAIN_HAND, 2, 9,  4, 0, 0, 0, 0,  45, "",  7}, // 10.c
-    {"long bow",    "Powerful draw. Long range.",     ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 9,  6, 0, 0, 0, 0,  70, "",  9}, // 10.d
-    {"crossbow",    "Slow to load. Hits hard.",       ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 9,  8, 0,-1, 0, 0, 100, "",  7}, // 10.a
+    {"short bow",      "+3 dmg, +1 atk, range 6.",       ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 9,  3, 0, 1, 0, 0,  25, "",  6},
+    {"hunting bow",    "+4 dmg, range 7.",               ItemType::WEAPON, EquipSlot::MAIN_HAND, 2, 9,  4, 0, 0, 0, 0,  45, "",  7},
+    {"crossbow",       "+6 dmg, -1 atk, range 7.",      ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 9,  6, 0,-1, 0, 0,  70, "",  7},
+    {"long bow",       "+7 dmg, range 9.",               ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 9,  7, 0, 0, 0, 0,  85, "",  9},
+    {"heavy crossbow", "+9 dmg, -2 atk, range 8.",      ItemType::WEAPON, EquipSlot::MAIN_HAND, 4, 9,  9, 0,-2, 0, 0, 120, "",  8},
 };
 
 static constexpr int RANGED_COUNT = sizeof(RANGED_TABLE) / sizeof(RANGED_TABLE[0]);
 
 static const ItemDef ARMOR_TABLE[] = {
+    // Ordered weakest to strongest — mixed slots so depth gating gives variety
     //                                                                              sx  sy  dmg arm atk dge heal gold unid
-    {"leather armor",  "Supple hide. Quiet.",             ItemType::ARMOR_CHEST, EquipSlot::CHEST,   1, 12, 0, 2, 0, 0, 0, 40, ""}, // 13.b
-    {"leather helm",   "Better than nothing.",            ItemType::ARMOR_HEAD,  EquipSlot::HEAD,    1, 15, 0, 1, 0, 0, 0, 20, ""}, // 16.b
-    {"leather boots",  "Worn but sturdy.",                ItemType::ARMOR_FEET,  EquipSlot::FEET,    1, 14, 0, 1, 0, 0, 0, 20, ""}, // 15.b
-    {"buckler",        "A small, round shield.",          ItemType::SHIELD,      EquipSlot::OFF_HAND,0, 11, 0, 2, 0, 1, 0, 30, ""}, // 12.a
-    {"chain mail",     "Rings of iron. Heavy.",           ItemType::ARMOR_CHEST, EquipSlot::CHEST,   3, 12, 0, 4, 0,-1, 0, 80, ""}, // 13.d
-    {"iron helm",      "Cold iron on your skull.",        ItemType::ARMOR_HEAD,  EquipSlot::HEAD,    4, 15, 0, 2, 0, 0, 0, 45, ""}, // 16.e
-    {"kite shield",    "Large enough to hide behind.",    ItemType::SHIELD,      EquipSlot::OFF_HAND,1, 11, 0, 3, 0, 0, 0, 50, ""}, // 12.b
-    {"plate armor",    "Full plate. Weighs a fortune.",   ItemType::ARMOR_CHEST, EquipSlot::CHEST,   5, 12, 0, 6, 0,-2, 0,150, ""}, // 13.f
-    {"plate helm",     "A helm of tempered steel.",       ItemType::ARMOR_HEAD,  EquipSlot::HEAD,    6, 15, 0, 3, 0, 0, 0, 70, ""}, // 16.g
-    {"iron boots",     "Heavy. Unyielding.",              ItemType::ARMOR_FEET,  EquipSlot::FEET,    3, 14, 0, 2, 0, 0, 0, 50, ""}, // 15.d
-    {"tower shield",   "A wall of wood and iron.",        ItemType::SHIELD,      EquipSlot::OFF_HAND,6, 11, 0, 5, 0,-1, 0, 80, ""}, // 12.g
+    {"cloth robes",    "AC +1, no penalty.",              ItemType::ARMOR_CHEST, EquipSlot::CHEST,   0, 12, 0, 1, 0, 1, 0, 10, ""},
+    {"cloth hood",     "AC +0, +1 dodge.",                ItemType::ARMOR_HEAD,  EquipSlot::HEAD,    0, 15, 0, 0, 0, 1, 0,  8, ""},
+    {"shoes",          "AC +0, +1 dodge.",                ItemType::ARMOR_FEET,  EquipSlot::FEET,    0, 14, 0, 0, 0, 1, 0,  8, ""},
+    {"cloth gloves",   "AC +0, +1 dodge.",                ItemType::ARMOR_HANDS, EquipSlot::HANDS,   0, 13, 0, 0, 0, 1, 0,  8, ""},
+    {"buckler",        "AC +2, +1 dodge, light.",         ItemType::SHIELD,      EquipSlot::OFF_HAND,0, 11, 0, 2, 0, 1, 0, 30, ""},
+    {"leather armor",  "AC +2, light armor.",             ItemType::ARMOR_CHEST, EquipSlot::CHEST,   1, 12, 0, 2, 0, 0, 0, 40, ""},
+    {"leather helm",   "AC +1.",                          ItemType::ARMOR_HEAD,  EquipSlot::HEAD,    1, 15, 0, 1, 0, 0, 0, 20, ""},
+    {"leather boots",  "AC +1.",                          ItemType::ARMOR_FEET,  EquipSlot::FEET,    1, 14, 0, 1, 0, 0, 0, 20, ""},
+    {"leather gloves", "AC +1.",                          ItemType::ARMOR_HANDS, EquipSlot::HANDS,   1, 13, 0, 1, 0, 0, 0, 18, ""},
+    {"round shield",   "AC +3.",                          ItemType::SHIELD,      EquipSlot::OFF_HAND,4, 11, 0, 3, 0, 0, 0, 45, ""},
+    {"chain mail",     "AC +4, -1 dodge, medium armor.",  ItemType::ARMOR_CHEST, EquipSlot::CHEST,   3, 12, 0, 4, 0,-1, 0, 80, ""},
+    {"chain coif",     "AC +2, medium armor.",            ItemType::ARMOR_HEAD,  EquipSlot::HEAD,    3, 15, 0, 2, 0, 0, 0, 40, ""},
+    {"iron boots",     "AC +2, medium armor.",            ItemType::ARMOR_FEET,  EquipSlot::FEET,    3, 14, 0, 2, 0, 0, 0, 50, ""},
+    {"gauntlets",      "AC +2, +1 attack.",               ItemType::ARMOR_HANDS, EquipSlot::HANDS,   3, 13, 0, 2, 1, 0, 0, 45, ""},
+    {"kite shield",    "AC +4.",                          ItemType::SHIELD,      EquipSlot::OFF_HAND,1, 11, 0, 4, 0, 0, 0, 60, ""},
+    {"scale mail",     "AC +5, -1 dodge, medium armor.",  ItemType::ARMOR_CHEST, EquipSlot::CHEST,   4, 12, 0, 5, 0,-1, 0,110, ""},
+    {"iron helm",      "AC +3.",                          ItemType::ARMOR_HEAD,  EquipSlot::HEAD,    4, 15, 0, 3, 0, 0, 0, 55, ""},
+    {"greaves",        "AC +3, -1 dodge, heavy.",         ItemType::ARMOR_FEET,  EquipSlot::FEET,    3, 14, 0, 3, 0,-1, 0, 65, ""},
+    {"dark shield",    "AC +4, black iron.",              ItemType::SHIELD,      EquipSlot::OFF_HAND,3, 11, 0, 4, 0, 0, 0, 70, ""},
+    {"scholar's robe", "AC +1, +2 dodge.",                ItemType::ARMOR_CHEST, EquipSlot::CHEST,   2, 12, 0, 1, 0, 2, 0, 55, ""},
 };
+
+// Legendary armor — NOT in random drop tables.
+static const ItemDef LEGENDARY_ARMOR_TABLE[] = {
+    {"The Anvil",      "AC +8, -2 dodge. Unique.",        ItemType::ARMOR_CHEST, EquipSlot::CHEST,   5, 12, 0, 8, 0,-2, 0, 0, ""},  // plate
+    {"Crown of Iron",  "AC +5, -1 dodge. Unique.",        ItemType::ARMOR_HEAD,  EquipSlot::HEAD,    6, 15, 0, 5, 0,-1, 0, 0, ""},  // plate helm
+    {"Bulwark",        "AC +7, -1 dodge. Unique.",        ItemType::SHIELD,      EquipSlot::OFF_HAND,6, 11, 0, 7, 0,-1, 0, 0, ""},  // tower shield
+};
+
+static const ItemDef AMULET_TABLE[] = {
+    {"red pendant",     "+1 attack.",                     ItemType::AMULET, EquipSlot::AMULET,  0, 16, 0, 0, 1, 0, 0, 40, "dull pendant"},
+    {"metal pendant",   "+1 AC.",                         ItemType::AMULET, EquipSlot::AMULET,  1, 16, 0, 1, 0, 0, 0, 50, "heavy pendant"},
+    {"crystal pendant", "+1 dodge.",                      ItemType::AMULET, EquipSlot::AMULET,  2, 16, 0, 0, 0, 1, 0, 55, "bright pendant"},
+    {"disc pendant",    "+2 attack.",                     ItemType::AMULET, EquipSlot::AMULET,  3, 16, 0, 0, 2, 0, 0, 65, "round pendant"},
+    {"stone pendant",   "+2 AC.",                         ItemType::AMULET, EquipSlot::AMULET,  5, 16, 0, 2, 0, 0, 0, 75, "grey pendant"},
+    {"golden ankh",     "+1 attack, +1 dodge.",           ItemType::AMULET, EquipSlot::AMULET,  6, 16, 0, 0, 1, 1, 0, 90, "golden pendant"},
+};
+static constexpr int AMULET_COUNT = sizeof(AMULET_TABLE) / sizeof(AMULET_TABLE[0]);
+
+static const ItemDef RING_TABLE[] = {
+    //                                                                              sx  sy  dmg arm atk dge heal gold unid
+    {"gold band",       "+0. Plain gold.",                ItemType::RING, EquipSlot::RING_1,  1, 17, 0, 0, 0, 0, 0, 30, "plain ring"},
+    {"jade ring",       "+1 dodge.",                      ItemType::RING, EquipSlot::RING_1,  2, 18, 0, 0, 0, 1, 0, 45, "green ring"},
+    {"silver signet",   "+1 AC.",                         ItemType::RING, EquipSlot::RING_1,  1, 18, 0, 1, 0, 0, 0, 50, "silver ring"},
+    {"ruby ring",       "+1 damage, +1 attack.",          ItemType::RING, EquipSlot::RING_1,  3, 17, 1, 0, 1, 0, 0, 65, "red ring"},
+    {"sapphire ring",   "+2 dodge.",                      ItemType::RING, EquipSlot::RING_1,  4, 17, 0, 0, 0, 2, 0, 70, "blue ring"},
+    {"onyx ring",       "+2 AC.",                         ItemType::RING, EquipSlot::RING_1,  5, 17, 0, 2, 0, 0, 0, 80, "dark ring"},
+    {"twisted gold",    "+2 damage, +1 attack.",          ItemType::RING, EquipSlot::RING_1,  4, 18, 2, 0, 1, 0, 0, 95, "twisted ring"}
+};
+static constexpr int RING_COUNT = sizeof(RING_TABLE) / sizeof(RING_TABLE[0]);
+
+static const ItemDef STAFF_TABLE[] = {
+    {"wooden staff",    "+2 dmg.",                         ItemType::WEAPON, EquipSlot::MAIN_HAND, 2, 10, 2, 0, 0, 0, 0, 20, ""},
+    {"crystal staff",   "+3 dmg, +1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 10, 3, 0, 1, 0, 0, 50, ""},
+    {"holy staff",      "+3 dmg, +1 dodge.",              ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 10, 3, 0, 0, 1, 0, 55, ""},
+    {"blue staff",      "+4 dmg, +1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 10, 4, 0, 1, 0, 0, 70, ""},
+    {"golden staff",    "+4 dmg, +2 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 4, 10, 4, 0, 2, 0, 0, 85, ""},
+    {"flame staff",     "+5 dmg, +1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 6, 10, 5, 0, 1, 0, 0,100, ""},
+};
+static constexpr int STAFF_COUNT = sizeof(STAFF_TABLE) / sizeof(STAFF_TABLE[0]);
 
 static const ItemDef CONSUMABLE_TABLE[] = {
     //                                                                          sx  sy  dmg arm atk dge heal gold unid
-    {"healing potion",  "Mends flesh.",                  ItemType::POTION, EquipSlot::NONE, 1, 19, 0, 0, 0, 0, 15, 25, "red potion"},      // 20.b
-    {"strong healing",  "Flesh knits together.",          ItemType::POTION, EquipSlot::NONE, 1, 19, 0, 0, 0, 0, 30, 50, "bright red potion"},// 20.b
-    {"mana potion",     "Magic pools in your veins.",     ItemType::POTION, EquipSlot::NONE, 3, 20, 0, 0, 0, 0,  0, 30, "blue potion"},     // 21.d
-    {"antidote",        "Purges what shouldn't be there.",ItemType::POTION, EquipSlot::NONE, 4, 19, 0, 0, 0, 0,  0, 20, "green potion"},    // 20.e
-    {"speed draught",   "The world slows. You don't.",    ItemType::POTION, EquipSlot::NONE, 4, 20, 0, 0, 0, 0,  0, 35, "orange potion"},   // 21.e
-    {"strength elixir", "Your muscles burn pleasantly.",   ItemType::POTION, EquipSlot::NONE, 0, 19, 0, 0, 0, 0,  0, 40, "purple potion"},   // 20.a
-    {"bread",           "Stale. Nourishing enough.",      ItemType::FOOD,   EquipSlot::NONE, 1, 25, 0, 0, 0, 0,  5, 5,  ""},               // 26.b
-    {"cheese",          "Pungent.",                       ItemType::FOOD,   EquipSlot::NONE, 0, 25, 0, 0, 0, 0,  3, 3,  ""},               // 26.a
-    {"dried meat",      "Tough but filling.",              ItemType::FOOD,   EquipSlot::NONE, 2, 25, 0, 0, 0, 0,  8, 8,  ""},               // 26.c (apple)
+    {"healing potion",  "Restores 15 HP.",               ItemType::POTION, EquipSlot::NONE, 1, 19, 0, 0, 0, 0, 15, 25, "red potion"},
+    {"strong healing",  "Restores 30 HP.",               ItemType::POTION, EquipSlot::NONE, 1, 19, 0, 0, 0, 0, 30, 50, "bright red potion"},
+    {"mana potion",     "Restores 15 MP.",               ItemType::POTION, EquipSlot::NONE, 3, 20, 0, 0, 0, 0,  0, 30, "blue potion"},
+    {"antidote",        "Cures poison.",                  ItemType::POTION, EquipSlot::NONE, 4, 19, 0, 0, 0, 0,  0, 20, "green potion"},
+    {"speed draught",   "Grants 3 bonus actions.",         ItemType::POTION, EquipSlot::NONE, 4, 20, 0, 0, 0, 0,  0, 35, "orange potion"},
+    {"strength elixir", "Permanently +4 STR.",            ItemType::POTION, EquipSlot::NONE, 0, 19, 0, 0, 0, 0,  0, 40, "purple potion"},
+    {"bread",           "Restores 5 HP. Stale.",          ItemType::FOOD,   EquipSlot::NONE, 1, 25, 0, 0, 0, 0,  5, 5,  ""},
+    {"cheese",          "Restores 3 HP.",                 ItemType::FOOD,   EquipSlot::NONE, 0, 25, 0, 0, 0, 0,  3, 3,  ""},
+    {"dried meat",      "Restores 8 HP.",                 ItemType::FOOD,   EquipSlot::NONE, 2, 25, 0, 0, 0, 0,  8, 8,  ""},
 };
 
 static constexpr int WEAPON_COUNT = sizeof(WEAPON_TABLE) / sizeof(WEAPON_TABLE[0]);
@@ -363,6 +438,19 @@ static void apply_tags(Item& item) {
     if (item.type == ItemType::POTION && item.heal_amount > 0) item.tags |= TAG_POTION;
 }
 
+// Weighted item pick: center around target index, triangular distribution
+// Higher effective_level = higher target. Items far above target are rare.
+static int weighted_item_pick(RNG& rng, int effective_level, int table_size, int divisor = 2) {
+    // Target index: where we center the distribution
+    int target = std::min(effective_level / divisor, table_size - 1);
+    // Pick two random indices and average them (triangular distribution centered on target)
+    int lo = std::max(0, target - 3);
+    int hi = std::min(table_size - 1, target + 4);
+    int a = rng.range(lo, hi);
+    int b = rng.range(lo, hi);
+    return (a + b) / 2; // tends toward the center
+}
+
 void spawn_items(World& world, const TileMap& map,
                   const std::vector<Room>& rooms, RNG& rng,
                   int dungeon_level) {
@@ -378,29 +466,31 @@ void spawn_items(World& world, const TileMap& map,
 
         // Pick item category
         int roll = rng.range(1, 100);
-        if (roll <= 18) {
-            // Melee weapon
-            int min_idx = std::min(dungeon_level / 3, WEAPON_COUNT - 1);
-            int idx = rng.range(min_idx, WEAPON_COUNT - 1);
+        if (roll <= 15) {
+            // Melee weapon — weighted toward effective level, better items rarer
+            int idx = weighted_item_pick(rng, dungeon_level, WEAPON_COUNT, 2);
             Entity e = create_item_from_def(world, WEAPON_TABLE[idx], x, y);
             auto& item = world.get<Item>(e);
             apply_material(item, dungeon_level, rng);
             apply_tags(item);
             apply_quality(item, dungeon_level, rng);
             apply_curse_bless(item, dungeon_level, rng);
-        } else if (roll <= 25) {
+        } else if (roll <= 21) {
             // Ranged weapon
-            int min_idx = std::min(dungeon_level / 4, RANGED_COUNT - 1);
-            int idx = rng.range(min_idx, RANGED_COUNT - 1);
+            int idx = weighted_item_pick(rng, dungeon_level, RANGED_COUNT, 3);
             Entity e = create_item_from_def(world, RANGED_TABLE[idx], x, y);
             auto& item = world.get<Item>(e);
             apply_material(item, dungeon_level, rng);
             apply_tags(item);
             apply_quality(item, dungeon_level, rng);
-        } else if (roll <= 47) {
+        } else if (roll <= 25) {
+            // Staff (mage weapon)
+            int idx = weighted_item_pick(rng, dungeon_level, STAFF_COUNT, 3);
+            Entity e = create_item_from_def(world, STAFF_TABLE[idx], x, y);
+            apply_tags(world.get<Item>(e));
+        } else if (roll <= 44) {
             // Armor
-            int min_idx = std::min(dungeon_level / 3, ARMOR_COUNT - 1);
-            int idx = rng.range(min_idx, ARMOR_COUNT - 1);
+            int idx = weighted_item_pick(rng, dungeon_level, ARMOR_COUNT, 2);
             Entity e = create_item_from_def(world, ARMOR_TABLE[idx], x, y);
             auto& item = world.get<Item>(e);
             apply_material(item, dungeon_level, rng);
@@ -409,17 +499,34 @@ void spawn_items(World& world, const TileMap& map,
             apply_curse_bless(item, dungeon_level, rng);
         } else if (roll <= 52) {
             // Spellbook — teaches a random spell
+            // Ordered by power — weak first, powerful last. 50 spells.
             static const SpellId LEARNABLE[] = {
-                SpellId::SPARK, SpellId::FORCE_BOLT, SpellId::FIREBALL,
-                SpellId::HARDEN_SKIN, SpellId::REVEAL_MAP, SpellId::DETECT_MONSTERS,
-                SpellId::IDENTIFY, SpellId::MINOR_HEAL, SpellId::CURE_POISON,
-                SpellId::MAJOR_HEAL, SpellId::ENTANGLE, SpellId::DRAIN_LIFE,
-                SpellId::FEAR,
+                // Tier 1 (early)
+                SpellId::SPARK, SpellId::MINOR_HEAL, SpellId::DETECT_MONSTERS,
+                SpellId::IDENTIFY, SpellId::CURE_POISON, SpellId::HARDEN_SKIN,
+                SpellId::SWARM, SpellId::ACID_SPLASH,
+                // Tier 2 (mid-early)
+                SpellId::FORCE_BOLT, SpellId::ENTANGLE, SpellId::FEAR,
+                SpellId::FORESIGHT, SpellId::HASTEN, SpellId::REJUVENATE,
+                SpellId::BARKSKIN, SpellId::SLOW, SpellId::SCRY,
+                // Tier 3 (mid)
+                SpellId::FIREBALL, SpellId::ICE_SHARD, SpellId::DRAIN_LIFE,
+                SpellId::MAJOR_HEAL, SpellId::REVEAL_MAP, SpellId::STONE_FIST,
+                SpellId::POISON_CLOUD, SpellId::HEX, SpellId::SHIELD_OF_FAITH,
+                SpellId::WITHER, SpellId::THORNWALL,
+                // Tier 4 (late)
+                SpellId::LIGHTNING, SpellId::SOUL_REND, SpellId::FROST_NOVA,
+                SpellId::PHASE, SpellId::CLEANSE, SpellId::BEAST_CALL,
+                SpellId::TRUESIGHT, SpellId::DARKNESS, SpellId::RESTORE,
+                SpellId::IRON_BODY, SpellId::CLAIRVOYANCE, SpellId::SANCTUARY,
+                SpellId::EARTHQUAKE,
+                // Tier 5 (endgame)
+                SpellId::CHAIN_LIGHTNING, SpellId::METEOR, SpellId::RAISE_DEAD,
+                SpellId::LIGHTNING_STORM, SpellId::POLYMORPH, SpellId::BLOOD_PACT,
+                SpellId::DISINTEGRATE, SpellId::DOOM, SpellId::RESURRECTION,
             };
             static constexpr int LEARNABLE_COUNT = sizeof(LEARNABLE) / sizeof(LEARNABLE[0]);
-            // Bias toward more advanced spells at depth
-            int min_sp = std::min(dungeon_level / 2, LEARNABLE_COUNT - 1);
-            int sp_idx = rng.range(min_sp, LEARNABLE_COUNT - 1);
+            int sp_idx = weighted_item_pick(rng, dungeon_level, LEARNABLE_COUNT, 2);
             auto spell = LEARNABLE[sp_idx];
             auto& sinfo = get_spell_info(spell);
 
@@ -435,7 +542,17 @@ void spawn_items(World& world, const TileMap& map,
             book.teaches_spell = static_cast<int>(spell);
             book.tags |= TAG_BOOK;
             world.add<Item>(e, std::move(book));
-        } else if (roll <= 56) {
+        } else if (roll <= 56 && dungeon_level >= 2) {
+            // Amulet — depth 2+
+            int idx = weighted_item_pick(rng, dungeon_level, AMULET_COUNT, 3);
+            Entity e = create_item_from_def(world, AMULET_TABLE[idx], x, y);
+            apply_curse_bless(world.get<Item>(e), dungeon_level, rng);
+        } else if (roll <= 60 && dungeon_level >= 2) {
+            // Ring — depth 2+
+            int idx = weighted_item_pick(rng, dungeon_level, RING_COUNT, 3);
+            Entity e = create_item_from_def(world, RING_TABLE[idx], x, y);
+            apply_curse_bless(world.get<Item>(e), dungeon_level, rng);
+        } else if (roll <= 63) {
             // Lore item — readable journal/inscription
             struct LoreEntry { const char* name; const char* text; };
             static const LoreEntry LORE[] = {
@@ -472,12 +589,12 @@ void spawn_items(World& world, const TileMap& map,
             item.gold_value = 5;
             item.identified = true;
             world.add<Item>(e, std::move(item));
-        } else if (roll <= 82) {
+        } else if (roll <= 85) {
             // Consumable
             int idx = rng.range(0, CONSUMABLE_COUNT - 1);
             Entity ce = create_item_from_def(world, CONSUMABLE_TABLE[idx], x, y);
             apply_tags(world.get<Item>(ce));
-        } else if (roll <= 85 && dungeon_level >= 2) {
+        } else if (roll <= 88 && dungeon_level >= 2) {
             // Pet — rare find
             int pid = rng.range(0, PET_TYPE_COUNT - 1);
             auto& pinfo = get_pet_info(static_cast<PetId>(pid));
@@ -514,6 +631,52 @@ void spawn_items(World& world, const TileMap& map,
     }
 }
 
+static constexpr int LEGENDARY_WEAPON_COUNT = sizeof(LEGENDARY_WEAPON_TABLE) / sizeof(LEGENDARY_WEAPON_TABLE[0]);
+static constexpr int LEGENDARY_ARMOR_COUNT = sizeof(LEGENDARY_ARMOR_TABLE) / sizeof(LEGENDARY_ARMOR_TABLE[0]);
+
+Entity spawn_legendary(World& world, const std::vector<Room>& rooms, [[maybe_unused]] RNG& rng,
+                        const std::string& dungeon_name) {
+    if (rooms.size() < 2) return NULL_ENTITY;
+
+    // Deterministic legendary assignment per dungeon name
+    // Each named dungeon gets a specific legendary
+    const ItemDef* def = nullptr;
+    if (dungeon_name == "The Hollowgate")      def = &LEGENDARY_WEAPON_TABLE[0]; // Bonecleaver
+    else if (dungeon_name == "The Molten Depths") def = &LEGENDARY_WEAPON_TABLE[1]; // Earthsplitter
+    else if (dungeon_name == "The Sunken Halls")  def = &LEGENDARY_WEAPON_TABLE[2]; // The Rending
+    else if (dungeon_name == "Frostmere Depths")  def = &LEGENDARY_WEAPON_TABLE[3]; // Serpent's Tooth
+    else if (dungeon_name == "Stonekeep")         def = &LEGENDARY_WEAPON_TABLE[4]; // The Old Growth
+    else if (dungeon_name == "The Catacombs")     def = &LEGENDARY_ARMOR_TABLE[0];  // The Anvil
+    else if (dungeon_name == "Ashford Ruins")     def = &LEGENDARY_ARMOR_TABLE[1];  // Crown of Iron
+    else if (dungeon_name == "The Barrow")        def = &LEGENDARY_ARMOR_TABLE[2];  // Bulwark
+    else return NULL_ENTITY;
+
+    // Place in the last room (deepest point)
+    auto& room = rooms.back();
+    int x = room.cx();
+    int y = room.cy();
+
+    Entity e = world.create();
+    world.add<Position>(e, {x, y});
+    world.add<Renderable>(e, {SHEET_ITEMS, def->sprite_x, def->sprite_y,
+                               {255, 240, 180, 255}, 2}); // golden tint, higher z
+
+    Item item;
+    item.name = def->name;
+    item.description = def->description;
+    item.type = def->type;
+    item.slot = def->slot;
+    item.damage_bonus = def->damage_bonus;
+    item.armor_bonus = def->armor_bonus;
+    item.attack_bonus = def->attack_bonus;
+    item.dodge_bonus = def->dodge_bonus;
+    item.gold_value = 0; // priceless
+    item.identified = true;
+    item.curse_state = 2; // blessed
+    world.add<Item>(e, std::move(item));
+    return e;
+}
+
 void spawn_doodads(World& world, const TileMap& map,
                     const std::vector<Room>& rooms, RNG& rng,
                     int dungeon_level, const std::string& zone) {
@@ -539,24 +702,24 @@ void spawn_doodads(World& world, const TileMap& map,
                 world.add<Position>(e, {x, y});
                 world.add<Renderable>(e, {SHEET_TILES, 0, 17, {255,255,255,255}, 1}); // chest closed
 
-                // Random loot: gold, potion, or food
-                Item item;
+                Container cont;
+                cont.open_sprite_x = 1; cont.open_sprite_y = 17; // chest open sprite
                 int roll = rng.range(1, 100);
                 if (roll <= 50) {
-                    item.name = "gold coins"; item.type = ItemType::GOLD;
-                    item.gold_value = rng.range(8, 25 + dungeon_level * 8);
-                    item.stack = item.gold_value; item.stackable = true;
+                    cont.contents.name = "gold coins"; cont.contents.type = ItemType::GOLD;
+                    cont.contents.gold_value = rng.range(8, 25 + dungeon_level * 8);
+                    cont.contents.stack = cont.contents.gold_value; cont.contents.stackable = true;
+                    cont.contents.identified = true;
                 } else if (roll <= 80) {
-                    item.name = "healing potion"; item.description = "Mends flesh.";
-                    item.type = ItemType::POTION; item.heal_amount = 15;
-                    item.gold_value = 25; item.unid_name = "red potion";
+                    cont.contents.name = "healing potion"; cont.contents.description = "Restores 15 HP.";
+                    cont.contents.type = ItemType::POTION; cont.contents.heal_amount = 15;
+                    cont.contents.gold_value = 25; cont.contents.unid_name = "red potion";
                 } else {
-                    item.name = "dried meat"; item.description = "Tough but filling.";
-                    item.type = ItemType::FOOD; item.heal_amount = 8;
-                    item.gold_value = 8;
+                    cont.contents.name = "dried meat"; cont.contents.description = "Restores 8 HP.";
+                    cont.contents.type = ItemType::FOOD; cont.contents.heal_amount = 8;
+                    cont.contents.gold_value = 8; cont.contents.identified = true;
                 }
-                item.identified = (item.type != ItemType::POTION);
-                world.add<Item>(e, std::move(item));
+                world.add<Container>(e, std::move(cont));
             }
         }
 
@@ -569,12 +732,13 @@ void spawn_doodads(World& world, const TileMap& map,
                 world.add<Position>(e, {x, y});
                 world.add<Renderable>(e, {SHEET_TILES, 2, 17, {255,255,255,255}, 1}); // jar closed
 
-                Item item;
-                item.name = "gold coins"; item.type = ItemType::GOLD;
-                item.gold_value = rng.range(2, 10 + dungeon_level * 3);
-                item.stack = item.gold_value; item.stackable = true;
-                item.identified = true;
-                world.add<Item>(e, std::move(item));
+                Container cont;
+                cont.open_sprite_x = 3; cont.open_sprite_y = 17; // jar open sprite
+                cont.contents.name = "gold coins"; cont.contents.type = ItemType::GOLD;
+                cont.contents.gold_value = rng.range(2, 10 + dungeon_level * 3);
+                cont.contents.stack = cont.contents.gold_value; cont.contents.stackable = true;
+                cont.contents.identified = true;
+                world.add<Container>(e, std::move(cont));
             }
         }
 
@@ -654,6 +818,20 @@ void spawn_doodads(World& world, const TileMap& map,
                 world.add<Renderable>(e, {SHEET_ANIMATED, 0, anim_row, {255,255,255,255}, 0});
                 break;
             }
+        }
+    }
+
+    // God shrine — ~20% chance per floor, placed in a mid-room
+    if (rng.chance(20) && rooms.size() >= 3) {
+        int room_idx = rng.range(1, static_cast<int>(rooms.size()) - 2);
+        auto& room = rooms[room_idx];
+        int sx = room.cx();
+        int sy = room.cy();
+        if (map.in_bounds(sx, sy) && map.is_walkable(sx, sy)) {
+            // Set tile to SHRINE — variant stores a pseudo-random god index for this shrine
+            auto& tile = const_cast<TileMap&>(map).at(sx, sy);
+            tile.type = TileType::SHRINE;
+            tile.variant = static_cast<uint8_t>(rng.range(0, GOD_COUNT - 1));
         }
     }
 }

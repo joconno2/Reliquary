@@ -19,27 +19,27 @@ struct ShopItemDef {
 };
 
 static const ShopItemDef SHOP_WEAPONS[] = {
-    {"dagger",        "A short, sharp blade.",          ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 0,  2, 0, 1, 0, 0,  15},
-    {"short sword",   "A reliable sidearm.",            ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 0,  3, 0, 0, 0, 0,  30},
-    {"long sword",    "A well-balanced blade.",         ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 0,  5, 0, 0, 0, 0,  60},
-    {"mace",          "Blunt and merciless.",           ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 5,  4, 0, 0, 0, 0,  40},
-    {"spear",         "Long reach. Keeps them at bay.", ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 6,  4, 0, 1, 0, 0,  35},
-    {"battle axe",    "Heavy. Splits bone.",            ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 3,  6, 0,-1, 0, 0,  55},
+    {"dagger",        "+2 dmg, +1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 0,  2, 0, 1, 0, 0,  15},
+    {"short sword",   "+3 dmg.",                         ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 0,  3, 0, 0, 0, 0,  30},
+    {"mace",          "+4 dmg.",                         ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 5,  4, 0, 0, 0, 0,  40},
+    {"spear",         "+4 dmg, +1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 6,  4, 0, 1, 0, 0,  35},
+    {"long sword",    "+5 dmg.",                         ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 0,  5, 0, 0, 0, 0,  60},
+    {"battle axe",    "+6 dmg, -1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 3,  6, 0,-1, 0, 0,  55},
 };
 
 static const ShopItemDef SHOP_ARMOR[] = {
-    {"leather armor", "Supple hide. Quiet.",            ItemType::ARMOR_CHEST, EquipSlot::CHEST,    1, 12, 0, 2, 0, 0, 0, 40},
-    {"chain mail",    "Rings of iron. Heavy.",          ItemType::ARMOR_CHEST, EquipSlot::CHEST,    3, 12, 0, 4, 0,-1, 0, 80},
-    {"leather helm",  "Better than nothing.",           ItemType::ARMOR_HEAD,  EquipSlot::HEAD,     1, 15, 0, 1, 0, 0, 0, 20},
-    {"iron helm",     "Cold iron on your skull.",       ItemType::ARMOR_HEAD,  EquipSlot::HEAD,     4, 15, 0, 2, 0, 0, 0, 45},
-    {"buckler",       "A small, round shield.",         ItemType::SHIELD,      EquipSlot::OFF_HAND, 0, 11, 0, 2, 0, 1, 0, 30},
-    {"leather boots", "Worn but sturdy.",               ItemType::ARMOR_FEET,  EquipSlot::FEET,     1, 14, 0, 1, 0, 0, 0, 20},
+    {"leather armor", "AC +2, light armor.",            ItemType::ARMOR_CHEST, EquipSlot::CHEST,    1, 12, 0, 2, 0, 0, 0, 40},
+    {"chain mail",    "AC +4, -1 dodge, medium armor.", ItemType::ARMOR_CHEST, EquipSlot::CHEST,    3, 12, 0, 4, 0,-1, 0, 80},
+    {"leather helm",  "AC +1.",                         ItemType::ARMOR_HEAD,  EquipSlot::HEAD,     1, 15, 0, 1, 0, 0, 0, 20},
+    {"iron helm",     "AC +3.",                         ItemType::ARMOR_HEAD,  EquipSlot::HEAD,     4, 15, 0, 3, 0, 0, 0, 55},
+    {"buckler",       "AC +2, +1 dodge, light.",        ItemType::SHIELD,      EquipSlot::OFF_HAND, 0, 11, 0, 2, 0, 1, 0, 30},
+    {"leather boots", "AC +1.",                         ItemType::ARMOR_FEET,  EquipSlot::FEET,     1, 14, 0, 1, 0, 0, 0, 20},
 };
 
 static const ShopItemDef SHOP_CONSUMABLES[] = {
-    {"healing potion", "Mends flesh.",                  ItemType::POTION, EquipSlot::NONE, 1, 19, 0, 0, 0, 0, 15, 25},
-    {"strong healing", "Flesh knits together.",         ItemType::POTION, EquipSlot::NONE, 1, 19, 0, 0, 0, 0, 30, 50},
-    {"bread",          "Stale. Nourishing enough.",     ItemType::FOOD,   EquipSlot::NONE, 1, 25, 0, 0, 0, 0,  5,  5},
+    {"healing potion", "Restores 15 HP.",               ItemType::POTION, EquipSlot::NONE, 1, 19, 0, 0, 0, 0, 15, 25},
+    {"strong healing", "Restores 30 HP.",               ItemType::POTION, EquipSlot::NONE, 1, 19, 0, 0, 0, 0, 30, 50},
+    {"bread",          "Restores 5 HP. Stale.",         ItemType::FOOD,   EquipSlot::NONE, 1, 25, 0, 0, 0, 0,  5,  5},
 };
 
 static constexpr int SHOP_WEAPON_COUNT = sizeof(SHOP_WEAPONS) / sizeof(SHOP_WEAPONS[0]);
@@ -64,36 +64,63 @@ static ShopItem make_shop_item(const ShopItemDef& def) {
     return si;
 }
 
-void ShopScreen::generate_stock(RNG& rng) {
+void ShopScreen::generate_stock(RNG& rng, int difficulty) {
     stock_.clear();
+
+    // Difficulty scales: 0 = starting area, 4 = mid-game, 8 = endgame
+    // Higher difficulty = bias toward better items + bonus stats + higher prices
+
+    // Minimum weapon/armor index increases with difficulty (skip weak items)
+    int min_weapon = std::min(difficulty / 2, SHOP_WEAPON_COUNT - 2);
+    int min_armor = std::min(difficulty / 2, SHOP_ARMOR_COUNT - 2);
+
+    // Bonus damage/armor on items from higher-difficulty shops
+    int stat_bonus = difficulty / 3; // +0 at diff 0-2, +1 at 3-5, +2 at 6-8
 
     // Pick 3-4 weapons
     int n_weapons = rng.range(3, 4);
     for (int i = 0; i < n_weapons; i++) {
-        int idx = rng.range(0, SHOP_WEAPON_COUNT - 1);
-        stock_.push_back(make_shop_item(SHOP_WEAPONS[idx]));
+        int idx = rng.range(min_weapon, SHOP_WEAPON_COUNT - 1);
+        auto si = make_shop_item(SHOP_WEAPONS[idx]);
+        si.item.damage_bonus += stat_bonus;
+        si.item.gold_value += stat_bonus * 15;
+        // Quality prefix for high-difficulty shops
+        if (stat_bonus >= 2) si.item.name = "Fine " + si.item.name;
+        else if (stat_bonus >= 1) si.item.name = "Sturdy " + si.item.name;
+        stock_.push_back(std::move(si));
     }
     // Pick 3-4 armor pieces
     int n_armor = rng.range(3, 4);
     for (int i = 0; i < n_armor; i++) {
-        int idx = rng.range(0, SHOP_ARMOR_COUNT - 1);
-        stock_.push_back(make_shop_item(SHOP_ARMOR[idx]));
+        int idx = rng.range(min_armor, SHOP_ARMOR_COUNT - 1);
+        auto si = make_shop_item(SHOP_ARMOR[idx]);
+        si.item.armor_bonus += stat_bonus;
+        si.item.gold_value += stat_bonus * 12;
+        if (stat_bonus >= 2) si.item.name = "Fine " + si.item.name;
+        else if (stat_bonus >= 1) si.item.name = "Sturdy " + si.item.name;
+        stock_.push_back(std::move(si));
     }
-    // Pick 2-3 consumables
+    // Pick 2-3 consumables — more potent at higher difficulty
     int n_cons = rng.range(2, 3);
     for (int i = 0; i < n_cons; i++) {
         int idx = rng.range(0, SHOP_CONS_COUNT - 1);
-        stock_.push_back(make_shop_item(SHOP_CONSUMABLES[idx]));
+        auto si = make_shop_item(SHOP_CONSUMABLES[idx]);
+        // Better healing potions in harder areas
+        if (si.item.heal_amount > 0) {
+            si.item.heal_amount += difficulty * 2;
+            si.item.gold_value += difficulty * 5;
+        }
+        stock_.push_back(std::move(si));
     }
 }
 
-void ShopScreen::open(Entity player, [[maybe_unused]] World& world, RNG& rng, int* gold) {
+void ShopScreen::open(Entity player, [[maybe_unused]] World& world, RNG& rng, int* gold, int difficulty) {
     open_ = true;
     selected_ = 0;
     player_ = player;
     gold_ = gold;
     buy_tab_ = true;
-    generate_stock(rng);
+    generate_stock(rng, difficulty);
 }
 
 ShopAction ShopScreen::handle_input(SDL_Event& event) {

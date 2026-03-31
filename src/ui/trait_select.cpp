@@ -236,26 +236,54 @@ void TraitSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
         detail_y += line_h;
     }
 
-    // Special flags
+    // Gameplay modifiers
     detail_y += 4;
-    if (cur.see_invisible) {
-        ui::draw_text(renderer, font, "  * Can see invisible", chosen_col, detail_x, detail_y);
+    if (cur.bonus_hp != 0) {
+        char buf[32]; snprintf(buf, sizeof(buf), "  HP %+d", cur.bonus_hp);
+        ui::draw_text(renderer, font, buf, cur.bonus_hp > 0 ? chosen_col : neg_col, detail_x, detail_y);
         detail_y += line_h;
     }
-    if (cur.immune_poison) {
-        ui::draw_text(renderer, font, "  * Immune to poison", chosen_col, detail_x, detail_y);
+    if (cur.bonus_natural_armor != 0) {
+        char buf[32]; snprintf(buf, sizeof(buf), "  Armor %+d", cur.bonus_natural_armor);
+        ui::draw_text(renderer, font, buf, cur.bonus_natural_armor > 0 ? chosen_col : neg_col, detail_x, detail_y);
         detail_y += line_h;
     }
-    if (cur.immune_disease) {
-        ui::draw_text(renderer, font, "  * Immune to disease", chosen_col, detail_x, detail_y);
+    if (cur.bonus_speed != 0) {
+        char buf[32]; snprintf(buf, sizeof(buf), "  Speed %+d", cur.bonus_speed);
+        ui::draw_text(renderer, font, buf, cur.bonus_speed > 0 ? chosen_col : neg_col, detail_x, detail_y);
         detail_y += line_h;
     }
-    if (cur.fear_resist) {
-        ui::draw_text(renderer, font, "  * Resists fear", chosen_col, detail_x, detail_y);
+    if (cur.bonus_fov != 0) {
+        char buf[32]; snprintf(buf, sizeof(buf), "  FOV %+d", cur.bonus_fov);
+        ui::draw_text(renderer, font, buf, cur.bonus_fov > 0 ? chosen_col : neg_col, detail_x, detail_y);
         detail_y += line_h;
     }
-    if (cur.extra_fov) {
-        ui::draw_text(renderer, font, "  * +2 sight radius", chosen_col, detail_x, detail_y);
+    if (cur.fire_resist != 0) {
+        char buf[32]; snprintf(buf, sizeof(buf), "  Fire resist %+d%%", cur.fire_resist);
+        ui::draw_text(renderer, font, buf, cur.fire_resist > 0 ? chosen_col : neg_col, detail_x, detail_y);
+        detail_y += line_h;
+    }
+    if (cur.poison_resist != 0) {
+        char buf[32]; snprintf(buf, sizeof(buf), "  Poison resist %+d%%", cur.poison_resist);
+        ui::draw_text(renderer, font, buf, cur.poison_resist > 0 ? chosen_col : neg_col, detail_x, detail_y);
+        detail_y += line_h;
+    }
+    if (cur.bleed_resist != 0) {
+        char buf[32]; snprintf(buf, sizeof(buf), "  Bleed resist %+d%%", cur.bleed_resist);
+        ui::draw_text(renderer, font, buf, cur.bleed_resist > 0 ? chosen_col : neg_col, detail_x, detail_y);
+        detail_y += line_h;
+    }
+    if (cur.hp_on_kill > 0) {
+        char buf[32]; snprintf(buf, sizeof(buf), "  Heal %d per kill", cur.hp_on_kill);
+        ui::draw_text(renderer, font, buf, chosen_col, detail_x, detail_y);
+        detail_y += line_h;
+    }
+    if (cur.immune_fear) {
+        ui::draw_text(renderer, font, "  Immune to fear", chosen_col, detail_x, detail_y);
+        detail_y += line_h;
+    }
+    if (cur.immune_confuse) {
+        ui::draw_text(renderer, font, "  Immune to confusion", chosen_col, detail_x, detail_y);
         detail_y += line_h;
     }
 

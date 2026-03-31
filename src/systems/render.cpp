@@ -3,6 +3,7 @@
 #include "components/renderable.h"
 #include <algorithm>
 #include <vector>
+#include <cmath>
 
 namespace render {
 
@@ -76,7 +77,11 @@ SpriteRef tile_sprite(TileType type, [[maybe_unused]] uint8_t variant) {
         case TileType::STAIRS_UP:         return {SHEET_TILES, 8, 16};
         case TileType::WATER:             return {SHEET_TILES, 0, 12};
         case TileType::TREE:              return {SHEET_TILES, 2, 25};
-        case TileType::BRUSH:             return {SHEET_TILES, 0, 25}; // sapling/small bush
+        case TileType::BRUSH:
+            if (variant == 1) return {SHEET_TILES, 1, 25};
+            if (variant == 2) return {SHEET_TILES, 3, 25};
+            return {SHEET_TILES, 0, 25};
+        case TileType::SHRINE:            return {SHEET_TILES, 5, 16}; // altar sprite
 
         // Floors handled by floor_sprite(), but provide fallback
         default:
@@ -160,11 +165,30 @@ void draw_map(SDL_Renderer* renderer, const SpriteManager& sprites,
                             show_side = false;
                     }
                     draw_sprite_scaled(SHEET_TILES, show_side ? side_col : top_col, wall_row, tint);
+                } else if (tile.type == TileType::SHRINE) {
+                    // Shrine: draw stone floor base + altar sprite on top
+                    draw_sprite_scaled(SHEET_TILES, 0, 6, tint); // stone floor
+                    auto ref = tile_sprite(tile.type, tile.variant);
+                    draw_sprite_scaled(ref.sheet, ref.col, ref.row, tint);
                 } else {
                     auto ref = tile_sprite(tile.type, tile.variant);
                     draw_sprite_scaled(ref.sheet, ref.col, ref.row, tint);
                 }
             };
+
+            // Region-tinted background fill (desert = brown, ice = light grey)
+            {
+                SDL_Color bg = {18, 20, 28, 255}; // default dark slate
+                if (tile.type == TileType::FLOOR_SAND || (tile.explored && y > map.height() * 5 / 6))
+                    bg = {35, 28, 18, 255}; // warm brown for desert
+                else if (tile.type == TileType::FLOOR_ICE || (tile.explored && y < map.height() / 6))
+                    bg = {45, 48, 55, 255}; // light grey for ice
+                if (tile.explored || tile.visible) {
+                    SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, 255);
+                    SDL_Rect fill = {screen_x, screen_y, TS, TS};
+                    SDL_RenderFillRect(renderer, &fill);
+                }
+            }
 
             if (tile.visible) {
                 draw_tile({255, 255, 255, 255});
@@ -229,15 +253,26 @@ void draw_entities(SDL_Renderer* renderer, const SpriteManager& sprites,
 
         // Warm glow around light sources (torches, braziers, fire pits)
         if (cmd.sheet == SHEET_ANIMATED && (sy == 1 || sy == 3 || sy == 5 || sy == 7)) {
-            // Lit variants: brazier(1), fire pit(3), torch(5), lamp(7)
             SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-            int glow_r = TS * 2;
-            SDL_Rect glow = {cmd.dx - glow_r / 2 + TS / 2, cmd.dy - glow_r / 2 + TS / 2,
-                              glow_r, glow_r};
-            // Flickering alpha
+            int gcx = cmd.dx + TS / 2;
+            int gcy = cmd.dy + TS / 2;
             int flicker = 15 + (anim_frame % 3) * 5;
-            SDL_SetRenderDrawColor(renderer, 255, 180, 80, static_cast<Uint8>(flicker));
-            SDL_RenderFillRect(renderer, &glow);
+            // Draw concentric diamond/circle layers for soft circular glow
+            int max_r = TS * 2;
+            int layers = 8;
+            for (int li = layers; li >= 1; li--) {
+                int r = max_r * li / layers;
+                int alpha = flicker * (layers - li + 1) / (layers + 2);
+                SDL_SetRenderDrawColor(renderer, 255, 180, 80, static_cast<Uint8>(alpha));
+                // Approximate circle with a clipped rect per row
+                for (int dy = -r; dy <= r; dy += std::max(1, r / 8)) {
+                    float frac = 1.0f - static_cast<float>(dy * dy) / static_cast<float>(r * r);
+                    if (frac <= 0) continue;
+                    int half_w = static_cast<int>(r * std::sqrt(frac));
+                    SDL_Rect row = {gcx - half_w, gcy + dy, half_w * 2, std::max(1, r / 8)};
+                    SDL_RenderFillRect(renderer, &row);
+                }
+            }
         }
     }
 }

@@ -66,14 +66,8 @@ struct Stats {
         if (xp >= xp_next) {
             level++;
             xp -= xp_next;
-            xp_next = level * level * 50 + 50; // scaling curve
-            // Small HP/MP boost on level (real gains come from level-up choices)
-            int hp_gain = 1;
-            int mp_gain = 1;
-            hp_max += hp_gain;
-            hp += hp_gain;
-            mp_max += mp_gain;
-            mp += mp_gain;
+            xp_next = level * level * 75 + 75; // steeper scaling curve
+            // No free HP/MP on level — real gains come from level-up choice screen only
             return true;
         }
         return false;

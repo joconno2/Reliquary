@@ -51,27 +51,30 @@ def fill_rect(x1, y1, x2, y2, ch):
             grid[y][x] = ch
 
 # === SPARSE TREES + BRUSH ===
+# Brush types: 't' = small bush, 'b' = tall grass, 'c' = flowers (mapped in engine)
 print("Placing vegetation...", flush=True)
+brush_types = ['t', 'b', 'c']
 for y in range(H):
     c = climate(y)
     for x in range(W):
         if grid[y][x] not in '.is': continue
         r = random.random()
+        brush = random.choice(brush_types)
         if c == 'temperate':
-            if r < 0.06: grid[y][x] = 'T'
-            elif r < 0.16: grid[y][x] = 't'
+            if r < 0.05: grid[y][x] = 'T'
+            elif r < 0.09: grid[y][x] = brush
         elif c == 'cold':
-            if r < 0.04: grid[y][x] = 'T'
-            elif r < 0.10: grid[y][x] = 't'
+            if r < 0.03: grid[y][x] = 'T'
+            elif r < 0.06: grid[y][x] = brush
         elif c == 'ice':
             if r < 0.01: grid[y][x] = 'T'
-            elif r < 0.03: grid[y][x] = 't'
+            elif r < 0.02: grid[y][x] = 'b'  # only tall grass in ice
         elif c == 'warm':
             if r < 0.03: grid[y][x] = 'T'
-            elif r < 0.08: grid[y][x] = 't'
+            elif r < 0.06: grid[y][x] = brush
         elif c == 'desert':
             if r < 0.005: grid[y][x] = 'R'
-            elif r < 0.015: grid[y][x] = 't'
+            elif r < 0.012: grid[y][x] = 'b'
 
 # === FOREST PATCHES (navigable, not walls) ===
 print("Creating forests...", flush=True)
@@ -159,39 +162,97 @@ towns = [
     (CX + 500, CY + 100, "Endgate", False),
 ]
 
-def place_town(tx, ty, is_start):
-    for dy in range(-20, 21):
-        for dx in range(-28, 29):
-            dist = math.sqrt(dx * dx * 0.6 + dy * dy)
-            if dist < 16: set_tile(tx + dx, ty + dy, '.')
-            elif dist < 20 and random.random() < 0.5: set_tile(tx + dx, ty + dy, '.')
+def place_town(tx, ty, is_start, town_rng):
+    """Place a town with randomized layout, size, orientation, and climate materials."""
+    # Climate determines building material: north=stone (#), south=wood (W)
+    lat = ty / H  # 0=north, 1=south
+    # Normal distribution: stone probability decreases south
+    stone_prob = max(0, min(1, 1.0 - lat * 1.2))
+    wall_ch = '#' if town_rng.random() < stone_prob else 'w'
 
-    for dx in range(-25, 26):
-        set_tile(tx + dx, ty, ',')
-        set_tile(tx + dx, ty + 1, ',')
-    for dy in range(-16, 17):
-        set_tile(tx, ty + dy, ',')
-        set_tile(tx + 1, ty + dy, ',')
+    # Randomize town shape: rotation angle and size variance
+    town_radius = town_rng.randint(14, 22)
+    aspect = town_rng.uniform(0.5, 1.0)  # elongation
 
-    buildings = [(-12, -8, 8, 6), (-1, -8, 8, 6), (10, -8, 8, 6),
-                 (-12, 4, 8, 6), (10, 4, 8, 6)]
+    # Clear ground
+    for dy in range(-town_radius - 4, town_radius + 5):
+        for dx in range(-int(town_radius / aspect) - 4, int(town_radius / aspect) + 5):
+            dist = math.sqrt(dx * dx * aspect + dy * dy)
+            if dist < town_radius: set_tile(tx + dx, ty + dy, '.')
+            elif dist < town_radius + 3 and town_rng.random() < 0.4: set_tile(tx + dx, ty + dy, '.')
+
+    # Roads — randomize orientation (cross, L-shape, or single)
+    road_style = town_rng.choice(['cross', 'vert', 'horiz', 'L'])
+    road_len = town_radius + 4
+    if road_style in ('cross', 'horiz'):
+        for dx in range(-road_len, road_len + 1):
+            set_tile(tx + dx, ty, ',')
+            set_tile(tx + dx, ty + 1, ',')
+    if road_style in ('cross', 'vert'):
+        for dy in range(-road_len, road_len + 1):
+            set_tile(tx, ty + dy, ',')
+            set_tile(tx + 1, ty + dy, ',')
+    if road_style == 'L':
+        for dx in range(-road_len, road_len + 1):
+            set_tile(tx + dx, ty, ',')
+        for dy in range(0, road_len + 1):
+            set_tile(tx + town_rng.randint(-3, 3), ty + dy, ',')
+
+    # Generate randomized building positions — must be fully on cleared ground
+    num_buildings = town_rng.randint(4, 7)
     npcs = ['S', 'B', 'P', 'G', 'F']
+    town_rng.shuffle(npcs)
+    buildings = []
+
+    def building_on_clear_ground(bx, by, bw, bh):
+        """Check that every tile of the building footprint is on cleared floor."""
+        for dy in range(bh):
+            for dx in range(bw):
+                gx, gy = tx + bx + dx, ty + by + dy
+                if not (0 <= gx < W and 0 <= gy < H): return False
+                if grid[gy][gx] not in '.,:': return False
+        return True
+
+    for _ in range(num_buildings * 10):  # more attempts to find valid spots
+        if len(buildings) >= num_buildings: break
+        bw = town_rng.randint(5, 8)
+        bh = town_rng.randint(4, 6)
+        bx = town_rng.randint(-town_radius + 3, town_radius - bw - 3)
+        by = town_rng.randint(-town_radius + 3, town_radius - bh - 3)
+        # Don't overlap road center
+        if abs(bx + bw // 2) < 3 and abs(by + bh // 2) < 3: continue
+        # Don't overlap other buildings (2-tile gap)
+        overlap = False
+        for obx, oby, obw, obh in buildings:
+            if bx < obx + obw + 2 and bx + bw + 2 > obx and by < oby + obh + 2 and by + bh + 2 > oby:
+                overlap = True; break
+        if overlap: continue
+        # Must be entirely on cleared ground
+        if not building_on_clear_ground(bx, by, bw, bh): continue
+        buildings.append((bx, by, bw, bh))
+
     for idx, (bx, by, bw, bh) in enumerate(buildings):
         ax, ay = tx + bx, ty + by
-        fill_rect(ax, ay, ax + bw, ay + bh, '#')
+        # Walls — complete rectangle
+        fill_rect(ax, ay, ax + bw, ay + bh, wall_ch)
+        # Floor inside
         fill_rect(ax + 1, ay + 1, ax + bw - 1, ay + bh - 1, ':')
-        door_y = ay + bh - 1 if by < 0 else ay
-        set_tile(ax + bw // 2, door_y, '+')
+        # Door on a random wall (centered on that wall)
+        door_side = town_rng.choice(['N', 'S', 'E', 'W'])
+        if door_side == 'N': set_tile(ax + bw // 2, ay, '+')
+        elif door_side == 'S': set_tile(ax + bw // 2, ay + bh - 1, '+')
+        elif door_side == 'E': set_tile(ax + bw - 1, ay + bh // 2, '+')
+        else: set_tile(ax, ay + bh // 2, '+')
+        # NPC inside (centered, not random edge)
         if idx < len(npcs):
             set_tile(ax + bw // 2, ay + bh // 2, npcs[idx])
 
     if is_start:
-        # Elder near the player start (quest giver)
         set_tile(tx + 3, ty + 2, 'E')
 
-for tx, ty, name, is_start in towns:
+for i, (tx, ty, name, is_start) in enumerate(towns):
     if 25 < tx < W - 25 and 25 < ty < H - 25:
-        place_town(tx, ty, is_start)
+        place_town(tx, ty, is_start, random.Random(42 + i * 7))
 
 # === NAMED QUEST DUNGEONS + GENERIC DUNGEONS ===
 print("Placing dungeons...", flush=True)
@@ -285,7 +346,7 @@ def draw_road(x1, y1, x2, y2):
             if random.random() < 0.2: x += dx
         for w in range(2):
             cur = get_tile(x, y + w)
-            if cur not in '~#:+>':
+            if cur not in '~#w:+>':
                 set_tile(x, y + w, ',')
 
 # Connect towns (MST)
@@ -323,20 +384,58 @@ for dx_pos, dy_pos, name, zone, quest in named_dungeons:
     if best_town:
         draw_road(best_town[0], best_town[1], dx_pos, dy_pos)
 
+# === BRIDGES — where roads meet rivers ===
+print("Building bridges...", flush=True)
+# Scan for road tiles adjacent to water — replace the water crossing with stone floor (bridge)
+for y in range(2, H - 2):
+    for x in range(2, W - 2):
+        if grid[y][x] != ',': continue  # only road tiles
+        # Check all 4 cardinal directions for water
+        for ddx, ddy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
+            nx, ny = x + ddx, y + ddy
+            if 0 <= nx < W and 0 <= ny < H and grid[ny][nx] == '~':
+                # Found road adjacent to water — build a bridge across
+                # Walk in that direction, replacing water with stone floor
+                bx, by = nx, ny
+                bridge_len = 0
+                while 0 <= bx < W and 0 <= by < H and grid[by][bx] == '~' and bridge_len < 12:
+                    grid[by][bx] = ':'  # stone floor = bridge
+                    # Also widen the bridge by 1 tile perpendicular
+                    if ddx != 0:  # horizontal crossing — widen vertically
+                        if 0 <= by - 1 < H and grid[by - 1][bx] == '~': grid[by - 1][bx] = ':'
+                    else:  # vertical crossing — widen horizontally
+                        if 0 <= bx - 1 < W and grid[by][bx - 1] == '~': grid[by][bx - 1] = ':'
+                    bx += ddx
+                    by += ddy
+                    bridge_len += 1
+
 # === RUINS ===
 print("Placing ruins...", flush=True)
+# Don't place ruins near towns
+town_positions = [(t[0], t[1]) for t in towns]
 for _ in range(40):
     rx, ry = random.randint(50, W - 50), random.randint(50, H - 50)
+    # Skip if near a town
+    near_town = False
+    for ttx, tty in town_positions:
+        if abs(rx - ttx) < 40 and abs(ry - tty) < 40:
+            near_town = True; break
+    if near_town: continue
     sz = random.randint(4, 7)
     for dy in range(-sz - 1, sz + 2):
         for dx in range(-sz - 1, sz + 2):
-            if random.random() < 0.25: set_tile(rx + dx, ry + dy, 't')
+            nx, ny = rx + dx, ry + dy
+            if 0 <= nx < W and 0 <= ny < H and grid[ny][nx] in '.tbc':
+                if random.random() < 0.25: set_tile(nx, ny, 't')
     for dy in range(sz):
         for dx in range(sz):
+            nx, ny = rx + dx, ry + dy
+            if not (0 <= nx < W and 0 <= ny < H): continue
+            if grid[ny][nx] not in '.t,bc': continue  # don't overwrite walls/NPCs/water
             if dx == 0 or dx == sz - 1 or dy == 0 or dy == sz - 1:
-                if random.random() < 0.6: set_tile(rx + dx, ry + dy, '#')
+                if random.random() < 0.6: set_tile(nx, ny, '#')
             else:
-                set_tile(rx + dx, ry + dy, ':')
+                set_tile(nx, ny, ':')
 
 # === BORDER ===
 for y in range(H):

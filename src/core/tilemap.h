@@ -26,6 +26,7 @@ enum class TileType : uint8_t {
     FLOOR_ICE,   // frozen terrain
     ROCK,        // impassable rocky outcrop (blocks movement, not sight)
     WALL_WOOD,   // wooden wall (houses, cabins)
+    SHRINE,      // god shrine — interactive altar
     COUNT
 };
 

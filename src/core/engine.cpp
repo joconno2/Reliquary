@@ -15,6 +15,7 @@
 #include "components/npc.h"
 #include "components/prayer.h"
 #include "components/status_effect.h"
+#include "components/container.h"
 #include "components/disease.h"
 #include "components/pet.h"
 #include "components/corpse.h"
@@ -114,7 +115,7 @@ bool Engine::init() {
 
     camera_.viewport_w = width_;
     camera_.viewport_h = height_ - LOG_HEIGHT - HUD_HEIGHT;
-    camera_.tile_size = static_cast<int>(48 * ui_scale_); // scale tiles with resolution
+    camera_.tile_size = static_cast<int>(60 * ui_scale_); // scale tiles with resolution (4x base)
 
     creation_screen_.reset();
 
@@ -134,6 +135,27 @@ bool Engine::init() {
                         de.quest = entry["quest"].get<std::string>();
                     dungeon_registry_.push_back(std::move(de));
                 }
+            }
+        }
+        // Calculate zone difficulty based on distance from Thornwall (1000, 750)
+        constexpr int START_X = 1000, START_Y = 750;
+        float max_dist = 0;
+        for (auto& de : dungeon_registry_) {
+            float d = std::sqrt(static_cast<float>((de.x - START_X) * (de.x - START_X) +
+                                                     (de.y - START_Y) * (de.y - START_Y)));
+            if (d > max_dist) max_dist = d;
+        }
+        if (max_dist > 0) {
+            for (auto& de : dungeon_registry_) {
+                float d = std::sqrt(static_cast<float>((de.x - START_X) * (de.x - START_X) +
+                                                         (de.y - START_Y) * (de.y - START_Y)));
+                de.zone_difficulty = static_cast<int>(d / max_dist * 8.0f);
+                if (de.zone_difficulty > 8) de.zone_difficulty = 8;
+                // Dungeon depth scales with difficulty: 3 floors near start, up to 10 far out
+                de.max_depth = 3 + de.zone_difficulty;
+                // Named quest dungeons get a minimum depth based on zone
+                if (de.zone == "sepulchre") { de.max_depth = 13; de.zone_difficulty = 8; }
+                else if (!de.quest.empty() && de.max_depth < 4) de.max_depth = 4;
             }
         }
     }
@@ -305,6 +327,10 @@ void Engine::cache_current_floor() {
             ce.has_item = true;
             ce.item = world_.get<Item>(e);
         }
+        if (world_.has<Container>(e)) {
+            ce.has_container = true;
+            ce.container = world_.get<Container>(e);
+        }
         fs.entities.push_back(std::move(ce));
     }
 }
@@ -331,6 +357,7 @@ bool Engine::restore_floor(int level) {
         if (ce.has_status) world_.add<StatusEffects>(e, ce.status_fx);
         if (ce.has_god) world_.add<GodAlignment>(e, ce.god_align);
         if (ce.has_item) world_.add<Item>(e, ce.item);
+        if (ce.has_container) world_.add<Container>(e, ce.container);
     }
 
     // Restore player position to where they were on this floor
@@ -440,12 +467,16 @@ void Engine::generate_level() {
     int start_x, start_y;
 
     if (dungeon_level_ == 0) {
-        // Overworld — loaded from hand-authored map file
-        auto mresult = mapfile::load("data/maps/overworld.map");
-        map_ = std::move(mresult.map);
-        rooms_.clear();
+        // Overworld — load from file once, then reuse cached copy
+        if (!overworld_loaded_) {
+            overworld_cache_ = mapfile::load("data/maps/overworld.map");
+            overworld_loaded_ = true;
+        }
+        auto& mresult = overworld_cache_;
+        map_ = mresult.map; // copy (preserves cache, gets fresh explored state)
         start_x = mresult.start_x;
         start_y = mresult.start_y;
+        rooms_.clear();
 
         // Dialogue pools — deterministic selection via position hash
         static const char* FARMER_DIALOGUE[] = {
@@ -744,10 +775,10 @@ void Engine::generate_level() {
 
         struct TownSpawn { int x, y; };
         static const TownSpawn TOWN_SPAWNS[] = {
-            {1000, 750}, {750, 650}, {1300, 670}, {850, 950}, {1200, 930},
-            {1050, 450}, {650, 800}, {1400, 750}, {1000, 1100}, {800, 400},
-            {1250, 1100}, {550, 550}, {1450, 500}, {900, 1200}, {1100, 300},
-            {700, 1050}, {1350, 1000}, {1150, 550}, {600, 700}, {1500, 850},
+            {1000,750}, {750,650}, {1300,670}, {850,950}, {1200,930},
+            {1050,450}, {650,800}, {1400,750}, {1000,1100}, {800,400},
+            {1250,1100}, {550,550}, {1450,500}, {900,1200}, {1100,300},
+            {700,1050}, {1350,1000}, {1150,550}, {600,700}, {1500,850},
         };
         static const char* HERBALIST_LINES[] = {
             "The wilds hold remedies for every ill, if you know where to look.",
@@ -841,8 +872,13 @@ void Engine::generate_level() {
         }
         auto& zone = DEPTH_ZONES[zone_idx];
 
-        // Don't place stairs down at the bottom of a zone
-        bool at_zone_bottom = (dungeon_level_ >= zone.max_depth);
+        // Don't place stairs down at the bottom — use per-dungeon max_depth
+        int max_depth = zone.max_depth; // fallback
+        if (current_dungeon_idx_ >= 0 &&
+            current_dungeon_idx_ < static_cast<int>(dungeon_registry_.size())) {
+            max_depth = dungeon_registry_[current_dungeon_idx_].max_depth;
+        }
+        bool at_zone_bottom = (dungeon_level_ >= max_depth);
 
         DungeonParams params;
         params.width = 80;
@@ -902,7 +938,8 @@ void Engine::generate_level() {
         player_stats.base_damage = cls.base_damage + bg.bonus_damage;
         player_stats.base_speed = 100;
 
-        // Apply trait stat modifiers
+        // Apply trait stat + gameplay modifiers
+        build_traits_ = build.traits;
         for (TraitId tid : build.traits) {
             const TraitInfo& tr = get_trait_info(tid);
             player_stats.set_attr(Attr::STR, player_stats.attr(Attr::STR) + tr.str_mod);
@@ -912,6 +949,13 @@ void Engine::generate_level() {
             player_stats.set_attr(Attr::WIL, player_stats.attr(Attr::WIL) + tr.wil_mod);
             player_stats.set_attr(Attr::PER, player_stats.attr(Attr::PER) + tr.per_mod);
             player_stats.set_attr(Attr::CHA, player_stats.attr(Attr::CHA) + tr.cha_mod);
+            player_stats.hp_max += tr.bonus_hp;
+            player_stats.hp += tr.bonus_hp;
+            player_stats.natural_armor += tr.bonus_natural_armor;
+            player_stats.base_speed += tr.bonus_speed;
+            player_stats.fire_resist += tr.fire_resist;
+            player_stats.poison_resist += tr.poison_resist;
+            player_stats.bleed_resist += tr.bleed_resist;
         }
 
         // God-specific resistances and passive stat mods
@@ -1068,8 +1112,15 @@ void Engine::generate_level() {
 
     // Spawn monsters and items (not in village)
     if (dungeon_level_ > 0) {
-        populate::spawn_monsters(world_, map_, rooms_, rng_, dungeon_level_);
-        populate::spawn_items(world_, map_, rooms_, rng_, dungeon_level_);
+        // Effective level = dungeon depth + zone difficulty (distance from start)
+        int zone_diff = 0;
+        if (current_dungeon_idx_ >= 0 &&
+            current_dungeon_idx_ < static_cast<int>(dungeon_registry_.size()))
+            zone_diff = dungeon_registry_[current_dungeon_idx_].zone_difficulty;
+        int effective_level = dungeon_level_ + zone_diff;
+
+        populate::spawn_monsters(world_, map_, rooms_, rng_, effective_level);
+        populate::spawn_items(world_, map_, rooms_, rng_, effective_level);
 
         // Dungeon doodads (chests, jars, mushrooms, coffins, etc.)
         {
@@ -1077,16 +1128,16 @@ void Engine::generate_level() {
             if (current_dungeon_idx_ >= 0 &&
                 current_dungeon_idx_ < static_cast<int>(dungeon_registry_.size()))
                 zone_name = dungeon_registry_[current_dungeon_idx_].zone;
-            populate::spawn_doodads(world_, map_, rooms_, rng_, dungeon_level_, zone_name);
+            populate::spawn_doodads(world_, map_, rooms_, rng_, effective_level, zone_name);
         }
 
-        // Rival paragons — rare, depth 4+ in named dungeons
-        if (dungeon_level_ >= 4 && current_dungeon_idx_ >= 0 && rng_.chance(15)) {
+        // Rival paragons — depth 4+ effective in named dungeons
+        if (effective_level >= 4 && current_dungeon_idx_ >= 0 && rng_.chance(15)) {
             GodId pgod = GodId::NONE;
             if (world_.has<GodAlignment>(player_))
                 pgod = world_.get<GodAlignment>(player_).god;
             Entity paragon = populate::spawn_paragon(world_, map_, rooms_, rng_,
-                                                      dungeon_level_, pgod);
+                                                      effective_level, pgod);
             if (paragon != NULL_ENTITY) {
                 auto& pgalign = world_.get<GodAlignment>(paragon);
                 auto& ginfo = get_god_info(pgalign.god);
@@ -1094,6 +1145,18 @@ void Engine::generate_level() {
                 snprintf(pbuf, sizeof(pbuf),
                     "You sense a presence. Another paragon — a servant of %s.", ginfo.name);
                 log_.add(pbuf, {200, 160, 200, 255});
+            }
+        }
+
+        // Legendary items — on the bottom floor of named dungeons only
+        if (current_dungeon_idx_ >= 0 &&
+            current_dungeon_idx_ < static_cast<int>(dungeon_registry_.size())) {
+            auto& dentry = dungeon_registry_[current_dungeon_idx_];
+            if (dungeon_level_ >= dentry.max_depth && !dentry.name.empty()) {
+                Entity leg = populate::spawn_legendary(world_, rooms_, rng_, dentry.name);
+                if (leg != NULL_ENTITY) {
+                    log_.add("Something valuable gleams in the deepest chamber.", {255, 240, 140, 255});
+                }
             }
         }
 
@@ -1341,6 +1404,28 @@ void Engine::generate_level() {
 void Engine::try_move_player(int dx, int dy) {
     if (state_ != GameState::PLAYING) return;
 
+    // Status effect checks — frozen/stunned skip turn, confused randomizes direction
+    if (world_.has<StatusEffects>(player_)) {
+        auto& fx = world_.get<StatusEffects>(player_);
+        if (fx.has(StatusType::FROZEN) || fx.has(StatusType::STUNNED)) {
+            const char* msg = fx.has(StatusType::FROZEN) ? "You are frozen solid." : "You are stunned.";
+            log_.add(msg, {180, 180, 220, 255});
+            player_acted_ = true;
+            return;
+        }
+        if (fx.has(StatusType::CONFUSED) && rng_.chance(50)) {
+            // 50% chance movement goes in a random direction
+            dx = rng_.range(-1, 1);
+            dy = rng_.range(-1, 1);
+            if (dx == 0 && dy == 0) dx = 1;
+        }
+        if (fx.has(StatusType::FEARED)) {
+            // Reverse direction — flee from where you were trying to go
+            dx = -dx;
+            dy = -dy;
+        }
+    }
+
     auto& pos = world_.get<Position>(player_);
     int nx = pos.x + dx;
     int ny = pos.y + dy;
@@ -1378,16 +1463,25 @@ void Engine::try_move_player(int dx, int dy) {
             }
 
             // Shopkeeper — open shop screen (unless they have a dynamic quest to offer)
+            // Calculate shop difficulty from town distance to Thornwall
+            auto calc_shop_diff = [&]() -> int {
+                if (dungeon_level_ > 0) return 0; // dungeon shops = base
+                if (!world_.has<Position>(target)) return 0;
+                auto& sp = world_.get<Position>(target);
+                float d = std::sqrt(static_cast<float>((sp.x - 1000) * (sp.x - 1000) +
+                                                        (sp.y - 750) * (sp.y - 750)));
+                return std::min(8, static_cast<int>(d / 80.0f)); // ~80 tiles per difficulty level
+            };
+
             if (npc.role == NPCRole::SHOPKEEPER && !world_.has<DynamicQuest>(target)) {
-                shop_screen_.open(player_, world_, rng_, &gold_);
+                shop_screen_.open(player_, world_, rng_, &gold_, calc_shop_diff());
                 return;
             }
             // Merchant with dynamic quest: show dialogue + quest, then can shop next time
             if (npc.role == NPCRole::SHOPKEEPER && world_.has<DynamicQuest>(target)) {
                 auto& dq = world_.get<DynamicQuest>(target);
                 if (dq.completed) {
-                    // Quest done, revert to shop behavior
-                    shop_screen_.open(player_, world_, rng_, &gold_);
+                    shop_screen_.open(player_, world_, rng_, &gold_, calc_shop_diff());
                     return;
                 }
             }
@@ -1545,13 +1639,20 @@ void Engine::try_move_player(int dx, int dy) {
             auto& tgt_stats = world_.get<Stats>(target);
             int bonus = 0;
 
-            // Check weapon tags for god bonuses
+            // Check weapon tags and material for bonuses
             uint32_t weapon_tags = 0;
+            MaterialType weapon_mat = MaterialType::NONE;
             if (world_.has<Inventory>(player_)) {
                 Entity wpn = world_.get<Inventory>(player_).get_equipped(EquipSlot::MAIN_HAND);
-                if (wpn != NULL_ENTITY && world_.has<Item>(wpn))
+                if (wpn != NULL_ENTITY && world_.has<Item>(wpn)) {
                     weapon_tags = world_.get<Item>(wpn).tags;
+                    weapon_mat = world_.get<Item>(wpn).material;
+                }
             }
+
+            // Silver weapons: +50% damage vs undead
+            if (weapon_mat == MaterialType::SILVER && is_undead(tgt_stats.name.c_str()))
+                bonus += std::max(1, atk_result.damage / 2);
 
             switch (ga.god) {
                 case GodId::VETHRIK:
@@ -1740,6 +1841,23 @@ void Engine::try_move_player(int dx, int dy) {
             }
         }
 
+        // Trait: Bloodlust — heal on kill
+        if (atk_result.killed && world_.has<Stats>(player_)) {
+            for (TraitId tid : build_traits_) {
+                auto& tr = get_trait_info(tid);
+                if (tr.hp_on_kill > 0) {
+                    auto& ps = world_.get<Stats>(player_);
+                    int heal = std::min(tr.hp_on_kill, ps.hp_max - ps.hp);
+                    if (heal > 0) {
+                        ps.hp += heal;
+                        char hbuf[64];
+                        snprintf(hbuf, sizeof(hbuf), "Bloodlust. (+%d HP)", heal);
+                        log_.add(hbuf, {200, 100, 100, 255});
+                    }
+                }
+            }
+        }
+
         // Crow scavenges gold from kills
         if (atk_result.killed && world_.has<Inventory>(player_)) {
             Entity pet_item = world_.get<Inventory>(player_).get_equipped(EquipSlot::PET);
@@ -1808,6 +1926,47 @@ void Engine::try_move_player(int dx, int dy) {
     // Stairs message
     if (tile.type == TileType::STAIRS_DOWN) {
         log_.add("Stairs descend further into the dark.", {150, 140, 130, 255});
+    }
+
+    // God shrine interaction
+    if (map_.at(nx, ny).type == TileType::SHRINE && world_.has<GodAlignment>(player_)) {
+        auto& ga = world_.get<GodAlignment>(player_);
+        GodId shrine_god = static_cast<GodId>(map_.at(nx, ny).variant % GOD_COUNT);
+        auto& sginfo = get_god_info(shrine_god);
+        auto& pginfo = get_god_info(ga.god);
+
+        if (shrine_god == ga.god) {
+            // Same god shrine: +5 favor, small heal, identify curse/bless
+            adjust_favor(5);
+            auto& ps = world_.get<Stats>(player_);
+            int heal = std::min(5, ps.hp_max - ps.hp);
+            ps.hp += heal;
+            char sbuf[128];
+            snprintf(sbuf, sizeof(sbuf), "A shrine of %s. You feel your god's presence. (+5 favor, +%d HP)", sginfo.name, heal);
+            log_.add(sbuf, {sginfo.color.r, sginfo.color.g, sginfo.color.b, 255});
+            // Identify curse/bless on all equipped items
+            if (world_.has<Inventory>(player_)) {
+                auto& inv = world_.get<Inventory>(player_);
+                for (int s = 0; s < EQUIP_SLOT_COUNT; s++) {
+                    Entity eq = inv.equipped[s];
+                    if (eq != NULL_ENTITY && world_.has<Item>(eq))
+                        world_.get<Item>(eq).identified = true;
+                }
+            }
+            audio_.play(SfxId::PRAYER);
+        } else if (ga.god == GodId::NONE) {
+            // Godless — shrines are just stone to you
+            char sbuf[128];
+            snprintf(sbuf, sizeof(sbuf), "A shrine of %s. It means nothing to you.", sginfo.name);
+            log_.add(sbuf, {128, 128, 128, 255});
+        } else {
+            // Different god shrine — option to desecrate
+            adjust_favor(2); // slight favor gain from your own god for finding a rival shrine
+            char sbuf[128];
+            snprintf(sbuf, sizeof(sbuf), "A shrine of %s. %s watches as you pass.", sginfo.name, pginfo.name);
+            log_.add(sbuf, {sginfo.color.r, sginfo.color.g, sginfo.color.b, 255});
+        }
+        particles_.prayer_effect(nx, ny, sginfo.color.r, sginfo.color.g, sginfo.color.b);
     }
 }
 
@@ -2022,8 +2181,42 @@ void Engine::process_turn() {
                 log_.add(mbuf, {180, 80, 200, 255});
                 { auto& lp = world_.get<Position>(player_); particles_.spell_effect(lp.x, lp.y, 140, 60, 180); }
             } else if (mstats.name == "death knight" && dist <= 3 && rng_.chance(25)) {
-                // Death knight fear aura — message only (no mechanical effect yet)
-                log_.add("The death knight's presence chills your blood.", {160, 100, 160, 255});
+                // Death knight fear aura — applies FEARED (blocked by Iron Willed)
+                if (world_.has<StatusEffects>(player_)) {
+                    bool immune = false;
+                    for (auto tid : build_traits_) if (get_trait_info(tid).immune_fear) immune = true;
+                    if (!immune) world_.get<StatusEffects>(player_).add(StatusType::FEARED, 0, 3);
+                    else log_.add("Your iron will resists the fear.", {200, 200, 140, 255});
+                }
+                log_.add("The death knight's presence freezes your courage.", {160, 100, 160, 255});
+            } else if (mstats.name == "naga" && dist <= 4 && rng_.chance(30)) {
+                // Naga gaze — applies STUNNED
+                if (world_.has<StatusEffects>(player_))
+                    world_.get<StatusEffects>(player_).add(StatusType::STUNNED, 0, 2);
+                log_.add("The naga's gaze locks your muscles.", {255, 255, 100, 255});
+            } else if (mstats.name == "wraith" && dist <= 3 && rng_.chance(30)) {
+                // Wraith wail — applies CONFUSED (blocked by Iron Willed)
+                if (world_.has<StatusEffects>(player_)) {
+                    bool immune = false;
+                    for (auto tid : build_traits_) if (get_trait_info(tid).immune_confuse) immune = true;
+                    if (!immune) world_.get<StatusEffects>(player_).add(StatusType::CONFUSED, 0, 4);
+                    else log_.add("Your mind holds firm against the wail.", {200, 200, 140, 255});
+                }
+                log_.add("The wraith screams. Your thoughts scatter.", {200, 140, 255, 255});
+            } else if ((mstats.name == "ice elemental" || mstats.name == "frost drake") && dist <= 3 && rng_.chance(30)) {
+                // Ice breath — applies FROZEN
+                int dmg = 5 + rng_.range(0, 5);
+                world_.get<Stats>(player_).hp -= dmg;
+                if (world_.has<StatusEffects>(player_))
+                    world_.get<StatusEffects>(player_).add(StatusType::FROZEN, 0, 2);
+                char mbuf[128];
+                snprintf(mbuf, sizeof(mbuf), "A wave of cold hits you. (%d)", dmg);
+                log_.add(mbuf, {140, 200, 255, 255});
+            } else if (mstats.name == "basilisk" && dist <= 4 && rng_.chance(20)) {
+                // Basilisk gaze — BLIND
+                if (world_.has<StatusEffects>(player_))
+                    world_.get<StatusEffects>(player_).add(StatusType::BLIND, 0, 5);
+                log_.add("The basilisk's gaze sears your vision.", {120, 120, 120, 255});
             } else if (mstats.name == "dragon" && dist <= 3 && rng_.chance(35)) {
                 // Dragon breathes fire
                 int dmg = 10 + rng_.range(0, 10);
@@ -2051,11 +2244,14 @@ void Engine::process_turn() {
         }
     }
 
-    // Recompute FOV
+    // Recompute FOV (blind reduces to 1)
     if (world_.has<Position>(player_) && world_.has<Stats>(player_)) {
         auto& pos = world_.get<Position>(player_);
         auto& stats = world_.get<Stats>(player_);
-        fov::compute(map_, pos.x, pos.y, stats.fov_radius());
+        int fov_r = stats.fov_radius();
+        if (world_.has<StatusEffects>(player_) && world_.get<StatusEffects>(player_).has(StatusType::BLIND))
+            fov_r = 1;
+        fov::compute(map_, pos.x, pos.y, fov_r);
         camera_.center_on(pos.x, pos.y);
     }
 
@@ -2129,10 +2325,10 @@ void Engine::try_spawn_overworld_enemy() {
 
     // Don't spawn near towns
     static const struct { int x, y; } TOWN_POS[] = {
-        {1000,750}, {750,650}, {1300,670}, {1050,450}, {1400,750},
-        {1450,500}, {550,550}, {850,950}, {1200,930}, {650,800},
-        {800,400}, {1250,1100}, {1000,1100}, {900,1200}, {1100,300},
-        {700,1050}, {1350,1000}, {1150,550}, {600,700}, {1500,850},
+        {500,375}, {375,325}, {650,335}, {525,225}, {700,375},
+        {725,250}, {275,275}, {425,475}, {600,465}, {325,400},
+        {400,200}, {625,550}, {500,550}, {450,600}, {550,150},
+        {350,525}, {675,500}, {575,275}, {300,350}, {750,425},
     };
     for (auto& t : TOWN_POS) {
         int d = std::max(std::abs(ppos.x - t.x), std::abs(ppos.y - t.y));
@@ -3114,6 +3310,7 @@ void Engine::process_status_effects() {
                     log_.add(buf, {200, 80, 80, 255});
                     particles_.bleed_effect(pp.x, pp.y);
                     break;
+                default: break; // non-DOT statuses (frozen, stunned, etc.) don't tick damage
             }
         }
     }
@@ -3213,8 +3410,6 @@ void Engine::process_status_effects() {
 void Engine::update_music_for_location() {
     if (state_ != GameState::PLAYING) return;
 
-    audio_.stop_all_ambient(800);
-
     if (dungeon_level_ <= 0) {
         // Overworld — check if near a town
         static const struct { int x, y; } TOWN_CENTERS[] = {
@@ -3235,20 +3430,24 @@ void Engine::update_music_for_location() {
         }
 
         if (near_town) {
-            MusicId town[] = {MusicId::TOWN1, MusicId::TOWN2};
+            // Only switch if not already playing town music
             if (audio_.current_music() != MusicId::TOWN1 &&
                 audio_.current_music() != MusicId::TOWN2) {
+                audio_.stop_all_ambient(800);
+                MusicId town[] = {MusicId::TOWN1, MusicId::TOWN2};
                 audio_.play_music(town[rng_.range(0, 1)], 2000);
+                audio_.play_ambient(AmbientId::INTERIOR_DAY, 1000);
             }
-            audio_.play_ambient(AmbientId::INTERIOR_DAY, 1000);
         } else {
-            MusicId ow_tracks[] = {MusicId::OVERWORLD1, MusicId::OVERWORLD2, MusicId::OVERWORLD3};
+            // Only switch if not already playing overworld music
             if (audio_.current_music() != MusicId::OVERWORLD1 &&
                 audio_.current_music() != MusicId::OVERWORLD2 &&
                 audio_.current_music() != MusicId::OVERWORLD3) {
+                audio_.stop_all_ambient(800);
+                MusicId ow_tracks[] = {MusicId::OVERWORLD1, MusicId::OVERWORLD2, MusicId::OVERWORLD3};
                 audio_.play_music(ow_tracks[rng_.range(0, 2)], 2000);
+                audio_.play_ambient(AmbientId::FOREST_DAY, 1000);
             }
-            audio_.play_ambient(AmbientId::FOREST_DAY, 1000);
         }
     } else {
         // Dungeon — check for Sepulchre, boss presence
@@ -3460,7 +3659,7 @@ void Engine::populate_overworld() {
     spawn_ow_npc(580, 560, "Pilgrim", "The seal at Hollowgate. Have you seen it? It's cracking.", NPCRole::FARMER, 7, 0);
 
     // Hunters in the deep wilderness
-    spawn_ow_npc(300, 500, "Hunter", "The game's thin out here. Something's scaring them deeper into the woods.", NPCRole::FARMER, 2, 0); // ranger sprite
+    spawn_ow_npc(300, 500, "Hunter", "The game's thin out here. Something's scaring them deeper into the woods.", NPCRole::FARMER, 2, 0);
     spawn_ow_npc(1700, 700, "Hunter", "I track wolves. They've been moving in packs larger than I've ever seen.", NPCRole::FARMER, 2, 0);
     spawn_ow_npc(500, 1100, "Hunter", "Don't go south. The swamp takes people.", NPCRole::FARMER, 2, 0);
 
@@ -3590,10 +3789,10 @@ void Engine::populate_overworld() {
 
     // Town decoration clusters
     static const struct { int x, y; } TOWN_POS[] = {
-        {1000,750}, {750,650}, {1300,670}, {850,950}, {1200,930},
-        {1050,450}, {650,800}, {1400,750}, {1000,1100}, {800,400},
-        {1250,1100}, {550,550}, {1450,500}, {900,1200}, {1100,300},
-        {700,1050}, {1350,1000}, {1150,550}, {600,700}, {1500,850},
+        {500,375}, {375,325}, {650,335}, {425,475}, {600,465},
+        {525,225}, {325,400}, {700,375}, {500,550}, {400,200},
+        {625,550}, {275,275}, {725,250}, {450,600}, {550,150},
+        {350,525}, {675,500}, {575,275}, {300,350}, {750,425},
     };
 
     // Helper: check if a tile is adjacent to a wall (building exterior)
@@ -3775,7 +3974,7 @@ void Engine::populate_overworld() {
     // OVERWORLD VEGETATION BY REGION
     // =============================================
 
-    // Temperate zone (y 500-900): varied flowers and grasses
+    // Temperate zone: varied flowers and grasses
     for (int i = 0; i < 80; i++) {
         int x = rng_.range(100, 1900);
         int y = rng_.range(500, 900);
@@ -3788,7 +3987,7 @@ void Engine::populate_overworld() {
         world_.add<Renderable>(e, {SHEET_TILES, crop, 19, {255,255,255,255}, 0});
     }
 
-    // Northern cold zone (y < 400): sparse, icy-blue tinted plants
+    // Northern cold zone: sparse, icy-blue tinted plants
     for (int i = 0; i < 30; i++) {
         int x = rng_.range(100, 1900);
         int y = rng_.range(100, 400);
@@ -3802,7 +4001,7 @@ void Engine::populate_overworld() {
                                     {180, 200, 240, 255}, 0});
     }
 
-    // Southern warm zone (y > 1000): warm-tinted plants, more variety
+    // Southern warm zone: warm-tinted plants, more variety
     for (int i = 0; i < 60; i++) {
         int x = rng_.range(100, 1900);
         int y = rng_.range(1000, 1400);
@@ -3970,88 +4169,76 @@ void Engine::render_victory() {
     const char* ending = nullptr;
     switch (god) {
         case GodId::VETHRIK:
-            ending = "Vethrik, the Ossuary Lord, speaks through the silence:\n"
-                     "'Now they will rest. All of them.'\n"
-                     "The world grows quiet. The bones of the earth settle.\n"
-                     "Death, at last, is proper.";
+            ending = "Vethrik claims the Reliquary.\n"
+                     "The dead lie still. The undead crumble to dust.\n"
+                     "The graveyards are quiet again.\n"
+                     "It is done.";
             break;
         case GodId::THESSARKA:
-            ending = "Thessarka opens her absent eyes through yours.\n"
-                     "You see everything -- every secret buried in stone,\n"
-                     "every forgotten name. The knowledge burns.\n"
-                     "But you do not look away.";
+            ending = "Thessarka takes the Reliquary.\n"
+                     "Every secret in the world is laid bare.\n"
+                     "The price is madness. You pay it gladly.";
             break;
         case GodId::MORRETH:
-            ending = "Morreth, the Iron Father, nods.\n"
-                     "'This was the test,' he says. 'You were the blade.'\n"
-                     "The weight of every battle settles into the metal.\n"
-                     "The iron sings.";
+            ending = "Morreth takes the Reliquary.\n"
+                     "The wars end. The strong rule.\n"
+                     "You are the strongest. That is enough.";
             break;
         case GodId::YASHKHET:
-            ending = "Blood runs from your hands -- yours, and not yours.\n"
-                     "Yashkhet smiles with your mouth.\n"
-                     "'Pain was the price. You paid it.'\n"
-                     "The Reliquary pulses like a second heart.";
+            ending = "Yashkhet takes the Reliquary.\n"
+                     "The blood price is paid in full.\n"
+                     "Your hands will never stop shaking.";
             break;
         case GodId::KHAEL:
-            ending = "Roots crack through the floor.\n"
-                     "Khael grows through the stone.\n"
-                     "'It was never yours,' the world says.\n"
-                     "'It was always the earth's.' The Reliquary blooms.";
+            ending = "Khael takes the Reliquary.\n"
+                     "The forest reclaims the cities.\n"
+                     "Mankind is no longer the dominant species.";
             break;
         case GodId::SOLETH:
-            ending = "White fire erupts from your hands.\n"
-                     "Soleth burns away what came before.\n"
-                     "'The corruption ends here,' the light says.\n"
-                     "The Sepulchre burns. The world begins again.";
+            ending = "Soleth takes the Reliquary.\n"
+                     "The Sepulchre burns. The old places burn.\n"
+                     "Everything unclean burns.\n"
+                     "There is a lot of burning.";
             break;
         case GodId::IXUUL:
-            ending = "The Reliquary shifts. Changes. Becomes something else.\n"
-                     "Ixuul laughs in frequencies that crack stone.\n"
-                     "'What did you think it was?'\n"
-                     "Nothing is what it was. Everything is what it could be.";
+            ending = "Ixuul takes the Reliquary.\n"
+                     "It becomes something else. So does everything.\n"
+                     "The world is unrecognizable by morning.";
             break;
         case GodId::ZHAVEK:
-            ending = "You hold it. Nobody sees.\n"
-                     "Zhavek takes the Reliquary into the space between,\n"
-                     "where light forgets to reach.\n"
-                     "The gods search for it still. They will never find it.";
+            ending = "Zhavek takes the Reliquary.\n"
+                     "It disappears. The gods cannot find it.\n"
+                     "Neither can you.";
             break;
         case GodId::THALARA:
-            ending = "Water rises from the stone.\n"
-                     "Thalara drowns the Sepulchre in black water.\n"
-                     "'Everything returns to the deep,' she says.\n"
-                     "The surface forgets what was lost.";
+            ending = "Thalara takes the Reliquary.\n"
+                     "The sea rises. The lowlands flood.\n"
+                     "The age of land is over.";
             break;
         case GodId::OSSREN:
-            ending = "The Reliquary does not change.\n"
-                     "Ossren holds it in place — permanent, unyielding.\n"
-                     "'This is what endures,' the hammer says.\n"
-                     "A thousand years pass. It has not moved.";
+            ending = "Ossren takes the Reliquary.\n"
+                     "It is sealed in iron and stone.\n"
+                     "No one will ever open it again.";
             break;
         case GodId::LETHIS:
-            ending = "You close your eyes.\n"
-                     "Lethis pulls the Reliquary into a dream\n"
-                     "from which nothing wakes.\n"
-                     "The world sleeps. It is not unpleasant.";
+            ending = "Lethis takes the Reliquary.\n"
+                     "The world falls asleep.\n"
+                     "Some of it wakes up. Most does not.";
             break;
         case GodId::GATHRUUN:
-            ending = "The floor opens.\n"
-                     "Gathruun takes the Reliquary deeper than any dungeon,\n"
-                     "past the roots of mountains, past the memory of stone.\n"
-                     "There is no bottom. There was never a bottom.";
+            ending = "Gathruun takes the Reliquary.\n"
+                     "It sinks into the earth.\n"
+                     "The mountains grow taller. The tunnels go deeper.";
             break;
         case GodId::SYTHARA:
-            ending = "The Reliquary softens in your hands.\n"
-                     "Sythara's love unmakes it — slowly, gently.\n"
-                     "'All things end,' she whispers.\n"
-                     "Even divine power rots. Especially divine power.";
+            ending = "Sythara takes the Reliquary.\n"
+                     "It decays. So does everything else.\n"
+                     "This was always going to happen.";
             break;
         default:
-            ending = "No god speaks. No voice answers.\n"
-                     "The silence is absolute.\n"
-                     "You took it without faith, without prayer,\n"
-                     "without permission. It is yours now.";
+            ending = "No god claims the Reliquary.\n"
+                     "You hold it in faithless hands.\n"
+                     "It is yours. You are not sure what that means.";
             break;
     }
 
@@ -4121,8 +4308,47 @@ void Engine::try_pickup() {
     auto& pos = world_.get<Position>(player_);
     auto& inv = world_.get<Inventory>(player_);
 
-    // Find items at player position
+    // Check for containers first (chests, jars) — open them, don't pick up
     auto& positions = world_.pool<Position>();
+    for (size_t i = 0; i < positions.size(); i++) {
+        Entity e = positions.entity_at(i);
+        if (e == player_) continue;
+        if (!world_.has<Container>(e)) continue;
+
+        auto& ipos = positions.at_index(i);
+        if (ipos.x != pos.x || ipos.y != pos.y) continue;
+
+        auto& cont = world_.get<Container>(e);
+        if (cont.opened) continue; // already opened
+
+        // Open the container — change sprite, spawn loot item
+        cont.opened = true;
+        if (world_.has<Renderable>(e)) {
+            auto& rend = world_.get<Renderable>(e);
+            rend.sprite_x = cont.open_sprite_x;
+            rend.sprite_y = cont.open_sprite_y;
+        }
+
+        // Spawn the contents as a separate item entity on top
+        Entity loot = world_.create();
+        world_.add<Position>(loot, {ipos.x, ipos.y});
+
+        // Determine sprite for the loot
+        int lsx = 1, lsy = 24; // default: coins
+        if (cont.contents.type == ItemType::POTION) { lsx = 1; lsy = 19; }
+        else if (cont.contents.type == ItemType::FOOD) { lsx = 1; lsy = 25; }
+        world_.add<Renderable>(loot, {SHEET_ITEMS, lsx, lsy, {255,255,255,255}, 1});
+        world_.add<Item>(loot, cont.contents);
+
+        char buf[128];
+        snprintf(buf, sizeof(buf), "You open it. Found: %s.", cont.contents.display_name().c_str());
+        log_.add(buf, {200, 190, 140, 255});
+        audio_.play(SfxId::PICKUP);
+        player_acted_ = true;
+        return;
+    }
+
+    // Find items at player position (regular pickup)
     for (size_t i = 0; i < positions.size(); i++) {
         Entity e = positions.entity_at(i);
         if (e == player_) continue;
@@ -4243,8 +4469,8 @@ void Engine::try_rest() {
         }
     }
 
-    // In dungeon: 30% chance of interruption
-    if (dungeon_level_ > 0 && rng_.chance(30)) {
+    // In dungeon: 40% chance of interruption (+ 3% per floor)
+    if (dungeon_level_ > 0 && rng_.chance(40 + dungeon_level_ * 3)) {
         // Spawn a wandering monster nearby
         auto& ppos = world_.get<Position>(player_);
         // Try to place monster within 3 tiles
@@ -4264,27 +4490,19 @@ void Engine::try_rest() {
             int max_idx = std::min(17, 4 + dungeon_level_ * 2);
             int idx = rng_.range(0, max_idx);
 
-            // Simple rat stats as fallback — the real spawn uses the table in populate
-            // but we just need one quick monster here
+            // Depth-scaled ambush monster
             Stats ms;
             ms.name = "something";
-            ms.hp = 8; ms.hp_max = 8;
-            ms.base_damage = 2;
-            ms.xp_value = 10;
+            ms.hp = 12 + dungeon_level_ * 4; ms.hp_max = ms.hp;
+            ms.base_damage = 3 + dungeon_level_;
+            ms.xp_value = 15 + dungeon_level_ * 5;
 
             // Use a generic hostile sprite
             world_.add<Renderable>(mob, {SHEET_MONSTERS, 11, 6, {255, 255, 255, 255}, 5});
             world_.add<AI>(mob, {AIState::HUNTING, ppos.x, ppos.y, 0, 20});
             world_.add<Energy>(mob, {0, 100});
 
-            // Scale with depth
-            float hp_scale = 1.0f + dungeon_level_ * 0.15f;
-            float dmg_scale = 1.0f + dungeon_level_ * 0.1f;
-            ms.hp = static_cast<int>(ms.hp * hp_scale);
-            ms.hp_max = ms.hp;
-            ms.base_damage = static_cast<int>(ms.base_damage * dmg_scale);
-
-            (void)idx; // we used generic stats; could index table if populate.h exposed it
+            (void)idx;
             world_.add<Stats>(mob, std::move(ms));
 
             log_.add("Your rest is interrupted!", {255, 120, 80, 255});
@@ -4298,11 +4516,11 @@ void Engine::try_rest() {
     rested_this_floor_ = true;
     if (dungeon_level_ <= 0) turn_actions_.rested_on_surface = true;
 
-    // Rest succeeds — restore 25% of max HP and MP (Lethis: 50%)
-    int rest_pct = 4; // default: 25% (divide by 4)
+    // Rest succeeds — restore 15% of max HP and MP (Lethis: 30%)
+    int rest_pct = 7; // default: ~15% (divide by 7)
     if (world_.has<GodAlignment>(player_)) {
         auto& ga = world_.get<GodAlignment>(player_);
-        if (ga.god == GodId::LETHIS) rest_pct = 2; // 50%
+        if (ga.god == GodId::LETHIS) rest_pct = 3; // ~33%
     }
     int hp_restore = std::max(1, stats.hp_max / rest_pct);
     int mp_restore = std::max(1, stats.mp_max / rest_pct);
@@ -4322,8 +4540,8 @@ void Engine::try_rest() {
     if (stats.hp * 4 > stats.hp_max * 3)
         turn_actions_.healed_above_75pct = true;
 
-    // Costs 10 turns
-    game_turn_ += 10;
+    // Costs 25 turns (rest takes real time — monsters move, things happen)
+    game_turn_ += 25;
 
     char buf[128];
     if (is_vampire && hp_actual == 0 && mp_actual > 0)
@@ -4479,7 +4697,7 @@ void Engine::handle_inventory_action(InvAction action) {
                     // Temporary speed boost — increase energy speed for a while
                     // Simple: grant 300 bonus energy (3 free actions)
                     world_.get<Energy>(player_).current += 300;
-                    snprintf(use_buf, sizeof(use_buf), "You drink the %s. The world slows around you.",
+                    snprintf(use_buf, sizeof(use_buf), "You drink the %s. (+3 actions)",
                              item.display_name().c_str());
                     log_.add(use_buf, {220, 220, 100, 255});
                     consumed = true;
@@ -4487,7 +4705,7 @@ void Engine::handle_inventory_action(InvAction action) {
                     // Temporary STR boost — +4 STR (permanent for simplicity, like a minor buff)
                     auto& stats = world_.get<Stats>(player_);
                     stats.set_attr(Attr::STR, stats.attr(Attr::STR) + 4);
-                    snprintf(use_buf, sizeof(use_buf), "You drink the %s. Your muscles surge with power. (+4 STR)",
+                    snprintf(use_buf, sizeof(use_buf), "You drink the %s. (+4 STR)",
                              item.display_name().c_str());
                     log_.add(use_buf, {220, 160, 100, 255});
                     consumed = true;
@@ -4587,7 +4805,7 @@ void Engine::handle_input() {
             if (ui_scale_ > 3.0f) ui_scale_ = 3.0f;
             LOG_HEIGHT = static_cast<int>(180 * ui_scale_);
             HUD_HEIGHT = static_cast<int>(32 * ui_scale_);
-            camera_.tile_size = static_cast<int>(48 * ui_scale_);
+            camera_.tile_size = static_cast<int>(60 * ui_scale_);
             camera_.viewport_w = width_;
             camera_.viewport_h = height_ - LOG_HEIGHT - HUD_HEIGHT;
             reload_fonts();
@@ -4696,7 +4914,7 @@ void Engine::handle_input() {
                     }
                     LOG_HEIGHT = static_cast<int>(180 * ui_scale_);
                     HUD_HEIGHT = static_cast<int>(32 * ui_scale_);
-                    camera_.tile_size = static_cast<int>(48 * ui_scale_);
+                    camera_.tile_size = static_cast<int>(60 * ui_scale_);
                     camera_.viewport_w = width_;
                     camera_.viewport_h = height_ - LOG_HEIGHT - HUD_HEIGHT;
                     reload_fonts();
@@ -4720,6 +4938,24 @@ void Engine::handle_input() {
             }
             creation_screen_.handle_input(event);
             if (creation_screen_.is_done()) {
+                // Full reset for new game — clear any leftover state from previous run
+                player_ = NULL_ENTITY;
+                pet_entity_ = NULL_ENTITY;
+                world_ = World();
+                dungeon_level_ = -1;
+                game_turn_ = 0;
+                gold_ = 0;
+                run_kills_ = 0;
+                journal_ = {};
+                overworld_return_x_ = 0;
+                overworld_return_y_ = 0;
+                floor_cache_.clear();
+                overworld_loaded_ = false;
+                current_dungeon_idx_ = -1;
+                build_traits_.clear();
+                log_ = MessageLog();
+                bestiary_.clear();
+
                 state_ = GameState::PLAYING;
                 hardcore_ = creation_screen_.get_build().hardcore;
                 // Pre-populate bestiary from meta-progression
@@ -4781,10 +5017,10 @@ void Engine::handle_input() {
                     int dx = 0, dy = 0;
                     auto sym = event.key.keysym.sym;
                     switch (sym) {
-                        case SDLK_LEFT:  case SDLK_h: case SDLK_KP_4: dx = -1; break;
-                        case SDLK_RIGHT: case SDLK_l: case SDLK_KP_6: dx =  1; break;
-                        case SDLK_UP:    case SDLK_k: case SDLK_KP_8: dy = -1; break;
-                        case SDLK_DOWN:  case SDLK_j: case SDLK_KP_2: dy =  1; break;
+                        case SDLK_LEFT:  case SDLK_h: case SDLK_KP_4: case SDLK_a: dx = -1; break;
+                        case SDLK_RIGHT: case SDLK_l: case SDLK_KP_6: case SDLK_d: dx =  1; break;
+                        case SDLK_UP:    case SDLK_k: case SDLK_KP_8: case SDLK_w: dy = -1; break;
+                        case SDLK_DOWN:  case SDLK_j: case SDLK_KP_2: case SDLK_s: dy =  1; break;
                         case SDLK_y: case SDLK_KP_7: dx = -1; dy = -1; break;
                         case SDLK_u: case SDLK_KP_9: dx =  1; dy = -1; break;
                         case SDLK_b: case SDLK_KP_1: dx = -1; dy =  1; break;
@@ -5093,7 +5329,9 @@ void Engine::handle_input() {
                 overworld_return_x_ = 0;
                 overworld_return_y_ = 0;
                 floor_cache_.clear();
+                overworld_loaded_ = false;
                 current_dungeon_idx_ = -1;
+                build_traits_.clear();
                 // Clear all entities
                 world_ = World();
                 state_ = GameState::MAIN_MENU;
@@ -5127,7 +5365,9 @@ void Engine::handle_input() {
                 overworld_return_x_ = 0;
                 overworld_return_y_ = 0;
                 floor_cache_.clear();
+                overworld_loaded_ = false;
                 current_dungeon_idx_ = -1;
+                build_traits_.clear();
                 world_ = World();
                 state_ = GameState::MAIN_MENU;
                 main_menu_.set_can_continue(false);
@@ -5140,10 +5380,10 @@ void Engine::handle_input() {
             }
 
             switch (event.key.keysym.sym) {
-                case SDLK_UP:    case SDLK_KP_8: try_move_player(0, -1); break;
-                case SDLK_DOWN:  case SDLK_KP_2: try_move_player(0, 1);  break;
-                case SDLK_LEFT:  case SDLK_KP_4: try_move_player(-1, 0); break;
-                case SDLK_RIGHT: case SDLK_KP_6: try_move_player(1, 0);  break;
+                case SDLK_UP:    case SDLK_KP_8: case SDLK_w: try_move_player(0, -1); break;
+                case SDLK_DOWN:  case SDLK_KP_2: case SDLK_s: try_move_player(0, 1);  break;
+                case SDLK_LEFT:  case SDLK_KP_4: case SDLK_a: try_move_player(-1, 0); break;
+                case SDLK_RIGHT: case SDLK_KP_6: case SDLK_d: try_move_player(1, 0);  break;
                 case SDLK_k: try_move_player(0, -1); break;
                 case SDLK_j: try_move_player(0, 1);  break;
                 case SDLK_h: try_move_player(-1, 0); break;
@@ -5271,10 +5511,10 @@ void Engine::handle_input() {
                         event.key.keysym.sym != SDLK_LESS) {
                         // Save overworld position before first descent
                         if (dungeon_level_ == 0) {
-                            floor_cache_.clear(); // new dungeon — clear any old cache
                             overworld_return_x_ = pos.x;
                             overworld_return_y_ = pos.y;
                             // Find nearest dungeon from registry
+                            int prev_dungeon = current_dungeon_idx_;
                             current_dungeon_idx_ = -1;
                             int best_dist = 9999;
                             for (int di = 0; di < static_cast<int>(dungeon_registry_.size()); di++) {
@@ -5286,6 +5526,9 @@ void Engine::handle_input() {
                                     current_dungeon_idx_ = di;
                                 }
                             }
+                            // Only clear cache if entering a DIFFERENT dungeon
+                            if (current_dungeon_idx_ != prev_dungeon)
+                                floor_cache_.clear();
                         }
                         cache_current_floor(); // persist current floor before leaving
                         generate_level(); // increments dungeon_level_
@@ -5299,11 +5542,9 @@ void Engine::handle_input() {
                             generate_level();
                             audio_.play(SfxId::STAIRS);
                         } else if (dungeon_level_ == 1) {
-                            // Return to overworld from depth 1
+                            // Return to overworld from depth 1 — keep cache for re-entry
                             cache_current_floor();
-                            floor_cache_.clear(); // leaving dungeon entirely — clear cache
                             dungeon_level_ = -1; // will increment to 0
-                            current_dungeon_idx_ = -1;
                             generate_level();
                             audio_.play(SfxId::STAIRS);
                             // Place player at the dungeon entrance they used
@@ -5604,9 +5845,14 @@ void Engine::render_hud() {
             const char* tag = "";
             SDL_Color col = {200, 200, 200, 255};
             switch (eff.type) {
-                case StatusType::POISON: tag = "PSN"; col = {100, 200, 100, 255}; break;
-                case StatusType::BURN:   tag = "BRN"; col = {255, 160, 60, 255}; break;
-                case StatusType::BLEED:  tag = "BLD"; col = {200, 80, 80, 255}; break;
+                case StatusType::POISON:   tag = "PSN"; col = {100, 200, 100, 255}; break;
+                case StatusType::BURN:     tag = "BRN"; col = {255, 160, 60, 255}; break;
+                case StatusType::BLEED:    tag = "BLD"; col = {200, 80, 80, 255}; break;
+                case StatusType::FROZEN:   tag = "FRZ"; col = {140, 200, 255, 255}; break;
+                case StatusType::STUNNED:  tag = "STN"; col = {255, 255, 100, 255}; break;
+                case StatusType::CONFUSED: tag = "CNF"; col = {200, 140, 255, 255}; break;
+                case StatusType::BLIND:    tag = "BLN"; col = {120, 120, 120, 255}; break;
+                case StatusType::FEARED:   tag = "FER"; col = {255, 255, 255, 255}; break;
             }
             SDL_Surface* surf = TTF_RenderText_Blended(font_, tag, col);
             if (surf) {
@@ -5775,20 +6021,20 @@ void Engine::render() {
         if (world_.has<GodAlignment>(player_))
             dgod = world_.get<GodAlignment>(player_).god;
         switch (dgod) {
-            case GodId::VETHRIK:  death_line = "Vethrik collects your bones. At least they are honest."; break;
-            case GodId::THESSARKA: death_line = "Thessarka saw this coming. She always does."; break;
-            case GodId::MORRETH:  death_line = "Morreth nods. You were tested. You broke."; break;
-            case GodId::YASHKHET: death_line = "Yashkhet smiles. The pain was real. That's all that mattered."; break;
-            case GodId::KHAEL:    death_line = "Khael watches. The wolf eats the deer. The cycle continues."; break;
-            case GodId::SOLETH:   death_line = "Soleth's flame gutters. The corruption endures."; break;
-            case GodId::IXUUL:    death_line = "Ixuul laughs. You were always temporary."; break;
-            case GodId::ZHAVEK:   death_line = "Zhavek says nothing. You simply stop being."; break;
-            case GodId::THALARA:  death_line = "Thalara pulls you under. The water is warm at the bottom."; break;
-            case GodId::OSSREN:   death_line = "Ossren's hammer strikes. You were not what endures."; break;
-            case GodId::LETHIS:   death_line = "Lethis closes your eyes. Perhaps you will dream forever."; break;
-            case GodId::GATHRUUN: death_line = "Gathruun takes you into the stone. You were always meant to go deeper."; break;
-            case GodId::SYTHARA:  death_line = "Sythara smiles. Something green will grow where you fell."; break;
-            default:              death_line = "No god mourns you. No voice remembers your name."; break;
+            case GodId::VETHRIK:  death_line = "Vethrik adds your bones to the collection."; break;
+            case GodId::THESSARKA: death_line = "Thessarka records your death. She forgets nothing."; break;
+            case GodId::MORRETH:  death_line = "Morreth found you wanting."; break;
+            case GodId::YASHKHET: death_line = "Yashkhet accepts the offering."; break;
+            case GodId::KHAEL:    death_line = "Your body feeds the roots."; break;
+            case GodId::SOLETH:   death_line = "The flame goes out."; break;
+            case GodId::IXUUL:    death_line = "Ixuul is already making something new from the pieces."; break;
+            case GodId::ZHAVEK:   death_line = "You vanish. No one notices."; break;
+            case GodId::THALARA:  death_line = "The sea takes you back."; break;
+            case GodId::OSSREN:   death_line = "You were not built to last."; break;
+            case GodId::LETHIS:   death_line = "You fall asleep. You do not wake up."; break;
+            case GodId::GATHRUUN: death_line = "The stone closes over you."; break;
+            case GodId::SYTHARA:  death_line = "Rot takes you before you hit the ground."; break;
+            default:              death_line = "You die alone."; break;
         }
         SDL_Color dim = {160, 120, 120, 255};
         SDL_Surface* dsurf = TTF_RenderText_Blended(font_, death_line, dim);

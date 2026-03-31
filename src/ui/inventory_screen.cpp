@@ -151,11 +151,11 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 160);
     SDL_RenderFillRect(renderer, &overlay);
 
-    // Layout: left panel = paper doll, right panel = carried items
+    // Layout: left panel = paper doll, right panel = carried items — centered
     int total_w = std::min(screen_w * 3 / 4, 1200);
-    int total_h = screen_h - 50;
+    int total_h = std::min(screen_h * 3 / 4, screen_h - 100);
     int base_x = (screen_w - total_w) / 2;
-    int base_y = 25;
+    int base_y = (screen_h - total_h) / 2;
 
     int doll_w = total_w * 2 / 5;
     int list_w = total_w - doll_w - 12;

@@ -32,6 +32,7 @@ bool TileMap::is_walkable(int x, int y) const {
         case TileType::TREE:
         case TileType::ROCK:
         case TileType::WALL_WOOD:
+        case TileType::WATER:
             return false;
         default:
             return true;

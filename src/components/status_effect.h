@@ -6,6 +6,11 @@ enum class StatusType : int {
     POISON = 0, // nature damage over time (green)
     BURN,       // fire damage over time (orange)
     BLEED,      // physical damage over time (red)
+    FROZEN,     // can't act for duration (blue)
+    STUNNED,    // can't act for duration (yellow)
+    CONFUSED,   // 50% chance actions go random direction (purple)
+    BLIND,      // FOV reduced to 1 (dark grey)
+    FEARED,     // forced to flee from source (white)
 };
 
 struct StatusEffect {
