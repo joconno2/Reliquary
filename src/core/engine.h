@@ -27,6 +27,12 @@
 #include "ui/help_screen.h"
 #include "ui/world_map.h"
 #include "systems/particles.h"
+#include "components/tenet.h"
+#include "components/stats.h"
+#include "components/ai.h"
+#include "components/item.h"
+#include "components/status_effect.h"
+#include "components/god.h"
 #include "core/audio.h"
 #include <vector>
 #include <string>
@@ -90,6 +96,37 @@ private:
     std::vector<DungeonEntry> dungeon_registry_;
     int current_dungeon_idx_ = -1; // which dungeon we're in (-1 = none/overworld)
 
+    // Floor persistence — cache floor state when changing levels
+    struct CachedEntity {
+        int x, y;
+        int sheet, sprite_x, sprite_y;
+        uint8_t tint_r, tint_g, tint_b, tint_a;
+        int z_order;
+        bool flip_h;
+        // Monster fields (valid if has_stats)
+        bool has_stats = false;
+        Stats stats;
+        bool has_ai = false;
+        AI ai;
+        int energy_current = 0, energy_speed = 100;
+        bool has_status = false;
+        StatusEffects status_fx;
+        bool has_god = false;
+        GodAlignment god_align;
+        // Item fields (valid if has_item)
+        bool has_item = false;
+        Item item;
+    };
+    struct FloorState {
+        TileMap map;
+        std::vector<Room> rooms;
+        std::vector<CachedEntity> entities;
+        int player_x = 0, player_y = 0; // where player was on this floor
+    };
+    std::map<int, FloorState> floor_cache_;
+    void cache_current_floor();
+    bool restore_floor(int level);
+
     // Player
     Entity player_ = NULL_ENTITY;
     Entity pet_entity_ = NULL_ENTITY; // visual pet that follows player
@@ -99,6 +136,8 @@ private:
     MetaSave meta_; // persistent cross-run progression
     int run_kills_ = 0; // kills this run (for tracking)
     bool hardcore_ = false; // permadeath mode
+    PlayerActions turn_actions_; // action flags for tenet checking
+    bool rested_this_floor_ = false; // Lethis tenet tracking
     Uint32 end_screen_time_ = 0; // SDL_GetTicks when death/victory screen appeared
     bool pet_naming_ = false; // currently naming a pet
     std::string pet_name_buf_; // pet name being typed
@@ -155,6 +194,8 @@ private:
     void try_spawn_overworld_enemy();
     void execute_prayer(int prayer_idx);
     void adjust_favor(int amount);
+    void check_tenets();
+    void render_god_visuals(const Camera& cam, int y_offset);
     void fire_ranged();
     void describe_tile(int x, int y);
     void process_status_effects();

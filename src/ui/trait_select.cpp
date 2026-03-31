@@ -107,22 +107,26 @@ void TraitSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     SDL_Color section_col = {180, 160, 100, 255};
 
     int margin = w / 30;
+    int pad = 10; // inner padding for panel content
 
     // Title + counter
-    ui::draw_text_centered(renderer, font, "Choose your traits.", title_col, w / 2, margin);
+    int header_y = margin;
+    ui::draw_text_centered(renderer, font, "Choose your traits.", title_col, w / 2, header_y);
 
     char count_buf[64];
     snprintf(count_buf, sizeof(count_buf), "Positive: %d/3   Negative: %d/2",
              positive_selected_count(), negative_selected_count());
-    ui::draw_text_centered(renderer, font, count_buf, dim_col, w / 2, margin + line_h + 2);
+    ui::draw_text_centered(renderer, font, count_buf, dim_col, w / 2, header_y + line_h + 2);
 
     // Centered two-column layout — 80% of screen
     int content_w = w * 4 / 5;
     int content_x = (w - content_w) / 2;
     int list_w = content_w * 2 / 5;
     int list_x = content_x;
-    int list_y = margin + line_h * 2 + 10;
-    int row_h  = line_h + 6;
+    int list_y = header_y + line_h * 2 + line_h;
+    int list_bottom = h - line_h * 2;
+    // Scale row height to fill available space (2 section headers + gap take ~3 rows)
+    int row_h  = std::max(line_h + 6, (list_bottom - list_y - line_h * 2 - 16) / TRAIT_COUNT);
 
     // Section header: Positive
     ui::draw_text(renderer, font, "-- Positive Traits --", section_col, list_x, list_y);
@@ -186,19 +190,23 @@ void TraitSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     // Detail panel on right
     int detail_x = content_x + list_w + margin;
     int detail_w = content_w * 3 / 5 - margin;
-    int detail_y = margin + line_h * 2 + 10;
+    int detail_y = header_y + line_h * 2 + line_h;
 
-    ui::draw_panel(renderer, detail_x - 10, detail_y - 10, detail_w + 20, h - detail_y - 20);
+    int tp_x = detail_x - pad - 6;
+    int tp_y = detail_y - pad - 6;
+    int tp_w = detail_w + (pad + 6) * 2;
+    int tp_h = h - detail_y - line_h * 2 + pad;
+    ui::draw_panel(renderer, tp_x, tp_y, tp_w, tp_h);
 
     const TraitInfo& cur = get_trait_info(static_cast<TraitId>(cursor_));
 
     SDL_Color name_col = cur.is_positive ? chosen_col : neg_col;
     ui::draw_text(renderer, font, cur.name, name_col, detail_x, detail_y);
-    detail_y += line_h + 6;
+    detail_y += line_h + 8;
 
     ui::draw_text_wrapped(renderer, font, cur.description, desc_col,
-                         detail_x, detail_y, detail_w);
-    detail_y += line_h * 2 + 10;
+                         detail_x, detail_y, detail_w - pad);
+    detail_y += line_h * 2 + 12;
 
     // Stat modifiers
     ui::draw_text(renderer, font, "Modifiers:", dim_col, detail_x, detail_y);

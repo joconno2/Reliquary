@@ -1,10 +1,10 @@
 # Reliquary — Project Plan
 
-> Last updated: 2026-03-29
+> Last updated: 2026-03-30
 
 ## Current Status: Feature-Complete Alpha
 
-The game is fully playable from character creation through a 17-step main quest chain. 17 classes (4 base + 13 unlockable), 7 gods, 15 backgrounds, 22 traits, 7 permanent diseases, 8 pets, 7 rival paragons. Full audio system with 19 music tracks, 12 ambient loops, 24 SFX. Animated torches/braziers/water. 20 towns + 4 hamlets + 6 cabins + 3 outposts, 27 dungeons, wilderness POIs, wandering NPCs. Meta-save progression, hardcore mode, persistent bestiary/potion IDs. Resolution scaling for ultrawide/4K.
+The game is fully playable from character creation through a 17-step main quest chain. 17 classes (4 base + 13 unlockable), **13 gods** (expanded from 7), 15 backgrounds, 22 traits, 7 permanent diseases, 8 pets, **13 rival paragons**. Full audio system with 19 music tracks, 12 ambient loops, 24 SFX. Animated torches/braziers/water. 20 towns + 4 hamlets + 6 cabins + 3 outposts, 27 dungeons, wilderness POIs, wandering NPCs. Meta-save progression, hardcore mode, persistent bestiary/potion IDs. Resolution scaling for ultrawide/4K. **God-specific player aura particles on every god.**
 
 **Repo:** https://github.com/joconno2/Reliquary.git
 **Location:** ~/Reliquary
@@ -32,7 +32,7 @@ The game is fully playable from character creation through a 17-step main quest 
 - Ranged combat (f key — bows/crossbows, DEX-based, auto-target nearest visible enemy)
 - Status effects: poison (spider/naga 25%), burn (dragon 30%), bleed (ghoul 20%) — tick damage, HUD indicators (PSN/BRN/BLD)
 - Permanent diseases: 7 Daggerfall-style diseases (lycanthropy, vampirism, stonescale, mindfire, sporebloom, hollow bones, blackblood) — contracted from monster hits, CON resist, permanent stat trade-offs, HUD + character sheet display
-- Rival paragons: 7 god-affiliated PC-like enemies (Osric/Mirael/Dain/Sera/Theron/Lucan/The Unnamed), depth 4+ in named dungeons, 15% spawn rate, depth-scaled, class-based sprites with god-colored tints
+- Rival paragons: 13 god-affiliated PC-like enemies (Osric/Mirael/Dain/Sera/Theron/Lucan/The Unnamed/Whisper/Nerissa/Varn/The Sleeper/Borek/Mother Rot), depth 4+ in named dungeons, 15% spawn rate, depth-scaled, class-based sprites with god-colored tints
 - 18+ monster types, HP/damage scale with depth (+20%/+15% per level)
 - 9 overworld enemy types: wolves, wild boars, highwaymen, giant spiders, bears, bandits, snakes, dire wolves, wandering skeletons
 - Monster AI: idle/wander, LOS hunting, flee at low HP, ranged attacks (goblin archers)
@@ -55,9 +55,13 @@ The game is fully playable from character creation through a 17-step main quest 
 
 ### Character System
 - 17 classes: 4 base (Fighter, Rogue, Wizard, Ranger) + 13 unlockable with meta-save progression
-- 7 gods with stat bonuses, lore, favor system, and 2 prayers each (p key)
-- God favor: +1 per kill, +5 per quest, god-specific bonuses/penalties (undead, animals, exploration, rest)
-- Prayers: favor-costed abilities (heals, damage, teleport, MP restore, map reveal, AoE, blood sacrifice)
+- **13 gods** with stat bonuses, lore, favor system, 2 prayers each (p key), unique passives, and player aura particles
+  - Original 7: Vethrik (death), Thessarka (knowledge), Morreth (war), Yashkhet (blood), Khael (nature), Soleth (fire), Ixuul (chaos)
+  - New 6: Zhavek (shadow/stealth), Thalara (sea/storms), Ossren (craft/forge), Lethis (sleep/dreams), Gathruun (stone/earth), Sythara (plague/decay)
+- God favor: +1 per kill, +5 per quest, god-specific bonuses/penalties (undead, animals, exploration, rest, stealth kills, depth, poison, sleeping enemies)
+- Prayers: 26 unique prayers (2 per god) — heals, damage, teleport, MP restore, map reveal, AoE, blood sacrifice, invisibility, silence, riptide, drown, temper items, unyielding armor, sleep enemies, forget, earthquake, stone skin, miasma, armor corrode
+- God passives with real gameplay impact: Vethrik +15% undead damage, Zhavek 2x stealth damage + enemy memory loss, Lethis lethal save once/floor + 50% rest healing, Gathruun +1 armor/depth + earthquake scaling, Sythara disease spread + 2x poison duration, etc.
+- Per-god player aura particles: bone motes, orbiting runes, iron sparks, blood drips, leaf drift, flame halo, void glitch, shadow trail, water ripples, forge sparks, purple mist, stone orbit, green spores
 - 15 backgrounds with unique passives, 22 traits (12 positive, 10 negative)
 - Character creation: Class grid (all 17 visible, SNES-bordered selection) → Name → God → Background → Traits → Hardcore toggle
 - Pet naming dialog on pickup
@@ -185,7 +189,74 @@ F11 fullscreen | F12 screenshot
 - [x] Overworld world-building — 8 wandering travelers, 3 pilgrims, 3 hunters, 4 hermits on roads and wilderness. 4 encampments (deserter camp, mercenary camp, scholar camp, refugee camp). Points of interest: 3 standing stones with pre-god lore, graveyard, old battlefield, ancient shrine ruins, watchtower ruins, witch's hut. 5 small lakes, 3 river segments. 9 overworld enemy types (up from 4: added bear, bandit, snake, dire wolf, wandering skeleton).
 - [x] Class unlock notifications on death/victory + progress display in creation screen
 
-### Tier 5 — Ship
+### Tier 5 — God System Deep + Systems (in progress)
+
+**5A. Tenet System** — behavioral rules that auto-adjust favor every turn ✅
+- [x] Define 3-4 tenets per god as data (tenet.h) — each tenet is a condition + favor delta
+- [x] Tenet checker runs end of each turn in process_turn() — evaluates conditions against recent player actions
+- [x] Track "recent actions" flags per turn (PlayerActions struct): killed_animal, killed_sleeping, used_dark_arts, used_fire_magic, used_poison, used_stealth_attack, fled_combat, wore_heavy_armor, healed_above_75pct, destroyed_book, rested_on_surface, etc.
+- [x] Tenet violations: immediate -3 to -5 favor + god-colored warning message
+- [x] Tenet compliance: passive +1 favor every 20 turns when no violations
+- [x] Display tenets in god detail panel (creation screen)
+- [x] Lethis floor-rest tenet checked on descent
+
+**5B. Sacred/Profane Items** — god-specific item affinities ✅
+- [x] Add `material` field to Item (MaterialType enum: NONE, BONE, WOOD, IRON, STEEL, SILVER, OBSIDIAN, MITHRIL, ADAMANTINE)
+- [x] Add `item_tags` bitfield to Item (24 tag types: TAG_DAGGER, TAG_BLUNT, TAG_AXE, TAG_HEAVY_ARMOR, TAG_BOOK, TAG_HERB, TAG_TORCH, etc.)
+- [x] Define sacred/profane tag sets per god in tenet.h (SacredProfane struct + get_sacred_profane())
+- [x] Sacred items: +1 favor on pickup + god-colored approval message
+- [x] Profane items: -2 favor on equip + god-colored warning message
+- [x] Material system: depth-scaled material assignment (bone/wood/iron → steel/silver → obsidian/mithril → adamantine)
+- [x] Material name in item display ("steel long sword", "mithril chainmail")
+- [x] Material damage modifiers applied (bone -1, wood -2, steel +1, obsidian/mithril +2, adamantine +4)
+- [x] Save/load for material and tags fields
+
+**5C. God Shrines** — interactive dungeon objects
+- [ ] Shrine tile type in tilemap (reuse altar/shrine sprite from 32rogues)
+- [ ] Each dungeon zone spawns 0-1 shrines of its associated god (from dungeons.json zone data)
+- [ ] Shrine interactions (bump): identify curse/bless status, pray for free (costs no favor), gain small heal
+- [ ] Same-god shrine: +5 favor, free prayer cooldown reset
+- [ ] Rival-god shrine: option to desecrate (-10 rival god's NPC disposition, +5 own favor)
+- [ ] Wrong-god shrine: warning, Ixuul tenet forbids praying at other shrines
+
+**5D. Excommunication & Conversion**
+- [ ] At favor <= -100: excommunicated state — prayers always fail, passive punishments (random damage, stat drain, divine enemies spawned)
+- [ ] Divine enemies: god-themed monsters spawned periodically when excommunicated
+- [ ] Conversion: interact with another god's shrine while excommunicated — lose all favor, start at 0 with new god, permanent -10% prayer power penalty
+- [ ] NPC reaction to excommunicated players: priests hostile, merchants charge double
+
+**5E. NPC God Factions**
+- [ ] Add god_affiliation field to NPC component
+- [ ] Town NPCs have god affiliations matching their town (Ironhearth = Morreth, Candlemere = Soleth, etc.)
+- [ ] Wandering priests of all 13 gods appear on roads
+- [ ] Same-god NPCs: better prices (-15%), free healing, quest priority
+- [ ] Rival-god NPCs: higher prices (+25%), hostile dialogue, may refuse service
+- [ ] Hostile factions: Soleth NPCs attack Ixuul followers on sight, Morreth NPCs hostile to Dark Arts users
+
+**5F. God Relics** — 13 unique legendary items
+- [ ] One relic per god, extremely rare (one per run, late-game dungeon only)
+- [ ] Each relic has powerful effect + permanent trade-off (can't be unequipped, stat drain, etc.)
+- [ ] Relics detected by god (your god's relic glows in inventory/on ground)
+- [ ] Using another god's relic: massive favor loss + potential excommunication
+
+**5G. Material System** — weapon/armor materials
+- [ ] MaterialType enum: BONE, WOOD, IRON, STEEL, SILVER, OBSIDIAN, MITHRIL, ADAMANTINE
+- [ ] Material affects: damage_mod, weight_mod, special properties (silver vs undead, obsidian shatters, mithril light)
+- [ ] Palette swap sprite selection based on material (items-palette-swaps.png exists in 32rogues)
+- [ ] Material determines sacred/profane status per god
+- [ ] Integrate into item generation (populate.cpp) — deeper = better materials
+
+**5H. Expanded Spells** — 15 → ~45 spells
+- [ ] 5-8 spells per school (Conjuration, Transmutation, Divination, Healing, Nature, Dark Arts)
+- [ ] Dark Souls-style evocative descriptions
+- [ ] Spellbook drops scale with dungeon depth and school affinity of zone
+- [ ] God-profane spells: casting Dark Arts as Soleth/Vethrik = tenet violation
+
+**5I. More Status Effects**
+- [ ] Frozen, confused, blind, paralyzed, feared, charmed, stunned, wet, entangled (design doc lists 12, only 3 implemented)
+- [ ] Each status has visual indicator on HUD + particle effect
+
+### Tier 6 — Ship
 - [ ] Steamworks integration
 - [ ] Windows/Mac builds
 - [ ] Store page, art

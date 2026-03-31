@@ -69,6 +69,8 @@ static json item_to_json(const Item& item) {
     j["curse_state"] = item.curse_state;
     j["teaches_spell"] = item.teaches_spell;
     j["pet_id"] = item.pet_id;
+    j["material"] = static_cast<int>(item.material);
+    j["tags"] = item.tags;
     return j;
 }
 
@@ -93,6 +95,8 @@ static Item json_to_item(const json& j) {
     item.curse_state = j.value("curse_state", 0);
     item.teaches_spell = j.value("teaches_spell", -1);
     item.pet_id = j.value("pet_id", -1);
+    item.material = static_cast<MaterialType>(j.value("material", 0));
+    item.tags = j.value("tags", (uint32_t)0);
     return item;
 }
 

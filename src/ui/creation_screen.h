@@ -65,4 +65,6 @@ private:
                             const SpriteManager& sprites, int w, int h) const;
     void render_god_select(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_title,
                             const SpriteManager& sprites, int w, int h) const;
+    void render_character_preview(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_title,
+                                   const SpriteManager& sprites, int w, int h) const;
 };

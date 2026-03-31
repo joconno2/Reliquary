@@ -2,6 +2,7 @@
 #include <SDL2/SDL.h>
 #include <vector>
 #include <cstdint>
+#include "components/god.h"
 
 struct Particle {
     float x, y;           // world position (tile coords, fractional)
@@ -44,6 +45,24 @@ public:
     void gold_sparkle(float wx, float wy);
     void prayer_effect(float wx, float wy, uint8_t r, uint8_t g, uint8_t b);
     void arrow_trail(float x0, float y0, float x1, float y1);
+
+    // God aura — subtle ambient particles around the player, called once per turn
+    void god_aura(GodId god, float wx, float wy);
+
+    // Directional fall (for drips, gravity particles)
+    void fall(float wx, float wy, int count,
+              uint8_t r, uint8_t g, uint8_t b,
+              float lifetime = 0.8f, int size = 2);
+
+    // Slow outward drift (for spores, mist)
+    void drift(float wx, float wy, int count,
+               uint8_t r, uint8_t g, uint8_t b,
+               float lifetime = 1.0f, int size = 2);
+
+    // Orbit around a point (for runes, stone)
+    void orbit(float wx, float wy, int count,
+               uint8_t r, uint8_t g, uint8_t b,
+               float radius = 0.4f, float lifetime = 1.2f, int size = 2);
 
     void update();
     void render(SDL_Renderer* renderer, int cam_x, int cam_y, int tile_size, int y_offset);

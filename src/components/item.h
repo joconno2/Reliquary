@@ -1,5 +1,47 @@
 #pragma once
 #include <string>
+#include <cstdint>
+
+enum class MaterialType : int {
+    NONE = 0,    // non-physical items (potions, scrolls, food)
+    BONE,        // -1 dmg, very light, sacred to Vethrik
+    WOOD,        // -2 dmg, light, sacred to Khael
+    IRON,        // +0, standard
+    STEEL,       // +1, improved
+    SILVER,      // +0, +50% vs undead/lycanthropes
+    OBSIDIAN,    // +2, shatters on crit fail, sacred to Yashkhet
+    MITHRIL,     // +2, very light, reduced armor penalty
+    ADAMANTINE,  // +4, heavy, ignores armor
+    MAT_COUNT
+};
+
+inline const char* material_name(MaterialType m) {
+    switch (m) {
+        case MaterialType::BONE:       return "bone";
+        case MaterialType::WOOD:       return "wooden";
+        case MaterialType::IRON:       return "iron";
+        case MaterialType::STEEL:      return "steel";
+        case MaterialType::SILVER:     return "silver";
+        case MaterialType::OBSIDIAN:   return "obsidian";
+        case MaterialType::MITHRIL:    return "mithril";
+        case MaterialType::ADAMANTINE: return "adamantine";
+        default: return "";
+    }
+}
+
+inline int material_damage_mod(MaterialType m) {
+    switch (m) {
+        case MaterialType::BONE:       return -1;
+        case MaterialType::WOOD:       return -2;
+        case MaterialType::IRON:       return 0;
+        case MaterialType::STEEL:      return 1;
+        case MaterialType::SILVER:     return 0;
+        case MaterialType::OBSIDIAN:   return 2;
+        case MaterialType::MITHRIL:    return 2;
+        case MaterialType::ADAMANTINE: return 4;
+        default: return 0;
+    }
+}
 
 enum class ItemType : int {
     WEAPON,
@@ -83,9 +125,18 @@ struct Item {
     int stack = 1;
     bool stackable = false;
 
-    // Display name respecting identification
-    const std::string& display_name() const {
+    // Material (weapons/armor)
+    MaterialType material = MaterialType::NONE;
+
+    // Item tags for sacred/profane system (bitmask from tenet.h ItemTag)
+    uint32_t tags = 0;
+
+    // Display name respecting identification and material
+    std::string display_name() const {
         if (!identified && !unid_name.empty()) return unid_name;
+        if (material != MaterialType::NONE && material != MaterialType::IRON) {
+            return std::string(material_name(material)) + " " + name;
+        }
         return name;
     }
 };

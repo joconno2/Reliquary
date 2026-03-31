@@ -8,6 +8,7 @@
 #include "components/spellbook.h"
 #include "components/pet.h"
 #include "components/god.h"
+#include "components/tenet.h"
 #include "core/spritesheet.h"
 #include <algorithm>
 #include <string>
@@ -266,6 +267,102 @@ static void apply_curse_bless(Item& item, int dungeon_level, RNG& rng) {
     }
 }
 
+// Assign material based on dungeon depth
+static void apply_material(Item& item, int dungeon_level, RNG& rng) {
+    // Only weapons and armor get materials
+    bool is_weapon = (item.type == ItemType::WEAPON);
+    bool is_armor = (item.type == ItemType::ARMOR_HEAD || item.type == ItemType::ARMOR_CHEST
+        || item.type == ItemType::ARMOR_HANDS || item.type == ItemType::ARMOR_FEET
+        || item.type == ItemType::SHIELD);
+    if (!is_weapon && !is_armor) return;
+
+    // Depth-based material table
+    // Shallow (1-3): bone/wood/iron
+    // Mid (4-6): iron/steel, small chance silver
+    // Deep (7-9): steel/silver/obsidian, small chance mithril
+    // Very deep (10+): mithril/adamantine possible
+    MaterialType mat = MaterialType::IRON; // default
+
+    if (dungeon_level <= 3) {
+        int roll = rng.range(1, 100);
+        if (roll <= 15) mat = MaterialType::BONE;
+        else if (roll <= 25) mat = MaterialType::WOOD;
+        else mat = MaterialType::IRON;
+    } else if (dungeon_level <= 6) {
+        int roll = rng.range(1, 100);
+        if (roll <= 40) mat = MaterialType::IRON;
+        else if (roll <= 75) mat = MaterialType::STEEL;
+        else mat = MaterialType::SILVER;
+    } else if (dungeon_level <= 9) {
+        int roll = rng.range(1, 100);
+        if (roll <= 20) mat = MaterialType::STEEL;
+        else if (roll <= 45) mat = MaterialType::SILVER;
+        else if (roll <= 75) mat = MaterialType::OBSIDIAN;
+        else mat = MaterialType::MITHRIL;
+    } else {
+        int roll = rng.range(1, 100);
+        if (roll <= 25) mat = MaterialType::OBSIDIAN;
+        else if (roll <= 55) mat = MaterialType::MITHRIL;
+        else if (roll <= 85) mat = MaterialType::STEEL;
+        else mat = MaterialType::ADAMANTINE;
+    }
+
+    item.material = mat;
+    item.damage_bonus += material_damage_mod(mat);
+
+    // Silver: mark for undead bonus (applied in combat)
+    // Obsidian: slight fragility (could track later)
+}
+
+// Assign item tags for sacred/profane system
+static void apply_tags(Item& item) {
+    // Weapon tags based on name
+    const std::string& n = item.name;
+    if (n.find("dagger") != std::string::npos) item.tags |= TAG_DAGGER;
+    if (n.find("mace") != std::string::npos || n.find("hammer") != std::string::npos
+        || n.find("club") != std::string::npos || n.find("flail") != std::string::npos)
+        item.tags |= TAG_BLUNT;
+    if (n.find("axe") != std::string::npos) item.tags |= TAG_AXE;
+    if (n.find("sword") != std::string::npos || n.find("blade") != std::string::npos)
+        item.tags |= TAG_SWORD;
+    if (n.find("bow") != std::string::npos || n.find("crossbow") != std::string::npos)
+        item.tags |= TAG_BOW;
+
+    // Armor tags
+    if (item.type == ItemType::ARMOR_CHEST || item.type == ItemType::ARMOR_HEAD
+        || item.type == ItemType::ARMOR_HANDS || item.type == ItemType::ARMOR_FEET) {
+        if (n.find("plate") != std::string::npos || n.find("full") != std::string::npos)
+            item.tags |= TAG_HEAVY_ARMOR;
+        else if (n.find("chain") != std::string::npos || n.find("scale") != std::string::npos)
+            item.tags |= TAG_MEDIUM_ARMOR;
+        else
+            item.tags |= TAG_LIGHT_ARMOR;
+    }
+    if (item.type == ItemType::SHIELD) item.tags |= TAG_SHIELD;
+
+    // Book/scroll
+    if (item.teaches_spell >= 0) item.tags |= TAG_BOOK;
+
+    // Potion
+    if (item.type == ItemType::POTION) item.tags |= TAG_POTION;
+
+    // Food
+    if (item.type == ItemType::FOOD) {
+        if (n.find("bread") != std::string::npos || n.find("cheese") != std::string::npos)
+            item.tags |= TAG_FOOD_COOKED;
+        else if (n.find("meat") != std::string::npos || n.find("dried") != std::string::npos)
+            item.tags |= TAG_FOOD_RAW;
+        if (n.find("mushroom") != std::string::npos) item.tags |= TAG_MUSHROOM;
+        if (n.find("herb") != std::string::npos) item.tags |= TAG_HERB;
+    }
+
+    // Material-based tags
+    if (item.material == MaterialType::BONE) item.tags |= TAG_BONE_ITEM;
+
+    // Healing potions are profane to Sythara
+    if (item.type == ItemType::POTION && item.heal_amount > 0) item.tags |= TAG_POTION;
+}
+
 void spawn_items(World& world, const TileMap& map,
                   const std::vector<Room>& rooms, RNG& rng,
                   int dungeon_level) {
@@ -287,6 +384,8 @@ void spawn_items(World& world, const TileMap& map,
             int idx = rng.range(min_idx, WEAPON_COUNT - 1);
             Entity e = create_item_from_def(world, WEAPON_TABLE[idx], x, y);
             auto& item = world.get<Item>(e);
+            apply_material(item, dungeon_level, rng);
+            apply_tags(item);
             apply_quality(item, dungeon_level, rng);
             apply_curse_bless(item, dungeon_level, rng);
         } else if (roll <= 25) {
@@ -295,6 +394,8 @@ void spawn_items(World& world, const TileMap& map,
             int idx = rng.range(min_idx, RANGED_COUNT - 1);
             Entity e = create_item_from_def(world, RANGED_TABLE[idx], x, y);
             auto& item = world.get<Item>(e);
+            apply_material(item, dungeon_level, rng);
+            apply_tags(item);
             apply_quality(item, dungeon_level, rng);
         } else if (roll <= 47) {
             // Armor
@@ -302,6 +403,8 @@ void spawn_items(World& world, const TileMap& map,
             int idx = rng.range(min_idx, ARMOR_COUNT - 1);
             Entity e = create_item_from_def(world, ARMOR_TABLE[idx], x, y);
             auto& item = world.get<Item>(e);
+            apply_material(item, dungeon_level, rng);
+            apply_tags(item);
             apply_quality(item, dungeon_level, rng);
             apply_curse_bless(item, dungeon_level, rng);
         } else if (roll <= 52) {
@@ -330,6 +433,7 @@ void spawn_items(World& world, const TileMap& map,
             book.gold_value = 30 + sinfo.mp_cost * 5;
             book.identified = true;
             book.teaches_spell = static_cast<int>(spell);
+            book.tags |= TAG_BOOK;
             world.add<Item>(e, std::move(book));
         } else if (roll <= 56) {
             // Lore item — readable journal/inscription
@@ -371,7 +475,8 @@ void spawn_items(World& world, const TileMap& map,
         } else if (roll <= 82) {
             // Consumable
             int idx = rng.range(0, CONSUMABLE_COUNT - 1);
-            create_item_from_def(world, CONSUMABLE_TABLE[idx], x, y);
+            Entity ce = create_item_from_def(world, CONSUMABLE_TABLE[idx], x, y);
+            apply_tags(world.get<Item>(ce));
         } else if (roll <= 85 && dungeon_level >= 2) {
             // Pet — rare find
             int pid = rng.range(0, PET_TYPE_COUNT - 1);
@@ -628,6 +733,30 @@ static const ParagonDef PARAGON_TABLE[] = {
     {"The Unnamed", GodId::IXUUL,
      1, 4,  160, 120, 200,
      60, 12, 14, 11, 18, 10, 14, 12, 1, 105},
+    // ZHAVEK — Whisper — Rogue, shadow/stealth
+    {"Whisper", GodId::ZHAVEK,
+     3, 0,  60, 60, 100,
+     45, 12, 20, 10, 14, 12, 18, 14, 1, 130},
+    // THALARA — Nerissa of the Depths — Ranger, sea
+    {"Nerissa of the Depths", GodId::THALARA,
+     2, 0,  80, 180, 200,
+     70, 14, 14, 15, 12, 16, 14, 10, 3, 100},
+    // OSSREN — Varn the Unbroken — Fighter, craft/forge
+    {"Varn the Unbroken", GodId::OSSREN,
+     1, 1,  220, 180, 80,
+     85, 16, 10, 18, 10, 12, 10, 11, 6, 85},
+    // LETHIS — The Sleeper — Wizard, dreams
+    {"The Sleeper", GodId::LETHIS,
+     1, 4,  160, 120, 200,
+     55, 10, 12, 12, 16, 18, 10, 13, 2, 95},
+    // GATHRUUN — Borek Deepdelver — Dwarf, stone/earth
+    {"Borek Deepdelver", GodId::GATHRUUN,
+     4, 1,  160, 130, 90,
+     95, 18, 8, 20, 8, 14, 10, 8, 7, 75},
+    // SYTHARA — Mother Rot — Nature, plague/decay
+    {"Mother Rot", GodId::SYTHARA,
+     1, 4,  120, 180, 60,
+     50, 10, 12, 14, 16, 14, 12, 12, 1, 100},
 };
 static constexpr int PARAGON_COUNT = sizeof(PARAGON_TABLE) / sizeof(PARAGON_TABLE[0]);
 
@@ -637,7 +766,7 @@ Entity spawn_paragon(World& world, [[maybe_unused]] const TileMap& map,
     if (rooms.size() < 3) return NULL_ENTITY;
 
     // Build list of eligible paragons (exclude player's god)
-    int eligible[PARAGON_COUNT];
+    int eligible[16]; // sized for up to 16 paragons
     int count = 0;
     for (int i = 0; i < PARAGON_COUNT; i++) {
         if (PARAGON_TABLE[i].god != player_god)

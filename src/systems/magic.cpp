@@ -7,6 +7,7 @@
 #include "components/item.h"
 #include "systems/combat.h"
 #include "components/status_effect.h"
+#include "components/god.h"
 #include <cmath>
 #include <algorithm>
 #include <cstdio>
@@ -58,13 +59,29 @@ CastResult cast(World& world, Entity caster, SpellId spell,
     auto& stats = world.get<Stats>(caster);
     auto& info = get_spell_info(spell);
 
-    // Check MP
-    if (stats.mp < info.mp_cost) {
-        if (world.has<Player>(caster)) {
-            log.add("Not enough mana.", {150, 120, 150, 255});
+    // Yashkhet blood magic: use HP instead of MP
+    bool blood_magic = false;
+    if (world.has<Player>(caster) && world.has<GodAlignment>(caster)) {
+        auto& ga = world.get<GodAlignment>(caster);
+        if (ga.god == GodId::YASHKHET) blood_magic = true;
+    }
+
+    if (blood_magic) {
+        // Blood magic: HP cost instead of MP (costs HP equal to MP cost)
+        if (stats.hp <= info.mp_cost) {
+            log.add("Not enough blood to give.", {200, 60, 60, 255});
+            result.consumed_turn = false;
+            return result;
         }
-        result.consumed_turn = false;
-        return result;
+    } else {
+        // Normal MP check
+        if (stats.mp < info.mp_cost) {
+            if (world.has<Player>(caster)) {
+                log.add("Not enough mana.", {150, 120, 150, 255});
+            }
+            result.consumed_turn = false;
+            return result;
+        }
     }
 
     // Spell failure from heavy armor (player only)
@@ -82,7 +99,8 @@ CastResult cast(World& world, Entity caster, SpellId spell,
             else if (eq_item.armor_bonus >= 3) fail_chance += 8;   // medium
         }
         if (fail_chance > 0 && rng.chance(fail_chance)) {
-            stats.mp -= info.mp_cost; // still costs MP
+            if (blood_magic) stats.hp -= info.mp_cost;
+            else stats.mp -= info.mp_cost;
             log.add("Your armor interferes. The spell fizzles.", {180, 130, 130, 255});
             result.consumed_turn = true;
             result.success = false;
@@ -90,8 +108,13 @@ CastResult cast(World& world, Entity caster, SpellId spell,
         }
     }
 
-    // Spend MP
-    stats.mp -= info.mp_cost;
+    // Deduct cost (blood or mana)
+    if (blood_magic) {
+        stats.hp -= info.mp_cost;
+        log.add("Blood for power.", {200, 60, 60, 255});
+    } else {
+        stats.mp -= info.mp_cost;
+    }
 
     // Spell power scales with INT
     int power = info.base_power + stats.attr(Attr::INT) / 3;
@@ -104,7 +127,7 @@ CastResult cast(World& world, Entity caster, SpellId spell,
             Entity target = nearest_enemy(world, caster, map, info.range);
             if (target == NULL_ENTITY) {
                 if (is_player) log.add("No target in range.", {140, 130, 120, 255});
-                stats.mp += info.mp_cost; // refund
+                if (blood_magic) stats.hp += info.mp_cost; else stats.mp += info.mp_cost; // refund
                 result.consumed_turn = false;
                 return result;
             }
@@ -144,7 +167,7 @@ CastResult cast(World& world, Entity caster, SpellId spell,
             Entity target = nearest_enemy(world, caster, map, info.range);
             if (target == NULL_ENTITY) {
                 if (is_player) log.add("No target in range.", {140, 130, 120, 255});
-                stats.mp += info.mp_cost;
+                if (blood_magic) stats.hp += info.mp_cost; else stats.mp += info.mp_cost;
                 result.consumed_turn = false;
                 return result;
             }
@@ -306,7 +329,7 @@ CastResult cast(World& world, Entity caster, SpellId spell,
             }
             if (is_player && !found) {
                 log.add("Everything you carry is already identified.", {140, 130, 120, 255});
-                stats.mp += info.mp_cost; // refund
+                if (blood_magic) stats.hp += info.mp_cost; else stats.mp += info.mp_cost; // refund
                 result.consumed_turn = false;
                 break;
             }
@@ -333,7 +356,7 @@ CastResult cast(World& world, Entity caster, SpellId spell,
                 log.add("That spell does nothing yet.", {140, 130, 120, 255});
             }
             result.consumed_turn = false;
-            stats.mp += info.mp_cost; // refund
+            if (blood_magic) stats.hp += info.mp_cost; else stats.mp += info.mp_cost; // refund
             break;
     }
 

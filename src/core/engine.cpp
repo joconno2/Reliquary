@@ -156,8 +156,8 @@ void Engine::reload_fonts() {
     font_title_ = nullptr;
     font_title_large_ = nullptr;
 
-    int body_size = static_cast<int>(12 * ui_scale_);
-    int title_size = static_cast<int>(32 * ui_scale_);
+    int body_size = static_cast<int>(15 * ui_scale_);
+    int title_size = static_cast<int>(38 * ui_scale_);
     int title_large_size = static_cast<int>(96 * ui_scale_);
 
     font_ = TTF_OpenFont("assets/fonts/PrStart.ttf", body_size);
@@ -252,6 +252,97 @@ void Engine::do_load() {
     log_.add("Game loaded.", {100, 200, 100, 255});
 }
 
+void Engine::cache_current_floor() {
+    if (dungeon_level_ < 1) return; // don't cache overworld
+    FloorState& fs = floor_cache_[dungeon_level_];
+    fs.map = map_; // copy tilemap (preserves explored state)
+    fs.rooms = rooms_;
+
+    // Save player position on this floor
+    if (world_.has<Position>(player_)) {
+        auto& pp = world_.get<Position>(player_);
+        fs.player_x = pp.x;
+        fs.player_y = pp.y;
+    }
+
+    // Serialize all non-player entities with Position
+    fs.entities.clear();
+    auto& positions = world_.pool<Position>();
+    for (size_t i = 0; i < positions.size(); i++) {
+        Entity e = positions.entity_at(i);
+        if (e == player_ || e == pet_entity_) continue;
+        if (!world_.has<Renderable>(e)) continue;
+
+        CachedEntity ce;
+        auto& pos = positions.at_index(i);
+        ce.x = pos.x; ce.y = pos.y;
+        auto& rend = world_.get<Renderable>(e);
+        ce.sheet = rend.sprite_sheet; ce.sprite_x = rend.sprite_x; ce.sprite_y = rend.sprite_y;
+        ce.tint_r = rend.tint.r; ce.tint_g = rend.tint.g; ce.tint_b = rend.tint.b; ce.tint_a = rend.tint.a;
+        ce.z_order = rend.z_order; ce.flip_h = rend.flip_h;
+
+        if (world_.has<Stats>(e)) {
+            ce.has_stats = true;
+            ce.stats = world_.get<Stats>(e);
+        }
+        if (world_.has<AI>(e)) {
+            ce.has_ai = true;
+            ce.ai = world_.get<AI>(e);
+        }
+        if (world_.has<Energy>(e)) {
+            auto& en = world_.get<Energy>(e);
+            ce.energy_current = en.current; ce.energy_speed = en.speed;
+        }
+        if (world_.has<StatusEffects>(e)) {
+            ce.has_status = true;
+            ce.status_fx = world_.get<StatusEffects>(e);
+        }
+        if (world_.has<GodAlignment>(e)) {
+            ce.has_god = true;
+            ce.god_align = world_.get<GodAlignment>(e);
+        }
+        if (world_.has<Item>(e)) {
+            ce.has_item = true;
+            ce.item = world_.get<Item>(e);
+        }
+        fs.entities.push_back(std::move(ce));
+    }
+}
+
+bool Engine::restore_floor(int level) {
+    auto it = floor_cache_.find(level);
+    if (it == floor_cache_.end()) return false;
+
+    auto& fs = it->second;
+    map_ = fs.map; // restore map with explored tiles preserved
+    rooms_ = fs.rooms;
+
+    // Recreate all cached entities
+    for (auto& ce : fs.entities) {
+        Entity e = world_.create();
+        world_.add<Position>(e, {ce.x, ce.y});
+        world_.add<Renderable>(e, {ce.sheet, ce.sprite_x, ce.sprite_y,
+                                    {ce.tint_r, ce.tint_g, ce.tint_b, ce.tint_a},
+                                    ce.z_order, ce.flip_h});
+        if (ce.has_stats) world_.add<Stats>(e, ce.stats);
+        if (ce.has_ai) world_.add<AI>(e, ce.ai);
+        if (ce.has_stats || ce.has_ai) // entities with stats get energy
+            world_.add<Energy>(e, {ce.energy_current, ce.energy_speed});
+        if (ce.has_status) world_.add<StatusEffects>(e, ce.status_fx);
+        if (ce.has_god) world_.add<GodAlignment>(e, ce.god_align);
+        if (ce.has_item) world_.add<Item>(e, ce.item);
+    }
+
+    // Restore player position to where they were on this floor
+    if (world_.has<Position>(player_)) {
+        auto& pp = world_.get<Position>(player_);
+        pp.x = fs.player_x;
+        pp.y = fs.player_y;
+    }
+
+    return true;
+}
+
 void Engine::clear_entities_except_player() {
     // Collect all entities that aren't the player or pet
     std::vector<Entity> to_destroy;
@@ -279,17 +370,71 @@ void Engine::generate_level() {
         }
     }
 
-    // Thessarka gains favor from exploration (descending deeper)
+    // God effects on level change
     if (dungeon_level_ > 1 && player_ != NULL_ENTITY && world_.has<GodAlignment>(player_)) {
         auto& align = world_.get<GodAlignment>(player_);
+        // Thessarka gains favor from exploration (descending deeper)
         if (align.god == GodId::THESSARKA) {
             adjust_favor(2);
+            align.items_identified_floor = 0; // reset auto-ID for new floor
         }
+        // Gathruun gains favor from depth
+        if (align.god == GodId::GATHRUUN) {
+            adjust_favor(1);
+        }
+        // Lethis: reset lethal save per floor
+        if (align.god == GodId::LETHIS) {
+            align.lethal_save_used = false;
+        }
+        // Gathruun: reset dig per floor
+        if (align.god == GodId::GATHRUUN) {
+            align.dig_used_floor = false;
+        }
+        // Lethis tenet: check if rested last floor (violation if not)
+        if (align.god == GodId::LETHIS && dungeon_level_ > 2 && !rested_this_floor_) {
+            adjust_favor(-2);
+            log_.add("Lethis frowns. You did not rest.", {160, 120, 200, 255});
+        }
+        rested_this_floor_ = false;
+
+        // Thessarka: auto-identify one unidentified item per floor
+        if (align.god == GodId::THESSARKA && world_.has<Inventory>(player_)) {
+            auto& inv = world_.get<Inventory>(player_);
+            for (size_t s = 0; s < inv.items.size(); s++) {
+                Entity ie = inv.items[s];
+                if (ie != NULL_ENTITY && world_.has<Item>(ie)) {
+                    auto& item = world_.get<Item>(ie);
+                    if (!item.identified && !item.unid_name.empty()) {
+                        item.identified = true;
+                        char idbuf[128];
+                        snprintf(idbuf, sizeof(idbuf),
+                            "Thessarka whispers: the %s is %s.", item.unid_name.c_str(), item.name.c_str());
+                        log_.add(idbuf, {140, 140, 220, 255});
+                        break; // only one per floor
+                    }
+                }
+            }
+        }
+
+        // Ixuul: slime/aberration neutrality (set on floor entry)
+        // handled in AI code
     }
 
     // Clear old monsters/items but keep player
+    // Note: cache_current_floor() is called from stair handlers BEFORE generate_level()
     if (player_ != NULL_ENTITY) {
         clear_entities_except_player();
+    }
+
+    // Try to restore cached floor
+    if (dungeon_level_ > 0 && restore_floor(dungeon_level_)) {
+        // Floor restored from cache — skip generation
+        if (world_.has<Position>(player_) && world_.has<Stats>(player_)) {
+            auto& pos = world_.get<Position>(player_);
+            fov::compute(map_, pos.x, pos.y, world_.get<Stats>(player_).fov_radius());
+            camera_.center_on(pos.x, pos.y);
+        }
+        return;
     }
 
     int start_x, start_y;
@@ -722,8 +867,17 @@ void Engine::generate_level() {
         player_ = world_.create();
         world_.add<Player>(player_);
         world_.add<Position>(player_, {start_x, start_y});
+        // Subtle god-colored sprite tint
+        SDL_Color player_tint = {255, 255, 255, 255};
+        if (build.god != GodId::NONE) {
+            auto& gi = get_god_info(build.god);
+            // Blend toward god color ~20% (subtle tint, not a full recolor)
+            player_tint.r = static_cast<Uint8>(255 - (255 - gi.color.r) / 5);
+            player_tint.g = static_cast<Uint8>(255 - (255 - gi.color.g) / 5);
+            player_tint.b = static_cast<Uint8>(255 - (255 - gi.color.b) / 5);
+        }
         world_.add<Renderable>(player_, {SHEET_ROGUES, cls.sprite_x, cls.sprite_y,
-                                         {255, 255, 255, 255}, 10});
+                                         player_tint, 10});
         world_.add<Energy>(player_, {0, 100});
         world_.add<Inventory>(player_);
         world_.add<GodAlignment>(player_, {build.god, 0});
@@ -758,6 +912,27 @@ void Engine::generate_level() {
             player_stats.set_attr(Attr::WIL, player_stats.attr(Attr::WIL) + tr.wil_mod);
             player_stats.set_attr(Attr::PER, player_stats.attr(Attr::PER) + tr.per_mod);
             player_stats.set_attr(Attr::CHA, player_stats.attr(Attr::CHA) + tr.cha_mod);
+        }
+
+        // God-specific resistances and passive stat mods
+        switch (build.god) {
+            case GodId::SOLETH:
+                player_stats.fire_resist = 30;
+                break;
+            case GodId::KHAEL:
+                player_stats.poison_resist = 25;
+                break;
+            case GodId::THALARA:
+                player_stats.poison_resist = 100; // immune
+                player_stats.fire_resist = -20;   // weakness
+                break;
+            case GodId::SYTHARA:
+                player_stats.poison_resist = 100; // immune — you ARE the plague
+                break;
+            case GodId::GATHRUUN:
+                player_stats.natural_armor += 3; // stone's endurance
+                break;
+            default: break;
         }
 
         world_.add<Stats>(player_, std::move(player_stats));
@@ -1363,6 +1538,78 @@ void Engine::try_move_player(int dx, int dy) {
             victim_god = world_.get<GodAlignment>(target).god;
         auto atk_result = combat::melee_attack(world_, player_, target, rng_, log_);
         player_acted_ = true;
+
+        // God passive combat bonuses (applied as extra damage after hit)
+        if (atk_result.hit && world_.has<GodAlignment>(player_) && world_.has<Stats>(target)) {
+            auto& ga = world_.get<GodAlignment>(player_);
+            auto& tgt_stats = world_.get<Stats>(target);
+            int bonus = 0;
+
+            // Check weapon tags for god bonuses
+            uint32_t weapon_tags = 0;
+            if (world_.has<Inventory>(player_)) {
+                Entity wpn = world_.get<Inventory>(player_).get_equipped(EquipSlot::MAIN_HAND);
+                if (wpn != NULL_ENTITY && world_.has<Item>(wpn))
+                    weapon_tags = world_.get<Item>(wpn).tags;
+            }
+
+            switch (ga.god) {
+                case GodId::VETHRIK:
+                    // +15% vs undead, +2 with bone weapons
+                    if (is_undead(tgt_stats.name.c_str())) bonus = std::max(1, atk_result.damage * 15 / 100);
+                    if (weapon_tags & TAG_BONE_ITEM) bonus += 2;
+                    break;
+                case GodId::MORRETH:
+                    // +2 damage with blunt or axe weapons
+                    if (weapon_tags & (TAG_BLUNT | TAG_AXE)) bonus = 2;
+                    break;
+                case GodId::YASHKHET: {
+                    // +15% below 50% HP, +1 with daggers
+                    auto& ps = world_.get<Stats>(player_);
+                    if (ps.hp * 2 < ps.hp_max) bonus = std::max(1, atk_result.damage * 15 / 100);
+                    if (weapon_tags & TAG_DAGGER) bonus += 1;
+                    break;
+                }
+                case GodId::SOLETH:
+                    // +2 vs undead (holy smite)
+                    if (is_undead(tgt_stats.name.c_str())) bonus = 2;
+                    break;
+                case GodId::ZHAVEK:
+                    // 2x from stealth, break invisibility
+                    if (world_.get<Stats>(player_).invisible_turns > 0) {
+                        bonus = atk_result.damage; // 2x total
+                        world_.get<Stats>(player_).invisible_turns = 0;
+                    }
+                    break;
+                case GodId::OSSREN:
+                    // All equipped weapons deal +1 (craftsmanship)
+                    if (weapon_tags != 0) bonus = 1;
+                    break;
+                case GodId::GATHRUUN:
+                    // +2 in dungeons (stone's strength)
+                    if (dungeon_level_ > 0) bonus = 2;
+                    break;
+                case GodId::SYTHARA:
+                    // 15% chance to poison enemy on hit
+                    if (rng_.chance(15) && !atk_result.killed) {
+                        if (!world_.has<StatusEffects>(target))
+                            world_.add<StatusEffects>(target, {});
+                        world_.get<StatusEffects>(target).add(StatusType::POISON, 2, 8);
+                        log_.add("Your touch carries Sythara's gift.", {120, 180, 60, 255});
+                    }
+                    break;
+                default: break;
+            }
+            if (bonus > 0 && !atk_result.killed) {
+                tgt_stats.hp -= bonus;
+                atk_result.damage += bonus;
+                if (tgt_stats.hp <= 0) {
+                    combat::kill(world_, target, log_);
+                    atk_result.killed = true;
+                }
+            }
+        }
+
         if (atk_result.hit && atk_result.critical) { audio_.play(SfxId::CRIT); particles_.crit_flash((float)nx, (float)ny); }
         else if (atk_result.hit) { audio_.play_hit(); particles_.blood((float)nx, (float)ny); }
         else audio_.play(SfxId::MISS);
@@ -1379,6 +1626,17 @@ void Engine::try_move_player(int dx, int dy) {
                 log_.add(qbuf, {120, 220, 120, 255});
                 log_.add("Return to the quest giver.", {160, 155, 140, 255});
             }
+        }
+
+        // Tenet action tracking for kills
+        if (atk_result.killed) {
+            turn_actions_.killed_anything = true;
+            if (is_undead(victim_name.c_str())) turn_actions_.killed_undead = true;
+            if (is_animal(victim_name.c_str())) turn_actions_.killed_animal = true;
+            if (world_.has<Stats>(target) && world_.get<Stats>(target).sleep_turns > 0)
+                turn_actions_.killed_sleeping = true;
+            if (world_.has<Stats>(player_) && world_.get<Stats>(player_).invisible_turns > 0)
+                turn_actions_.used_stealth_attack = true;
         }
 
         // Bestiary entry
@@ -1424,6 +1682,31 @@ void Engine::try_move_player(int dx, int dy) {
                         break;
                     case GodId::KHAEL:
                         if (is_animal(victim_name.c_str())) gain = -2; // nature god hates animal kills
+                        break;
+                    case GodId::ZHAVEK:
+                        // Bonus favor for kills from stealth/invisible
+                        if (world_.has<Stats>(player_) && world_.get<Stats>(player_).invisible_turns > 0) gain += 3;
+                        break;
+                    case GodId::THALARA:
+                        // Bonus favor for kills near water (drowning theme)
+                        gain += 1;
+                        break;
+                    case GodId::OSSREN:
+                        // No special kill favor — Ossren cares about craft, not death
+                        break;
+                    case GodId::LETHIS:
+                        // Favor from killing sleeping enemies
+                        if (world_.has<Stats>(target) && world_.get<Stats>(target).sleep_turns > 0)
+                            gain = -3; // Lethis forbids killing sleepers!
+                        break;
+                    case GodId::GATHRUUN:
+                        // More favor for kills underground
+                        if (dungeon_level_ > 0) gain += 1;
+                        break;
+                    case GodId::SYTHARA:
+                        // Favor when enemy was poisoned/diseased
+                        if (world_.has<StatusEffects>(target) && world_.get<StatusEffects>(target).has(StatusType::POISON))
+                            gain += 2;
                         break;
                     default: break;
                 }
@@ -1500,6 +1783,24 @@ void Engine::try_move_player(int dx, int dy) {
         }
     }
 
+    // Check fled combat: was there an adjacent hostile before we moved?
+    {
+        auto& ai_pool_fc = world_.pool<AI>();
+        for (size_t fi = 0; fi < ai_pool_fc.size(); fi++) {
+            Entity fe = ai_pool_fc.entity_at(fi);
+            if (!world_.has<Position>(fe)) continue;
+            auto& fep = world_.get<Position>(fe);
+            if (std::abs(fep.x - pos.x) <= 1 && std::abs(fep.y - pos.y) <= 1
+                && !(fep.x == pos.x && fep.y == pos.y)) {
+                auto& fai = ai_pool_fc.at_index(fi);
+                if (fai.state == AIState::HUNTING) {
+                    turn_actions_.fled_combat = true;
+                    break;
+                }
+            }
+        }
+    }
+
     pos.x = nx;
     pos.y = ny;
     player_acted_ = true;
@@ -1520,6 +1821,10 @@ void Engine::process_turn() {
     if (!player_acted_) return;
     player_acted_ = false;
     game_turn_++;
+
+    // Check tenet violations for this turn's actions
+    check_tenets();
+    turn_actions_.clear();
 
     // Check player death
     if (world_.has<Stats>(player_)) {
@@ -1921,6 +2226,121 @@ void Engine::adjust_favor(int amount) {
     }
 }
 
+void Engine::check_tenets() {
+    if (!world_.has<GodAlignment>(player_)) return;
+    auto& align = world_.get<GodAlignment>(player_);
+    if (align.god == GodId::NONE) return;
+
+    auto tenets = get_god_tenets(align.god);
+    if (!tenets.tenets || tenets.count == 0) return;
+
+    for (int i = 0; i < tenets.count; i++) {
+        auto& t = tenets.tenets[i];
+        bool violated = false;
+
+        switch (t.check) {
+            case TenetCheck::NEVER_KILL_ANIMAL:
+                violated = turn_actions_.killed_animal;
+                break;
+            case TenetCheck::NEVER_USE_DARK_ARTS:
+                violated = turn_actions_.used_dark_arts;
+                break;
+            case TenetCheck::NEVER_USE_FIRE_MAGIC:
+                violated = turn_actions_.used_fire_magic;
+                break;
+            case TenetCheck::NEVER_USE_POISON:
+                violated = turn_actions_.used_poison;
+                break;
+            case TenetCheck::NEVER_BACKSTAB:
+                violated = turn_actions_.used_stealth_attack;
+                break;
+            case TenetCheck::NEVER_FLEE_COMBAT:
+                violated = turn_actions_.fled_combat;
+                break;
+            case TenetCheck::NEVER_USE_HEALING_MAGIC:
+                violated = turn_actions_.used_healing_magic;
+                break;
+            case TenetCheck::NEVER_WEAR_HEAVY_ARMOR:
+                violated = turn_actions_.wore_heavy_armor;
+                break;
+            case TenetCheck::NEVER_CARRY_LIGHT:
+                violated = turn_actions_.used_light_source;
+                break;
+            case TenetCheck::NEVER_DESTROY_BOOK:
+                violated = turn_actions_.destroyed_book;
+                break;
+            case TenetCheck::NEVER_KILL_SLEEPING:
+                violated = turn_actions_.killed_sleeping;
+                break;
+            case TenetCheck::NEVER_DIG_WALLS:
+                violated = turn_actions_.dug_wall;
+                break;
+            case TenetCheck::NEVER_REST_ON_SURFACE:
+                violated = turn_actions_.rested_on_surface;
+                break;
+            case TenetCheck::NEVER_HEAL_ABOVE_75:
+                violated = turn_actions_.healed_above_75pct;
+                break;
+            case TenetCheck::MUST_DESCEND:
+                // Checked on floor transition, not per-turn
+                break;
+            case TenetCheck::MUST_KILL_UNDEAD:
+                // Soleth: if undead is visible and you leave the floor without killing it
+                // Too complex for per-turn — skip for now
+                break;
+            case TenetCheck::MUST_REST_EACH_FLOOR:
+                // Checked on floor transition
+                break;
+        }
+
+        if (violated) {
+            adjust_favor(t.violation_favor);
+            auto& ginfo = get_god_info(align.god);
+            char buf[192];
+            snprintf(buf, sizeof(buf), "Tenet broken: %s", t.description);
+            log_.add(buf, {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255});
+        }
+    }
+
+    // Check equipment-based tenet flags (per-turn scan of equipped items)
+    if (world_.has<Inventory>(player_)) {
+        auto& inv = world_.get<Inventory>(player_);
+        for (int s = 0; s < EQUIP_SLOT_COUNT; s++) {
+            Entity eq = inv.equipped[s];
+            if (eq != NULL_ENTITY && world_.has<Item>(eq)) {
+                auto& item = world_.get<Item>(eq);
+                if (item.tags & TAG_HEAVY_ARMOR) turn_actions_.wore_heavy_armor = true;
+                if (item.tags & TAG_TORCH) turn_actions_.used_light_source = true;
+                if (item.curse_state == 1) turn_actions_.carrying_cursed = true;
+            }
+        }
+        // Also check carried (not just equipped) items for torch/cursed
+        for (auto ie : inv.items) {
+            if (ie != NULL_ENTITY && world_.has<Item>(ie)) {
+                auto& item = world_.get<Item>(ie);
+                if (item.tags & TAG_TORCH) turn_actions_.used_light_source = true;
+                if (item.curse_state == 1) turn_actions_.carrying_cursed = true;
+            }
+        }
+    }
+
+    // Soleth: carrying cursed items drains favor slowly
+    if (align.god == GodId::SOLETH && turn_actions_.carrying_cursed && game_turn_ % 10 == 0) {
+        adjust_favor(-1);
+        log_.add("The cursed item in your possession offends Soleth.", {255, 220, 100, 255});
+    }
+
+    // Passive favor gain: +1 favor every 20 turns with no violations this cycle
+    if (game_turn_ % 20 == 0 && align.favor < 100) {
+        // Only gain passive favor if no violation flags were set
+        bool clean = !turn_actions_.killed_animal && !turn_actions_.used_dark_arts
+            && !turn_actions_.fled_combat && !turn_actions_.used_stealth_attack;
+        if (clean) {
+            align.favor = std::min(100, align.favor + 1);
+        }
+    }
+}
+
 void Engine::execute_prayer(int prayer_idx) {
     if (!world_.has<GodAlignment>(player_) || !world_.has<Stats>(player_)) return;
     auto& align = world_.get<GodAlignment>(player_);
@@ -1950,17 +2370,8 @@ void Engine::execute_prayer(int prayer_idx) {
     auto& ppos = world_.get<Position>(player_);
 
     // God-colored prayer particles
-    uint8_t pr = 200, pg = 200, pb = 200;
-    switch (align.god) {
-        case GodId::VETHRIK:  pr=160; pg=160; pb=200; break;
-        case GodId::THESSARKA:pr=140; pg=140; pb=220; break;
-        case GodId::MORRETH:  pr=200; pg=180; pb=140; break;
-        case GodId::YASHKHET: pr=200; pg=60;  pb=60;  break;
-        case GodId::KHAEL:    pr=80;  pg=200; pb=80;  break;
-        case GodId::SOLETH:   pr=255; pg=220; pb=100; break;
-        case GodId::IXUUL:    pr=180; pg=100; pb=255; break;
-        default: break;
-    }
+    auto& ginfo = get_god_info(align.god);
+    uint8_t pr = ginfo.color.r, pg = ginfo.color.g, pb = ginfo.color.b;
     particles_.prayer_effect(ppos.x, ppos.y, pr, pg, pb);
 
     // Execute prayer effect based on god and index
@@ -2214,6 +2625,222 @@ void Engine::execute_prayer(int prayer_idx) {
             }
             break;
 
+        case GodId::ZHAVEK:
+            if (prayer_idx == 0) {
+                // Vanish — invisible for 8 turns or until attack
+                stats.invisible_turns = 8;
+                log_.add("You slip between the spaces. The world forgets you.", {80, 80, 120, 255});
+            } else {
+                // Silence — all enemies in FOV lose track
+                auto& ai_pool2 = world_.pool<AI>();
+                int silenced = 0;
+                for (size_t i = 0; i < ai_pool2.size(); i++) {
+                    Entity e = ai_pool2.entity_at(i);
+                    if (!world_.has<Position>(e)) continue;
+                    auto& mp = world_.get<Position>(e);
+                    if (map_.in_bounds(mp.x, mp.y) && map_.at(mp.x, mp.y).visible) {
+                        auto& ai = world_.get<AI>(e);
+                        ai.state = AIState::IDLE;
+                        ai.target = NULL_ENTITY;
+                        silenced++;
+                    }
+                }
+                char buf2[128];
+                snprintf(buf2, sizeof(buf2),
+                    "Silence falls. %d creatures lose your trail.", silenced);
+                log_.add(buf2, {80, 80, 120, 255});
+            }
+            break;
+
+        case GodId::THALARA:
+            if (prayer_idx == 0) {
+                // Riptide — pull all visible enemies 3 tiles toward player
+                auto& ai_pool3 = world_.pool<AI>();
+                int pulled = 0;
+                for (size_t i = 0; i < ai_pool3.size(); i++) {
+                    Entity e = ai_pool3.entity_at(i);
+                    if (!world_.has<Position>(e) || !world_.has<Stats>(e)) continue;
+                    auto& mp = world_.get<Position>(e);
+                    if (!map_.in_bounds(mp.x, mp.y) || !map_.at(mp.x, mp.y).visible) continue;
+                    // Pull toward player
+                    for (int step = 0; step < 3; step++) {
+                        int dx = (ppos.x > mp.x) ? 1 : (ppos.x < mp.x) ? -1 : 0;
+                        int dy = (ppos.y > mp.y) ? 1 : (ppos.y < mp.y) ? -1 : 0;
+                        int nx = mp.x + dx;
+                        int ny = mp.y + dy;
+                        if (map_.is_walkable(nx, ny) && !(nx == ppos.x && ny == ppos.y)) {
+                            mp.x = nx;
+                            mp.y = ny;
+                        } else break;
+                    }
+                    pulled++;
+                }
+                char buf3[128];
+                snprintf(buf3, sizeof(buf3),
+                    "The tide pulls. %d creatures dragged toward you.", pulled);
+                log_.add(buf3, {80, 180, 200, 255});
+            } else {
+                // Drown — deal WIL damage/turn for 5 turns to nearest enemy
+                Entity target = magic::nearest_enemy(world_, player_, map_, 8);
+                if (target != NULL_ENTITY) {
+                    auto& tgt = world_.get<Stats>(target);
+                    tgt.drown_turns = 5;
+                    tgt.drown_damage = stats.attr(Attr::WIL);
+                    char buf4[128];
+                    snprintf(buf4, sizeof(buf4),
+                        "Water fills the %s's lungs.", tgt.name.c_str());
+                    log_.add(buf4, {80, 180, 200, 255});
+                } else {
+                    log_.add("No one to drown.", {150, 140, 130, 255});
+                    align.favor += prayer.favor_cost;
+                    player_acted_ = false;
+                }
+            }
+            break;
+
+        case GodId::OSSREN:
+            if (prayer_idx == 0) {
+                // Temper — upgrade one equipped item +1 quality
+                Entity weapon_e = world_.get<Inventory>(player_).get_equipped(EquipSlot::MAIN_HAND);
+                if (weapon_e != NULL_ENTITY && world_.has<Item>(weapon_e)) {
+                    auto& item = world_.get<Item>(weapon_e);
+                    item.damage_bonus += 1;
+                    char buf5[128];
+                    snprintf(buf5, sizeof(buf5),
+                        "Ossren's hand steadies the forge. Your %s is tempered.", item.name.c_str());
+                    log_.add(buf5, {220, 180, 80, 255});
+                    particles_.hit_spark(ppos.x, ppos.y);
+                } else {
+                    log_.add("You have nothing to temper.", {150, 140, 130, 255});
+                    align.favor += prayer.favor_cost;
+                    player_acted_ = false;
+                }
+            } else {
+                // Unyielding — double armor for 15 turns
+                stats.unyielding_turns = 15;
+                log_.add("Your armor hardens beyond what metal should allow.", {220, 180, 80, 255});
+            }
+            break;
+
+        case GodId::LETHIS:
+            if (prayer_idx == 0) {
+                // Sleepwalk — all visible enemies fall asleep for 5 turns
+                auto& ai_pool4 = world_.pool<AI>();
+                int slept = 0;
+                for (size_t i = 0; i < ai_pool4.size(); i++) {
+                    Entity e = ai_pool4.entity_at(i);
+                    if (!world_.has<Position>(e) || !world_.has<Stats>(e)) continue;
+                    auto& mp = world_.get<Position>(e);
+                    if (map_.in_bounds(mp.x, mp.y) && map_.at(mp.x, mp.y).visible) {
+                        world_.get<Stats>(e).sleep_turns = 5;
+                        auto& ai = world_.get<AI>(e);
+                        ai.state = AIState::IDLE;
+                        ai.target = NULL_ENTITY;
+                        slept++;
+                    }
+                }
+                char buf6[128];
+                snprintf(buf6, sizeof(buf6),
+                    "A dream passes through. %d creatures slumber.", slept);
+                log_.add(buf6, {160, 120, 200, 255});
+            } else {
+                // Forget — target enemy permanently forgets you
+                Entity target = magic::nearest_enemy(world_, player_, map_, 8);
+                if (target != NULL_ENTITY) {
+                    auto& ai = world_.get<AI>(target);
+                    ai.state = AIState::IDLE;
+                    ai.target = NULL_ENTITY;
+                    ai.forget_player = true;
+                    auto& tgt = world_.get<Stats>(target);
+                    char buf7[128];
+                    snprintf(buf7, sizeof(buf7),
+                        "The %s blinks. You were never here.", tgt.name.c_str());
+                    log_.add(buf7, {160, 120, 200, 255});
+                } else {
+                    log_.add("No one to forget.", {150, 140, 130, 255});
+                    align.favor += prayer.favor_cost;
+                    player_acted_ = false;
+                }
+            }
+            break;
+
+        case GodId::GATHRUUN:
+            if (prayer_idx == 0) {
+                // Tremor — earthquake damage to all enemies on floor (WIL + level based)
+                int depth_dmg = stats.attr(Attr::WIL) / 2 + stats.level;
+                auto& ai_pool5 = world_.pool<AI>();
+                int hit_count = 0;
+                for (size_t i = 0; i < ai_pool5.size(); i++) {
+                    Entity e = ai_pool5.entity_at(i);
+                    if (!world_.has<Stats>(e)) continue;
+                    auto& es = world_.get<Stats>(e);
+                    es.hp -= depth_dmg;
+                    hit_count++;
+                    // Stun adjacent enemies (sleep as stun substitute)
+                    if (world_.has<Position>(e)) {
+                        auto& mp = world_.get<Position>(e);
+                        int dx = std::abs(mp.x - ppos.x);
+                        int dy = std::abs(mp.y - ppos.y);
+                        if (dx <= 1 && dy <= 1) {
+                            es.sleep_turns = 2;
+                        }
+                    }
+                    if (es.hp <= 0) combat::kill(world_, e, log_);
+                }
+                char buf8[128];
+                snprintf(buf8, sizeof(buf8),
+                    "The earth convulses. %d creatures take %d damage.", hit_count, depth_dmg);
+                log_.add(buf8, {160, 130, 90, 255});
+                particles_.burst(ppos.x, ppos.y, 20, 160, 130, 90, 0.12f, 0.8f, 6);
+            } else {
+                // Stone Skin — +10 armor, can't move, 20 turns
+                stats.stone_skin_turns = 20;
+                stats.stone_skin_armor = 10;
+                log_.add("Your flesh becomes stone. You cannot move, but nothing can reach you.", {160, 130, 90, 255});
+            }
+            break;
+
+        case GodId::SYTHARA:
+            if (prayer_idx == 0) {
+                // Miasma — poison all visible enemies for 10 turns
+                auto& ai_pool6 = world_.pool<AI>();
+                int poisoned = 0;
+                for (size_t i = 0; i < ai_pool6.size(); i++) {
+                    Entity e = ai_pool6.entity_at(i);
+                    if (!world_.has<Position>(e) || !world_.has<Stats>(e)) continue;
+                    auto& mp = world_.get<Position>(e);
+                    if (map_.in_bounds(mp.x, mp.y) && map_.at(mp.x, mp.y).visible) {
+                        if (!world_.has<StatusEffects>(e))
+                            world_.add<StatusEffects>(e, {});
+                        world_.get<StatusEffects>(e).add(StatusType::POISON, 2, 10);
+                        poisoned++;
+                    }
+                }
+                char buf9[128];
+                snprintf(buf9, sizeof(buf9),
+                    "A sickly cloud spreads. %d creatures choke.", poisoned);
+                log_.add(buf9, {120, 180, 60, 255});
+                particles_.drift(ppos.x, ppos.y, 15, 120, 180, 60, 1.5f, 5);
+            } else {
+                // Unravel — target loses 50% natural armor
+                Entity target = magic::nearest_enemy(world_, player_, map_, 8);
+                if (target != NULL_ENTITY) {
+                    auto& tgt = world_.get<Stats>(target);
+                    int lost = tgt.natural_armor / 2;
+                    if (lost < 1) lost = 1;
+                    tgt.natural_armor = std::max(0, tgt.natural_armor - lost);
+                    char buf10[128];
+                    snprintf(buf10, sizeof(buf10),
+                        "The %s's armor corrodes and flakes away. (-%d armor)", tgt.name.c_str(), lost);
+                    log_.add(buf10, {120, 180, 60, 255});
+                } else {
+                    log_.add("Nothing to corrode.", {150, 140, 130, 255});
+                    align.favor += prayer.favor_cost;
+                    player_acted_ = false;
+                }
+            }
+            break;
+
         default: break;
     }
 }
@@ -2447,30 +3074,47 @@ void Engine::process_status_effects() {
     for (auto& eff : fx.effects) {
         // Blackblood: immune to poison
         if (eff.type == StatusType::POISON && has_blackblood) {
-            eff.turns_remaining = 0; // clear it
+            eff.turns_remaining = 0;
             log_.add("Your blackened blood neutralizes the poison.", {80, 40, 80, 255});
             continue;
         }
-        stats.hp -= eff.damage;
+        // Apply resistance reduction
+        int dmg = eff.damage;
+        if (eff.type == StatusType::POISON && stats.poison_resist > 0) {
+            dmg = dmg * (100 - stats.poison_resist) / 100;
+            if (stats.poison_resist >= 100) { eff.turns_remaining = 0; continue; } // immune
+        }
+        if (eff.type == StatusType::BURN && stats.fire_resist > 0) {
+            dmg = dmg * (100 - stats.fire_resist) / 100;
+            if (stats.fire_resist >= 100) { eff.turns_remaining = 0; continue; }
+        }
+        if (eff.type == StatusType::BLEED && stats.bleed_resist > 0) {
+            dmg = dmg * (100 - stats.bleed_resist) / 100;
+            if (stats.bleed_resist >= 100) { eff.turns_remaining = 0; continue; }
+        }
+        if (dmg < 0) dmg = 0;
+        stats.hp -= dmg;
         char buf[128];
-        switch (eff.type) {
-            case StatusType::POISON:
-                snprintf(buf, sizeof(buf), "Poison burns through your veins. (%d)", eff.damage);
-                log_.add(buf, {100, 200, 100, 255});
-                audio_.play(SfxId::POISON);
-                particles_.poison_effect(pp.x, pp.y);
-                break;
-            case StatusType::BURN:
-                snprintf(buf, sizeof(buf), "Fire sears your flesh. (%d)", eff.damage);
-                log_.add(buf, {255, 160, 60, 255});
-                audio_.play(SfxId::BURN);
-                particles_.burn_effect(pp.x, pp.y);
-                break;
-            case StatusType::BLEED:
-                snprintf(buf, sizeof(buf), "Blood seeps from your wounds. (%d)", eff.damage);
-                log_.add(buf, {200, 80, 80, 255});
-                particles_.bleed_effect(pp.x, pp.y);
-                break;
+        if (dmg > 0) {
+            switch (eff.type) {
+                case StatusType::POISON:
+                    snprintf(buf, sizeof(buf), "Poison burns through your veins. (%d)", dmg);
+                    log_.add(buf, {100, 200, 100, 255});
+                    audio_.play(SfxId::POISON);
+                    particles_.poison_effect(pp.x, pp.y);
+                    break;
+                case StatusType::BURN:
+                    snprintf(buf, sizeof(buf), "Fire sears your flesh. (%d)", dmg);
+                    log_.add(buf, {255, 160, 60, 255});
+                    audio_.play(SfxId::BURN);
+                    particles_.burn_effect(pp.x, pp.y);
+                    break;
+                case StatusType::BLEED:
+                    snprintf(buf, sizeof(buf), "Blood seeps from your wounds. (%d)", dmg);
+                    log_.add(buf, {200, 80, 80, 255});
+                    particles_.bleed_effect(pp.x, pp.y);
+                    break;
+            }
         }
     }
     fx.tick();
@@ -2491,6 +3135,73 @@ void Engine::process_status_effects() {
             stats.hp--;
             if (game_turn_ % 15 == 0) // don't spam
                 log_.add("The sunlight scalds your skin.", {200, 160, 100, 255});
+        }
+    }
+
+    // Tick god-specific status effects on player
+    if (stats.invisible_turns > 0) stats.invisible_turns--;
+    if (stats.unyielding_turns > 0) stats.unyielding_turns--;
+    if (stats.stone_skin_turns > 0) stats.stone_skin_turns--;
+
+    // Tick drown, sleep, invisible on ALL entities (monsters)
+    auto& all_stats_pool = world_.pool<Stats>();
+    for (size_t i = 0; i < all_stats_pool.size(); i++) {
+        Entity e = all_stats_pool.entity_at(i);
+        if (e == player_) continue;
+        auto& es = all_stats_pool.at_index(i);
+        // Drown tick
+        if (es.drown_turns > 0) {
+            es.hp -= es.drown_damage;
+            es.drown_turns--;
+            if (es.hp <= 0) combat::kill(world_, e, log_);
+        }
+        // Sleep tick
+        if (es.sleep_turns > 0) es.sleep_turns--;
+    }
+
+    // Soleth passive: undead adjacent to player take 1 damage/turn
+    if (world_.has<GodAlignment>(player_)) {
+        auto& ga = world_.get<GodAlignment>(player_);
+        if (ga.god == GodId::SOLETH) {
+            auto& ai_pool_s = world_.pool<AI>();
+            for (size_t i = 0; i < ai_pool_s.size(); i++) {
+                Entity e = ai_pool_s.entity_at(i);
+                if (!world_.has<Position>(e) || !world_.has<Stats>(e)) continue;
+                auto& mp = world_.get<Position>(e);
+                int dx = std::abs(mp.x - pp.x);
+                int dy = std::abs(mp.y - pp.y);
+                if (dx <= 1 && dy <= 1) {
+                    auto& es = world_.get<Stats>(e);
+                    if (is_undead(es.name.c_str())) {
+                        es.hp -= 1;
+                        if (es.hp <= 0) combat::kill(world_, e, log_);
+                    }
+                }
+            }
+        }
+
+        // Sythara passive: 15% chance enemies you damaged get diseased
+        // (handled in combat resolution, not here)
+
+        // Thalara passive: fire zones hurt
+        if (ga.god == GodId::THALARA && dungeon_level_ > 0 && game_turn_ % 3 == 0) {
+            // Check if in a fire-themed zone (Molten Depths)
+            std::string zone;
+            if (current_dungeon_idx_ >= 0 && current_dungeon_idx_ < static_cast<int>(dungeon_registry_.size()))
+                zone = dungeon_registry_[current_dungeon_idx_].zone;
+            if (zone == "molten" || zone == "molten_depths") {
+                stats.hp -= 1;
+                if (game_turn_ % 15 == 0)
+                    log_.add("The heat sears you. Thalara's domain is water, not fire.", {80, 180, 200, 255});
+            }
+        }
+
+        // Lethis passive: lethal save (once per floor)
+        if (ga.god == GodId::LETHIS && stats.hp <= 0 && !ga.lethal_save_used) {
+            ga.lethal_save_used = true;
+            stats.hp = 1;
+            log_.add("You die. Then you wake up. Was it a dream?", {160, 120, 200, 255});
+            particles_.prayer_effect(pp.x, pp.y, 160, 120, 200);
         }
     }
 
@@ -3300,6 +4011,42 @@ void Engine::render_victory() {
                      "'What did you think it was?'\n"
                      "Nothing is what it was. Everything is what it could be.";
             break;
+        case GodId::ZHAVEK:
+            ending = "You hold it. Nobody sees.\n"
+                     "Zhavek takes the Reliquary into the space between,\n"
+                     "where light forgets to reach.\n"
+                     "The gods search for it still. They will never find it.";
+            break;
+        case GodId::THALARA:
+            ending = "Water rises from the stone.\n"
+                     "Thalara drowns the Sepulchre in black water.\n"
+                     "'Everything returns to the deep,' she says.\n"
+                     "The surface forgets what was lost.";
+            break;
+        case GodId::OSSREN:
+            ending = "The Reliquary does not change.\n"
+                     "Ossren holds it in place — permanent, unyielding.\n"
+                     "'This is what endures,' the hammer says.\n"
+                     "A thousand years pass. It has not moved.";
+            break;
+        case GodId::LETHIS:
+            ending = "You close your eyes.\n"
+                     "Lethis pulls the Reliquary into a dream\n"
+                     "from which nothing wakes.\n"
+                     "The world sleeps. It is not unpleasant.";
+            break;
+        case GodId::GATHRUUN:
+            ending = "The floor opens.\n"
+                     "Gathruun takes the Reliquary deeper than any dungeon,\n"
+                     "past the roots of mountains, past the memory of stone.\n"
+                     "There is no bottom. There was never a bottom.";
+            break;
+        case GodId::SYTHARA:
+            ending = "The Reliquary softens in your hands.\n"
+                     "Sythara's love unmakes it — slowly, gently.\n"
+                     "'All things end,' she whispers.\n"
+                     "Even divine power rots. Especially divine power.";
+            break;
         default:
             ending = "No god speaks. No voice answers.\n"
                      "The silence is absolute.\n"
@@ -3408,6 +4155,20 @@ void Engine::try_pickup() {
         snprintf(buf, sizeof(buf), "You pick up the %s.", item.display_name().c_str());
         log_.add(buf, {180, 175, 160, 255});
         audio_.play(SfxId::PICKUP);
+
+        // Sacred/profane check on pickup
+        if (world_.has<GodAlignment>(player_) && item.tags != 0) {
+            auto& ga = world_.get<GodAlignment>(player_);
+            auto sp = get_sacred_profane(ga.god);
+            if (sp.sacred && (item.tags & sp.sacred)) {
+                auto& ginfo = get_god_info(ga.god);
+                adjust_favor(1);
+                char sbuf[128];
+                snprintf(sbuf, sizeof(sbuf), "A sacred item. %s approves.", ginfo.name);
+                log_.add(sbuf, {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255});
+                turn_actions_.picked_up_sacred = true;
+            }
+        }
 
         // Remove from ground (remove Position only — keep Renderable for paper doll)
         world_.remove<Position>(e);
@@ -3532,9 +4293,19 @@ void Engine::try_rest() {
         }
     }
 
-    // Rest succeeds — restore 25% of max HP and MP
-    int hp_restore = std::max(1, stats.hp_max / 4);
-    int mp_restore = std::max(1, stats.mp_max / 4);
+    // Track rest for tenets
+    turn_actions_.rested = true;
+    rested_this_floor_ = true;
+    if (dungeon_level_ <= 0) turn_actions_.rested_on_surface = true;
+
+    // Rest succeeds — restore 25% of max HP and MP (Lethis: 50%)
+    int rest_pct = 4; // default: 25% (divide by 4)
+    if (world_.has<GodAlignment>(player_)) {
+        auto& ga = world_.get<GodAlignment>(player_);
+        if (ga.god == GodId::LETHIS) rest_pct = 2; // 50%
+    }
+    int hp_restore = std::max(1, stats.hp_max / rest_pct);
+    int mp_restore = std::max(1, stats.mp_max / rest_pct);
 
     // Vampirism: no natural HP regen
     bool is_vampire = world_.has<Diseases>(player_) &&
@@ -3546,6 +4317,10 @@ void Engine::try_rest() {
     stats.hp += hp_actual;
     stats.mp += mp_actual;
     if (hp_actual > 0) meta_.total_hp_healed += hp_actual;
+
+    // Yashkhet tenet: healed above 75%
+    if (stats.hp * 4 > stats.hp_max * 3)
+        turn_actions_.healed_above_75pct = true;
 
     // Costs 10 turns
     game_turn_ += 10;
@@ -3631,6 +4406,19 @@ void Engine::handle_inventory_action(InvAction action) {
                     log_.add("A dark chill runs through you. The item is cursed!", {200, 80, 80, 255});
                     audio_.play(SfxId::CURSE);
                 }
+                // Profane item check on equip
+                if (world_.has<GodAlignment>(player_) && item.tags != 0) {
+                    auto& ga = world_.get<GodAlignment>(player_);
+                    auto sp = get_sacred_profane(ga.god);
+                    if (sp.profane && (item.tags & sp.profane)) {
+                        auto& ginfo = get_god_info(ga.god);
+                        adjust_favor(-2);
+                        char pbuf[128];
+                        snprintf(pbuf, sizeof(pbuf), "%s recoils. This item is profane.", ginfo.name);
+                        log_.add(pbuf, {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255});
+                        turn_actions_.equipped_profane = true;
+                    }
+                }
                 // Pet equipped — spawn visual following entity
                 if (item.slot == EquipSlot::PET && item.pet_id >= 0) {
                     spawn_pet_visual(item.pet_id);
@@ -3649,9 +4437,19 @@ void Engine::handle_inventory_action(InvAction action) {
 
                 if (item.heal_amount > 0 && world_.has<Stats>(player_)) {
                     auto& stats = world_.get<Stats>(player_);
-                    int healed = std::min(item.heal_amount, stats.hp_max - stats.hp);
+                    int heal_amt = item.heal_amount;
+                    // Yashkhet: healing -50%, Sythara: healing -30%
+                    if (world_.has<GodAlignment>(player_)) {
+                        auto& ga = world_.get<GodAlignment>(player_);
+                        if (ga.god == GodId::YASHKHET) heal_amt = heal_amt / 2;
+                        else if (ga.god == GodId::SYTHARA) heal_amt = heal_amt * 7 / 10;
+                    }
+                    int healed = std::min(heal_amt, stats.hp_max - stats.hp);
                     stats.hp += healed;
                     if (healed > 0) meta_.total_hp_healed += healed;
+                    // Yashkhet tenet: healed above 75%
+                    if (stats.hp * 4 > stats.hp_max * 3)
+                        turn_actions_.healed_above_75pct = true;
                     snprintf(use_buf, sizeof(use_buf), "You consume the %s. Healed %d.",
                              item.display_name().c_str(), healed);
                     log_.add(use_buf, {100, 200, 100, 255});
@@ -3881,15 +4679,31 @@ void Engine::handle_input() {
         // Settings state
         if (state_ == GameState::SETTINGS) {
             settings_.handle_input(event, window_);
-            // Check if UI scale changed
-            if (settings_.scale_changed()) {
-                ui_scale_ = settings_.get_ui_scale();
-                reload_fonts();
-                settings_.clear_scale_changed();
+            // Recompute layout after any settings change — resolution or scale
+            {
+                int new_w, new_h;
+                SDL_GetWindowSize(window_, &new_w, &new_h);
+                if (new_w != width_ || new_h != height_ || settings_.scale_changed()) {
+                    width_ = new_w;
+                    height_ = new_h;
+                    if (settings_.scale_changed()) {
+                        ui_scale_ = settings_.get_ui_scale();
+                        settings_.clear_scale_changed();
+                    } else {
+                        ui_scale_ = static_cast<float>(height_) / 1080.0f;
+                        if (ui_scale_ < 0.75f) ui_scale_ = 0.75f;
+                        if (ui_scale_ > 3.0f) ui_scale_ = 3.0f;
+                    }
+                    LOG_HEIGHT = static_cast<int>(180 * ui_scale_);
+                    HUD_HEIGHT = static_cast<int>(32 * ui_scale_);
+                    camera_.tile_size = static_cast<int>(48 * ui_scale_);
+                    camera_.viewport_w = width_;
+                    camera_.viewport_h = height_ - LOG_HEIGHT - HUD_HEIGHT;
+                    reload_fonts();
+                }
             }
             if (settings_.should_close()) {
                 state_ = return_from_settings_;
-                // If returning to PLAYING, reopen the pause menu
                 if (return_from_settings_ == GameState::PLAYING) {
                     pause_menu_.open();
                 }
@@ -3947,6 +4761,7 @@ void Engine::handle_input() {
                         break;
                     case PauseChoice::EXIT_TO_MENU:
                         pause_menu_.close();
+                        floor_cache_.clear();
                         main_menu_.set_can_continue(true);
                         state_ = GameState::MAIN_MENU;
                         audio_.stop_all_ambient(500);
@@ -4176,8 +4991,15 @@ void Engine::handle_input() {
                                                    map_, rng_, log_);
                         if (result.consumed_turn) player_acted_ = true;
                         if (result.success) {
-                            if (sinfo.school == SpellSchool::DARK_ARTS)
+                            if (sinfo.school == SpellSchool::DARK_ARTS) {
                                 meta_.total_dark_arts_casts++;
+                                turn_actions_.used_dark_arts = true;
+                            }
+                            if (spell == SpellId::FIREBALL)
+                                turn_actions_.used_fire_magic = true;
+                            // Healing magic tenet flag
+                            if (sinfo.school == SpellSchool::HEALING)
+                                turn_actions_.used_healing_magic = true;
                             auto& sp = world_.get<Position>(player_);
                             switch (spell) {
                                 case SpellId::SPARK:
@@ -4270,6 +5092,8 @@ void Engine::handle_input() {
                 journal_ = {};
                 overworld_return_x_ = 0;
                 overworld_return_y_ = 0;
+                floor_cache_.clear();
+                current_dungeon_idx_ = -1;
                 // Clear all entities
                 world_ = World();
                 state_ = GameState::MAIN_MENU;
@@ -4302,6 +5126,8 @@ void Engine::handle_input() {
                 journal_ = {};
                 overworld_return_x_ = 0;
                 overworld_return_y_ = 0;
+                floor_cache_.clear();
+                current_dungeon_idx_ = -1;
                 world_ = World();
                 state_ = GameState::MAIN_MENU;
                 main_menu_.set_can_continue(false);
@@ -4445,6 +5271,7 @@ void Engine::handle_input() {
                         event.key.keysym.sym != SDLK_LESS) {
                         // Save overworld position before first descent
                         if (dungeon_level_ == 0) {
+                            floor_cache_.clear(); // new dungeon — clear any old cache
                             overworld_return_x_ = pos.x;
                             overworld_return_y_ = pos.y;
                             // Find nearest dungeon from registry
@@ -4460,17 +5287,21 @@ void Engine::handle_input() {
                                 }
                             }
                         }
+                        cache_current_floor(); // persist current floor before leaving
                         generate_level(); // increments dungeon_level_
                         audio_.play(SfxId::STAIRS);
                     } else if (tile_type == TileType::STAIRS_UP &&
                                event.key.keysym.sym != SDLK_GREATER) {
                         if (dungeon_level_ > 1) {
                             // Go up one dungeon level: -2 because generate_level increments by 1
+                            cache_current_floor(); // persist current floor before leaving
                             dungeon_level_ -= 2;
                             generate_level();
                             audio_.play(SfxId::STAIRS);
                         } else if (dungeon_level_ == 1) {
                             // Return to overworld from depth 1
+                            cache_current_floor();
+                            floor_cache_.clear(); // leaving dungeon entirely — clear cache
                             dungeon_level_ = -1; // will increment to 0
                             current_dungeon_idx_ = -1;
                             generate_level();
@@ -4506,6 +5337,200 @@ void Engine::handle_input() {
                 default: break;
             }
         }
+    }
+}
+
+void Engine::render_god_visuals(const Camera& cam, int y_offset) {
+    if (!world_.has<GodAlignment>(player_) || !world_.has<Position>(player_)) return;
+    auto& ga = world_.get<GodAlignment>(player_);
+    if (ga.god == GodId::NONE) return;
+    auto& pos = world_.get<Position>(player_);
+    auto& ginfo = get_god_info(ga.god);
+
+    int TS = cam.tile_size;
+    int px = (pos.x - cam.x) * TS;
+    int py = (pos.y - cam.y) * TS + y_offset;
+    int cx = px + TS / 2;
+    int cy = py + TS / 2;
+
+    Uint32 ticks = SDL_GetTicks();
+    float t = ticks / 1000.0f; // time in seconds
+    uint8_t r = ginfo.color.r, g = ginfo.color.g, b = ginfo.color.b;
+
+    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+    int ds = std::max(3, TS / 12); // dot/drip size scales with tile
+
+
+    switch (ga.god) {
+    case GodId::VETHRIK: {
+        // Rising bone motes (matches creation screen)
+        for (int i = 0; i < 4; i++) {
+            float phase = std::fmod(t * 0.8f + i * 0.25f, 1.0f);
+            int mx = cx + static_cast<int>(std::sin(t * 0.5f + i * 1.7f) * TS * 0.4f);
+            int my = py + TS - static_cast<int>(phase * TS * 1.2f);
+            int ma = static_cast<int>((1.0f - phase) * 180);
+            SDL_SetRenderDrawColor(renderer_, 200, 200, 220, static_cast<Uint8>(ma));
+            SDL_Rect mote = {mx - ds, my - ds, ds * 2, ds * 2};
+            SDL_RenderFillRect(renderer_, &mote);
+        }
+        break;
+    }
+    case GodId::THESSARKA: {
+        for (int i = 0; i < 4; i++) {
+            float angle = t * 1.8f + i * 1.5708f;
+            int ox = cx + static_cast<int>(std::cos(angle) * TS * 0.6f);
+            int oy = cy + static_cast<int>(std::sin(angle) * TS * 0.4f);
+            SDL_SetRenderDrawColor(renderer_, r, g, b, 170);
+            SDL_Rect dot = {ox - ds * 2, oy - ds * 2, ds * 4, ds * 4};
+            SDL_RenderFillRect(renderer_, &dot);
+        }
+        break;
+    }
+    case GodId::MORRETH: {
+        for (int i = 0; i < 3; i++) {
+            float phase = std::fmod(t * 2.0f + i * 0.33f, 1.0f);
+            if (phase < 0.3f) {
+                int spx = cx + static_cast<int>((phase - 0.15f) * TS * 3.0f * (i % 2 ? 1 : -1));
+                int spy = py + TS - static_cast<int>(phase * TS * 0.5f);
+                int sa = static_cast<int>((0.3f - phase) * 600);
+                SDL_SetRenderDrawColor(renderer_, 220, 180, 120, static_cast<Uint8>(std::min(sa, 200)));
+                SDL_Rect spark = {spx - ds, spy - ds, ds * 2, ds * 2};
+                SDL_RenderFillRect(renderer_, &spark);
+            }
+        }
+        break;
+    }
+    case GodId::YASHKHET: {
+        for (int i = 0; i < 5; i++) {
+            float phase = std::fmod(t * 0.6f + i * 0.2f, 1.0f);
+            int dx2 = cx + static_cast<int>(std::sin(i * 2.3f) * TS * 0.4f);
+            int dy2 = py + static_cast<int>(phase * TS * 1.4f);
+            int da = static_cast<int>((1.0f - phase) * 180);
+            SDL_SetRenderDrawColor(renderer_, 200, 40, 40, static_cast<Uint8>(da));
+            SDL_Rect drip = {dx2 - ds / 2, dy2, ds, ds * 3};
+            SDL_RenderFillRect(renderer_, &drip);
+        }
+        break;
+    }
+    case GodId::KHAEL: {
+        for (int i = 0; i < 5; i++) {
+            float phase = std::fmod(t * 0.4f + i * 0.2f, 1.0f);
+            float angle = i * 1.257f + t * 0.3f;
+            int lx = cx + static_cast<int>(std::cos(angle) * phase * TS * 0.8f);
+            int ly = cy + static_cast<int>(std::sin(angle) * phase * TS * 0.5f);
+            int la = static_cast<int>((1.0f - phase) * 150);
+            SDL_SetRenderDrawColor(renderer_, 80, 180, 60, static_cast<Uint8>(la));
+            SDL_Rect leaf = {lx - ds, ly - ds / 2, ds * 2, ds};
+            SDL_RenderFillRect(renderer_, &leaf);
+        }
+        break;
+    }
+    case GodId::SOLETH: {
+        int fl = static_cast<int>(45 + 25 * std::sin(t * 6.0f));
+        SDL_SetRenderDrawColor(renderer_, 255, 220, 100, static_cast<Uint8>(fl));
+        SDL_Rect halo = {cx - TS / 2, py - TS / 5, TS, TS / 5};
+        SDL_RenderFillRect(renderer_, &halo);
+        for (int i = 0; i < 4; i++) {
+            float phase = std::fmod(t * 1.0f + i * 0.25f, 1.0f);
+            int ex = cx + static_cast<int>(std::sin(t * 0.7f + i * 2.1f) * TS * 0.4f);
+            int ey = py + TS - static_cast<int>(phase * TS * 1.3f);
+            int ea = static_cast<int>((1.0f - phase) * 170);
+            SDL_SetRenderDrawColor(renderer_, 255, 180, 60, static_cast<Uint8>(ea));
+            SDL_Rect ember = {ex - ds, ey - ds, ds * 2, ds * 2};
+            SDL_RenderFillRect(renderer_, &ember);
+        }
+        break;
+    }
+    case GodId::IXUUL: {
+        if ((ticks / 50) % 4 == 0) {
+            int off = (ticks / 25) % 9 - 4;
+            SDL_SetRenderDrawColor(renderer_, r, g, b, 90);
+            SDL_Rect tear = {px + off * 3, py + TS / 3, TS + 4, ds * 2};
+            SDL_RenderFillRect(renderer_, &tear);
+            SDL_Rect tear2 = {px - off * 4, py + TS * 2 / 3, TS + 6, ds + 1};
+            SDL_RenderFillRect(renderer_, &tear2);
+            SDL_Rect tear3 = {px + off * 2, py + TS / 6, TS / 2, ds};
+            SDL_RenderFillRect(renderer_, &tear3);
+        }
+        break;
+    }
+    case GodId::ZHAVEK: {
+        for (int i = 1; i <= 3; i++) {
+            int off = i * TS / 8;
+            int alpha = 45 - i * 12;
+            SDL_SetRenderDrawColor(renderer_, 15, 15, 30, static_cast<Uint8>(alpha));
+            SDL_Rect trail = {px + off, py + off, TS - off / 2, TS - off / 2};
+            SDL_RenderFillRect(renderer_, &trail);
+        }
+        break;
+    }
+    case GodId::THALARA: {
+        for (int i = 0; i < 3; i++) {
+            float rp = std::fmod(t * 1.2f + i * 0.33f, 1.0f);
+            int rs = static_cast<int>(rp * TS * 1.2f);
+            int ra = static_cast<int>((1.0f - rp) * 60);
+            SDL_SetRenderDrawColor(renderer_, 80, 180, 200, static_cast<Uint8>(ra));
+            SDL_Rect ring = {cx - rs / 2, py + TS - rs / 3, rs, rs * 2 / 3};
+            SDL_RenderDrawRect(renderer_, &ring);
+            SDL_Rect ring2 = {cx - rs / 2 + 1, py + TS - rs / 3 + 1, rs - 2, rs * 2 / 3 - 2};
+            SDL_RenderDrawRect(renderer_, &ring2);
+        }
+        break;
+    }
+    case GodId::OSSREN: {
+        for (int i = 0; i < 3; i++) {
+            float phase = std::fmod(t * 1.5f + i * 0.33f, 1.0f);
+            if (phase < 0.4f) {
+                int spx = cx + static_cast<int>(std::sin(i * 3.1f) * TS * 0.4f);
+                int spy = py + TS - static_cast<int>(phase * TS * 0.7f);
+                int sa = static_cast<int>((0.4f - phase) * 500);
+                SDL_SetRenderDrawColor(renderer_, 255, 180, 60, static_cast<Uint8>(std::min(sa, 200)));
+                SDL_Rect spark = {spx - ds, spy - ds, ds * 2, ds * 2};
+                SDL_RenderFillRect(renderer_, &spark);
+            }
+        }
+        break;
+    }
+    case GodId::LETHIS: {
+        for (int ei = 0; ei < 2; ei++) {
+            float ep = std::fmod(t * 0.6f + ei * 1.5f, 3.0f);
+            if (ep < 0.6f) {
+                int ea = static_cast<int>((0.6f - std::abs(ep - 0.3f)) * 500);
+                SDL_SetRenderDrawColor(renderer_, 200, 160, 240, static_cast<Uint8>(std::min(ea, 220)));
+                float eangle = t * 0.3f + ei * 3.14f;
+                int ex2 = cx + static_cast<int>(std::cos(eangle) * TS * 0.5f);
+                int ey2 = cy - TS / 6 + static_cast<int>(std::sin(eangle * 0.7f) * TS * 0.1f);
+                SDL_Rect eye = {ex2 - ds * 2, ey2 - ds, ds * 4, ds * 2};
+                SDL_RenderFillRect(renderer_, &eye);
+            }
+        }
+        break;
+    }
+    case GodId::GATHRUUN: {
+        for (int i = 0; i < 4; i++) {
+            float angle = t * 1.2f + i * 1.5708f;
+            int ox = cx + static_cast<int>(std::cos(angle) * TS * 0.55f);
+            int oy = py + TS - ds * 2 + static_cast<int>(std::sin(angle) * TS * 0.08f);
+            SDL_SetRenderDrawColor(renderer_, 160, 130, 90, 190);
+            SDL_Rect peb = {ox - ds * 2, oy - ds, ds * 3, ds * 2};
+            SDL_RenderFillRect(renderer_, &peb);
+        }
+        break;
+    }
+    case GodId::SYTHARA: {
+        for (int i = 0; i < 6; i++) {
+            float phase = std::fmod(t * 0.5f + i * 0.167f, 1.0f);
+            float angle = i * 1.047f + t * 0.2f;
+            int spx = cx + static_cast<int>(std::cos(angle) * phase * TS * 0.7f);
+            int spy = cy + static_cast<int>(std::sin(angle) * phase * TS * 0.5f);
+            int sa = static_cast<int>((1.0f - phase) * 150);
+            SDL_SetRenderDrawColor(renderer_, 100, 160, 40, static_cast<Uint8>(sa));
+            SDL_Rect spore = {spx - ds, spy - ds, ds * 2, ds * 2};
+            SDL_RenderFillRect(renderer_, &spore);
+        }
+        break;
+    }
+    default: break;
     }
 }
 
@@ -4698,6 +5723,9 @@ void Engine::render() {
     // Draw entities
     render::draw_entities(renderer_, sprites_, world_, map_, render_cam, HUD_HEIGHT);
 
+    // God visual effects on player (rendered every frame)
+    render_god_visuals(render_cam, HUD_HEIGHT);
+
     // HUD
     render_hud();
 
@@ -4754,6 +5782,12 @@ void Engine::render() {
             case GodId::KHAEL:    death_line = "Khael watches. The wolf eats the deer. The cycle continues."; break;
             case GodId::SOLETH:   death_line = "Soleth's flame gutters. The corruption endures."; break;
             case GodId::IXUUL:    death_line = "Ixuul laughs. You were always temporary."; break;
+            case GodId::ZHAVEK:   death_line = "Zhavek says nothing. You simply stop being."; break;
+            case GodId::THALARA:  death_line = "Thalara pulls you under. The water is warm at the bottom."; break;
+            case GodId::OSSREN:   death_line = "Ossren's hammer strikes. You were not what endures."; break;
+            case GodId::LETHIS:   death_line = "Lethis closes your eyes. Perhaps you will dream forever."; break;
+            case GodId::GATHRUUN: death_line = "Gathruun takes you into the stone. You were always meant to go deeper."; break;
+            case GodId::SYTHARA:  death_line = "Sythara smiles. Something green will grow where you fell."; break;
             default:              death_line = "No god mourns you. No voice remembers your name."; break;
         }
         SDL_Color dim = {160, 120, 120, 255};

@@ -1,4 +1,5 @@
 #include "systems/particles.h"
+#include "components/god.h"
 #include <cstdlib>
 #include <cmath>
 #include <algorithm>
@@ -134,6 +135,141 @@ void ParticleSystem::prayer_effect(float wx, float wy, uint8_t r, uint8_t g, uin
 
 void ParticleSystem::arrow_trail(float x0, float y0, float x1, float y1) {
     trail(x0, y0, x1, y1, 12, 180, 160, 120, 4);
+}
+
+void ParticleSystem::fall(float wx, float wy, int count,
+                           uint8_t r, uint8_t g, uint8_t b,
+                           float lifetime, int size) {
+    for (int i = 0; i < count; i++) {
+        float vx = randf_signed() * 0.015f;
+        float vy = 0.02f + randf() * 0.03f; // downward
+        float decay = 1.0f / (lifetime * (60.0f * (0.7f + randf() * 0.6f)));
+        particles_.push_back({
+            wx + randf_signed() * 0.3f + 0.5f, wy + 0.3f,
+            vx, vy,
+            r, g, b, 1.0f, decay, size
+        });
+    }
+}
+
+void ParticleSystem::drift(float wx, float wy, int count,
+                            uint8_t r, uint8_t g, uint8_t b,
+                            float lifetime, int size) {
+    for (int i = 0; i < count; i++) {
+        float angle = randf() * 6.283f;
+        float spd = 0.01f + randf() * 0.015f; // slow outward
+        float decay = 1.0f / (lifetime * (60.0f * (0.7f + randf() * 0.6f)));
+        particles_.push_back({
+            wx + randf_signed() * 0.2f + 0.5f, wy + randf_signed() * 0.2f + 0.5f,
+            std::cos(angle) * spd, std::sin(angle) * spd,
+            r, g, b, 0.7f + randf() * 0.3f, decay, size
+        });
+    }
+}
+
+void ParticleSystem::orbit(float wx, float wy, int count,
+                            uint8_t r, uint8_t g, uint8_t b,
+                            float radius, float lifetime, int size) {
+    for (int i = 0; i < count; i++) {
+        float angle = randf() * 6.283f;
+        float ox = std::cos(angle) * radius;
+        float oy = std::sin(angle) * radius;
+        // velocity perpendicular to radius (tangential orbit)
+        float spd = 0.02f + randf() * 0.01f;
+        float vx = -std::sin(angle) * spd;
+        float vy = std::cos(angle) * spd;
+        float decay = 1.0f / (lifetime * (60.0f * (0.7f + randf() * 0.6f)));
+        particles_.push_back({
+            wx + 0.5f + ox, wy + 0.5f + oy,
+            vx, vy,
+            r, g, b, 0.6f + randf() * 0.4f, decay, size
+        });
+    }
+}
+
+void ParticleSystem::god_aura(GodId god, float wx, float wy) {
+    if (god == GodId::NONE) return;
+    auto& info = get_god_info(god);
+    uint8_t r = info.color.r, g = info.color.g, b = info.color.b;
+
+    switch (god) {
+    case GodId::VETHRIK:
+        // Pale bone-white motes drift upward
+        rise(wx, wy, 2, r, g, b, 1.5f, 3);
+        if (randf() < 0.3f) rise(wx, wy, 1, 200, 200, 180, 2.0f, 2);
+        break;
+    case GodId::THESSARKA:
+        // Faint glyphs orbit the head
+        orbit(wx, wy - 0.3f, 2, r, g, b, 0.35f, 1.5f, 2);
+        break;
+    case GodId::MORRETH:
+        // Iron sparks at feet
+        if (randf() < 0.4f)
+            burst(wx, wy + 0.3f, 2, r, g, b, 0.03f, 0.4f, 2);
+        break;
+    case GodId::YASHKHET:
+        // Blood drips downward
+        fall(wx, wy, 2, r, g, b, 1.0f, 2);
+        if (randf() < 0.2f) fall(wx, wy, 1, 160, 30, 30, 0.8f, 3);
+        break;
+    case GodId::KHAEL:
+        // Green leaf/vine particles drift
+        drift(wx, wy, 2, r, g, b, 1.5f, 2);
+        if (randf() < 0.2f) rise(wx, wy, 1, 60, 160, 40, 1.8f, 3);
+        break;
+    case GodId::SOLETH:
+        // Flickering pale-gold flame halo, embers rise
+        rise(wx, wy, 2, r, g, b, 0.8f, 3);
+        if (randf() < 0.3f) rise(wx, wy, 1, 255, 180, 60, 0.6f, 2);
+        break;
+    case GodId::IXUUL:
+        // Glitch/distortion — random offset burst, sprite tear feel
+        if (randf() < 0.5f) {
+            float ox = randf_signed() * 0.3f;
+            float oy = randf_signed() * 0.3f;
+            burst(wx + ox, wy + oy, 3, r, g, b, 0.04f, 0.3f, 2);
+        }
+        break;
+    case GodId::ZHAVEK:
+        // Shadow trail — dark particles, flicker
+        if (randf() < 0.5f) {
+            drift(wx, wy, 2, r, g, b, 1.0f, 3);
+            burst(wx, wy, 1, 30, 30, 50, 0.02f, 0.6f, 4);
+        }
+        break;
+    case GodId::THALARA:
+        // Blue-green ripple particles rise from feet, water droplets
+        rise(wx, wy + 0.3f, 2, r, g, b, 1.2f, 2);
+        if (randf() < 0.2f) fall(wx, wy, 1, 60, 140, 180, 0.6f, 2);
+        break;
+    case GodId::OSSREN:
+        // Metallic gold sparks from armor, forge-ember glow
+        if (randf() < 0.4f)
+            burst(wx, wy, 2, r, g, b, 0.04f, 0.5f, 2);
+        if (randf() < 0.15f)
+            rise(wx, wy, 1, 255, 140, 40, 0.5f, 3);
+        break;
+    case GodId::LETHIS:
+        // Soft purple mist, floating eye particles
+        drift(wx, wy, 2, r, g, b, 2.0f, 3);
+        if (randf() < 0.1f)
+            rise(wx, wy - 0.2f, 1, 200, 160, 240, 1.5f, 2);
+        break;
+    case GodId::GATHRUUN:
+        // Stone pebbles orbit feet, dust trail
+        orbit(wx, wy + 0.3f, 2, r, g, b, 0.3f, 1.0f, 2);
+        if (randf() < 0.2f)
+            burst(wx, wy + 0.4f, 1, 140, 110, 80, 0.02f, 0.4f, 2);
+        break;
+    case GodId::SYTHARA:
+        // Green spore drift outward, tiny mushroom pops
+        drift(wx, wy, 2, r, g, b, 1.5f, 2);
+        if (randf() < 0.15f)
+            burst(wx, wy, 2, 80, 140, 40, 0.03f, 0.8f, 3);
+        break;
+    default:
+        break;
+    }
 }
 
 // --- Update & Render ---

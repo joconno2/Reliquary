@@ -1,4 +1,5 @@
 #pragma once
+#include "core/ecs.h"
 
 enum class AIState : int {
     IDLE,       // wander randomly
@@ -14,4 +15,7 @@ struct AI {
     int flee_threshold = 20; // HP% below which monster flees
     int ranged_range = 0;  // >0 = can shoot at this range
     int ranged_damage = 0; // base ranged damage
+    bool forget_player = false; // Lethis: permanently ignores player
+    // Entity target field for prayer targeting
+    Entity target = 0;  // NULL_ENTITY equivalent (0)
 };

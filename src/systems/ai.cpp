@@ -5,6 +5,8 @@
 #include "components/stats.h"
 #include "components/energy.h"
 #include "components/player.h"
+#include "components/god.h"
+#include "components/prayer.h"
 #include <cmath>
 #include <cstdlib>
 
@@ -157,12 +159,52 @@ void process(World& world, TileMap& map, Entity player, RNG& rng) {
         if (!energy.can_act()) continue;
         energy.spend();
 
+        // Lethis: forget_player — permanently ignores player
+        if (ai_comp.forget_player) {
+            wander(world, map, e, rng);
+            continue;
+        }
+
+        // Sleep: skip turn if sleeping
+        if (world.has<Stats>(e) && world.get<Stats>(e).sleep_turns > 0) {
+            continue; // sleeping — don't act
+        }
+
         auto& pos = world.get<Position>(e);
         int dist = distance(pos.x, pos.y, player_pos.x, player_pos.y);
 
         // Check if we can see the player
-        bool can_see = dist <= 8 && has_los(map, pos.x, pos.y,
-                                             player_pos.x, player_pos.y);
+        // Zhavek invisible: enemies can't see you
+        bool player_invisible = false;
+        if (world.has<Stats>(player) && world.get<Stats>(player).invisible_turns > 0)
+            player_invisible = true;
+        bool can_see = dist <= 8 && !player_invisible &&
+                       has_los(map, pos.x, pos.y, player_pos.x, player_pos.y);
+
+        // Zhavek passive: enemies lose track after 3 turns out of LOS
+        if (world.has<GodAlignment>(player)) {
+            auto& ga = world.get<GodAlignment>(player);
+            if (ga.god == GodId::ZHAVEK && !can_see && ai_comp.state == AIState::HUNTING
+                && ai_comp.alert_turns > 3) {
+                ai_comp.state = AIState::IDLE;
+                ai_comp.alert_turns = 0;
+            }
+        }
+
+        // Khael passive: animals never aggro first
+        // Ixuul passive: slimes/aberrations neutral
+        if (world.has<GodAlignment>(player) && world.has<Stats>(e)) {
+            auto& ga = world.get<GodAlignment>(player);
+            const char* ename = world.get<Stats>(e).name.c_str();
+            if (ga.god == GodId::KHAEL && ai_comp.state == AIState::IDLE
+                && is_animal(ename)) {
+                can_see = false;
+            }
+            if (ga.god == GodId::IXUUL && ai_comp.state == AIState::IDLE
+                && is_slime(ename)) {
+                can_see = false;
+            }
+        }
 
         // Check flee condition
         if (world.has<Stats>(e)) {

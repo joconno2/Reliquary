@@ -44,8 +44,10 @@ void BackgroundSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     SDL_Color green_col  = {120, 200, 120, 255};
 
     int margin = w / 30;
+    int pad = 10; // inner padding for panel content
 
-    ui::draw_text_centered(renderer, font, "Choose your background.", title_col, w / 2, margin);
+    int header_y = margin;
+    ui::draw_text_centered(renderer, font, "Choose your background.", title_col, w / 2, header_y);
 
     // Centered two-column layout — 80% of screen
     int content_w = w * 4 / 5;
@@ -55,9 +57,10 @@ void BackgroundSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     int list_x = content_x;
     int detail_x_bg = content_x + list_w + margin;
 
-    int list_top = margin + line_h + 12;
+    int list_top = header_y + line_h + line_h;
     int list_bottom = h - line_h * 2;
-    int row_h = std::min((list_bottom - list_top) / BACKGROUND_COUNT, line_h * 3);
+    // Scale row height to fill available list space
+    int row_h = std::max(line_h + 6, (list_bottom - list_top) / BACKGROUND_COUNT);
 
     for (int i = 0; i < BACKGROUND_COUNT; i++) {
         const BackgroundInfo& bg = get_background_info(static_cast<BackgroundId>(i));
@@ -78,23 +81,27 @@ void BackgroundSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
 
     const BackgroundInfo& sel = get_background_info(static_cast<BackgroundId>(selected_));
 
-    ui::draw_panel(renderer, detail_x - 10, detail_y - 10, detail_w + 20, h - detail_y - 20);
+    int dp_x = detail_x - pad - 6;
+    int dp_y = detail_y - pad - 6;
+    int dp_w = detail_w + (pad + 6) * 2;
+    int dp_h = h - detail_y - line_h * 2 + pad;
+    ui::draw_panel(renderer, dp_x, dp_y, dp_w, dp_h);
 
     ui::draw_text(renderer, font, sel.name, sel_col, detail_x, detail_y);
-    detail_y += line_h + 6;
+    detail_y += line_h + 8;
 
     ui::draw_text_wrapped(renderer, font, sel.description, desc_col,
-                         detail_x, detail_y, detail_w);
-    detail_y += line_h * 2 + 10;
+                         detail_x, detail_y, detail_w - pad);
+    detail_y += line_h * 2 + 12;
 
     // Passive
     ui::draw_text(renderer, font, "Passive:", dim_col, detail_x, detail_y);
-    detail_y += line_h + 2;
+    detail_y += line_h + 4;
     ui::draw_text(renderer, font, sel.passive_name, sel_col, detail_x + 8, detail_y);
-    detail_y += line_h + 2;
+    detail_y += line_h + 4;
     ui::draw_text_wrapped(renderer, font, sel.passive_desc, desc_col,
-                         detail_x + 8, detail_y, detail_w - 8);
-    detail_y += line_h * 2 + 10;
+                         detail_x + 8, detail_y, detail_w - pad - 8);
+    detail_y += line_h * 2 + 12;
 
     // Stat bonuses
     ui::draw_text(renderer, font, "Bonuses:", dim_col, detail_x, detail_y);

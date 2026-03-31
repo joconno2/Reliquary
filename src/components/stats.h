@@ -39,6 +39,20 @@ struct Stats {
     // XP reward when killed (monsters only)
     int xp_value = 0;
 
+    // Resistances (percentage reduction, 0-100)
+    int fire_resist = 0;
+    int poison_resist = 0;
+    int bleed_resist = 0;
+
+    // God prayer / passive status fields
+    int invisible_turns = 0;   // Zhavek: invisible until attack or expiry
+    int sleep_turns = 0;       // Lethis: sleeping, skip turns
+    int drown_turns = 0;       // Thalara: taking drown damage over time
+    int drown_damage = 0;      // Thalara: damage per drown tick
+    int unyielding_turns = 0;  // Ossren: armor doubled
+    int stone_skin_turns = 0;  // Gathruun: bonus armor, can't move
+    int stone_skin_armor = 0;  // Gathruun: armor bonus while stone skin active
+
     // Derived combat stats
     int melee_attack() const { return attr(Attr::STR) + level; }
     int melee_damage() const { return base_damage + attr(Attr::STR) / 3; }
