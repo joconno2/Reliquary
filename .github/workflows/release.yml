@@ -52,7 +52,7 @@ jobs:
 
       - name: Build Windows
         run: |
-          # Set up SDL2 paths for MinGW
+          # Set up SDL2 paths for MinGW — use include/ not include/SDL2/ (code does #include <SDL2/SDL.h>)
           SDL2_DIR="$(pwd)/deps/windows"
           SDL2_PREFIX="${SDL2_DIR}/SDL2-2.32.4/x86_64-w64-mingw32"
           SDL2_IMAGE_PREFIX="${SDL2_DIR}/SDL2_image-2.8.8/x86_64-w64-mingw32"
@@ -62,14 +62,13 @@ jobs:
           cmake -S . -B build-windows -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE=tools/mingw-toolchain.cmake \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_PREFIX_PATH="${SDL2_PREFIX};${SDL2_IMAGE_PREFIX};${SDL2_TTF_PREFIX};${SDL2_MIXER_PREFIX}" \
-            -DSDL2_INCLUDE_DIRS="${SDL2_PREFIX}/include/SDL2" \
+            -DSDL2_INCLUDE_DIRS="${SDL2_PREFIX}/include" \
             -DSDL2_LIBRARIES="-L${SDL2_PREFIX}/lib -lmingw32 -lSDL2main -lSDL2" \
-            -DSDL2_IMAGE_INCLUDE_DIRS="${SDL2_IMAGE_PREFIX}/include/SDL2" \
+            -DSDL2_IMAGE_INCLUDE_DIRS="${SDL2_IMAGE_PREFIX}/include" \
             -DSDL2_IMAGE_LIBRARIES="-L${SDL2_IMAGE_PREFIX}/lib -lSDL2_image" \
-            -DSDL2_TTF_INCLUDE_DIRS="${SDL2_TTF_PREFIX}/include/SDL2" \
+            -DSDL2_TTF_INCLUDE_DIRS="${SDL2_TTF_PREFIX}/include" \
             -DSDL2_TTF_LIBRARIES="-L${SDL2_TTF_PREFIX}/lib -lSDL2_ttf" \
-            -DSDL2_MIXER_INCLUDE_DIRS="${SDL2_MIXER_PREFIX}/include/SDL2" \
+            -DSDL2_MIXER_INCLUDE_DIRS="${SDL2_MIXER_PREFIX}/include" \
             -DSDL2_MIXER_LIBRARIES="-L${SDL2_MIXER_PREFIX}/lib -lSDL2_mixer"
           cmake --build build-windows --parallel $(nproc)
           x86_64-w64-mingw32-strip build-windows/reliquary.exe
