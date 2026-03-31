@@ -21,7 +21,10 @@ jobs:
           sudo apt-get install -y \
             cmake ninja-build zip \
             libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev libsdl2-mixer-dev \
-            g++-mingw-w64-x86-64 mingw-w64
+            g++-mingw-w64-x86-64-posix mingw-w64
+          # Use posix threading model (win32 model breaks C++20 std::memory)
+          sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
+          sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
 
       - name: Fetch Windows SDL2 packages
         run: |
