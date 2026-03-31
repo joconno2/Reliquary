@@ -156,15 +156,35 @@ static const ItemDef WEAPON_TABLE[] = {
     {"long rapier",    "+5 dmg, +4 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 1,  5, 0, 4, 0, 0,  90, ""},
     {"great scimitar", "+7 dmg, +1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 2,  7, 0, 1, 0, 0,  80, ""},
     {"great axe",      "+9 dmg, -2 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 3,  9, 0,-2, 0, 0, 100, ""},
+    {"large flamberge","+10 dmg, -2 atk.",               ItemType::WEAPON, EquipSlot::MAIN_HAND, 5, 1, 10, 0,-2, 0, 0, 110, ""},  // 2.f
+    {"great sword",    "+11 dmg, -3 atk.",               ItemType::WEAPON, EquipSlot::MAIN_HAND, 6, 1, 11, 0,-3, 0, 0, 125, ""},  // 2.g
+    {"giant axe",      "+11 dmg, -3 atk.",               ItemType::WEAPON, EquipSlot::MAIN_HAND, 4, 3, 11, 0,-3, 0, 0, 130, ""},  // 4.e
+    {"great hammer",   "+10 dmg, -3 atk.",               ItemType::WEAPON, EquipSlot::MAIN_HAND, 4, 4, 10, 0,-3, 0, 0, 115, ""},  // 5.e
+    {"trident",        "+6 dmg, +1 atk, +1 dodge.",      ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 6,  6, 0, 1, 1, 0,  65, ""},  // 7.d
+    {"spiked flail",   "+7 dmg, -1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 8,  7, 0,-1, 0, 0,  60, ""},  // 9.d club with nails
 };
 
-// Legendary weapons — NOT in random drop tables. Placed in specific locations only.
+// Legendary weapons — genuinely unique sprites only. NOT in random drops.
 static const ItemDef LEGENDARY_WEAPON_TABLE[] = {
-    {"Bonecleaver",    "+10 dmg, -2 atk. Unique.",       ItemType::WEAPON, EquipSlot::MAIN_HAND, 5, 0, 10, 0,-2, 0, 0, 0, ""},  // zweihander
-    {"Earthsplitter",  "+10 dmg, -3 atk. Unique.",       ItemType::WEAPON, EquipSlot::MAIN_HAND, 4, 4, 10, 0,-3, 0, 0, 0, ""},  // great hammer
-    {"The Rending",    "+11 dmg, -3 atk. Unique.",       ItemType::WEAPON, EquipSlot::MAIN_HAND, 4, 3, 11, 0,-3, 0, 0, 0, ""},  // giant axe
-    {"Serpent's Tooth", "+9 dmg, +1 atk. Unique.",       ItemType::WEAPON, EquipSlot::MAIN_HAND, 4, 1,  9, 0, 1, 0, 0, 0, ""},  // flamberge
-    {"The Old Growth", "+8 dmg, -2 atk. Unique.",        ItemType::WEAPON, EquipSlot::MAIN_HAND, 2, 8,  8, 0,-2, 0, 0, 0, ""},  // great club
+    // Unique sword sprites (1.g-k)
+    {"Sanguine Edge",   "+8 dmg, +2 atk.",   ItemType::WEAPON, EquipSlot::MAIN_HAND, 6, 0,  8, 0, 2, 0, 0, 0, ""},  // 1.g sanguine dagger
+    {"Nullblade",       "+7 dmg, +3 atk.",   ItemType::WEAPON, EquipSlot::MAIN_HAND, 7, 0,  7, 0, 3, 0, 0, 0, ""},  // 1.h magic dagger
+    {"Crystal Fang",    "+9 dmg, +2 atk.",   ItemType::WEAPON, EquipSlot::MAIN_HAND, 8, 0,  9, 0, 2, 0, 0, 0, ""},  // 1.i crystal sword
+    {"Doomhilt",        "+11 dmg, -1 atk.",  ItemType::WEAPON, EquipSlot::MAIN_HAND, 9, 0, 11, 0,-1, 0, 0, 0, ""},  // 1.j evil sword
+    {"Emberbrand",      "+10 dmg, +1 atk.",  ItemType::WEAPON, EquipSlot::MAIN_HAND,10, 0, 10, 0, 1, 0, 0, 0, ""},  // 1.k flame sword
+    // Unique spear sprite (7.e)
+    {"Stormcaller",     "+9 dmg, +2 atk.",   ItemType::WEAPON, EquipSlot::MAIN_HAND, 4, 6,  9, 0, 2, 0, 0, 0, ""},  // 7.e magic spear
+    // Unique staff sprites (11.f, 11.h, 11.j)
+    {"Red Pyre",        "+6 dmg, +2 atk.",   ItemType::WEAPON, EquipSlot::MAIN_HAND, 5, 10, 6, 0, 2, 0, 0, 0, ""},  // 11.f red crystal staff
+    {"Frostspire",      "+7 dmg, +2 atk.",   ItemType::WEAPON, EquipSlot::MAIN_HAND, 7, 10, 7, 0, 2, 0, 0, 0, ""},  // 11.h blue crystal staff
+    {"Saint's Rest",    "+6 dmg, +3 atk.",   ItemType::WEAPON, EquipSlot::MAIN_HAND, 9, 10, 6, 0, 3, 0, 0, 0, ""},  // 11.j saint's staff
+};
+
+// Legendary armor/accessories — unique sprites only.
+static const ItemDef LEGENDARY_ARMOR_TABLE[] = {
+    {"Crown of Iron",  "+5 AC, -1 dodge.",  ItemType::ARMOR_HEAD,  EquipSlot::HEAD,    7, 15, 0, 5, 0,-1, 0, 0, ""},  // 16.h plate helm 2
+    {"Cross Shield",   "+5 AC, +1 atk.",   ItemType::SHIELD,      EquipSlot::OFF_HAND,2, 11, 0, 5, 1, 0, 0, 0, ""},  // 12.c cross shield
+    {"Cross Pendant",  "+2 atk, +1 AC.",   ItemType::AMULET,      EquipSlot::AMULET,  4, 16, 0, 1, 2, 0, 0, 0, ""},  // 17.e cross pendant
 };
 
 //                                                                                            sx sy dmg arm atk dge heal gold unid          range
@@ -201,13 +221,6 @@ static const ItemDef ARMOR_TABLE[] = {
     {"greaves",        "AC +3, -1 dodge, heavy.",         ItemType::ARMOR_FEET,  EquipSlot::FEET,    3, 14, 0, 3, 0,-1, 0, 65, ""},
     {"dark shield",    "AC +4, black iron.",              ItemType::SHIELD,      EquipSlot::OFF_HAND,3, 11, 0, 4, 0, 0, 0, 70, ""},
     {"scholar's robe", "AC +1, +2 dodge.",                ItemType::ARMOR_CHEST, EquipSlot::CHEST,   2, 12, 0, 1, 0, 2, 0, 55, ""},
-};
-
-// Legendary armor — NOT in random drop tables.
-static const ItemDef LEGENDARY_ARMOR_TABLE[] = {
-    {"The Anvil",      "AC +8, -2 dodge. Unique.",        ItemType::ARMOR_CHEST, EquipSlot::CHEST,   5, 12, 0, 8, 0,-2, 0, 0, ""},  // plate
-    {"Crown of Iron",  "AC +5, -1 dodge. Unique.",        ItemType::ARMOR_HEAD,  EquipSlot::HEAD,    6, 15, 0, 5, 0,-1, 0, 0, ""},  // plate helm
-    {"Bulwark",        "AC +7, -1 dodge. Unique.",        ItemType::SHIELD,      EquipSlot::OFF_HAND,6, 11, 0, 7, 0,-1, 0, 0, ""},  // tower shield
 };
 
 static const ItemDef AMULET_TABLE[] = {
@@ -344,12 +357,8 @@ static void apply_curse_bless(Item& item, int dungeon_level, RNG& rng) {
 
 // Assign material based on dungeon depth
 static void apply_material(Item& item, int dungeon_level, RNG& rng) {
-    // Only weapons and armor get materials
-    bool is_weapon = (item.type == ItemType::WEAPON);
-    bool is_armor = (item.type == ItemType::ARMOR_HEAD || item.type == ItemType::ARMOR_CHEST
-        || item.type == ItemType::ARMOR_HANDS || item.type == ItemType::ARMOR_FEET
-        || item.type == ItemType::SHIELD);
-    if (!is_weapon && !is_armor) return;
+    // Only melee and ranged weapons get materials — not armor, staves, rings, amulets
+    if (item.type != ItemType::WEAPON) return;
 
     // Depth-based material table
     // Shallow (1-3): bone/wood/iron
@@ -489,11 +498,10 @@ void spawn_items(World& world, const TileMap& map,
             Entity e = create_item_from_def(world, STAFF_TABLE[idx], x, y);
             apply_tags(world.get<Item>(e));
         } else if (roll <= 44) {
-            // Armor
+            // Armor — no material, the sprite IS the tier
             int idx = weighted_item_pick(rng, dungeon_level, ARMOR_COUNT, 2);
             Entity e = create_item_from_def(world, ARMOR_TABLE[idx], x, y);
             auto& item = world.get<Item>(e);
-            apply_material(item, dungeon_level, rng);
             apply_tags(item);
             apply_quality(item, dungeon_level, rng);
             apply_curse_bless(item, dungeon_level, rng);
@@ -629,6 +637,47 @@ void spawn_items(World& world, const TileMap& map,
             world.add<Item>(e, std::move(gold));
         }
     }
+
+    // Apply material palette swaps or tints to all items
+    // Palette swap sheet covers weapon groups 1-8 (items.png rows 0-7)
+    // Color blocks: rows 0-7 = bone, 8-15 = silver, 16-23 = mithril, 24-31 = adamantine
+    // Default steel/iron/wood/obsidian uses original items.png sprites
+    auto& item_pool = world.pool<Item>();
+    for (size_t i = 0; i < item_pool.size(); i++) {
+        Entity e = item_pool.entity_at(i);
+        auto& item = item_pool.at_index(i);
+        if (item.material == MaterialType::NONE || item.material == MaterialType::IRON ||
+            item.material == MaterialType::STEEL || item.material == MaterialType::WOOD)
+            continue; // default sprite
+        if (!world.has<Renderable>(e)) continue;
+        auto& rend = world.get<Renderable>(e);
+
+        // Check if this item's sprite is a weapon on the palette swap sheet (rows 0-7 in items.png)
+        bool on_palette_sheet = (rend.sprite_sheet == SHEET_ITEMS && rend.sprite_y >= 0 && rend.sprite_y <= 7);
+
+        if (on_palette_sheet) {
+            int palette_row_offset = -1;
+            switch (item.material) {
+                case MaterialType::BONE:       palette_row_offset = 0;  break; // orange
+                case MaterialType::SILVER:     palette_row_offset = 8;  break; // grayish purple
+                case MaterialType::MITHRIL:    palette_row_offset = 16; break; // blue
+                case MaterialType::ADAMANTINE: palette_row_offset = 24; break; // light green
+                default: break;
+            }
+            if (palette_row_offset >= 0) {
+                rend.sprite_sheet = SHEET_ITEMS_PALETTE;
+                rend.sprite_y = palette_row_offset + rend.sprite_y; // same row within group + color offset
+                // sprite_x stays the same (same column = same item within group)
+            }
+        } else {
+            // Weapon not on palette sheet (e.g. bows row 9) — tint fallback
+            if (item.material == MaterialType::BONE || item.material == MaterialType::SILVER ||
+                item.material == MaterialType::MITHRIL || item.material == MaterialType::ADAMANTINE ||
+                item.material == MaterialType::OBSIDIAN) {
+                rend.tint = material_tint(item.material);
+            }
+        }
+    }
 }
 
 static constexpr int LEGENDARY_WEAPON_COUNT = sizeof(LEGENDARY_WEAPON_TABLE) / sizeof(LEGENDARY_WEAPON_TABLE[0]);
@@ -638,17 +687,14 @@ Entity spawn_legendary(World& world, const std::vector<Room>& rooms, [[maybe_unu
                         const std::string& dungeon_name) {
     if (rooms.size() < 2) return NULL_ENTITY;
 
-    // Deterministic legendary assignment per dungeon name
-    // Each named dungeon gets a specific legendary
+    // Legendaries only in specific hard dungeons — not every dungeon has one
     const ItemDef* def = nullptr;
-    if (dungeon_name == "The Hollowgate")      def = &LEGENDARY_WEAPON_TABLE[0]; // Bonecleaver
-    else if (dungeon_name == "The Molten Depths") def = &LEGENDARY_WEAPON_TABLE[1]; // Earthsplitter
-    else if (dungeon_name == "The Sunken Halls")  def = &LEGENDARY_WEAPON_TABLE[2]; // The Rending
-    else if (dungeon_name == "Frostmere Depths")  def = &LEGENDARY_WEAPON_TABLE[3]; // Serpent's Tooth
-    else if (dungeon_name == "Stonekeep")         def = &LEGENDARY_WEAPON_TABLE[4]; // The Old Growth
-    else if (dungeon_name == "The Catacombs")     def = &LEGENDARY_ARMOR_TABLE[0];  // The Anvil
-    else if (dungeon_name == "Ashford Ruins")     def = &LEGENDARY_ARMOR_TABLE[1];  // Crown of Iron
-    else if (dungeon_name == "The Barrow")        def = &LEGENDARY_ARMOR_TABLE[2];  // Bulwark
+    // 0=Sanguine Edge, 1=Nullblade, 2=Crystal Fang, 3=Doomhilt, 4=Emberbrand,
+    // 5=Stormcaller, 6=Red Pyre, 7=Frostspire, 8=Saint's Rest
+    if (dungeon_name == "The Hollowgate")          def = &LEGENDARY_WEAPON_TABLE[3]; // Doomhilt
+    else if (dungeon_name == "The Molten Depths")   def = &LEGENDARY_WEAPON_TABLE[4]; // Emberbrand
+    else if (dungeon_name == "The Sunken Halls")    def = &LEGENDARY_WEAPON_TABLE[2]; // Crystal Fang
+    else if (dungeon_name == "The Sepulchre")       def = &LEGENDARY_WEAPON_TABLE[5]; // Stormcaller
     else return NULL_ENTITY;
 
     // Place in the last room (deepest point)

@@ -11,6 +11,7 @@
 #include "components/renderable.h"
 #include "components/energy.h"
 #include "core/spritesheet.h"
+#include "components/buff.h"
 #include <cmath>
 #include <algorithm>
 #include <cstdio>
@@ -248,24 +249,36 @@ CastResult cast(World& world, Entity caster, SpellId spell,
 
         // === TRANSMUTATION ===
         case SpellId::HARDEN_SKIN:
-            stats.natural_armor += 2;
-            if (is_player) log.add("Your skin hardens. (+2 armor)", {160, 160, 140, 255});
+            if (world.has<Buffs>(caster) && !world.get<Buffs>(caster).has(BuffType::HARDEN_SKIN)) {
+                stats.natural_armor += 2;
+                world.get<Buffs>(caster).add(BuffType::HARDEN_SKIN, 20, 2);
+                if (is_player) log.add("+2 armor, 20 turns.", {160, 160, 140, 255});
+            } else if (is_player) log.add("Already active.", {140, 130, 120, 255});
             result.success = true;
             break;
         case SpellId::HASTEN:
-            stats.base_speed += 30;
-            if (is_player) log.add("+30 speed.", {200, 200, 140, 255});
+            if (world.has<Buffs>(caster) && !world.get<Buffs>(caster).has(BuffType::HASTEN)) {
+                stats.base_speed += 30;
+                world.get<Buffs>(caster).add(BuffType::HASTEN, 15, 30);
+                if (is_player) log.add("+30 speed, 15 turns.", {200, 200, 140, 255});
+            } else if (is_player) log.add("Already active.", {140, 130, 120, 255});
             result.success = true;
             break;
         case SpellId::STONE_FIST:
-            stats.base_damage += 3;
-            if (is_player) log.add("+3 melee damage.", {160, 140, 120, 255});
+            if (world.has<Buffs>(caster) && !world.get<Buffs>(caster).has(BuffType::STONE_FIST)) {
+                stats.base_damage += 3;
+                world.get<Buffs>(caster).add(BuffType::STONE_FIST, 15, 3);
+                if (is_player) log.add("+3 damage, 15 turns.", {160, 140, 120, 255});
+            } else if (is_player) log.add("Already active.", {140, 130, 120, 255});
             result.success = true;
             break;
         case SpellId::IRON_BODY:
-            stats.natural_armor += 4;
-            stats.base_speed -= 10;
-            if (is_player) log.add("+4 armor, -10 speed.", {160, 160, 160, 255});
+            if (world.has<Buffs>(caster) && !world.get<Buffs>(caster).has(BuffType::IRON_BODY)) {
+                stats.natural_armor += 4;
+                stats.base_speed -= 10;
+                world.get<Buffs>(caster).add(BuffType::IRON_BODY, 20, 4, 10);
+                if (is_player) log.add("+4 armor, -10 speed, 20 turns.", {160, 160, 160, 255});
+            } else if (is_player) log.add("Already active.", {140, 130, 120, 255});
             result.success = true;
             break;
         case SpellId::SLOW: {
@@ -364,10 +377,11 @@ CastResult cast(World& world, Entity caster, SpellId spell,
             break;
         }
         case SpellId::FORESIGHT:
-            stats.dodge_value(); // just for reference — apply via dodge_bonus hack
-            // Can't easily add temporary dodge. Add natural_armor as proxy.
-            stats.natural_armor += 1; // minor defensive buff
-            if (is_player) log.add("Your senses sharpen. You feel more evasive.", {120, 140, 200, 255});
+            if (world.has<Buffs>(caster) && !world.get<Buffs>(caster).has(BuffType::FORESIGHT)) {
+                stats.natural_armor += 1;
+                world.get<Buffs>(caster).add(BuffType::FORESIGHT, 15, 1);
+                if (is_player) log.add("+1 armor, 15 turns.", {120, 140, 200, 255});
+            } else if (is_player) log.add("Already active.", {140, 130, 120, 255});
             result.success = true;
             break;
         case SpellId::TRUESIGHT: {
@@ -437,8 +451,11 @@ CastResult cast(World& world, Entity caster, SpellId spell,
             result.success = true;
             break;
         case SpellId::SHIELD_OF_FAITH:
-            stats.natural_armor += 3;
-            if (is_player) log.add("A ward settles over you. (+3 armor)", {200, 200, 140, 255});
+            if (world.has<Buffs>(caster) && !world.get<Buffs>(caster).has(BuffType::SHIELD_OF_FAITH)) {
+                stats.natural_armor += 3;
+                world.get<Buffs>(caster).add(BuffType::SHIELD_OF_FAITH, 20, 3);
+                if (is_player) log.add("+3 armor, 20 turns.", {200, 200, 140, 255});
+            } else if (is_player) log.add("Already active.", {140, 130, 120, 255});
             result.success = true;
             break;
         case SpellId::RESTORE: {
@@ -450,14 +467,15 @@ CastResult cast(World& world, Entity caster, SpellId spell,
             break;
         }
         case SpellId::SANCTUARY:
-            stats.natural_armor += 5;
-            // Make enemies lose track
-            { auto& ai_pool = world.pool<AI>();
-              for (size_t i = 0; i < ai_pool.size(); i++) {
-                  ai_pool.at_index(i).state = AIState::IDLE;
-              }
-            }
-            if (is_player) log.add("+5 armor. Enemies lose track of you.", {200, 220, 140, 255});
+            if (world.has<Buffs>(caster) && !world.get<Buffs>(caster).has(BuffType::SANCTUARY)) {
+                stats.natural_armor += 5;
+                world.get<Buffs>(caster).add(BuffType::SANCTUARY, 12, 5);
+                // Also make enemies lose track
+                auto& ai_pool = world.pool<AI>();
+                for (size_t i = 0; i < ai_pool.size(); i++)
+                    ai_pool.at_index(i).state = AIState::IDLE;
+                if (is_player) log.add("+5 armor, 12 turns. Enemies lose track.", {200, 220, 140, 255});
+            } else if (is_player) log.add("Already active.", {140, 130, 120, 255});
             result.success = true;
             break;
         case SpellId::RESURRECTION:
@@ -577,9 +595,12 @@ CastResult cast(World& world, Entity caster, SpellId spell,
             break;
         }
         case SpellId::BARKSKIN:
-            stats.natural_armor += 3;
-            stats.poison_resist += 15;
-            if (is_player) log.add("+3 armor, +15% poison resist.", {80, 160, 80, 255});
+            if (world.has<Buffs>(caster) && !world.get<Buffs>(caster).has(BuffType::BARKSKIN)) {
+                stats.natural_armor += 3;
+                stats.poison_resist += 15;
+                world.get<Buffs>(caster).add(BuffType::BARKSKIN, 25, 3, 15);
+                if (is_player) log.add("+3 armor, +15% poison resist, 25 turns.", {80, 160, 80, 255});
+            } else if (is_player) log.add("Already active.", {140, 130, 120, 255});
             result.success = true;
             break;
         case SpellId::SWARM: {

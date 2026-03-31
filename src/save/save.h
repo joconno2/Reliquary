@@ -3,6 +3,7 @@
 #include "core/tilemap.h"
 #include "core/rng.h"
 #include "components/quest.h"
+#include "components/traits.h"
 #include "generation/dungeon.h"
 #include <string>
 #include <vector>
@@ -14,15 +15,18 @@ struct SaveData {
     int gold = 0;
     QuestJournal journal;
 
-    // Overworld return position (where to place player when ascending from depth 1)
+    // Overworld return position
     int overworld_return_x = 0;
     int overworld_return_y = 0;
 
-    // RNG state for reproducibility
+    // RNG state
     uint64_t rng_seed = 0;
 
-    // Hardcore mode — save deleted on death, one-shot loads
+    // Hardcore mode
     bool hardcore = false;
+
+    // Player traits (for runtime checks like Bloodlust)
+    std::vector<TraitId> traits;
 
     bool valid = false;
 };

@@ -225,13 +225,29 @@ F11 fullscreen | F12 screenshot
 - [ ] Conversion: interact with another god's shrine while excommunicated — lose all favor, start at 0 with new god, permanent -10% prayer power penalty
 - [ ] NPC reaction to excommunicated players: priests hostile, merchants charge double
 
-**5E. NPC God Factions**
+**5E. NPC God Factions** — BLOCKED: needs town visual identity first
+- [ ] **Prerequisite: God-affiliated town generation** — each town assigned a patron god, generator produces visually distinct layouts:
+  - Soleth towns: central brazier/temple, torch-lined streets, stone construction
+  - Khael towns: trees inside walls, dirt floors, organic layout
+  - Vethrik towns: bone-floor cemetery district, ossuary building
+  - Morreth towns: blacksmith + arena, barracks, iron/stone heavy
+  - Thessarka towns: library building, scholar NPCs, inscribed walls
+  - Yashkhet towns: red stone floors, blood altar, small and isolated
+  - Ixuul towns: half-ruined, irregular geometry, no central structure
+  - Thalara towns: water features, docks, coastal layout
+  - Ossren towns: forge district, well-maintained walls, symmetrical
+  - Lethis towns: quiet, overgrown, beds/dream imagery
+  - Gathruun towns: built into hillside, stone-heavy, underground sections
+  - Sythara towns: mushrooms, overgrown, decaying structures
+  - Zhavek towns: dark alleys, few torches, hidden passages
+  - God symbols/banners on buildings (decorative tile markers)
+  - Town-specific NPC rosters (Morreth = blacksmith+arena, no scholar; Thessarka = library+scholar, no blacksmith)
+- [ ] Assign god affiliations to all 20 towns in generate_overworld.py
 - [ ] Add god_affiliation field to NPC component
-- [ ] Town NPCs have god affiliations matching their town (Ironhearth = Morreth, Candlemere = Soleth, etc.)
-- [ ] Wandering priests of all 13 gods appear on roads
 - [ ] Same-god NPCs: better prices (-15%), free healing, quest priority
 - [ ] Rival-god NPCs: higher prices (+25%), hostile dialogue, may refuse service
-- [ ] Hostile factions: Soleth NPCs attack Ixuul followers on sight, Morreth NPCs hostile to Dark Arts users
+- [ ] Hostile factions: Soleth NPCs attack Ixuul followers on sight
+- [ ] Wandering priests of all 13 gods on roads
 
 **5F. God Relics** — 13 unique legendary items
 - [ ] One relic per god, extremely rare (one per run, late-game dungeon only)

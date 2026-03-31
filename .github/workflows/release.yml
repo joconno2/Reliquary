@@ -107,7 +107,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: release-artifacts
-          path: dist/*
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
 
   release:
     needs: [build-linux-windows]
@@ -129,7 +131,7 @@ jobs:
           body: |
             ## Reliquary ${{ github.ref_name }}
 
-            Traditional turn-based roguelike. 13 gods, 50 spells, 78 items, 17 classes.
+            Traditional turn-based roguelike. 13 gods, 50 spells, 80+ items, 17 classes, 12 legendaries.
 
             | Platform | File | Notes |
             |---|---|---|
@@ -137,6 +139,8 @@ jobs:
             | Linux (x64) | `reliquary-linux-x64-${{ github.ref_name }}.tar.gz` | Requires SDL2: `apt install libsdl2-2.0-0 libsdl2-image-2.0-0 libsdl2-mixer-2.0-0 libsdl2-ttf-2.0-0` |
 
             See RELEASE_NOTES.md for full feature list, controls, and known issues.
-          files: release-files/**
+          files: |
+            release-files/*.tar.gz
+            release-files/*.zip
           draft: false
           prerelease: true

@@ -10,6 +10,7 @@
 #include "components/spellbook.h"
 #include "components/status_effect.h"
 #include "components/disease.h"
+#include "components/buff.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <cstdio>
@@ -115,6 +116,12 @@ bool save_game(const std::string& path, const SaveData& data,
     root["overworld_return_y"] = data.overworld_return_y;
     root["hardcore"] = data.hardcore;
 
+    // Traits
+    json traits = json::array();
+    for (auto t : data.traits)
+        traits.push_back(static_cast<int>(t));
+    root["traits"] = traits;
+
     // Quest journal
     json quests = json::array();
     for (auto& e : data.journal.entries) {
@@ -177,6 +184,34 @@ bool save_game(const std::string& path, const SaveData& data,
         for (auto d : world.get<Diseases>(player).active)
             diseases.push_back(static_cast<int>(d));
         root["diseases"] = diseases;
+    }
+
+    // Player sprite tint (for god conversion)
+    if (world.has<Renderable>(player)) {
+        auto& r = world.get<Renderable>(player);
+        root["player_tint"] = {r.tint.r, r.tint.g, r.tint.b, r.tint.a};
+    }
+
+    // God alignment extra fields
+    if (world.has<GodAlignment>(player)) {
+        auto& g = world.get<GodAlignment>(player);
+        root["god_lethal_save_used"] = g.lethal_save_used;
+        root["god_items_identified_floor"] = g.items_identified_floor;
+        root["god_dig_used_floor"] = g.dig_used_floor;
+    }
+
+    // Buffs
+    if (world.has<Buffs>(player)) {
+        json buffs = json::array();
+        for (auto& b : world.get<Buffs>(player).active) {
+            json bj;
+            bj["type"] = static_cast<int>(b.type);
+            bj["turns"] = b.turns_remaining;
+            bj["value"] = b.value;
+            bj["value2"] = b.value2;
+            buffs.push_back(bj);
+        }
+        root["buffs"] = buffs;
     }
 
     // Inventory items
@@ -245,6 +280,12 @@ SaveData load_game(const std::string& path, World& world, TileMap& map) {
     data.overworld_return_y = root.value("overworld_return_y", 0);
     data.hardcore = root.value("hardcore", false);
 
+    // Traits
+    if (root.contains("traits")) {
+        for (auto& t : root["traits"])
+            data.traits.push_back(static_cast<TraitId>(t.get<int>()));
+    }
+
     // Quests
     if (root.contains("quests")) {
         for (auto& qj : root["quests"]) {
@@ -293,10 +334,13 @@ SaveData load_game(const std::string& path, World& world, TileMap& map) {
                                         {255,255,255,255}, 10});
     }
     if (root.contains("god")) {
-        world.add<GodAlignment>(player, {
-            static_cast<GodId>(root.value("god", 0)),
-            root.value("favor", 0)
-        });
+        GodAlignment ga;
+        ga.god = static_cast<GodId>(root.value("god", 0));
+        ga.favor = root.value("favor", 0);
+        ga.lethal_save_used = root.value("god_lethal_save_used", false);
+        ga.items_identified_floor = root.value("god_items_identified_floor", 0);
+        ga.dig_used_floor = root.value("god_dig_used_floor", false);
+        world.add<GodAlignment>(player, ga);
     }
     world.add<Energy>(player, {root.value("energy", 0), root.value("speed", 100)});
 
@@ -328,6 +372,30 @@ SaveData load_game(const std::string& path, World& world, TileMap& map) {
                 dis.active.push_back(static_cast<DiseaseId>(d.get<int>()));
         }
         world.add<Diseases>(player, std::move(dis));
+    }
+
+    // Player sprite tint
+    if (root.contains("player_tint") && world.has<Renderable>(player)) {
+        auto& t = root["player_tint"];
+        auto& r = world.get<Renderable>(player);
+        r.tint = {static_cast<Uint8>(t[0].get<int>()), static_cast<Uint8>(t[1].get<int>()),
+                   static_cast<Uint8>(t[2].get<int>()), static_cast<Uint8>(t[3].get<int>())};
+    }
+
+    // Buffs
+    {
+        Buffs buffs;
+        if (root.contains("buffs")) {
+            for (auto& bj : root["buffs"]) {
+                buffs.active.push_back({
+                    static_cast<BuffType>(bj.value("type", 0)),
+                    bj.value("turns", 0),
+                    bj.value("value", 0),
+                    bj.value("value2", 0)
+                });
+            }
+        }
+        world.add<Buffs>(player, std::move(buffs));
     }
 
     // Inventory

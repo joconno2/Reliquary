@@ -1,4 +1,5 @@
 #pragma once
+#include <SDL2/SDL.h>
 #include <string>
 #include <cstdint>
 
@@ -26,6 +27,21 @@ inline const char* material_name(MaterialType m) {
         case MaterialType::MITHRIL:    return "mithril";
         case MaterialType::ADAMANTINE: return "adamantine";
         default: return "";
+    }
+}
+
+// Visual tint per material (applied to item sprite)
+inline SDL_Color material_tint(MaterialType m) {
+    switch (m) {
+        case MaterialType::BONE:       return {220, 210, 190, 255}; // pale yellow
+        case MaterialType::WOOD:       return {180, 140, 100, 255}; // brown
+        case MaterialType::IRON:       return {200, 200, 210, 255}; // grey-blue
+        case MaterialType::STEEL:      return {220, 225, 230, 255}; // bright silver
+        case MaterialType::SILVER:     return {230, 230, 240, 255}; // bright white-blue
+        case MaterialType::OBSIDIAN:   return {60, 50, 70, 255};    // dark purple-black
+        case MaterialType::MITHRIL:    return {200, 220, 255, 255}; // bright blue-white
+        case MaterialType::ADAMANTINE: return {180, 255, 180, 255}; // green-white
+        default: return {255, 255, 255, 255};
     }
 }
 

@@ -16,6 +16,7 @@
 #include "components/prayer.h"
 #include "components/status_effect.h"
 #include "components/container.h"
+#include "components/buff.h"
 #include "components/disease.h"
 #include "components/pet.h"
 #include "components/corpse.h"
@@ -210,6 +211,7 @@ void Engine::do_save() {
     data.overworld_return_x = overworld_return_x_;
     data.overworld_return_y = overworld_return_y_;
     data.hardcore = hardcore_;
+    data.traits = build_traits_;
 
     if (save::save_game(save::default_path(), data, world_, player_, map_)) {
         log_.add("Game saved.", {100, 200, 100, 255});
@@ -238,6 +240,7 @@ void Engine::do_load() {
     overworld_return_x_ = data.overworld_return_x;
     overworld_return_y_ = data.overworld_return_y;
     hardcore_ = data.hardcore;
+    build_traits_ = data.traits;
 
     // Hardcore: one-shot load — delete save after loading
     if (hardcore_) {
@@ -919,6 +922,7 @@ void Engine::generate_level() {
         world_.add<GodAlignment>(player_, {build.god, 0});
         world_.add<StatusEffects>(player_);
         world_.add<Diseases>(player_);
+        world_.add<Buffs>(player_);
 
         auto& bg  = get_background_info(build.background);
 
@@ -1148,11 +1152,11 @@ void Engine::generate_level() {
             }
         }
 
-        // Legendary items — on the bottom floor of named dungeons only
+        // Legendary items — only in high-difficulty dungeons (zone_difficulty >= 5), bottom floor
         if (current_dungeon_idx_ >= 0 &&
             current_dungeon_idx_ < static_cast<int>(dungeon_registry_.size())) {
             auto& dentry = dungeon_registry_[current_dungeon_idx_];
-            if (dungeon_level_ >= dentry.max_depth && !dentry.name.empty()) {
+            if (dungeon_level_ >= dentry.max_depth && dentry.zone_difficulty >= 5) {
                 Entity leg = populate::spawn_legendary(world_, rooms_, rng_, dentry.name);
                 if (leg != NULL_ENTITY) {
                     log_.add("Something valuable gleams in the deepest chamber.", {255, 240, 140, 255});
@@ -1959,11 +1963,29 @@ void Engine::try_move_player(int dx, int dy) {
             char sbuf[128];
             snprintf(sbuf, sizeof(sbuf), "A shrine of %s. It means nothing to you.", sginfo.name);
             log_.add(sbuf, {128, 128, 128, 255});
-        } else {
-            // Different god shrine — option to desecrate
-            adjust_favor(2); // slight favor gain from your own god for finding a rival shrine
+        } else if (ga.favor <= -100) {
+            // Excommunicated — can convert at a rival god's shrine
+            ga.god = shrine_god;
+            ga.favor = 0;
+            // Permanent penalty: -2 to all attributes
+            auto& conv_stats = world_.get<Stats>(player_);
+            for (int ai = 0; ai < ATTR_COUNT; ai++)
+                conv_stats.attributes[ai] = std::max(1, conv_stats.attributes[ai] - 2);
+            // Update sprite tint
+            if (world_.has<Renderable>(player_)) {
+                auto& rend = world_.get<Renderable>(player_);
+                rend.tint.r = static_cast<Uint8>(255 - (255 - sginfo.color.r) / 5);
+                rend.tint.g = static_cast<Uint8>(255 - (255 - sginfo.color.g) / 5);
+                rend.tint.b = static_cast<Uint8>(255 - (255 - sginfo.color.b) / 5);
+            }
             char sbuf[128];
-            snprintf(sbuf, sizeof(sbuf), "A shrine of %s. %s watches as you pass.", sginfo.name, pginfo.name);
+            snprintf(sbuf, sizeof(sbuf), "You renounce your old faith. %s accepts you. (-2 all attributes)", sginfo.name);
+            log_.add(sbuf, {sginfo.color.r, sginfo.color.g, sginfo.color.b, 255});
+        } else {
+            // Different god shrine — slight favor from your own god
+            adjust_favor(2);
+            char sbuf[128];
+            snprintf(sbuf, sizeof(sbuf), "A shrine of %s. %s watches.", sginfo.name, pginfo.name);
             log_.add(sbuf, {sginfo.color.r, sginfo.color.g, sginfo.color.b, 255});
         }
         particles_.prayer_effect(nx, ny, sginfo.color.r, sginfo.color.g, sginfo.color.b);
@@ -2052,12 +2074,54 @@ void Engine::process_turn() {
             if (mresult.hit && world_.has<Stats>(e) && world_.has<StatusEffects>(player_)) {
                 auto& mname = world_.get<Stats>(e).name;
                 auto& fx = world_.get<StatusEffects>(player_);
-                if ((mname == "giant spider" || mname == "naga") && rng_.chance(25))
+                // Poison: spiders, naga, snakes
+                if ((mname == "giant spider" || mname == "naga" || mname == "snake") && rng_.chance(25))
                     fx.add(StatusType::POISON, 2, 5);
-                else if (mname == "ghoul" && rng_.chance(20))
+                // Bleed: ghouls, wolves, bears
+                else if ((mname == "ghoul" || mname == "wolf" || mname == "dire wolf" || mname == "bear") && rng_.chance(20))
                     fx.add(StatusType::BLEED, 1, 8);
+                // Burn: dragons
                 else if (mname == "dragon" && rng_.chance(30))
                     fx.add(StatusType::BURN, 3, 4);
+                // Stun: trolls, orc warchief (heavy hit)
+                else if ((mname == "troll" || mname == "orc warchief") && rng_.chance(20))
+                    fx.add(StatusType::STUNNED, 0, 1);
+                // Freeze: ice creatures
+                else if ((mname == "ice elemental" || mname == "frost drake") && rng_.chance(25))
+                    fx.add(StatusType::FROZEN, 0, 1);
+                // Confuse: wraiths, banshees
+                else if ((mname == "wraith" || mname == "banshee") && rng_.chance(20))
+                    fx.add(StatusType::CONFUSED, 0, 3);
+                // Fear: death knight on crit
+                else if (mname == "death knight" && mresult.critical)
+                    fx.add(StatusType::FEARED, 0, 2);
+                // Blind: basilisk
+                else if (mname == "basilisk" && rng_.chance(15))
+                    fx.add(StatusType::BLIND, 0, 3);
+            }
+            // Troll regeneration — heals 2 HP per turn if alive
+            if (world_.has<Stats>(e)) {
+                auto& ms = world_.get<Stats>(e);
+                if (ms.name == "troll" && ms.hp > 0 && ms.hp < ms.hp_max)
+                    ms.hp = std::min(ms.hp_max, ms.hp + 2);
+            }
+            // Skeleton shield — 25% chance to block melee attacks entirely
+            // (already handled implicitly by high natural_armor, but add message)
+            // Orc warchief — buff adjacent orcs (+2 damage)
+            if (world_.has<Stats>(e) && world_.get<Stats>(e).name == "orc warchief" && game_turn_ % 5 == 0) {
+                auto& ai_pool_b = world_.pool<AI>();
+                for (size_t bi = 0; bi < ai_pool_b.size(); bi++) {
+                    Entity be = ai_pool_b.entity_at(bi);
+                    if (be == e || !world_.has<Stats>(be) || !world_.has<Position>(be)) continue;
+                    auto& bs = world_.get<Stats>(be);
+                    auto& bp = world_.get<Position>(be);
+                    if (bs.name.find("orc") != std::string::npos &&
+                        std::abs(bp.x - mpos.x) <= 2 && std::abs(bp.y - mpos.y) <= 2) {
+                        // Temporary damage boost (stacks slowly)
+                        if (bs.base_damage < bs.hp_max / 2)
+                            bs.base_damage++;
+                    }
+                }
             }
             // Permanent disease contraction from monster hits
             if (mresult.hit && world_.has<Stats>(e) && world_.has<Diseases>(player_)
@@ -2546,20 +2610,28 @@ void Engine::execute_prayer(int prayer_idx) {
     auto& prayer = prayers[prayer_idx];
     auto& stats = world_.get<Stats>(player_);
 
-    // Check favor (negative favor = prayers fail)
+    // Excommunicated — prayers always fail
+    if (align.favor <= -100) {
+        log_.add("You are excommunicated. No god answers.", {180, 80, 80, 255});
+        return;
+    }
+    // Negative favor — prayers fail below -50
     if (align.favor < -50) {
         auto& ginfo = get_god_info(align.god);
         char buf[128];
-        snprintf(buf, sizeof(buf), "%s does not answer. Your faith is too weak.", ginfo.name);
+        snprintf(buf, sizeof(buf), "%s does not answer.", ginfo.name);
         log_.add(buf, {180, 120, 120, 255});
         return;
     }
-    if (align.favor < prayer.favor_cost) {
+    // Negative favor — prayer costs doubled
+    int cost = prayer.favor_cost;
+    if (align.favor < 0) cost *= 2;
+    if (align.favor < cost) {
         log_.add("Not enough favor.", {180, 120, 120, 255});
         return;
     }
 
-    align.favor -= prayer.favor_cost;
+    align.favor -= cost;
     player_acted_ = true;
     audio_.play(SfxId::PRAYER);
 
@@ -3185,6 +3257,14 @@ void Engine::describe_tile(int x, int y) {
         case TileType::DOOR_OPEN:      desc = "An open doorway."; break;
         case TileType::STAIRS_DOWN:    desc = "Stairs leading down."; break;
         case TileType::STAIRS_UP:      desc = "Stairs leading up."; break;
+        case TileType::SHRINE: {
+            GodId sg = static_cast<GodId>(tile.variant % GOD_COUNT);
+            auto& sgi = get_god_info(sg);
+            static char shrine_buf[128];
+            snprintf(shrine_buf, sizeof(shrine_buf), "A shrine of %s. Step on it to interact.", sgi.name);
+            desc = shrine_buf;
+            break;
+        }
         default: break;
     }
 
@@ -3226,11 +3306,27 @@ void Engine::describe_tile(int x, int y) {
                 if (world_.has<GodAlignment>(e)) {
                     auto& ga = world_.get<GodAlignment>(e);
                     auto& gi = get_god_info(ga.god);
-                    snprintf(buf, sizeof(buf), "%s — Paragon of %s (HP: %d/%d)",
-                             st.name.c_str(), gi.name, st.hp, st.hp_max);
+                    snprintf(buf, sizeof(buf), "%s — Paragon of %s. HP %d/%d, Dmg %d, Arm %d.",
+                             st.name.c_str(), gi.name, st.hp, st.hp_max, st.melee_damage(), st.protection());
                     log_.add(buf, {200, 160, 200, 255});
                 } else {
-                    snprintf(buf, sizeof(buf), "%s (HP: %d/%d)", st.name.c_str(), st.hp, st.hp_max);
+                    // Monster description with stats + abilities
+                    const char* note = "";
+                    if (st.name == "troll") note = " Regenerates.";
+                    else if (st.name == "giant spider") note = " Poisonous bite.";
+                    else if (st.name == "naga") note = " Paralyzing gaze. Poison.";
+                    else if (st.name == "lich") note = " Drains life at range.";
+                    else if (st.name == "dragon") note = " Breathes fire.";
+                    else if (st.name == "death knight") note = " Fear aura.";
+                    else if (st.name == "wraith") note = " Confusing wail.";
+                    else if (st.name == "basilisk") note = " Blinding gaze.";
+                    else if (st.name == "orc warchief") note = " Buffs nearby orcs.";
+                    else if (st.name == "goblin archer") note = " Ranged attack.";
+                    else if (st.name == "ghoul") note = " Causes bleeding.";
+                    else if (is_undead(st.name.c_str())) note = " Undead.";
+                    else if (is_animal(st.name.c_str())) note = " Beast.";
+                    snprintf(buf, sizeof(buf), "%s. HP %d/%d, Dmg %d, Arm %d.%s",
+                             st.name.c_str(), st.hp, st.hp_max, st.melee_damage(), st.protection(), note);
                     log_.add(buf, {220, 140, 140, 255});
                 }
                 meta_.total_creatures_examined++;
@@ -3240,9 +3336,24 @@ void Engine::describe_tile(int x, int y) {
             found_entity = true;
         } else if (world_.has<Item>(e)) {
             auto& item = world_.get<Item>(e);
-            char buf[128];
-            snprintf(buf, sizeof(buf), "%s.", item.display_name().c_str());
+            char buf[256];
+            if (item.type == ItemType::WEAPON || item.type == ItemType::ARMOR_CHEST ||
+                item.type == ItemType::ARMOR_HEAD || item.type == ItemType::ARMOR_FEET ||
+                item.type == ItemType::ARMOR_HANDS || item.type == ItemType::SHIELD ||
+                item.type == ItemType::AMULET || item.type == ItemType::RING) {
+                snprintf(buf, sizeof(buf), "%s. %s", item.display_name().c_str(), item.description.c_str());
+            } else {
+                snprintf(buf, sizeof(buf), "%s.", item.display_name().c_str());
+            }
             log_.add(buf, {180, 200, 160, 255});
+            found_entity = true;
+        } else if (world_.has<Container>(e)) {
+            auto& cont = world_.get<Container>(e);
+            if (cont.opened) {
+                log_.add("An opened container.", {140, 130, 120, 255});
+            } else {
+                log_.add("A closed container. Press g to open.", {180, 170, 140, 255});
+            }
             found_entity = true;
         } else if (world_.has<Corpse>(e)) {
             auto& c = world_.get<Corpse>(e);
@@ -3335,6 +3446,38 @@ void Engine::process_status_effects() {
         }
     }
 
+    // Tick spell buffs and revert expired ones
+    if (world_.has<Buffs>(player_)) {
+        auto& buffs = world_.get<Buffs>(player_);
+        buffs.tick();
+        auto expired = buffs.collect_expired();
+        for (auto& b : expired) {
+            switch (b.type) {
+                case BuffType::HARDEN_SKIN:
+                case BuffType::FORESIGHT:
+                case BuffType::SHIELD_OF_FAITH:
+                case BuffType::SANCTUARY:
+                    stats.natural_armor = std::max(0, stats.natural_armor - b.value);
+                    break;
+                case BuffType::HASTEN:
+                    stats.base_speed -= b.value;
+                    break;
+                case BuffType::STONE_FIST:
+                    stats.base_damage = std::max(1, stats.base_damage - b.value);
+                    break;
+                case BuffType::IRON_BODY:
+                    stats.natural_armor = std::max(0, stats.natural_armor - b.value);
+                    stats.base_speed += b.value2; // restore speed penalty
+                    break;
+                case BuffType::BARKSKIN:
+                    stats.natural_armor = std::max(0, stats.natural_armor - b.value);
+                    stats.poison_resist -= b.value2;
+                    break;
+            }
+            log_.add("A spell effect wears off.", {140, 130, 120, 255});
+        }
+    }
+
     // Tick god-specific status effects on player
     if (stats.invisible_turns > 0) stats.invisible_turns--;
     if (stats.unyielding_turns > 0) stats.unyielding_turns--;
@@ -3397,8 +3540,66 @@ void Engine::process_status_effects() {
         if (ga.god == GodId::LETHIS && stats.hp <= 0 && !ga.lethal_save_used) {
             ga.lethal_save_used = true;
             stats.hp = 1;
-            log_.add("You die. Then you wake up. Was it a dream?", {160, 120, 200, 255});
+            log_.add("You die. Then you wake up.", {160, 120, 200, 255});
             particles_.prayer_effect(pp.x, pp.y, 160, 120, 200);
+        }
+
+        // === Negative favor punishments (escalating) ===
+        if (ga.god != GodId::NONE && ga.favor < 0) {
+            auto& ginfo = get_god_info(ga.god);
+
+            // Mild: favor -1 to -30 — prayer costs doubled (handled in execute_prayer)
+            // Moderate: favor -31 to -60 — random stat drain every 50 turns
+            if (ga.favor <= -30 && game_turn_ % 50 == 0) {
+                int attr_idx = rng_.range(0, 6);
+                int cur = stats.attributes[attr_idx];
+                if (cur > 3) {
+                    stats.attributes[attr_idx] = cur - 1;
+                    static const char* ATTR_NAMES[] = {"STR","DEX","CON","INT","WIL","PER","CHA"};
+                    char buf[128];
+                    snprintf(buf, sizeof(buf), "%s's displeasure weakens you. (-1 %s)", ginfo.name, ATTR_NAMES[attr_idx]);
+                    log_.add(buf, {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255});
+                }
+            }
+
+            // Severe: favor -61 to -99 — periodic HP damage
+            if (ga.favor <= -60 && game_turn_ % 20 == 0) {
+                int dmg = 1 + (-ga.favor) / 30;
+                stats.hp -= dmg;
+                if (game_turn_ % 60 == 0) {
+                    char buf[128];
+                    snprintf(buf, sizeof(buf), "%s punishes your faithlessness. (%d)", ginfo.name, dmg);
+                    log_.add(buf, {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255});
+                }
+            }
+
+            // Excommunication: favor == -100
+            if (ga.favor <= -100 && game_turn_ % 40 == 0) {
+                // Spawn a divine enemy near the player
+                for (int a = 0; a < 30; a++) {
+                    int mx = pp.x + rng_.range(-4, 4);
+                    int my = pp.y + rng_.range(-4, 4);
+                    if (mx == pp.x && my == pp.y) continue;
+                    if (!map_.in_bounds(mx, my) || !map_.is_walkable(mx, my)) continue;
+                    if (combat::entity_at(world_, mx, my, player_) != NULL_ENTITY) continue;
+                    Entity de = world_.create();
+                    world_.add<Position>(de, {mx, my});
+                    world_.add<Renderable>(de, {SHEET_MONSTERS, 3, 4, // death knight sprite
+                                                 {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255}, 5});
+                    Stats ds; ds.name = "divine avenger"; ds.hp = 30 + stats.level * 5;
+                    ds.hp_max = ds.hp; ds.base_damage = 6 + stats.level; ds.base_speed = 110;
+                    ds.xp_value = 25 + stats.level * 5;
+                    world_.add<Stats>(de, std::move(ds));
+                    world_.add<AI>(de, {AIState::HUNTING, pp.x, pp.y, 0, 0}); // never flees
+                    world_.add<Energy>(de, {0, 110});
+                    if (game_turn_ % 120 == 0) {
+                        char buf[128];
+                        snprintf(buf, sizeof(buf), "%s sends an avenger.", ginfo.name);
+                        log_.add(buf, {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255});
+                    }
+                    break;
+                }
+            }
         }
     }
 
@@ -4743,15 +4944,28 @@ void Engine::handle_inventory_action(InvAction action) {
                     if (book.knows(spell)) {
                         log_.add("You already know this spell.", {150, 140, 130, 255});
                     } else {
-                        book.learn(spell);
-                        auto& sinfo = get_spell_info(spell);
-                        char buf[128];
-                        snprintf(buf, sizeof(buf), "You learn %s!", sinfo.name);
-                        log_.add(buf, {160, 140, 220, 255});
-                        audio_.play(SfxId::SPELL);
-                        inv.remove(item_e);
-                        world_.destroy(item_e);
-                        player_acted_ = true;
+                        // INT-based study check: fail chance = 60 - INT*2 (min 5%)
+                        int fail_chance = std::max(5, 60 - world_.get<Stats>(player_).attr(Attr::INT) * 2);
+                        if (rng_.chance(fail_chance)) {
+                            // Failed — book destroyed
+                            char buf[128];
+                            snprintf(buf, sizeof(buf), "The %s crumbles as you study it. The spell is lost.", item.display_name().c_str());
+                            log_.add(buf, {200, 120, 120, 255});
+                            turn_actions_.destroyed_book = true;
+                            inv.remove(item_e);
+                            world_.destroy(item_e);
+                            player_acted_ = true;
+                        } else {
+                            book.learn(spell);
+                            auto& sinfo = get_spell_info(spell);
+                            char buf[128];
+                            snprintf(buf, sizeof(buf), "You learn %s.", sinfo.name);
+                            log_.add(buf, {160, 140, 220, 255});
+                            audio_.play(SfxId::SPELL);
+                            inv.remove(item_e);
+                            world_.destroy(item_e);
+                            player_acted_ = true;
+                        }
                     }
                 }
             } else {

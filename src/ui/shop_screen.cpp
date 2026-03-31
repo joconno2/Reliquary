@@ -77,16 +77,46 @@ void ShopScreen::generate_stock(RNG& rng, int difficulty) {
     // Bonus damage/armor on items from higher-difficulty shops
     int stat_bonus = difficulty / 3; // +0 at diff 0-2, +1 at 3-5, +2 at 6-8
 
-    // Pick 3-4 weapons
+    // Pick 3-4 weapons — assign materials based on town difficulty
     int n_weapons = rng.range(3, 4);
     for (int i = 0; i < n_weapons; i++) {
         int idx = rng.range(min_weapon, SHOP_WEAPON_COUNT - 1);
         auto si = make_shop_item(SHOP_WEAPONS[idx]);
         si.item.damage_bonus += stat_bonus;
         si.item.gold_value += stat_bonus * 15;
-        // Quality prefix for high-difficulty shops
-        if (stat_bonus >= 2) si.item.name = "Fine " + si.item.name;
-        else if (stat_bonus >= 1) si.item.name = "Sturdy " + si.item.name;
+
+        // Material based on difficulty
+        // 0-2: iron (default), 3-4: steel, 5-6: silver/obsidian, 7-8: silver/obsidian (mithril/adamantine stay dungeon-only)
+        if (difficulty >= 5) {
+            int mroll = rng.range(1, 100);
+            if (mroll <= 40) {
+                si.item.material = MaterialType::SILVER;
+                si.item.damage_bonus += material_damage_mod(MaterialType::SILVER);
+                si.item.gold_value += 30;
+            } else if (mroll <= 70) {
+                si.item.material = MaterialType::OBSIDIAN;
+                si.item.damage_bonus += material_damage_mod(MaterialType::OBSIDIAN);
+                si.item.gold_value += 40;
+            } else {
+                si.item.material = MaterialType::STEEL;
+                si.item.damage_bonus += material_damage_mod(MaterialType::STEEL);
+                si.item.gold_value += 15;
+            }
+        } else if (difficulty >= 3) {
+            si.item.material = MaterialType::STEEL;
+            si.item.damage_bonus += material_damage_mod(MaterialType::STEEL);
+            si.item.gold_value += 15;
+        }
+
+        // Update display name with material
+        if (si.item.material != MaterialType::NONE && si.item.material != MaterialType::IRON) {
+            si.item.name = std::string(material_name(si.item.material)) + " " + si.item.name;
+        } else if (stat_bonus >= 2) {
+            si.item.name = "Fine " + si.item.name;
+        } else if (stat_bonus >= 1) {
+            si.item.name = "Sturdy " + si.item.name;
+        }
+
         stock_.push_back(std::move(si));
     }
     // Pick 3-4 armor pieces
@@ -110,6 +140,53 @@ void ShopScreen::generate_stock(RNG& rng, int difficulty) {
             si.item.heal_amount += difficulty * 2;
             si.item.gold_value += difficulty * 5;
         }
+        stock_.push_back(std::move(si));
+    }
+
+    // Chance of interesting accessories — amulets, rings, staves
+    // 40% chance of an amulet
+    if (rng.chance(40)) {
+        static const ShopItemDef SHOP_AMULETS[] = {
+            {"red pendant",     "+1 attack.",         ItemType::AMULET, EquipSlot::AMULET, 0, 16, 0, 0, 1, 0, 0, 40},
+            {"metal pendant",   "+1 AC.",             ItemType::AMULET, EquipSlot::AMULET, 1, 16, 0, 1, 0, 0, 0, 50},
+            {"crystal pendant", "+1 dodge.",           ItemType::AMULET, EquipSlot::AMULET, 2, 16, 0, 0, 0, 1, 0, 55},
+            {"disc pendant",    "+2 attack.",         ItemType::AMULET, EquipSlot::AMULET, 3, 16, 0, 0, 2, 0, 0, 65},
+            {"stone pendant",   "+2 AC.",             ItemType::AMULET, EquipSlot::AMULET, 5, 16, 0, 2, 0, 0, 0, 75},
+        };
+        int max_a = std::min(difficulty / 2 + 1, 4);
+        int idx = rng.range(0, max_a);
+        auto si = make_shop_item(SHOP_AMULETS[idx]);
+        si.item.gold_value += difficulty * 8;
+        si.item.identified = true;
+        stock_.push_back(std::move(si));
+    }
+    // 30% chance of a ring
+    if (rng.chance(30)) {
+        static const ShopItemDef SHOP_RINGS[] = {
+            {"gold band",       "+0.",                ItemType::RING, EquipSlot::RING_1, 1, 17, 0, 0, 0, 0, 0, 30},
+            {"jade ring",       "+1 dodge.",           ItemType::RING, EquipSlot::RING_1, 2, 18, 0, 0, 0, 1, 0, 45},
+            {"silver signet",   "+1 AC.",             ItemType::RING, EquipSlot::RING_1, 1, 18, 0, 1, 0, 0, 0, 50},
+            {"ruby ring",       "+1 damage, +1 attack.", ItemType::RING, EquipSlot::RING_1, 3, 17, 1, 0, 1, 0, 0, 65},
+        };
+        int max_r = std::min(difficulty / 2, 3);
+        int idx = rng.range(0, max_r);
+        auto si = make_shop_item(SHOP_RINGS[idx]);
+        si.item.gold_value += difficulty * 6;
+        si.item.identified = true;
+        stock_.push_back(std::move(si));
+    }
+    // 20% chance of a staff (difficulty 3+)
+    if (difficulty >= 3 && rng.chance(20)) {
+        static const ShopItemDef SHOP_STAVES[] = {
+            {"wooden staff",    "+2 dmg.",            ItemType::WEAPON, EquipSlot::MAIN_HAND, 2, 10, 2, 0, 0, 0, 0, 20},
+            {"crystal staff",   "+3 dmg, +1 atk.",   ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 10, 3, 0, 1, 0, 0, 50},
+            {"holy staff",      "+3 dmg, +1 dodge.", ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 10, 3, 0, 0, 1, 0, 55},
+            {"blue staff",      "+4 dmg, +1 atk.",   ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 10, 4, 0, 1, 0, 0, 70},
+        };
+        int max_s = std::min((difficulty - 2) / 2, 3);
+        int idx = rng.range(0, max_s);
+        auto si = make_shop_item(SHOP_STAVES[idx]);
+        si.item.gold_value += difficulty * 5;
         stock_.push_back(std::move(si));
     }
 }
