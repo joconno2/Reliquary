@@ -191,13 +191,19 @@ void ShopScreen::generate_stock(RNG& rng, int difficulty) {
     }
 }
 
-void ShopScreen::open(Entity player, [[maybe_unused]] World& world, RNG& rng, int* gold, int difficulty) {
+void ShopScreen::open(Entity player, [[maybe_unused]] World& world, RNG& rng, int* gold, int difficulty, int price_mult) {
     open_ = true;
     selected_ = 0;
     player_ = player;
     gold_ = gold;
+    price_mult_ = price_mult;
     buy_tab_ = true;
     generate_stock(rng, difficulty);
+    // Apply price multiplier to stock
+    if (price_mult_ != 100) {
+        for (auto& si : stock_)
+            si.item.gold_value = std::max(1, si.item.gold_value * price_mult_ / 100);
+    }
 }
 
 ShopAction ShopScreen::handle_input(SDL_Event& event) {

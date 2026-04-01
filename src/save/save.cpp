@@ -75,6 +75,7 @@ static json item_to_json(const Item& item) {
     j["pet_id"] = item.pet_id;
     j["material"] = static_cast<int>(item.material);
     j["tags"] = item.tags;
+    j["relic_god"] = item.relic_god;
     return j;
 }
 
@@ -101,6 +102,7 @@ static Item json_to_item(const json& j) {
     item.pet_id = j.value("pet_id", -1);
     item.material = static_cast<MaterialType>(j.value("material", 0));
     item.tags = j.value("tags", (uint32_t)0);
+    item.relic_god = j.value("relic_god", -1);
     return item;
 }
 

@@ -11,11 +11,14 @@ static TileType char_to_tile(char c) {
         case ':': return TileType::FLOOR_STONE;
         case '#': return TileType::WALL_STONE_BRICK;
         case 'w': return TileType::WALL_WOOD;
+        case 'g': return TileType::WALL_GRASS;
+        case 'n': return TileType::WALL_SANDSTONE;
         case 'T': return TileType::TREE;
         case 't': case '"': case 'b': case 'c': return TileType::BRUSH;
         case '~': return TileType::WATER;
         case 's': return TileType::FLOOR_SAND;
         case 'i': return TileType::FLOOR_ICE;
+        case 'I': return TileType::FLOOR_SNOW;
         case 'R': return TileType::ROCK;
         case '+': return TileType::DOOR_CLOSED;
         case '>': return TileType::STAIRS_DOWN;

@@ -53,6 +53,7 @@ struct DungeonEntry {
     std::string quest; // empty = generic dungeon
     int zone_difficulty = 0; // 0-8, based on distance from Thornwall
     int max_depth = 3;       // how many floors this dungeon has
+    int patron_god_idx = -1; // index into GodId enum, -1 = no patron
 };
 
 enum class GameState {
@@ -213,7 +214,6 @@ private:
     void render_god_visuals(const Camera& cam, int y_offset);
     void fire_ranged();
     void describe_tile(int x, int y);
-    void process_status_effects();
     void sepulchre_ambient();
     void spawn_pet_visual(int pet_id);
     void despawn_pet_visual();
@@ -222,6 +222,7 @@ private:
     void update_meta_on_end();
     void update_music_for_location();
     void render_victory();
+    void reset_to_main_menu();
     void do_save();
     void do_load();
 };

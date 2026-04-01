@@ -25,7 +25,7 @@ class ShopScreen {
 public:
     ShopScreen() = default;
 
-    void open(Entity player, World& world, RNG& rng, int* gold, int difficulty = 0);
+    void open(Entity player, World& world, RNG& rng, int* gold, int difficulty = 0, int price_mult = 100);
     void close() { open_ = false; }
     bool is_open() const { return open_; }
 
@@ -43,6 +43,7 @@ private:
     int selected_ = 0;
     Entity player_ = 0;
     int* gold_ = nullptr;
+    int price_mult_ = 100; // percentage: 100 = normal, 200 = double
     bool buy_tab_ = true; // true = Buy, false = Sell
     std::vector<ShopItem> stock_;
 

@@ -1,4 +1,6 @@
 #include "core/engine.h"
+#include "systems/god_system.h"
+#include "systems/npc_interaction.h"
 #include "components/position.h"
 #include "components/renderable.h"
 #include "components/player.h"
@@ -7,6 +9,7 @@
 #include "components/ai.h"
 #include "components/energy.h"
 #include "components/corpse.h"
+#include "data/world_data.h"
 #include "components/item.h"
 #include "components/inventory.h"
 #include "components/god.h"
@@ -20,11 +23,12 @@
 #include "components/buff.h"
 #include "components/disease.h"
 #include "components/pet.h"
-#include "components/corpse.h"
 #include "components/quest_target.h"
 #include "components/dynamic_quest.h"
 #include "ui/ui_draw.h"
+#include "ui/death_screen.h"
 #include "systems/magic.h"
+#include "systems/status.h"
 #include "generation/quest_gen.h"
 #include "components/background.h"
 #include "components/traits.h"
@@ -33,6 +37,8 @@
 #include "systems/ai.h"
 #include "generation/dungeon.h"
 #include "generation/populate.h"
+#include "generation/overworld.h"
+#include "generation/player_setup.h"
 #include <SDL2/SDL_image.h>
 #include <nlohmann/json.hpp>
 #include <fstream>
@@ -135,6 +141,7 @@ bool Engine::init() {
                     de.zone = entry.value("zone", "warrens");
                     if (entry.contains("quest") && !entry["quest"].is_null())
                         de.quest = entry["quest"].get<std::string>();
+                    de.patron_god_idx = entry.value("patron_god_idx", -1);
                     dungeon_registry_.push_back(std::move(de));
                 }
             }
@@ -587,12 +594,12 @@ void Engine::generate_level() {
         auto& align = world_.get<GodAlignment>(player_);
         // Thessarka gains favor from exploration (descending deeper)
         if (align.god == GodId::THESSARKA) {
-            adjust_favor(2);
+            god_system::adjust_favor(world_, player_, log_, 2);
             align.items_identified_floor = 0; // reset auto-ID for new floor
         }
         // Gathruun gains favor from depth
         if (align.god == GodId::GATHRUUN) {
-            adjust_favor(1);
+            god_system::adjust_favor(world_, player_, log_, 1);
         }
         // Lethis: reset lethal save per floor
         if (align.god == GodId::LETHIS) {
@@ -604,7 +611,7 @@ void Engine::generate_level() {
         }
         // Lethis tenet: check if rested last floor (violation if not)
         if (align.god == GodId::LETHIS && dungeon_level_ > 2 && !rested_this_floor_) {
-            adjust_favor(-2);
+            god_system::adjust_favor(world_, player_, log_, -2);
             log_.add("Lethis frowns. You did not rest.", {160, 120, 200, 255});
         }
         rested_this_floor_ = false;
@@ -689,31 +696,6 @@ void Engine::generate_level() {
         auto pick_dialogue = [](const char* pool[], int pool_size, int x, int y) -> const char* {
             unsigned h = static_cast<unsigned>(x * 31 + y * 17 + x * y * 7);
             return pool[h % pool_size];
-        };
-
-        // Quest town centers for proximity-based quest assignment
-        struct QuestTown { int x, y; const char* name; };
-        static constexpr QuestTown QUEST_TOWNS[] = {
-            {1000, 750, "Thornwall"},
-            { 750, 650, "Ashford"},
-            {1300, 670, "Greywatch"},
-            {1050, 450, "Frostmere"},
-            {1400, 750, "Ironhearth"},
-            {1450, 500, "Candlemere"},
-            { 550, 550, "Hollowgate"},
-            { 850, 950, "Millhaven"},
-        };
-        static constexpr int QUEST_TOWN_COUNT = sizeof(QUEST_TOWNS) / sizeof(QUEST_TOWNS[0]);
-        constexpr int TOWN_RADIUS = 30;
-
-        // Helper: find which quest town an NPC is near (-1 if none)
-        auto near_quest_town = [&](int mx, int my) -> int {
-            for (int i = 0; i < QUEST_TOWN_COUNT; i++) {
-                if (std::abs(mx - QUEST_TOWNS[i].x) < TOWN_RADIUS &&
-                    std::abs(my - QUEST_TOWNS[i].y) < TOWN_RADIUS)
-                    return i;
-            }
-            return -1;
         };
 
         // Track which main quest slots have been assigned so each is assigned once
@@ -921,6 +903,7 @@ void Engine::generate_level() {
             }
             npc_comp.home_x = me.x;
             npc_comp.home_y = me.y;
+            npc_comp.god_affiliation = get_town_god(me.x, me.y);
             world_.add<NPC>(npc, std::move(npc_comp));
             world_.add<Renderable>(npc, {SHEET_ROGUES, sx, sy, {255, 255, 255, 255}, 5});
 
@@ -954,6 +937,7 @@ void Engine::generate_level() {
                 nc.dialogue = dialogue;
                 nc.home_x = tx;
                 nc.home_y = ty;
+                nc.god_affiliation = get_town_god(cx, cy);
                 world_.add<NPC>(e, std::move(nc));
                 world_.add<Renderable>(e, {SHEET_ROGUES, spr_x, spr_y, {255, 255, 255, 255}, 5});
                 Stats ns;
@@ -965,13 +949,6 @@ void Engine::generate_level() {
             }
         };
 
-        struct TownSpawn { int x, y; };
-        static const TownSpawn TOWN_SPAWNS[] = {
-            {1000,750}, {750,650}, {1300,670}, {850,950}, {1200,930},
-            {1050,450}, {650,800}, {1400,750}, {1000,1100}, {800,400},
-            {1250,1100}, {550,550}, {1450,500}, {900,1200}, {1100,300},
-            {700,1050}, {1350,1000}, {1150,550}, {600,700}, {1500,850},
-        };
         static const char* HERBALIST_LINES[] = {
             "The wilds hold remedies for every ill, if you know where to look.",
             "Moonpetal grows only where the dead have lain. Think about that.",
@@ -982,10 +959,10 @@ void Engine::generate_level() {
             "Every town needs something only another town has.",
             "The roads are getting worse. Good for business, bad for living.",
         };
-        for (auto& ts : TOWN_SPAWNS) {
-            spawn_extra_npc(ts.x, ts.y, "Herbalist", NPCRole::PRIEST,
+        for (int i = 0; i < TOWN_COUNT; i++) {
+            spawn_extra_npc(ALL_TOWNS[i].x, ALL_TOWNS[i].y, "Herbalist", NPCRole::PRIEST,
                             HERBALIST_LINES[rng_.range(0, 2)], 3, 6);
-            spawn_extra_npc(ts.x, ts.y, "Merchant", NPCRole::SHOPKEEPER,
+            spawn_extra_npc(ALL_TOWNS[i].x, ALL_TOWNS[i].y, "Merchant", NPCRole::SHOPKEEPER,
                             MERCHANT_LINES[rng_.range(0, 2)], 2, 6);
         }
 
@@ -993,31 +970,9 @@ void Engine::generate_level() {
         populate_overworld();
 
         // Generate dynamic side quests for each town's NPCs
-        struct TownInfo { int x, y; const char* name; };
-        static const TownInfo TOWNS[] = {
-            {1000, 750, "Thornwall"},
-            {750, 650, "Ashford"},
-            {1300, 670, "Greywatch"},
-            {850, 950, "Millhaven"},
-            {1200, 930, "Stonehollow"},
-            {1050, 450, "Frostmere"},
-            {650, 800, "Bramblewood"},
-            {1400, 750, "Ironhearth"},
-            {1000, 1100, "Dustfall"},
-            {800, 400, "Whitepeak"},
-            {1250, 1100, "Drywell"},
-            {550, 550, "Hollowgate"},
-            {1450, 500, "Candlemere"},
-            {900, 1200, "Sandmoor"},
-            {1100, 300, "Glacierveil"},
-            {700, 1050, "Tanglewood"},
-            {1350, 1000, "Redrock"},
-            {1150, 550, "Ravenshold"},
-            {600, 700, "Fenwatch"},
-            {1500, 850, "Endgate"},
-        };
-        for (auto& t : TOWNS) {
-            quest_gen::generate_town_quests(world_, map_, rng_, t.x, t.y, t.name);
+        for (int i = 0; i < TOWN_COUNT; i++) {
+            quest_gen::generate_town_quests(world_, map_, rng_,
+                ALL_TOWNS[i].x, ALL_TOWNS[i].y, ALL_TOWNS[i].name);
         }
     } else {
         // Dungeon zone themes — keyed by name for registry lookup
@@ -1089,211 +1044,9 @@ void Engine::generate_level() {
     // Create or reposition player
     if (player_ == NULL_ENTITY) {
         auto build = creation_screen_.get_build();
-        auto& cls = get_class_info(build.class_id);
-        auto& god = get_god_info(build.god);
-
-        player_ = world_.create();
-        world_.add<Player>(player_);
-        world_.add<Position>(player_, {start_x, start_y});
-        // Subtle god-colored sprite tint
-        SDL_Color player_tint = {255, 255, 255, 255};
-        if (build.god != GodId::NONE) {
-            auto& gi = get_god_info(build.god);
-            // Blend toward god color ~20% (subtle tint, not a full recolor)
-            player_tint.r = static_cast<Uint8>(255 - (255 - gi.color.r) / 5);
-            player_tint.g = static_cast<Uint8>(255 - (255 - gi.color.g) / 5);
-            player_tint.b = static_cast<Uint8>(255 - (255 - gi.color.b) / 5);
-        }
-        world_.add<Renderable>(player_, {SHEET_ROGUES, cls.sprite_x, cls.sprite_y,
-                                         player_tint, 10});
-        world_.add<Energy>(player_, {0, 100});
-        world_.add<Inventory>(player_);
-        world_.add<GodAlignment>(player_, {build.god, 0});
-        world_.add<StatusEffects>(player_);
-        world_.add<Diseases>(player_);
-        world_.add<Buffs>(player_);
-
-        auto& bg  = get_background_info(build.background);
-
-        Stats player_stats;
-        player_stats.name = build.name;
-        player_stats.hp = cls.hp + god.bonus_hp + bg.bonus_hp;
-        player_stats.hp_max = cls.hp + god.bonus_hp + bg.bonus_hp;
-        player_stats.mp = cls.mp + god.bonus_mp;
-        player_stats.mp_max = cls.mp + god.bonus_mp;
-        player_stats.set_attr(Attr::STR, cls.str   + god.str_bonus + bg.str_bonus);
-        player_stats.set_attr(Attr::DEX, cls.dex   + god.dex_bonus + bg.dex_bonus);
-        player_stats.set_attr(Attr::CON, cls.con   + god.con_bonus + bg.con_bonus);
-        player_stats.set_attr(Attr::INT, cls.intel + god.int_bonus + bg.int_bonus);
-        player_stats.set_attr(Attr::WIL, cls.wil   + god.wil_bonus + bg.wil_bonus);
-        player_stats.set_attr(Attr::PER, cls.per   + god.per_bonus + bg.per_bonus);
-        player_stats.set_attr(Attr::CHA, cls.cha   + god.cha_bonus + bg.cha_bonus);
-        player_stats.base_damage = cls.base_damage + bg.bonus_damage;
-        player_stats.base_speed = 100;
-
-        // Apply trait stat + gameplay modifiers
-        build_traits_ = build.traits;
-        for (TraitId tid : build.traits) {
-            const TraitInfo& tr = get_trait_info(tid);
-            player_stats.set_attr(Attr::STR, player_stats.attr(Attr::STR) + tr.str_mod);
-            player_stats.set_attr(Attr::DEX, player_stats.attr(Attr::DEX) + tr.dex_mod);
-            player_stats.set_attr(Attr::CON, player_stats.attr(Attr::CON) + tr.con_mod);
-            player_stats.set_attr(Attr::INT, player_stats.attr(Attr::INT) + tr.int_mod);
-            player_stats.set_attr(Attr::WIL, player_stats.attr(Attr::WIL) + tr.wil_mod);
-            player_stats.set_attr(Attr::PER, player_stats.attr(Attr::PER) + tr.per_mod);
-            player_stats.set_attr(Attr::CHA, player_stats.attr(Attr::CHA) + tr.cha_mod);
-            player_stats.hp_max += tr.bonus_hp;
-            player_stats.hp += tr.bonus_hp;
-            player_stats.natural_armor += tr.bonus_natural_armor;
-            player_stats.base_speed += tr.bonus_speed;
-            player_stats.fire_resist += tr.fire_resist;
-            player_stats.poison_resist += tr.poison_resist;
-            player_stats.bleed_resist += tr.bleed_resist;
-        }
-
-        // God-specific resistances and passive stat mods
-        switch (build.god) {
-            case GodId::SOLETH:
-                player_stats.fire_resist = 30;
-                break;
-            case GodId::KHAEL:
-                player_stats.poison_resist = 25;
-                break;
-            case GodId::THALARA:
-                player_stats.poison_resist = 100; // immune
-                player_stats.fire_resist = -20;   // weakness
-                break;
-            case GodId::SYTHARA:
-                player_stats.poison_resist = 100; // immune — you ARE the plague
-                break;
-            case GodId::GATHRUUN:
-                player_stats.natural_armor += 3; // stone's endurance
-                break;
-            default: break;
-        }
-
-        world_.add<Stats>(player_, std::move(player_stats));
-
-        // Starting spells based on class
-        Spellbook book;
-        switch (build.class_id) {
-            case ClassId::WIZARD:
-                book.learn(SpellId::SPARK);
-                book.learn(SpellId::FORCE_BOLT);
-                book.learn(SpellId::IDENTIFY);
-                break;
-            case ClassId::RANGER:
-                book.learn(SpellId::DETECT_MONSTERS);
-                break;
-            case ClassId::DRUID:
-                book.learn(SpellId::ENTANGLE);
-                book.learn(SpellId::MINOR_HEAL);
-                break;
-            case ClassId::WAR_CLERIC:
-                book.learn(SpellId::MINOR_HEAL);
-                book.learn(SpellId::MAJOR_HEAL);
-                break;
-            case ClassId::WARLOCK:
-                book.learn(SpellId::DRAIN_LIFE);
-                book.learn(SpellId::FEAR);
-                break;
-            case ClassId::NECROMANCER:
-                book.learn(SpellId::DRAIN_LIFE);
-                book.learn(SpellId::FEAR);
-                book.learn(SpellId::RAISE_DEAD);
-                break;
-            case ClassId::SCHEMA_MONK:
-                book.learn(SpellId::HARDEN_SKIN);
-                break;
-            case ClassId::TEMPLAR:
-                book.learn(SpellId::MINOR_HEAL);
-                break;
-            default:
-                book.learn(SpellId::MINOR_HEAL); // everyone gets minor heal
-                break;
-        }
-        world_.add<Spellbook>(player_, std::move(book));
-
-        // Starting gear per class
-        auto give_item = [&](const char* name, const char* desc, ItemType type, EquipSlot slot,
-                              int sx, int sy, int dmg, int arm, int atk, int dge, int range_val) {
-            Entity ie = world_.create();
-            Item item;
-            item.name = name; item.description = desc;
-            item.type = type; item.slot = slot;
-            item.damage_bonus = dmg; item.armor_bonus = arm;
-            item.attack_bonus = atk; item.dodge_bonus = dge;
-            item.range = range_val;
-            item.identified = true; item.gold_value = 0;
-            world_.add<Item>(ie, std::move(item));
-            world_.add<Renderable>(ie, {SHEET_ITEMS, sx, sy, {255,255,255,255}, 1});
-            auto& inv = world_.get<Inventory>(player_);
-            inv.add(ie);
-            inv.equip(world_.get<Item>(ie).slot, ie);
-        };
-
-        switch (build.class_id) {
-            case ClassId::FIGHTER:
-                give_item("short sword", "A reliable sidearm.", ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 0, 3, 0, 0, 0, 0);
-                give_item("leather armor", "Supple hide.", ItemType::ARMOR_CHEST, EquipSlot::CHEST, 1, 12, 0, 2, 0, 0, 0);
-                break;
-            case ClassId::ROGUE:
-                give_item("dagger", "A short, sharp blade.", ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 0, 2, 0, 1, 1, 0);
-                give_item("leather armor", "Supple hide.", ItemType::ARMOR_CHEST, EquipSlot::CHEST, 1, 12, 0, 2, 0, 0, 0);
-                break;
-            case ClassId::WIZARD:
-                give_item("dagger", "A short, sharp blade.", ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 0, 2, 0, 0, 0, 0);
-                break;
-            case ClassId::RANGER:
-                give_item("short bow", "Light and quick.", ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 9, 3, 0, 1, 0, 6);
-                give_item("leather armor", "Supple hide.", ItemType::ARMOR_CHEST, EquipSlot::CHEST, 1, 12, 0, 2, 0, 0, 0);
-                break;
-            case ClassId::BARBARIAN:
-                give_item("battle axe", "Heavy. Splits bone.", ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 3, 6, 0, -1, 0, 0);
-                break;
-            case ClassId::KNIGHT:
-                give_item("long sword", "A well-balanced blade.", ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 0, 5, 0, 0, 0, 0);
-                give_item("buckler", "A small, round shield.", ItemType::SHIELD, EquipSlot::OFF_HAND, 0, 11, 0, 2, 0, 1, 0);
-                give_item("chain mail", "Rings of iron.", ItemType::ARMOR_CHEST, EquipSlot::CHEST, 3, 12, 0, 4, 0, -1, 0);
-                break;
-            case ClassId::MONK:
-            case ClassId::SCHEMA_MONK:
-                // Unarmed specialists — no gear
-                break;
-            case ClassId::TEMPLAR:
-                give_item("mace", "Blunt and merciless.", ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 5, 4, 0, 0, 0, 0);
-                give_item("buckler", "A small, round shield.", ItemType::SHIELD, EquipSlot::OFF_HAND, 0, 11, 0, 2, 0, 1, 0);
-                give_item("chain mail", "Rings of iron.", ItemType::ARMOR_CHEST, EquipSlot::CHEST, 3, 12, 0, 4, 0, -1, 0);
-                break;
-            case ClassId::DRUID:
-                give_item("spear", "Long reach.", ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 6, 4, 0, 1, 0, 0);
-                give_item("leather armor", "Supple hide.", ItemType::ARMOR_CHEST, EquipSlot::CHEST, 1, 12, 0, 2, 0, 0, 0);
-                break;
-            case ClassId::WAR_CLERIC:
-                give_item("mace", "Blunt and merciless.", ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 5, 4, 0, 0, 0, 0);
-                give_item("chain mail", "Rings of iron.", ItemType::ARMOR_CHEST, EquipSlot::CHEST, 3, 12, 0, 4, 0, -1, 0);
-                break;
-            case ClassId::WARLOCK:
-            case ClassId::NECROMANCER:
-                give_item("dagger", "A short, sharp blade.", ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 0, 2, 0, 0, 0, 0);
-                break;
-            case ClassId::DWARF:
-                give_item("war hammer", "Crushes plate.", ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 4, 8, 0, -1, 0, 0);
-                give_item("chain mail", "Rings of iron.", ItemType::ARMOR_CHEST, EquipSlot::CHEST, 3, 12, 0, 4, 0, -1, 0);
-                break;
-            case ClassId::ELF:
-                give_item("long sword", "A well-balanced blade.", ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 0, 5, 0, 0, 0, 0);
-                give_item("leather armor", "Supple hide.", ItemType::ARMOR_CHEST, EquipSlot::CHEST, 1, 12, 0, 2, 0, 0, 0);
-                break;
-            case ClassId::BANDIT:
-                give_item("dagger", "A short, sharp blade.", ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 0, 2, 0, 1, 1, 0);
-                give_item("leather armor", "Supple hide.", ItemType::ARMOR_CHEST, EquipSlot::CHEST, 1, 12, 0, 2, 0, 0, 0);
-                break;
-            case ClassId::HERETIC:
-                // Godless — starts with nothing
-                break;
-            default: break;
-        }
+        auto result = player_setup::create_player(world_, build, start_x, start_y);
+        player_ = result.entity;
+        build_traits_ = std::move(result.traits);
     } else {
         world_.get<Position>(player_) = {start_x, start_y};
     }
@@ -1315,13 +1068,16 @@ void Engine::generate_level() {
         populate::spawn_monsters(world_, map_, rooms_, rng_, effective_level);
         populate::spawn_items(world_, map_, rooms_, rng_, effective_level);
 
-        // Dungeon doodads (chests, jars, mushrooms, coffins, etc.)
+        // Dungeon doodads (chests, jars, mushrooms, coffins, god shrines, etc.)
         {
             std::string zone_name;
+            int patron_god = -1;
             if (current_dungeon_idx_ >= 0 &&
-                current_dungeon_idx_ < static_cast<int>(dungeon_registry_.size()))
+                current_dungeon_idx_ < static_cast<int>(dungeon_registry_.size())) {
                 zone_name = dungeon_registry_[current_dungeon_idx_].zone;
-            populate::spawn_doodads(world_, map_, rooms_, rng_, effective_level, zone_name);
+                patron_god = dungeon_registry_[current_dungeon_idx_].patron_god_idx;
+            }
+            populate::spawn_doodads(world_, map_, rooms_, rng_, effective_level, zone_name, patron_god);
         }
 
         // Rival paragons — depth 4+ effective in named dungeons
@@ -1351,194 +1107,33 @@ void Engine::generate_level() {
                     log_.add("Something valuable gleams in the deepest chamber.", {255, 240, 140, 255});
                 }
             }
-        }
-
-        // Spawn quest bosses at specific depths
-        if (dungeon_level_ == 3) {
-            // Barrow Wight — bottom of The Warrens (first dungeon)
-            // Uses death knight sprite (row 4 col 3) for a menacing undead look
-            Entity wight = populate::spawn_boss(world_, map_, rooms_,
-                "Barrow Wight", SHEET_MONSTERS, 3, 4,
-                45, 16, 12, 14, 8, 3, 90, 100);
-            if (wight != NULL_ENTITY) {
-                world_.add<QuestTarget>(wight, {QuestId::MQ_01_BARROW_WIGHT, true});
-            }
-        }
-
-        // The Sepulchre depth-triggered quests (MQ_15/16/17)
-        bool in_sepulchre = false;
-        if (current_dungeon_idx_ >= 0 &&
-            current_dungeon_idx_ < static_cast<int>(dungeon_registry_.size())) {
-            in_sepulchre = (dungeon_registry_[current_dungeon_idx_].zone == "sepulchre");
-        }
-        if (in_sepulchre) {
-            // MQ_15: auto-activate on entering The Sepulchre
-            if (dungeon_level_ == 1 && !journal_.has_quest(QuestId::MQ_15_THE_SEPULCHRE)) {
-                auto prereq = QuestId::MQ_14_HOLLOWGATE_SEAL;
-                if (journal_.has_quest(prereq) && journal_.get_state(prereq) == QuestState::FINISHED) {
-                    journal_.add_quest(QuestId::MQ_15_THE_SEPULCHRE);
-                    log_.add("Quest started: Enter The Sepulchre", {220, 200, 100, 255});
-                    log_.add("Your god is screaming.", {180, 80, 80, 255});
-                }
-            }
-            // MQ_16: auto-activate at depth 4+
-            if (dungeon_level_ >= 4 && !journal_.has_quest(QuestId::MQ_16_THE_DESCENT)) {
-                if (journal_.has_quest(QuestId::MQ_15_THE_SEPULCHRE) &&
-                    journal_.get_state(QuestId::MQ_15_THE_SEPULCHRE) == QuestState::ACTIVE) {
-                    journal_.set_state(QuestId::MQ_15_THE_SEPULCHRE, QuestState::COMPLETE);
-                    journal_.set_state(QuestId::MQ_15_THE_SEPULCHRE, QuestState::FINISHED);
-                    journal_.add_quest(QuestId::MQ_16_THE_DESCENT);
-                    log_.add("Quest started: The Descent", {220, 200, 100, 255});
-                    log_.add("The architecture stops making sense. You hear other footsteps.", {180, 80, 80, 255});
-                }
-            }
-            // MQ_17: auto-activate at depth 6 (the bottom)
-            if (dungeon_level_ >= 6 && !journal_.has_quest(QuestId::MQ_17_CLAIM_RELIQUARY)) {
-                if (journal_.has_quest(QuestId::MQ_16_THE_DESCENT) &&
-                    journal_.get_state(QuestId::MQ_16_THE_DESCENT) == QuestState::ACTIVE) {
-                    journal_.set_state(QuestId::MQ_16_THE_DESCENT, QuestState::COMPLETE);
-                    journal_.set_state(QuestId::MQ_16_THE_DESCENT, QuestState::FINISHED);
-                    journal_.add_quest(QuestId::MQ_17_CLAIM_RELIQUARY);
-                    log_.add("Quest started: Claim the Reliquary", {220, 200, 100, 255});
-                    log_.add("You see it. A vessel of light that hurts to look at.", {255, 220, 100, 255});
-                }
-            }
-            // Sepulchre atmospheric entry messages
-            static const char* SEPULCHRE_ENTRY[] = {
-                "The air changes. Something is wrong with this place.",
-                "The walls here are older than stone should be.",
-                "The geometry stops making sense. Corners that shouldn't exist.",
-                "You hear footsteps that aren't yours.",
-                "The walls are breathing.",
-                "The Reliquary is here. You can feel it pulling.",
-            };
-            if (dungeon_level_ >= 1 && dungeon_level_ <= 6) {
-                log_.add(SEPULCHRE_ENTRY[dungeon_level_ - 1], {160, 100, 140, 255});
-            }
-        }
-
-        // Spawn quest items at the bottom of their respective dungeons
-        if (current_dungeon_idx_ >= 0 &&
-            current_dungeon_idx_ < static_cast<int>(dungeon_registry_.size())) {
-            auto& dentry = dungeon_registry_[current_dungeon_idx_];
-
-            // Helper: spawn a quest item in the last room
-            auto spawn_quest_item = [&](const char* name, const char* desc,
-                                        int sprite_x, int sprite_y,
-                                        QuestId qid,
-                                        SDL_Color tint = {255,255,255,255}) {
-                if (rooms_.size() < 2) return;
-                auto& room = rooms_.back();
-                int x = room.cx();
-                int y = room.cy() + 1;
-                Entity e = world_.create();
-                world_.add<Position>(e, {x, y});
-                world_.add<Renderable>(e, {SHEET_ITEMS, sprite_x, sprite_y, tint, 2});
-                Item item;
-                item.name = name;
-                item.description = desc;
-                item.type = ItemType::KEY;
-                item.identified = true;
-                item.quest_id = static_cast<int>(qid);
-                item.gold_value = 0;
-                world_.add<Item>(e, std::move(item));
-            };
-
-            // Determine the zone's max depth to know if we're at the bottom
-            struct ZoneMax { const char* key; int max_depth; };
-            static const ZoneMax ZONE_DEPTHS[] = {
-                {"warrens", 3}, {"stonekeep", 6}, {"deep_halls", 9},
-                {"catacombs", 12}, {"molten", 15}, {"sunken", 18},
-                {"sepulchre", 6}, // Sepulchre has 6 levels
-            };
-            int zone_max = 3; // default
-            for (auto& zd : ZONE_DEPTHS) {
-                if (dentry.zone == zd.key) { zone_max = zd.max_depth; break; }
-            }
-            bool is_bottom = (dungeon_level_ >= zone_max);
-
-            if (is_bottom) {
-                // MQ_03: Stone Tablet in Ashford Ruins
-                if (dentry.quest == "MQ_03") {
-                    spawn_quest_item("Stone Tablet",
-                        "A heavy stone tablet. The inscriptions shift when you aren't looking.",
-                        0, 21, QuestId::MQ_03_ASHFORD_TABLET);
-                }
-                // MQ_05: Ancient Inscription in Stonekeep
-                if (dentry.quest == "MQ_05") {
-                    spawn_quest_item("Ancient Inscription",
-                        "A page of burned stone. The words are too heavy for the rock.",
-                        7, 21, QuestId::MQ_05_STONEKEEP_DEPTHS);
-                }
-                // MQ_07: Frozen Key in Frostmere Depths
-                if (dentry.quest == "MQ_07") {
-                    spawn_quest_item("Frozen Key",
-                        "A key of impossible cold. It burns your hand.",
-                        2, 22, QuestId::MQ_07_FROZEN_KEY);
-                }
-                // MQ_09: Reliquary Fragment in The Catacombs
-                if (dentry.quest == "MQ_08") {
-                    spawn_quest_item("Reliquary Fragment",
-                        "A shard of solidified memory. It hums with warmth.",
-                        2, 16, QuestId::MQ_09_OSSUARY_FRAGMENT);
-                }
-                // MQ_11: Molten Fragment in The Molten Depths
-                if (dentry.quest == "MQ_11") {
-                    spawn_quest_item("Molten Fragment",
-                        "Cold even in the heart of the furnace. Two of three.",
-                        2, 16, QuestId::MQ_11_MOLTEN_TRIAL,
-                        {255, 120, 80, 255}); // red tint
-                }
-                // MQ_13: Sunken Fragment in The Sunken Halls
-                if (dentry.quest == "MQ_13") {
-                    spawn_quest_item("Sunken Fragment",
-                        "The water remembers. Three fragments. They pull toward each other.",
-                        2, 16, QuestId::MQ_13_SUNKEN_FRAGMENT,
-                        {100, 160, 255, 255}); // blue tint
-                }
-                // MQ_14: Seal Stone in The Hollowgate
-                if (dentry.quest == "MQ_14") {
-                    spawn_quest_item("Seal Stone",
-                        "The fragments resonate near it. Break the seal.",
-                        5, 16, QuestId::MQ_14_HOLLOWGATE_SEAL);
-                }
-                // MQ_17: The Reliquary in The Sepulchre (depth 6)
-                if (dentry.quest == "MQ_15" && dungeon_level_ >= 6) {
-                    spawn_quest_item("The Reliquary",
-                        "A vessel of light that hurts to look at. It was here before the gods.",
-                        6, 16, QuestId::MQ_17_CLAIM_RELIQUARY,
-                        {255, 220, 100, 255}); // golden tint
-
-                    // Spawn The Keeper — final boss guarding the Reliquary
-                    Entity keeper = populate::spawn_boss(world_, map_, rooms_,
-                        "The Keeper", SHEET_MONSTERS, 0, 11,
-                        150, 24, 14, 20, 20, 5, 85, 500);
-                    if (keeper != NULL_ENTITY) {
-                        // Give the Keeper a golden tint to match the Reliquary's glow
-                        world_.get<Renderable>(keeper).tint = {255, 220, 100, 255};
-                    }
+            // God relic — bottom floor of late-game dungeons with a patron god, ~30% chance
+            if (dungeon_level_ >= dentry.max_depth && dentry.zone_difficulty >= 6
+                && dentry.patron_god_idx >= 0 && rng_.chance(30)) {
+                Entity relic = populate::spawn_relic(world_, rooms_, rng_, dentry.patron_god_idx);
+                if (relic != NULL_ENTITY) {
+                    auto& ginfo = get_god_info(static_cast<GodId>(dentry.patron_god_idx));
+                    char rbuf[128];
+                    snprintf(rbuf, sizeof(rbuf), "A divine presence radiates from the depths — something of %s.", ginfo.name);
+                    log_.add(rbuf, {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255});
                 }
             }
         }
 
-        // Side quest items — spawn in any dungeon when quest is active
-        if (journal_.has_quest(QuestId::SQ_LOST_AMULET) &&
-            journal_.get_state(QuestId::SQ_LOST_AMULET) == QuestState::ACTIVE &&
-            dungeon_level_ >= 1 && rooms_.size() >= 3) {
-            auto& room = rooms_[rooms_.size() / 2]; // mid dungeon
-            int ax = room.cx(), ay = room.cy();
-            Entity ae = world_.create();
-            world_.add<Position>(ae, {ax, ay});
-            world_.add<Renderable>(ae, {SHEET_ITEMS, 0, 16, {255, 255, 255, 255}, 1});
-            Item amulet;
-            amulet.name = "family amulet";
-            amulet.description = "A tarnished silver amulet. Worthless to anyone but its owner.";
-            amulet.type = ItemType::AMULET;
-            amulet.slot = EquipSlot::NONE;
-            amulet.quest_id = static_cast<int>(QuestId::SQ_LOST_AMULET);
-            amulet.identified = true;
-            amulet.gold_value = 0;
-            world_.add<Item>(ae, std::move(amulet));
+        // Spawn quest bosses, quest items, and depth-triggered quest auto-starts
+        {
+            const quest_gen::DungeonContext* ctx = nullptr;
+            quest_gen::DungeonContext dctx;
+            if (current_dungeon_idx_ >= 0 &&
+                current_dungeon_idx_ < static_cast<int>(dungeon_registry_.size())) {
+                auto& dentry = dungeon_registry_[current_dungeon_idx_];
+                dctx.zone = dentry.zone;
+                dctx.quest = dentry.quest;
+                dctx.max_depth = dentry.max_depth;
+                ctx = &dctx;
+            }
+            quest_gen::spawn_quest_content(world_, map_, rooms_,
+                dungeon_level_, ctx, journal_, log_);
         }
     }
 
@@ -1654,173 +1249,14 @@ void Engine::try_move_player(int dx, int dy) {
     if (target != NULL_ENTITY) {
         // NPC — talk instead of fight
         if (world_.has<NPC>(target)) {
-            auto& npc = world_.get<NPC>(target);
-
-            // Check if bumping this NPC satisfies any delivery quest's target town
-            {
-                auto& dq_pool = world_.pool<DynamicQuest>();
-                for (size_t di = 0; di < dq_pool.size(); di++) {
-                    auto& dq = dq_pool.at_index(di);
-                    if (dq.accepted && !dq.completed && dq.target_town_x >= 0 && !dq.reached_target) {
-                        if (std::abs(nx - dq.target_town_x) < 30 &&
-                            std::abs(ny - dq.target_town_y) < 30) {
-                            dq.reached_target = true;
-                        }
-                    }
-                }
-            }
-
-            // Shopkeeper — open shop screen (unless they have a dynamic quest to offer)
-            // Calculate shop difficulty from town distance to Thornwall
-            auto calc_shop_diff = [&]() -> int {
-                if (dungeon_level_ > 0) return 0; // dungeon shops = base
-                if (!world_.has<Position>(target)) return 0;
-                auto& sp = world_.get<Position>(target);
-                float d = std::sqrt(static_cast<float>((sp.x - 1000) * (sp.x - 1000) +
-                                                        (sp.y - 750) * (sp.y - 750)));
-                return std::min(8, static_cast<int>(d / 80.0f)); // ~80 tiles per difficulty level
+            npc_interaction::Context npc_ctx {
+                world_, player_, log_, audio_, rng_, particles_,
+                shop_screen_, quest_offer_, levelup_screen_,
+                journal_, meta_, gold_, game_turn_, dungeon_level_,
+                pending_levelup_, pending_quest_npc_
             };
-
-            if (npc.role == NPCRole::SHOPKEEPER && !world_.has<DynamicQuest>(target)) {
-                shop_screen_.open(player_, world_, rng_, &gold_, calc_shop_diff());
+            if (npc_interaction::interact(npc_ctx, target, nx, ny))
                 return;
-            }
-            // Merchant with dynamic quest: show dialogue + quest, then can shop next time
-            if (npc.role == NPCRole::SHOPKEEPER && world_.has<DynamicQuest>(target)) {
-                auto& dq = world_.get<DynamicQuest>(target);
-                if (dq.completed) {
-                    shop_screen_.open(player_, world_, rng_, &gold_, calc_shop_diff());
-                    return;
-                }
-            }
-
-            char buf[256];
-            snprintf(buf, sizeof(buf), "%s: \"%s\"", npc.name.c_str(), npc.dialogue.c_str());
-            log_.add(buf, {180, 180, 140, 255});
-
-            // God-aware NPC reactions (priests/scholars react to player's god)
-            if (npc.role == NPCRole::PRIEST && world_.has<GodAlignment>(player_)) {
-                auto& align = world_.get<GodAlignment>(player_);
-                if (align.god == GodId::IXUUL) {
-                    log_.add("The priest eyes you warily. \"Your god is... unwelcome here.\"",
-                             {180, 140, 140, 255});
-                } else if (align.god == GodId::YASHKHET) {
-                    log_.add("The priest flinches at your scars. \"The Wound's followers unsettle me.\"",
-                             {180, 140, 140, 255});
-                } else if (align.god == GodId::NONE) {
-                    log_.add("The priest looks at you with pity. \"No god watches over you.\"",
-                             {160, 150, 140, 255});
-                } else if (align.favor > 50) {
-                    auto& ginfo = get_god_info(align.god);
-                    char gbuf[128];
-                    snprintf(gbuf, sizeof(gbuf),
-                        "The priest nods respectfully. \"%s's favor is strong in you.\"", ginfo.name);
-                    log_.add(gbuf, {160, 180, 200, 255});
-                }
-            }
-
-            // Show direction hint if quest is active
-            if (npc.quest_id >= 0) {
-                auto hint_qid = static_cast<QuestId>(npc.quest_id);
-                if (journal_.has_quest(hint_qid) &&
-                    journal_.get_state(hint_qid) == QuestState::ACTIVE) {
-                    const char* hint = get_quest_hint(hint_qid);
-                    if (hint) {
-                        char hbuf[256];
-                        snprintf(hbuf, sizeof(hbuf), "%s: \"%s\"", npc.name.c_str(), hint);
-                        log_.add(hbuf, {200, 190, 150, 255});
-                    }
-                }
-            }
-
-            // Quest giving — static quests with prerequisite chaining
-            if (npc.quest_id >= 0) {
-                auto qid = static_cast<QuestId>(npc.quest_id);
-
-                // Check prerequisite: for main quests, the previous quest must be FINISHED
-                auto quest_prereq = [](QuestId id) -> QuestId {
-                    int idx = static_cast<int>(id);
-                    if (idx <= 0 || idx > static_cast<int>(QuestId::MQ_17_CLAIM_RELIQUARY))
-                        return QuestId::COUNT; // no prereq
-                    return static_cast<QuestId>(idx - 1);
-                };
-                auto prereq = quest_prereq(qid);
-                bool prereq_met = (prereq == QuestId::COUNT) ||
-                                  (journal_.has_quest(prereq) &&
-                                   journal_.get_state(prereq) == QuestState::FINISHED);
-
-                if (prereq_met && !journal_.has_quest(qid)) {
-                    // Show quest offer modal
-                    quest_offer_.show(qid, npc.name);
-                    pending_quest_npc_ = target;
-                } else if (journal_.get_state(qid) == QuestState::COMPLETE) {
-                    journal_.set_state(qid, QuestState::FINISHED);
-                    auto& qinfo = get_quest_info(qid);
-                    char qbuf[128];
-                    snprintf(qbuf, sizeof(qbuf), "Quest complete: %s (+%dxp, +%dgold)",
-                             qinfo.name, qinfo.xp_reward, qinfo.gold_reward);
-                    log_.add(qbuf, {120, 220, 120, 255});
-                    audio_.play(SfxId::QUEST);
-                    gold_ += qinfo.gold_reward;
-                    adjust_favor(5); // gods reward quest completion
-                    if (world_.has<Stats>(player_) && qinfo.xp_reward > 0) {
-                        if (world_.get<Stats>(player_).grant_xp(qinfo.xp_reward)) {
-                            pending_levelup_ = true;
-                            levelup_screen_.open(player_, rng_);
-                            audio_.play(SfxId::LEVELUP);
-                            { auto& lp = world_.get<Position>(player_); particles_.levelup_effect(lp.x, lp.y); }
-                        }
-                    }
-                }
-            }
-
-            // Dynamic quest handling
-            if (world_.has<DynamicQuest>(target)) {
-                auto& dq = world_.get<DynamicQuest>(target);
-                if (!dq.accepted) {
-                    // Offer the quest
-                    char qbuf[256];
-                    snprintf(qbuf, sizeof(qbuf), "[Quest] %s", dq.name.c_str());
-                    log_.add(qbuf, {220, 200, 100, 255});
-                    log_.add(dq.description.c_str(), {180, 170, 140, 255});
-                    snprintf(qbuf, sizeof(qbuf), "Objective: %s", dq.objective.c_str());
-                    log_.add(qbuf, {160, 160, 130, 255});
-                    snprintf(qbuf, sizeof(qbuf), "Reward: %d XP, %d gold", dq.xp_reward, dq.gold_reward);
-                    log_.add(qbuf, {160, 160, 130, 255});
-                    dq.accepted = true;
-                    dq.accepted_turn = game_turn_;
-                    log_.add("Quest accepted.", {120, 220, 120, 255});
-                } else if (!dq.completed) {
-                    if (dq.conditions_met(game_turn_)) {
-                        // Conditions satisfied — complete the quest
-                        dq.completed = true;
-                        meta_.total_quests_completed++;
-                        char qbuf[256];
-                        snprintf(qbuf, sizeof(qbuf), "Quest complete: %s (+%dxp, +%dgold)",
-                                 dq.name.c_str(), dq.xp_reward, dq.gold_reward);
-                        log_.add(qbuf, {120, 220, 120, 255});
-                        audio_.play(SfxId::QUEST);
-                        log_.add(dq.complete_text.c_str(), {180, 170, 140, 255});
-                        gold_ += dq.gold_reward;
-                        if (world_.has<Stats>(player_) && dq.xp_reward > 0) {
-                            if (world_.get<Stats>(player_).grant_xp(dq.xp_reward)) {
-                                pending_levelup_ = true;
-                                levelup_screen_.open(player_, rng_);
-                                audio_.play(SfxId::LEVELUP);
-                            }
-                        }
-                    } else {
-                        // Tell the player what's still needed
-                        if (dq.requires_dungeon && !dq.visited_dungeon)
-                            log_.add("\"Come back when you've actually been down there.\"", {180, 170, 140, 255});
-                        else if (dq.target_town_x >= 0 && !dq.reached_target)
-                            log_.add("\"You haven't made the journey yet. Go.\"", {180, 170, 140, 255});
-                        else
-                            log_.add("\"It hasn't been long enough. These things take time.\"", {180, 170, 140, 255});
-                    }
-                }
-            }
-            return;
         }
         // Hostile — attack
         int level_before = world_.has<Stats>(player_) ? world_.get<Stats>(player_).level : 0;
@@ -2019,7 +1455,7 @@ void Engine::try_move_player(int dx, int dy) {
                         break;
                     default: break;
                 }
-                if (gain != 0) adjust_favor(gain);
+                if (gain != 0) god_system::adjust_favor(world_, player_, log_, gain);
             }
         }
 
@@ -2031,7 +1467,7 @@ void Engine::try_move_player(int dx, int dy) {
                 "A rival paragon falls. The servant of %s is no more.", ginfo.name);
             log_.add(rbuf, {220, 200, 100, 255});
             if (world_.has<GodAlignment>(player_)) {
-                adjust_favor(10); // large favor bonus
+                god_system::adjust_favor(world_, player_, log_, 10); // large favor bonus
             }
         }
 
@@ -2145,7 +1581,7 @@ void Engine::try_move_player(int dx, int dy) {
 
         if (shrine_god == ga.god) {
             // Same god shrine: +5 favor, small heal, identify curse/bless
-            adjust_favor(5);
+            god_system::adjust_favor(world_, player_, log_, 5);
             auto& ps = world_.get<Stats>(player_);
             int heal = std::min(5, ps.hp_max - ps.hp);
             ps.hp += heal;
@@ -2187,7 +1623,7 @@ void Engine::try_move_player(int dx, int dy) {
             log_.add(sbuf, {sginfo.color.r, sginfo.color.g, sginfo.color.b, 255});
         } else {
             // Different god shrine — slight favor from your own god
-            adjust_favor(2);
+            god_system::adjust_favor(world_, player_, log_, 2);
             char sbuf[128];
             snprintf(sbuf, sizeof(sbuf), "A shrine of %s. %s watches.", sginfo.name, pginfo.name);
             log_.add(sbuf, {sginfo.color.r, sginfo.color.g, sginfo.color.b, 255});
@@ -2210,6 +1646,40 @@ void Engine::process_turn() {
     // Check tenet violations for this turn's actions
     check_tenets();
     turn_actions_.clear();
+
+    // Excommunication punishments — periodic divine wrath when favor <= -100
+    if (world_.has<GodAlignment>(player_) && world_.has<Stats>(player_)) {
+        auto& align = world_.get<GodAlignment>(player_);
+        if (align.god != GodId::NONE && align.favor <= -100) {
+            // Random divine damage every ~15 turns
+            if (game_turn_ % 15 == 0 && rng_.chance(60)) {
+                auto& ps = world_.get<Stats>(player_);
+                int dmg = rng_.range(2, 6);
+                ps.hp -= dmg;
+                auto& ginfo = get_god_info(align.god);
+                char wbuf[128];
+                snprintf(wbuf, sizeof(wbuf), "%s's wrath strikes you! (%d damage)", ginfo.name, dmg);
+                log_.add(wbuf, {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255});
+                auto& pp = world_.get<Position>(player_);
+                particles_.crit_flash(pp.x, pp.y);
+                audio_.play(SfxId::CRIT);
+            }
+            // Random stat drain every ~40 turns
+            if (game_turn_ % 40 == 0 && rng_.chance(40)) {
+                auto& ps = world_.get<Stats>(player_);
+                int attr = rng_.range(0, ATTR_COUNT - 1);
+                if (ps.attributes[attr] > 1) {
+                    ps.attributes[attr]--;
+                    auto& ginfo = get_god_info(align.god);
+                    static const char* ATTR_NAMES[] = {"STR", "DEX", "CON", "INT", "WIL", "PER", "CHA"};
+                    char dbuf[128];
+                    snprintf(dbuf, sizeof(dbuf), "You feel %s's curse draining your %s. (-1 %s)",
+                             ginfo.name, ATTR_NAMES[attr], ATTR_NAMES[attr]);
+                    log_.add(dbuf, {180, 80, 80, 255});
+                }
+            }
+        }
+    }
 
     // Check player death
     if (world_.has<Stats>(player_)) {
@@ -2528,7 +1998,20 @@ void Engine::process_turn() {
     }
 
     // Status effects tick
-    process_status_effects();
+    {
+        std::string zone;
+        if (current_dungeon_idx_ >= 0 && current_dungeon_idx_ < static_cast<int>(dungeon_registry_.size()))
+            zone = dungeon_registry_[current_dungeon_idx_].zone;
+        auto fx_result = status::process(world_, player_, map_, rng_, log_, audio_, particles_,
+                                         game_turn_, dungeon_level_, zone);
+        if (fx_result.player_died) {
+            death_cause_ = fx_result.death_cause;
+            state_ = GameState::DEAD;
+            end_screen_time_ = SDL_GetTicks();
+            audio_.stop_all_ambient(500);
+            audio_.play_music(MusicId::DEATH, 1500);
+        }
+    }
 
     // Sepulchre ambient messages
     sepulchre_ambient();
@@ -2538,787 +2021,25 @@ void Engine::process_turn() {
 }
 
 void Engine::process_npc_wander() {
-    auto& npc_pool = world_.pool<NPC>();
-    for (size_t i = 0; i < npc_pool.size(); i++) {
-        Entity e = npc_pool.entity_at(i);
-        auto& npc = npc_pool.at_index(i);
-
-        // Shopkeepers stay put (need to be findable for shops)
-        if (npc.role == NPCRole::SHOPKEEPER) continue;
-
-        if (!world_.has<Position>(e) || !world_.has<Energy>(e)) continue;
-        auto& energy = world_.get<Energy>(e);
-        if (!energy.can_act()) continue;
-        energy.spend();
-
-        // 80% chance to just stand still (frequent pausing)
-        if (rng_.chance(80)) continue;
-
-        auto& pos = world_.get<Position>(e);
-
-        // Don't stray more than 4 tiles from home
-        int dx = rng_.range(-1, 1);
-        int dy = rng_.range(-1, 1);
-        if (dx == 0 && dy == 0) continue;
-
-        int nx = pos.x + dx;
-        int ny = pos.y + dy;
-        int home_dist = std::max(std::abs(nx - npc.home_x), std::abs(ny - npc.home_y));
-        if (home_dist > 4) continue;
-
-        if (!map_.is_walkable(nx, ny)) continue;
-
-        // Don't walk into other entities
-        bool blocked = false;
-        auto& positions = world_.pool<Position>();
-        for (size_t j = 0; j < positions.size(); j++) {
-            Entity other = positions.entity_at(j);
-            if (other == e) continue;
-            auto& op = positions.at_index(j);
-            if (op.x == nx && op.y == ny && world_.has<Stats>(other)) {
-                blocked = true;
-                break;
-            }
-        }
-        if (blocked) continue;
-
-        int old_x = pos.x;
-        pos.x = nx;
-        pos.y = ny;
-        if (world_.has<Renderable>(e) && old_x != nx) {
-            world_.get<Renderable>(e).flip_h = (nx > old_x);
-        }
-    }
+    overworld::process_npc_wander(world_, map_, rng_);
 }
 
 void Engine::try_spawn_overworld_enemy() {
-    if (!world_.has<Position>(player_)) return;
-    auto& ppos = world_.get<Position>(player_);
-
-    // Don't spawn near towns
-    static const struct { int x, y; } TOWN_POS[] = {
-        {500,375}, {375,325}, {650,335}, {525,225}, {700,375},
-        {725,250}, {275,275}, {425,475}, {600,465}, {325,400},
-        {400,200}, {625,550}, {500,550}, {450,600}, {550,150},
-        {350,525}, {675,500}, {575,275}, {300,350}, {750,425},
-    };
-    for (auto& t : TOWN_POS) {
-        int d = std::max(std::abs(ppos.x - t.x), std::abs(ppos.y - t.y));
-        if (d < 35) return;
-    }
-
-    // Count nearby hostile entities
-    int nearby = 0;
-    auto& ai_pool = world_.pool<AI>();
-    for (size_t i = 0; i < ai_pool.size(); i++) {
-        Entity e = ai_pool.entity_at(i);
-        if (!world_.has<Position>(e)) continue;
-        auto& mp = world_.get<Position>(e);
-        int dist = std::max(std::abs(mp.x - ppos.x), std::abs(mp.y - ppos.y));
-        if (dist <= 30) nearby++;
-    }
-    if (nearby >= 4) return;
-
-    // Overworld monster definitions
-    struct OWMonster {
-        const char* name;
-        int sheet, sx, sy, hp, str, dex, con, dmg, armor, speed, flee, xp;
-    };
-    static const OWMonster OW_TABLE[] = {
-        {"wolf",         SHEET_ANIMALS,  6, 4, 12, 10, 14,  8, 3, 0, 120, 30, 15}, // wolf = 5.g (row4,col6)
-        {"wild boar",    SHEET_ANIMALS,  7, 9, 18, 14,  8, 12, 4, 1,  90, 20, 20}, // boar = 10.h (row9,col7)
-        {"highwayman",   SHEET_ROGUES,   4, 0, 16, 12, 12, 10, 3, 1, 100, 25, 25}, // bandit sprite
-        {"giant spider", SHEET_MONSTERS, 8, 6, 10,  8, 14,  6, 3, 0, 120, 30, 15},
-        {"bear",         SHEET_ANIMALS,  0, 0, 24, 16,  8, 14, 5, 2,  80, 15, 30}, // grizzly
-        {"bandit",       SHEET_ROGUES,   4, 0, 14, 11, 13, 10, 3, 1, 105, 30, 20},
-        {"snake",        SHEET_ANIMALS,  0, 7,  6,  6, 16,  6, 2, 0, 130, 40, 10},
-        {"dire wolf",    SHEET_ANIMALS,  6, 4, 20, 14, 14, 12, 5, 1, 125, 15, 35}, // wolf sprite (row4,col6)
-        {"wandering skeleton", SHEET_MONSTERS, 0, 4, 16, 10, 10, 10, 3, 2, 90, 0, 20},
-    };
-    static constexpr int OW_COUNT = sizeof(OW_TABLE) / sizeof(OW_TABLE[0]);
-
-    // Try to spawn at edge of visibility
-    for (int attempt = 0; attempt < 15; attempt++) {
-        int dist = rng_.range(14, 20);
-        float angle = rng_.range_f(0.0f, 6.283f);
-        int sx = ppos.x + static_cast<int>(dist * std::cos(angle));
-        int sy = ppos.y + static_cast<int>(dist * std::sin(angle));
-
-        if (!map_.in_bounds(sx, sy) || !map_.is_walkable(sx, sy)) continue;
-
-        // Only spawn on wilderness tiles
-        auto tt = map_.at(sx, sy).type;
-        if (tt != TileType::FLOOR_GRASS && tt != TileType::FLOOR_DIRT &&
-            tt != TileType::FLOOR_SAND && tt != TileType::FLOOR_ICE &&
-            tt != TileType::BRUSH) continue;
-
-        auto& def = OW_TABLE[rng_.range(0, OW_COUNT - 1)];
-
-        Entity e = world_.create();
-        world_.add<Position>(e, {sx, sy});
-        world_.add<Renderable>(e, {def.sheet, def.sx, def.sy,
-                                    {255, 255, 255, 255}, 5});
-        Stats stats;
-        stats.name = def.name;
-        stats.hp = def.hp;
-        stats.hp_max = def.hp;
-        stats.set_attr(Attr::STR, def.str);
-        stats.set_attr(Attr::DEX, def.dex);
-        stats.set_attr(Attr::CON, def.con);
-        stats.base_damage = def.dmg;
-        stats.natural_armor = def.armor;
-        stats.base_speed = def.speed;
-        stats.xp_value = def.xp;
-        world_.add<Stats>(e, std::move(stats));
-        world_.add<AI>(e, {AIState::IDLE, -1, -1, 0, def.flee});
-        world_.add<Energy>(e, {0, def.speed});
-        return; // one at a time
-    }
+    overworld::try_spawn_overworld_enemy(world_, map_, rng_, player_);
 }
 
 void Engine::adjust_favor(int amount) {
-    if (!world_.has<GodAlignment>(player_)) return;
-    auto& align = world_.get<GodAlignment>(player_);
-    int old_favor = align.favor;
-    align.favor = std::max(-100, std::min(100, align.favor + amount));
-    if (align.favor != old_favor && amount > 0) {
-        char buf[64];
-        auto& ginfo = get_god_info(align.god);
-        snprintf(buf, sizeof(buf), "%s is pleased. (+%d favor)", ginfo.name, amount);
-        log_.add(buf, {180, 200, 255, 255});
-    } else if (align.favor != old_favor && amount < 0) {
-        char buf[64];
-        auto& ginfo = get_god_info(align.god);
-        snprintf(buf, sizeof(buf), "%s is displeased. (%d favor)", ginfo.name, amount);
-        log_.add(buf, {255, 160, 120, 255});
-    }
+    god_system::adjust_favor(world_, player_, log_, amount);
 }
 
 void Engine::check_tenets() {
-    if (!world_.has<GodAlignment>(player_)) return;
-    auto& align = world_.get<GodAlignment>(player_);
-    if (align.god == GodId::NONE) return;
-
-    auto tenets = get_god_tenets(align.god);
-    if (!tenets.tenets || tenets.count == 0) return;
-
-    for (int i = 0; i < tenets.count; i++) {
-        auto& t = tenets.tenets[i];
-        bool violated = false;
-
-        switch (t.check) {
-            case TenetCheck::NEVER_KILL_ANIMAL:
-                violated = turn_actions_.killed_animal;
-                break;
-            case TenetCheck::NEVER_USE_DARK_ARTS:
-                violated = turn_actions_.used_dark_arts;
-                break;
-            case TenetCheck::NEVER_USE_FIRE_MAGIC:
-                violated = turn_actions_.used_fire_magic;
-                break;
-            case TenetCheck::NEVER_USE_POISON:
-                violated = turn_actions_.used_poison;
-                break;
-            case TenetCheck::NEVER_BACKSTAB:
-                violated = turn_actions_.used_stealth_attack;
-                break;
-            case TenetCheck::NEVER_FLEE_COMBAT:
-                violated = turn_actions_.fled_combat;
-                break;
-            case TenetCheck::NEVER_USE_HEALING_MAGIC:
-                violated = turn_actions_.used_healing_magic;
-                break;
-            case TenetCheck::NEVER_WEAR_HEAVY_ARMOR:
-                violated = turn_actions_.wore_heavy_armor;
-                break;
-            case TenetCheck::NEVER_CARRY_LIGHT:
-                violated = turn_actions_.used_light_source;
-                break;
-            case TenetCheck::NEVER_DESTROY_BOOK:
-                violated = turn_actions_.destroyed_book;
-                break;
-            case TenetCheck::NEVER_KILL_SLEEPING:
-                violated = turn_actions_.killed_sleeping;
-                break;
-            case TenetCheck::NEVER_DIG_WALLS:
-                violated = turn_actions_.dug_wall;
-                break;
-            case TenetCheck::NEVER_REST_ON_SURFACE:
-                violated = turn_actions_.rested_on_surface;
-                break;
-            case TenetCheck::NEVER_HEAL_ABOVE_75:
-                violated = turn_actions_.healed_above_75pct;
-                break;
-            case TenetCheck::MUST_DESCEND:
-                // Checked on floor transition, not per-turn
-                break;
-            case TenetCheck::MUST_KILL_UNDEAD:
-                // Soleth: if undead is visible and you leave the floor without killing it
-                // Too complex for per-turn — skip for now
-                break;
-            case TenetCheck::MUST_REST_EACH_FLOOR:
-                // Checked on floor transition
-                break;
-        }
-
-        if (violated) {
-            adjust_favor(t.violation_favor);
-            auto& ginfo = get_god_info(align.god);
-            char buf[192];
-            snprintf(buf, sizeof(buf), "Tenet broken: %s", t.description);
-            log_.add(buf, {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255});
-        }
-    }
-
-    // Check equipment-based tenet flags (per-turn scan of equipped items)
-    if (world_.has<Inventory>(player_)) {
-        auto& inv = world_.get<Inventory>(player_);
-        for (int s = 0; s < EQUIP_SLOT_COUNT; s++) {
-            Entity eq = inv.equipped[s];
-            if (eq != NULL_ENTITY && world_.has<Item>(eq)) {
-                auto& item = world_.get<Item>(eq);
-                if (item.tags & TAG_HEAVY_ARMOR) turn_actions_.wore_heavy_armor = true;
-                if (item.tags & TAG_TORCH) turn_actions_.used_light_source = true;
-                if (item.curse_state == 1) turn_actions_.carrying_cursed = true;
-            }
-        }
-        // Also check carried (not just equipped) items for torch/cursed
-        for (auto ie : inv.items) {
-            if (ie != NULL_ENTITY && world_.has<Item>(ie)) {
-                auto& item = world_.get<Item>(ie);
-                if (item.tags & TAG_TORCH) turn_actions_.used_light_source = true;
-                if (item.curse_state == 1) turn_actions_.carrying_cursed = true;
-            }
-        }
-    }
-
-    // Soleth: carrying cursed items drains favor slowly
-    if (align.god == GodId::SOLETH && turn_actions_.carrying_cursed && game_turn_ % 10 == 0) {
-        adjust_favor(-1);
-        log_.add("The cursed item in your possession offends Soleth.", {255, 220, 100, 255});
-    }
-
-    // Passive favor gain: +1 favor every 20 turns with no violations this cycle
-    if (game_turn_ % 20 == 0 && align.favor < 100) {
-        // Only gain passive favor if no violation flags were set
-        bool clean = !turn_actions_.killed_animal && !turn_actions_.used_dark_arts
-            && !turn_actions_.fled_combat && !turn_actions_.used_stealth_attack;
-        if (clean) {
-            align.favor = std::min(100, align.favor + 1);
-        }
-    }
+    god_system::check_tenets(world_, player_, turn_actions_, game_turn_, log_);
 }
 
 void Engine::execute_prayer(int prayer_idx) {
-    if (!world_.has<GodAlignment>(player_) || !world_.has<Stats>(player_)) return;
-    auto& align = world_.get<GodAlignment>(player_);
-    auto prayers = get_prayers(align.god);
-    if (!prayers || prayer_idx < 0 || prayer_idx > 1) return;
-
-    auto& prayer = prayers[prayer_idx];
-    auto& stats = world_.get<Stats>(player_);
-
-    // Excommunicated — prayers always fail
-    if (align.favor <= -100) {
-        log_.add("You are excommunicated. No god answers.", {180, 80, 80, 255});
-        return;
-    }
-    // Negative favor — prayers fail below -50
-    if (align.favor < -50) {
-        auto& ginfo = get_god_info(align.god);
-        char buf[128];
-        snprintf(buf, sizeof(buf), "%s does not answer.", ginfo.name);
-        log_.add(buf, {180, 120, 120, 255});
-        return;
-    }
-    // Negative favor — prayer costs doubled
-    int cost = prayer.favor_cost;
-    if (align.favor < 0) cost *= 2;
-    if (align.favor < cost) {
-        log_.add("Not enough favor.", {180, 120, 120, 255});
-        return;
-    }
-
-    align.favor -= cost;
-    player_acted_ = true;
-    audio_.play(SfxId::PRAYER);
-
-    auto& ppos = world_.get<Position>(player_);
-
-    // God-colored prayer particles
-    auto& ginfo = get_god_info(align.god);
-    uint8_t pr = ginfo.color.r, pg = ginfo.color.g, pb = ginfo.color.b;
-    particles_.prayer_effect(ppos.x, ppos.y, pr, pg, pb);
-
-    // Execute prayer effect based on god and index
-    switch (align.god) {
-        case GodId::VETHRIK:
-            if (prayer_idx == 0) {
-                // Lay to Rest — heal
-                int heal = 5 + stats.attr(Attr::WIL) / 2;
-                stats.hp = std::min(stats.hp + heal, stats.hp_max);
-                char buf[128];
-                snprintf(buf, sizeof(buf), "The dead grant you respite. (+%d HP)", heal);
-                log_.add(buf, {160, 200, 180, 255});
-                particles_.heal_effect(ppos.x, ppos.y);
-            } else {
-                // Death's Grasp — damage nearest
-                Entity target = magic::nearest_enemy(world_, player_, map_, 8);
-                if (target != NULL_ENTITY && world_.has<Stats>(target)) {
-                    int dmg = stats.attr(Attr::WIL) * 2;
-                    auto& tgt = world_.get<Stats>(target);
-                    tgt.hp -= dmg;
-                    char buf[128];
-                    snprintf(buf, sizeof(buf), "A skeletal hand tears at the %s. (%d damage)",
-                             tgt.name.c_str(), dmg);
-                    log_.add(buf, {200, 180, 255, 255});
-                    if (tgt.hp <= 0) {
-                        combat::kill(world_, target, log_);
-                    }
-                } else {
-                    log_.add("There is nothing nearby to grasp.", {150, 140, 130, 255});
-                    align.favor += prayer.favor_cost; // refund
-                    player_acted_ = false;
-                }
-            }
-            break;
-
-        case GodId::THESSARKA:
-            if (prayer_idx == 0) {
-                // Clarity — restore MP
-                int restored = stats.mp_max - stats.mp;
-                stats.mp = stats.mp_max;
-                char buf[128];
-                snprintf(buf, sizeof(buf), "Your mind clears. (+%d MP)", restored);
-                log_.add(buf, {160, 200, 255, 255});
-            } else {
-                // True Sight — reveal level
-                for (int y = 0; y < map_.height(); y++) {
-                    for (int x = 0; x < map_.width(); x++) {
-                        map_.at(x, y).explored = true;
-                    }
-                }
-                log_.add("The veil lifts. You see everything.", {200, 200, 255, 255});
-            }
-            break;
-
-        case GodId::MORRETH:
-            if (prayer_idx == 0) {
-                // Iron Resolve — heal
-                int heal = 10 + stats.attr(Attr::STR) / 2;
-                stats.hp = std::min(stats.hp + heal, stats.hp_max);
-                char buf[128];
-                snprintf(buf, sizeof(buf), "Iron will sustains you. (+%d HP)", heal);
-                log_.add(buf, {200, 200, 160, 255});
-                particles_.heal_effect(ppos.x, ppos.y);
-            } else {
-                // War Cry — damage all adjacent
-                int dmg = stats.attr(Attr::STR);
-                int hit_count = 0;
-                for (int dy = -1; dy <= 1; dy++) {
-                    for (int dx = -1; dx <= 1; dx++) {
-                        if (dx == 0 && dy == 0) continue;
-                        Entity target = combat::entity_at(world_, ppos.x + dx, ppos.y + dy, player_);
-                        if (target != NULL_ENTITY && world_.has<Stats>(target) &&
-                            world_.has<AI>(target)) {
-                            world_.get<Stats>(target).hp -= dmg;
-                            hit_count++;
-                            if (world_.get<Stats>(target).hp <= 0) {
-                                combat::kill(world_, target, log_);
-                            }
-                        }
-                    }
-                }
-                if (hit_count > 0) {
-                    char buf[128];
-                    snprintf(buf, sizeof(buf),
-                        "Your war cry shakes the air. (%d enemies struck for %d)", hit_count, dmg);
-                    log_.add(buf, {255, 200, 140, 255});
-                } else {
-                    log_.add("Your cry echoes unanswered.", {150, 140, 130, 255});
-                }
-            }
-            break;
-
-        case GodId::YASHKHET:
-            if (prayer_idx == 0) {
-                // Blood Offering — sacrifice HP for MP, gain favor
-                int sacrifice = stats.hp_max / 4;
-                if (stats.hp <= sacrifice + 1) {
-                    log_.add("You don't have enough blood to offer.", {180, 120, 120, 255});
-                    player_acted_ = false;
-                    break;
-                }
-                stats.hp -= sacrifice;
-                int restore = std::min(sacrifice, stats.mp_max - stats.mp);
-                stats.mp += restore;
-                adjust_favor(5);
-                char buf[128];
-                snprintf(buf, sizeof(buf), "Your blood sings. (-%d HP, +%d MP)", sacrifice, restore);
-                log_.add(buf, {200, 100, 100, 255});
-            } else {
-                // Sanguine Burst — sacrifice HP, damage nearest
-                if (stats.hp <= 11) {
-                    log_.add("You don't have enough blood.", {180, 120, 120, 255});
-                    align.favor += prayer.favor_cost; // refund
-                    player_acted_ = false;
-                    break;
-                }
-                Entity target = magic::nearest_enemy(world_, player_, map_, 8);
-                if (target != NULL_ENTITY && world_.has<Stats>(target)) {
-                    stats.hp -= 10;
-                    int dmg = 10 + stats.attr(Attr::WIL);
-                    auto& tgt = world_.get<Stats>(target);
-                    tgt.hp -= dmg;
-                    char buf[128];
-                    snprintf(buf, sizeof(buf),
-                        "Your blood erupts outward, striking the %s. (%d damage)", tgt.name.c_str(), dmg);
-                    log_.add(buf, {200, 80, 80, 255});
-                    if (tgt.hp <= 0) {
-                        combat::kill(world_, target, log_);
-                    }
-                } else {
-                    log_.add("There is nothing nearby to strike.", {150, 140, 130, 255});
-                    align.favor += prayer.favor_cost; // refund
-                    player_acted_ = false;
-                }
-            }
-            break;
-
-        case GodId::KHAEL:
-            if (prayer_idx == 0) {
-                // Regrowth — heal 30%
-                int heal = stats.hp_max * 3 / 10;
-                stats.hp = std::min(stats.hp + heal, stats.hp_max);
-                char buf[128];
-                snprintf(buf, sizeof(buf), "Green light mends your wounds. (+%d HP)", heal);
-                log_.add(buf, {120, 220, 120, 255});
-                particles_.heal_effect(ppos.x, ppos.y);
-            } else {
-                // Nature's Wrath — damage nearest
-                Entity target = magic::nearest_enemy(world_, player_, map_, 8);
-                if (target != NULL_ENTITY && world_.has<Stats>(target)) {
-                    int dmg = stats.attr(Attr::WIL) + 10;
-                    auto& tgt = world_.get<Stats>(target);
-                    tgt.hp -= dmg;
-                    char buf[128];
-                    snprintf(buf, sizeof(buf),
-                        "Thorns erupt from the ground beneath the %s. (%d damage)", tgt.name.c_str(), dmg);
-                    log_.add(buf, {100, 200, 100, 255});
-                    if (tgt.hp <= 0) {
-                        combat::kill(world_, target, log_);
-                    }
-                } else {
-                    log_.add("The wilderness is quiet.", {150, 140, 130, 255});
-                    align.favor += prayer.favor_cost; // refund
-                    player_acted_ = false;
-                }
-            }
-            break;
-
-        case GodId::SOLETH:
-            if (prayer_idx == 0) {
-                // Purifying Flame — damage all adjacent
-                int dmg = stats.attr(Attr::WIL) + 5;
-                int hit_count = 0;
-                for (int dy = -1; dy <= 1; dy++) {
-                    for (int dx = -1; dx <= 1; dx++) {
-                        if (dx == 0 && dy == 0) continue;
-                        Entity target = combat::entity_at(world_, ppos.x + dx, ppos.y + dy, player_);
-                        if (target != NULL_ENTITY && world_.has<Stats>(target) &&
-                            world_.has<AI>(target)) {
-                            world_.get<Stats>(target).hp -= dmg;
-                            hit_count++;
-                            if (world_.get<Stats>(target).hp <= 0) {
-                                combat::kill(world_, target, log_);
-                            }
-                        }
-                    }
-                }
-                if (hit_count > 0) {
-                    char buf[128];
-                    snprintf(buf, sizeof(buf),
-                        "Holy fire erupts around you. (%d enemies burned for %d)", hit_count, dmg);
-                    log_.add(buf, {255, 220, 100, 255});
-                } else {
-                    log_.add("The flame finds nothing to purify.", {150, 140, 130, 255});
-                }
-            } else {
-                // Holy Light — full heal
-                int heal = stats.hp_max - stats.hp;
-                stats.hp = stats.hp_max;
-                char buf[128];
-                snprintf(buf, sizeof(buf), "Blinding light restores you. (+%d HP)", heal);
-                log_.add(buf, {255, 255, 200, 255});
-                particles_.heal_effect(ppos.x, ppos.y);
-            }
-            break;
-
-        case GodId::IXUUL:
-            if (prayer_idx == 0) {
-                // Warp — teleport to random walkable tile
-                for (int attempt = 0; attempt < 100; attempt++) {
-                    int tx = rng_.range(1, map_.width() - 2);
-                    int ty = rng_.range(1, map_.height() - 2);
-                    if (map_.is_walkable(tx, ty)) {
-                        ppos.x = tx;
-                        ppos.y = ty;
-                        fov::compute(map_, ppos.x, ppos.y, stats.fov_radius());
-                        camera_.center_on(ppos.x, ppos.y);
-                        log_.add("Reality blinks. You are elsewhere.", {180, 120, 255, 255});
-                        break;
-                    }
-                }
-            } else {
-                // Chaos Surge — random damage to random visible enemy
-                std::vector<Entity> visible_enemies;
-                auto& ai_pool = world_.pool<AI>();
-                for (size_t i = 0; i < ai_pool.size(); i++) {
-                    Entity e = ai_pool.entity_at(i);
-                    if (!world_.has<Position>(e) || !world_.has<Stats>(e)) continue;
-                    auto& mp = world_.get<Position>(e);
-                    if (map_.in_bounds(mp.x, mp.y) && map_.at(mp.x, mp.y).visible) {
-                        visible_enemies.push_back(e);
-                    }
-                }
-                if (!visible_enemies.empty()) {
-                    Entity target = visible_enemies[rng_.range(0, static_cast<int>(visible_enemies.size()) - 1)];
-                    int dmg = rng_.range(5, 35);
-                    auto& tgt = world_.get<Stats>(target);
-                    tgt.hp -= dmg;
-                    char buf[128];
-                    snprintf(buf, sizeof(buf),
-                        "Chaos lashes at the %s. (%d damage)", tgt.name.c_str(), dmg);
-                    log_.add(buf, {200, 100, 255, 255});
-                    if (tgt.hp <= 0) {
-                        combat::kill(world_, target, log_);
-                    }
-                } else {
-                    log_.add("The void has nothing to consume.", {150, 140, 130, 255});
-                    align.favor += prayer.favor_cost; // refund
-                    player_acted_ = false;
-                }
-            }
-            break;
-
-        case GodId::ZHAVEK:
-            if (prayer_idx == 0) {
-                // Vanish — invisible for 8 turns or until attack
-                stats.invisible_turns = 8;
-                log_.add("You slip between the spaces. The world forgets you.", {80, 80, 120, 255});
-            } else {
-                // Silence — all enemies in FOV lose track
-                auto& ai_pool2 = world_.pool<AI>();
-                int silenced = 0;
-                for (size_t i = 0; i < ai_pool2.size(); i++) {
-                    Entity e = ai_pool2.entity_at(i);
-                    if (!world_.has<Position>(e)) continue;
-                    auto& mp = world_.get<Position>(e);
-                    if (map_.in_bounds(mp.x, mp.y) && map_.at(mp.x, mp.y).visible) {
-                        auto& ai = world_.get<AI>(e);
-                        ai.state = AIState::IDLE;
-                        ai.target = NULL_ENTITY;
-                        silenced++;
-                    }
-                }
-                char buf2[128];
-                snprintf(buf2, sizeof(buf2),
-                    "Silence falls. %d creatures lose your trail.", silenced);
-                log_.add(buf2, {80, 80, 120, 255});
-            }
-            break;
-
-        case GodId::THALARA:
-            if (prayer_idx == 0) {
-                // Riptide — pull all visible enemies 3 tiles toward player
-                auto& ai_pool3 = world_.pool<AI>();
-                int pulled = 0;
-                for (size_t i = 0; i < ai_pool3.size(); i++) {
-                    Entity e = ai_pool3.entity_at(i);
-                    if (!world_.has<Position>(e) || !world_.has<Stats>(e)) continue;
-                    auto& mp = world_.get<Position>(e);
-                    if (!map_.in_bounds(mp.x, mp.y) || !map_.at(mp.x, mp.y).visible) continue;
-                    // Pull toward player
-                    for (int step = 0; step < 3; step++) {
-                        int dx = (ppos.x > mp.x) ? 1 : (ppos.x < mp.x) ? -1 : 0;
-                        int dy = (ppos.y > mp.y) ? 1 : (ppos.y < mp.y) ? -1 : 0;
-                        int nx = mp.x + dx;
-                        int ny = mp.y + dy;
-                        if (map_.is_walkable(nx, ny) && !(nx == ppos.x && ny == ppos.y)) {
-                            mp.x = nx;
-                            mp.y = ny;
-                        } else break;
-                    }
-                    pulled++;
-                }
-                char buf3[128];
-                snprintf(buf3, sizeof(buf3),
-                    "The tide pulls. %d creatures dragged toward you.", pulled);
-                log_.add(buf3, {80, 180, 200, 255});
-            } else {
-                // Drown — deal WIL damage/turn for 5 turns to nearest enemy
-                Entity target = magic::nearest_enemy(world_, player_, map_, 8);
-                if (target != NULL_ENTITY) {
-                    auto& tgt = world_.get<Stats>(target);
-                    tgt.drown_turns = 5;
-                    tgt.drown_damage = stats.attr(Attr::WIL);
-                    char buf4[128];
-                    snprintf(buf4, sizeof(buf4),
-                        "Water fills the %s's lungs.", tgt.name.c_str());
-                    log_.add(buf4, {80, 180, 200, 255});
-                } else {
-                    log_.add("No one to drown.", {150, 140, 130, 255});
-                    align.favor += prayer.favor_cost;
-                    player_acted_ = false;
-                }
-            }
-            break;
-
-        case GodId::OSSREN:
-            if (prayer_idx == 0) {
-                // Temper — upgrade one equipped item +1 quality
-                Entity weapon_e = world_.get<Inventory>(player_).get_equipped(EquipSlot::MAIN_HAND);
-                if (weapon_e != NULL_ENTITY && world_.has<Item>(weapon_e)) {
-                    auto& item = world_.get<Item>(weapon_e);
-                    item.damage_bonus += 1;
-                    char buf5[128];
-                    snprintf(buf5, sizeof(buf5),
-                        "Ossren's hand steadies the forge. Your %s is tempered.", item.name.c_str());
-                    log_.add(buf5, {220, 180, 80, 255});
-                    particles_.hit_spark(ppos.x, ppos.y);
-                } else {
-                    log_.add("You have nothing to temper.", {150, 140, 130, 255});
-                    align.favor += prayer.favor_cost;
-                    player_acted_ = false;
-                }
-            } else {
-                // Unyielding — double armor for 15 turns
-                stats.unyielding_turns = 15;
-                log_.add("Your armor hardens beyond what metal should allow.", {220, 180, 80, 255});
-            }
-            break;
-
-        case GodId::LETHIS:
-            if (prayer_idx == 0) {
-                // Sleepwalk — all visible enemies fall asleep for 5 turns
-                auto& ai_pool4 = world_.pool<AI>();
-                int slept = 0;
-                for (size_t i = 0; i < ai_pool4.size(); i++) {
-                    Entity e = ai_pool4.entity_at(i);
-                    if (!world_.has<Position>(e) || !world_.has<Stats>(e)) continue;
-                    auto& mp = world_.get<Position>(e);
-                    if (map_.in_bounds(mp.x, mp.y) && map_.at(mp.x, mp.y).visible) {
-                        world_.get<Stats>(e).sleep_turns = 5;
-                        auto& ai = world_.get<AI>(e);
-                        ai.state = AIState::IDLE;
-                        ai.target = NULL_ENTITY;
-                        slept++;
-                    }
-                }
-                char buf6[128];
-                snprintf(buf6, sizeof(buf6),
-                    "A dream passes through. %d creatures slumber.", slept);
-                log_.add(buf6, {160, 120, 200, 255});
-            } else {
-                // Forget — target enemy permanently forgets you
-                Entity target = magic::nearest_enemy(world_, player_, map_, 8);
-                if (target != NULL_ENTITY) {
-                    auto& ai = world_.get<AI>(target);
-                    ai.state = AIState::IDLE;
-                    ai.target = NULL_ENTITY;
-                    ai.forget_player = true;
-                    auto& tgt = world_.get<Stats>(target);
-                    char buf7[128];
-                    snprintf(buf7, sizeof(buf7),
-                        "The %s blinks. You were never here.", tgt.name.c_str());
-                    log_.add(buf7, {160, 120, 200, 255});
-                } else {
-                    log_.add("No one to forget.", {150, 140, 130, 255});
-                    align.favor += prayer.favor_cost;
-                    player_acted_ = false;
-                }
-            }
-            break;
-
-        case GodId::GATHRUUN:
-            if (prayer_idx == 0) {
-                // Tremor — earthquake damage to all enemies on floor (WIL + level based)
-                int depth_dmg = stats.attr(Attr::WIL) / 2 + stats.level;
-                auto& ai_pool5 = world_.pool<AI>();
-                int hit_count = 0;
-                for (size_t i = 0; i < ai_pool5.size(); i++) {
-                    Entity e = ai_pool5.entity_at(i);
-                    if (!world_.has<Stats>(e)) continue;
-                    auto& es = world_.get<Stats>(e);
-                    es.hp -= depth_dmg;
-                    hit_count++;
-                    // Stun adjacent enemies (sleep as stun substitute)
-                    if (world_.has<Position>(e)) {
-                        auto& mp = world_.get<Position>(e);
-                        int dx = std::abs(mp.x - ppos.x);
-                        int dy = std::abs(mp.y - ppos.y);
-                        if (dx <= 1 && dy <= 1) {
-                            es.sleep_turns = 2;
-                        }
-                    }
-                    if (es.hp <= 0) combat::kill(world_, e, log_);
-                }
-                char buf8[128];
-                snprintf(buf8, sizeof(buf8),
-                    "The earth convulses. %d creatures take %d damage.", hit_count, depth_dmg);
-                log_.add(buf8, {160, 130, 90, 255});
-                particles_.burst(ppos.x, ppos.y, 20, 160, 130, 90, 0.12f, 0.8f, 6);
-            } else {
-                // Stone Skin — +10 armor, can't move, 20 turns
-                stats.stone_skin_turns = 20;
-                stats.stone_skin_armor = 10;
-                log_.add("Your flesh becomes stone. You cannot move, but nothing can reach you.", {160, 130, 90, 255});
-            }
-            break;
-
-        case GodId::SYTHARA:
-            if (prayer_idx == 0) {
-                // Miasma — poison all visible enemies for 10 turns
-                auto& ai_pool6 = world_.pool<AI>();
-                int poisoned = 0;
-                for (size_t i = 0; i < ai_pool6.size(); i++) {
-                    Entity e = ai_pool6.entity_at(i);
-                    if (!world_.has<Position>(e) || !world_.has<Stats>(e)) continue;
-                    auto& mp = world_.get<Position>(e);
-                    if (map_.in_bounds(mp.x, mp.y) && map_.at(mp.x, mp.y).visible) {
-                        if (!world_.has<StatusEffects>(e))
-                            world_.add<StatusEffects>(e, {});
-                        world_.get<StatusEffects>(e).add(StatusType::POISON, 2, 10);
-                        poisoned++;
-                    }
-                }
-                char buf9[128];
-                snprintf(buf9, sizeof(buf9),
-                    "A sickly cloud spreads. %d creatures choke.", poisoned);
-                log_.add(buf9, {120, 180, 60, 255});
-                particles_.drift(ppos.x, ppos.y, 15, 120, 180, 60, 1.5f, 5);
-            } else {
-                // Unravel — target loses 50% natural armor
-                Entity target = magic::nearest_enemy(world_, player_, map_, 8);
-                if (target != NULL_ENTITY) {
-                    auto& tgt = world_.get<Stats>(target);
-                    int lost = tgt.natural_armor / 2;
-                    if (lost < 1) lost = 1;
-                    tgt.natural_armor = std::max(0, tgt.natural_armor - lost);
-                    char buf10[128];
-                    snprintf(buf10, sizeof(buf10),
-                        "The %s's armor corrodes and flakes away. (-%d armor)", tgt.name.c_str(), lost);
-                    log_.add(buf10, {120, 180, 60, 255});
-                } else {
-                    log_.add("Nothing to corrode.", {150, 140, 130, 255});
-                    align.favor += prayer.favor_cost;
-                    player_acted_ = false;
-                }
-            }
-            break;
-
-        default: break;
-    }
+    player_acted_ = god_system::execute_prayer(world_, player_, map_, rng_,
+                                                log_, audio_, particles_,
+                                                camera_, prayer_idx);
 }
 
 void Engine::fire_ranged() {
@@ -3417,7 +2138,7 @@ void Engine::fire_ranged() {
                     break;
                 default: break;
             }
-            if (gain != 0) adjust_favor(gain);
+            if (gain != 0) god_system::adjust_favor(world_, player_, log_, gain);
         }
     }
 
@@ -3581,280 +2302,18 @@ void Engine::describe_tile(int x, int y) {
     }
 }
 
-void Engine::process_status_effects() {
-    if (!world_.has<StatusEffects>(player_) || !world_.has<Stats>(player_)) return;
-    auto& fx = world_.get<StatusEffects>(player_);
-    auto& stats = world_.get<Stats>(player_);
-
-    bool has_blackblood = world_.has<Diseases>(player_) &&
-                          world_.get<Diseases>(player_).has(DiseaseId::BLACKBLOOD);
-
-    auto& pp = world_.get<Position>(player_);
-    for (auto& eff : fx.effects) {
-        // Blackblood: immune to poison
-        if (eff.type == StatusType::POISON && has_blackblood) {
-            eff.turns_remaining = 0;
-            log_.add("Your blackened blood neutralizes the poison.", {80, 40, 80, 255});
-            continue;
-        }
-        // Apply resistance reduction
-        int dmg = eff.damage;
-        if (eff.type == StatusType::POISON && stats.poison_resist > 0) {
-            dmg = dmg * (100 - stats.poison_resist) / 100;
-            if (stats.poison_resist >= 100) { eff.turns_remaining = 0; continue; } // immune
-        }
-        if (eff.type == StatusType::BURN && stats.fire_resist > 0) {
-            dmg = dmg * (100 - stats.fire_resist) / 100;
-            if (stats.fire_resist >= 100) { eff.turns_remaining = 0; continue; }
-        }
-        if (eff.type == StatusType::BLEED && stats.bleed_resist > 0) {
-            dmg = dmg * (100 - stats.bleed_resist) / 100;
-            if (stats.bleed_resist >= 100) { eff.turns_remaining = 0; continue; }
-        }
-        if (dmg < 0) dmg = 0;
-        stats.hp -= dmg;
-        if (dmg > 0 && stats.hp <= 0) {
-            switch (eff.type) {
-                case StatusType::POISON: death_cause_ = "poison"; break;
-                case StatusType::BURN:   death_cause_ = "fire"; break;
-                case StatusType::BLEED:  death_cause_ = "bleeding"; break;
-                default: death_cause_ = "an affliction"; break;
-            }
-        }
-        char buf[128];
-        if (dmg > 0) {
-            switch (eff.type) {
-                case StatusType::POISON:
-                    snprintf(buf, sizeof(buf), "Poison burns through your veins. (%d)", dmg);
-                    log_.add(buf, {100, 200, 100, 255});
-                    audio_.play(SfxId::POISON);
-                    particles_.poison_effect(pp.x, pp.y);
-                    break;
-                case StatusType::BURN:
-                    snprintf(buf, sizeof(buf), "Fire sears your flesh. (%d)", dmg);
-                    log_.add(buf, {255, 160, 60, 255});
-                    audio_.play(SfxId::BURN);
-                    particles_.burn_effect(pp.x, pp.y);
-                    break;
-                case StatusType::BLEED:
-                    snprintf(buf, sizeof(buf), "Blood seeps from your wounds. (%d)", dmg);
-                    log_.add(buf, {200, 80, 80, 255});
-                    particles_.bleed_effect(pp.x, pp.y);
-                    break;
-                default: break; // non-DOT statuses (frozen, stunned, etc.) don't tick damage
-            }
-        }
-    }
-    fx.tick();
-
-    // Disease tick effects
-    if (world_.has<Diseases>(player_)) {
-        auto& diseases = world_.get<Diseases>(player_);
-
-        // Sporebloom: regen 1 HP every 5 turns in dungeons
-        if (diseases.has(DiseaseId::SPOREBLOOM) && dungeon_level_ > 0
-            && game_turn_ % 5 == 0 && stats.hp < stats.hp_max) {
-            stats.hp++;
-        }
-
-        // Vampirism: surface (overworld) hurts — 1 damage every 3 turns
-        if (diseases.has(DiseaseId::VAMPIRISM) && dungeon_level_ <= 0
-            && game_turn_ % 3 == 0) {
-            stats.hp--;
-            if (game_turn_ % 15 == 0) // don't spam
-                log_.add("The sunlight scalds your skin.", {200, 160, 100, 255});
-        }
-    }
-
-    // Tick spell buffs and revert expired ones
-    if (world_.has<Buffs>(player_)) {
-        auto& buffs = world_.get<Buffs>(player_);
-        buffs.tick();
-        auto expired = buffs.collect_expired();
-        for (auto& b : expired) {
-            switch (b.type) {
-                case BuffType::HARDEN_SKIN:
-                case BuffType::FORESIGHT:
-                case BuffType::SHIELD_OF_FAITH:
-                case BuffType::SANCTUARY:
-                    stats.natural_armor = std::max(0, stats.natural_armor - b.value);
-                    break;
-                case BuffType::HASTEN:
-                    stats.base_speed -= b.value;
-                    break;
-                case BuffType::STONE_FIST:
-                    stats.base_damage = std::max(1, stats.base_damage - b.value);
-                    break;
-                case BuffType::IRON_BODY:
-                    stats.natural_armor = std::max(0, stats.natural_armor - b.value);
-                    stats.base_speed += b.value2; // restore speed penalty
-                    break;
-                case BuffType::BARKSKIN:
-                    stats.natural_armor = std::max(0, stats.natural_armor - b.value);
-                    stats.poison_resist -= b.value2;
-                    break;
-            }
-            log_.add("A spell effect wears off.", {140, 130, 120, 255});
-        }
-    }
-
-    // Tick god-specific status effects on player
-    if (stats.invisible_turns > 0) stats.invisible_turns--;
-    if (stats.unyielding_turns > 0) stats.unyielding_turns--;
-    if (stats.stone_skin_turns > 0) stats.stone_skin_turns--;
-
-    // Tick drown, sleep, invisible on ALL entities (monsters)
-    auto& all_stats_pool = world_.pool<Stats>();
-    for (size_t i = 0; i < all_stats_pool.size(); i++) {
-        Entity e = all_stats_pool.entity_at(i);
-        if (e == player_) continue;
-        auto& es = all_stats_pool.at_index(i);
-        // Drown tick
-        if (es.drown_turns > 0) {
-            es.hp -= es.drown_damage;
-            es.drown_turns--;
-            if (es.hp <= 0) combat::kill(world_, e, log_);
-        }
-        // Sleep tick
-        if (es.sleep_turns > 0) es.sleep_turns--;
-    }
-
-    // Soleth passive: undead adjacent to player take 1 damage/turn
-    if (world_.has<GodAlignment>(player_)) {
-        auto& ga = world_.get<GodAlignment>(player_);
-        if (ga.god == GodId::SOLETH) {
-            auto& ai_pool_s = world_.pool<AI>();
-            for (size_t i = 0; i < ai_pool_s.size(); i++) {
-                Entity e = ai_pool_s.entity_at(i);
-                if (!world_.has<Position>(e) || !world_.has<Stats>(e)) continue;
-                auto& mp = world_.get<Position>(e);
-                int dx = std::abs(mp.x - pp.x);
-                int dy = std::abs(mp.y - pp.y);
-                if (dx <= 1 && dy <= 1) {
-                    auto& es = world_.get<Stats>(e);
-                    if (is_undead(es.name.c_str())) {
-                        es.hp -= 1;
-                        if (es.hp <= 0) combat::kill(world_, e, log_);
-                    }
-                }
-            }
-        }
-
-        // Sythara passive: 15% chance enemies you damaged get diseased
-        // (handled in combat resolution, not here)
-
-        // Thalara passive: fire zones hurt
-        if (ga.god == GodId::THALARA && dungeon_level_ > 0 && game_turn_ % 3 == 0) {
-            // Check if in a fire-themed zone (Molten Depths)
-            std::string zone;
-            if (current_dungeon_idx_ >= 0 && current_dungeon_idx_ < static_cast<int>(dungeon_registry_.size()))
-                zone = dungeon_registry_[current_dungeon_idx_].zone;
-            if (zone == "molten" || zone == "molten_depths") {
-                stats.hp -= 1;
-                if (game_turn_ % 15 == 0)
-                    log_.add("The heat sears you. Thalara's domain is water, not fire.", {80, 180, 200, 255});
-            }
-        }
-
-        // Lethis passive: lethal save (once per floor)
-        if (ga.god == GodId::LETHIS && stats.hp <= 0 && !ga.lethal_save_used) {
-            ga.lethal_save_used = true;
-            stats.hp = 1;
-            log_.add("You die. Then you wake up.", {160, 120, 200, 255});
-            particles_.prayer_effect(pp.x, pp.y, 160, 120, 200);
-        }
-
-        // === Negative favor punishments (escalating) ===
-        if (ga.god != GodId::NONE && ga.favor < 0) {
-            auto& ginfo = get_god_info(ga.god);
-
-            // Mild: favor -1 to -30 — prayer costs doubled (handled in execute_prayer)
-            // Moderate: favor -31 to -60 — random stat drain every 50 turns
-            if (ga.favor <= -30 && game_turn_ % 50 == 0) {
-                int attr_idx = rng_.range(0, 6);
-                int cur = stats.attributes[attr_idx];
-                if (cur > 3) {
-                    stats.attributes[attr_idx] = cur - 1;
-                    static const char* ATTR_NAMES[] = {"STR","DEX","CON","INT","WIL","PER","CHA"};
-                    char buf[128];
-                    snprintf(buf, sizeof(buf), "%s's displeasure weakens you. (-1 %s)", ginfo.name, ATTR_NAMES[attr_idx]);
-                    log_.add(buf, {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255});
-                }
-            }
-
-            // Severe: favor -61 to -99 — periodic HP damage
-            if (ga.favor <= -60 && game_turn_ % 20 == 0) {
-                int dmg = 1 + (-ga.favor) / 30;
-                stats.hp -= dmg;
-                if (stats.hp <= 0) death_cause_ = std::string(ginfo.name) + "'s wrath";
-                if (game_turn_ % 60 == 0) {
-                    char buf[128];
-                    snprintf(buf, sizeof(buf), "%s punishes your faithlessness. (%d)", ginfo.name, dmg);
-                    log_.add(buf, {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255});
-                }
-            }
-
-            // Excommunication: favor == -100
-            if (ga.favor <= -100 && game_turn_ % 40 == 0) {
-                // Spawn a divine enemy near the player
-                for (int a = 0; a < 30; a++) {
-                    int mx = pp.x + rng_.range(-4, 4);
-                    int my = pp.y + rng_.range(-4, 4);
-                    if (mx == pp.x && my == pp.y) continue;
-                    if (!map_.in_bounds(mx, my) || !map_.is_walkable(mx, my)) continue;
-                    if (combat::entity_at(world_, mx, my, player_) != NULL_ENTITY) continue;
-                    Entity de = world_.create();
-                    world_.add<Position>(de, {mx, my});
-                    world_.add<Renderable>(de, {SHEET_MONSTERS, 3, 4, // death knight sprite
-                                                 {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255}, 5});
-                    Stats ds; ds.name = "divine avenger"; ds.hp = 30 + stats.level * 5;
-                    ds.hp_max = ds.hp; ds.base_damage = 6 + stats.level; ds.base_speed = 110;
-                    ds.xp_value = 25 + stats.level * 5;
-                    world_.add<Stats>(de, std::move(ds));
-                    world_.add<AI>(de, {AIState::HUNTING, pp.x, pp.y, 0, 0}); // never flees
-                    world_.add<Energy>(de, {0, 110});
-                    if (game_turn_ % 120 == 0) {
-                        char buf[128];
-                        snprintf(buf, sizeof(buf), "%s sends an avenger.", ginfo.name);
-                        log_.add(buf, {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255});
-                    }
-                    break;
-                }
-            }
-        }
-    }
-
-    if (stats.hp <= 0) {
-        state_ = GameState::DEAD;
-        end_screen_time_ = SDL_GetTicks();
-        audio_.stop_all_ambient(500);
-        audio_.play_music(MusicId::DEATH, 1500);
-    }
-}
-
 void Engine::update_music_for_location() {
     if (state_ != GameState::PLAYING) return;
 
     if (dungeon_level_ <= 0) {
         // Overworld — check if near a town
-        static const struct { int x, y; } TOWN_CENTERS[] = {
-            {1000,750}, {750,650}, {1300,670}, {850,950}, {1200,930},
-            {1050,450}, {650,800}, {1400,750}, {1000,1100}, {800,400},
-            {1250,1100}, {550,550}, {1450,500}, {900,1200}, {1100,300},
-            {700,1050}, {1350,1000}, {1150,550}, {600,700}, {1500,850},
-        };
-        bool near_town = false;
+        bool in_town = false;
         if (world_.has<Position>(player_)) {
             auto& pp = world_.get<Position>(player_);
-            for (auto& tc : TOWN_CENTERS) {
-                if (std::abs(pp.x - tc.x) < 25 && std::abs(pp.y - tc.y) < 25) {
-                    near_town = true;
-                    break;
-                }
-            }
+            in_town = (near_town(pp.x, pp.y, 25) >= 0);
         }
 
-        if (near_town) {
+        if (in_town) {
             // Only switch if not already playing town music
             if (audio_.current_music() != MusicId::TOWN1 &&
                 audio_.current_music() != MusicId::TOWN2) {
@@ -3988,610 +2447,7 @@ void Engine::update_meta_on_end() {
 }
 
 void Engine::populate_overworld() {
-    // Helper: spawn a wilderness NPC
-    auto spawn_ow_npc = [&](int x, int y, const char* name, const char* dialogue,
-                             NPCRole role, int spr_x, int spr_y, int wander_speed = 35) {
-        // Find a walkable tile near the target
-        for (int a = 0; a < 20; a++) {
-            int tx = x + rng_.range(-3, 3);
-            int ty = y + rng_.range(-3, 3);
-            if (!map_.in_bounds(tx, ty) || !map_.is_walkable(tx, ty)) continue;
-            Entity e = world_.create();
-            world_.add<Position>(e, {tx, ty});
-            NPC nc;
-            nc.role = role; nc.name = name; nc.dialogue = dialogue;
-            nc.home_x = tx; nc.home_y = ty;
-            world_.add<NPC>(e, std::move(nc));
-            world_.add<Renderable>(e, {SHEET_ROGUES, spr_x, spr_y, {255,255,255,255}, 5});
-            Stats ns; ns.name = name; ns.hp = 999; ns.hp_max = 999;
-            world_.add<Stats>(e, std::move(ns));
-            world_.add<Energy>(e, {0, wander_speed});
-            return;
-        }
-    };
-
-    // Helper: place a lore item on the ground
-    auto place_lore = [&](int x, int y, const char* name, const char* text) {
-        for (int a = 0; a < 10; a++) {
-            int tx = x + rng_.range(-2, 2);
-            int ty = y + rng_.range(-2, 2);
-            if (!map_.in_bounds(tx, ty) || !map_.is_walkable(tx, ty)) continue;
-            Entity e = world_.create();
-            world_.add<Position>(e, {tx, ty});
-            world_.add<Renderable>(e, {SHEET_ITEMS, 2, 20, {255,255,255,255}, 1});
-            Item item;
-            item.name = name; item.description = text;
-            item.type = ItemType::SCROLL; item.identified = true; item.gold_value = 5;
-            world_.add<Item>(e, std::move(item));
-            return;
-        }
-    };
-
-    // Helper: paint a small water feature
-    auto paint_lake = [&](int cx, int cy, int radius) {
-        for (int dy = -radius; dy <= radius; dy++) {
-            for (int dx = -radius; dx <= radius; dx++) {
-                if (dx*dx + dy*dy > radius*radius) continue;
-                int tx = cx + dx, ty = cy + dy;
-                if (!map_.in_bounds(tx, ty)) continue;
-                auto& t = map_.at(tx, ty);
-                if (t.type == TileType::FLOOR_GRASS || t.type == TileType::FLOOR_DIRT)
-                    t.type = TileType::WATER;
-            }
-        }
-    };
-
-    // Helper: paint a small ruin (scattered stone walls + floor)
-    auto paint_ruin = [&](int cx, int cy) {
-        for (int dy = -2; dy <= 2; dy++) {
-            for (int dx = -2; dx <= 2; dx++) {
-                int tx = cx + dx, ty = cy + dy;
-                if (!map_.in_bounds(tx, ty)) continue;
-                auto& t = map_.at(tx, ty);
-                if (t.type != TileType::FLOOR_GRASS && t.type != TileType::FLOOR_DIRT) continue;
-                // Outer ring = scattered walls, inner = stone floor
-                if (std::abs(dx) == 2 || std::abs(dy) == 2) {
-                    if (rng_.chance(40)) t.type = TileType::WALL_STONE_ROUGH;
-                } else {
-                    t.type = TileType::FLOOR_STONE;
-                }
-            }
-        }
-    };
-
-    // =============================================
-    // WANDERING WILDERNESS NPCs
-    // =============================================
-
-    // Travelers on roads between towns
-    static const struct { int x, y; const char* dialogue; } TRAVELERS[] = {
-        {875, 700, "The roads aren't safe. But then, nothing is."},
-        {1150, 710, "I'm heading to Greywatch. They say there's work there."},
-        {950, 850, "Used to be farmers here. Before the barrow opened."},
-        {1100, 600, "The cold gets worse the further north you go."},
-        {700, 750, "Bramblewood's seen better days. The forest is closing in."},
-        {1300, 850, "Ironhearth's forges never stop. You can hear them for miles."},
-        {800, 1050, "Something's wrong with the water south of here."},
-        {1050, 950, "I saw lights in the hills last night. Moving."},
-    };
-    for (auto& t : TRAVELERS) {
-        spawn_ow_npc(t.x, t.y, "Traveler", t.dialogue, NPCRole::FARMER, 1, 6); // peasant sprite
-    }
-
-    // Pilgrims (near dungeon entrances or holy sites)
-    spawn_ow_npc(1060, 730, "Pilgrim", "The barrow calls to the faithful. And the foolish.", NPCRole::FARMER, 4, 7);
-    spawn_ow_npc(1450, 520, "Pilgrim", "Soleth's fire burns in Candlemere. I go to pray.", NPCRole::FARMER, 4, 7);
-    spawn_ow_npc(580, 560, "Pilgrim", "The seal at Hollowgate. Have you seen it? It's cracking.", NPCRole::FARMER, 4, 7);
-
-    // Hunters in the deep wilderness
-    spawn_ow_npc(300, 500, "Hunter", "The game's thin out here. Something's scaring them deeper into the woods.", NPCRole::FARMER, 2, 6);
-    spawn_ow_npc(1700, 700, "Hunter", "I track wolves. They've been moving in packs larger than I've ever seen.", NPCRole::FARMER, 1, 6);
-    spawn_ow_npc(500, 1100, "Hunter", "Don't go south. The swamp takes people.", NPCRole::FARMER, 2, 6);
-
-    // Hermits (isolated, deeper dialogue)
-    spawn_ow_npc(200, 300, "Hermit", "I left the towns years ago. The gods are louder out here.", NPCRole::PRIEST, 4, 7);
-    spawn_ow_npc(1800, 400, "Old Woman", "I remember when there were no dungeons. Then the ground opened.", NPCRole::FARMER, 3, 7);
-    spawn_ow_npc(400, 1200, "Hermit", "The Reliquary isn't what they think. It was here before the gods.", NPCRole::PRIEST, 4, 7);
-    spawn_ow_npc(1600, 1100, "Madman", "I HEARD IT. Under the stone. Breathing.", NPCRole::FARMER, 1, 7);
-
-    // =============================================
-    // ENCAMPMENTS (small NPC + lore clusters)
-    // =============================================
-
-    // Abandoned camp — between Ashford and Hollowgate
-    paint_ruin(650, 600);
-    place_lore(650, 600, "abandoned journal",
-        "Day 3. We found the entrance. Day 5. Markus didn't come back. Day 7. None of us are going back in.");
-    spawn_ow_npc(655, 600, "Deserter", "I was a guard once. Then I saw what's down there.", NPCRole::FARMER, 1, 7);
-
-    // Mercenary camp — between Greywatch and Ironhearth
-    spawn_ow_npc(1350, 720, "Sellsword", "We're waiting for a contract. Know anyone who needs killing?", NPCRole::GUARD, 0, 7);
-    spawn_ow_npc(1355, 725, "Sellsword", "Gold talks. Everything else walks.", NPCRole::GUARD, 0, 7);
-
-    // Scholar's camp — between Frostmere and Glacierveil
-    spawn_ow_npc(1080, 370, "Field Scholar", "The inscriptions up north predate the current pantheon by centuries.", NPCRole::PRIEST, 5, 6);
-    place_lore(1075, 370, "field notes",
-        "The symbols near Glacierveil match nothing in our records. They resemble the Sepulchre markings.");
-
-    // Refugee camp — between Dustfall and Sandmoor
-    spawn_ow_npc(950, 1150, "Refugee", "The southern dungeons drove us out. We can't go home.", NPCRole::FARMER, 0, 6);
-    spawn_ow_npc(955, 1155, "Refugee", "My children are hungry. The road north is dangerous.", NPCRole::FARMER, 3, 7);
-
-    // =============================================
-    // POINTS OF INTEREST
-    // =============================================
-
-    // Standing stones — ancient, pre-god monuments
-    auto paint_standing_stone = [&](int x, int y) {
-        if (map_.in_bounds(x, y)) map_.at(x, y).type = TileType::FLOOR_STONE;
-        if (map_.in_bounds(x-1, y)) map_.at(x-1, y).type = TileType::ROCK;
-        if (map_.in_bounds(x+1, y)) map_.at(x+1, y).type = TileType::ROCK;
-    };
-
-    paint_standing_stone(400, 400);
-    place_lore(400, 402, "worn inscription",
-        "BEFORE THE SEVEN. BEFORE THE NAMING. THIS PLACE REMEMBERS.");
-
-    paint_standing_stone(1600, 300);
-    place_lore(1600, 302, "cracked tablet",
-        "The Reliquary was not made. It arrived. The stones grew around it.");
-
-    paint_standing_stone(800, 1300);
-    place_lore(800, 1302, "eroded pillar text",
-        "Seven gods claimed it. None of them made it. Who will claim it next?");
-
-    // Graveyard — north of Thornwall
-    for (int i = 0; i < 8; i++) {
-        int gx = 980 + (i % 4) * 4;
-        int gy = 690 + (i / 4) * 4;
-        if (map_.in_bounds(gx, gy)) map_.at(gx, gy).type = TileType::FLOOR_BONE;
-    }
-    place_lore(982, 695, "gravestone",
-        "Here lies the second paragon of Morreth. He did not fail. He chose to stop.");
-
-    // Old battlefield — between Redrock and Stonehollow
-    for (int i = 0; i < 12; i++) {
-        int bx = 1280 + rng_.range(-8, 8);
-        int by = 960 + rng_.range(-8, 8);
-        if (map_.in_bounds(bx, by) && map_.is_walkable(bx, by))
-            map_.at(bx, by).type = TileType::FLOOR_BONE;
-    }
-    place_lore(1280, 960, "rusted helm",
-        "Hundreds died here. The grass grew back. The bones didn't leave.");
-
-    // Shrine of the older gods — deep wilderness
-    paint_ruin(250, 800);
-    place_lore(250, 800, "ancient shrine inscription",
-        "This shrine predates the Seven. It honors something that has no name. The stone is warm.");
-
-    // Watchtower ruins — hilltop between Whitepeak and Frostmere
-    paint_ruin(920, 420);
-    spawn_ow_npc(920, 420, "Tower Guard", "I watch the north. Nothing comes from there anymore. That worries me.", NPCRole::GUARD, 3, 1);
-
-    // Witch's hut — deep forest
-    spawn_ow_npc(350, 700, "Hedge Witch", "I know what you seek. Everyone who comes here seeks the same thing.", NPCRole::PRIEST, 4, 7);
-    place_lore(355, 700, "witch's note",
-        "The herbs won't help. The prayers won't help. The only cure for what's down there is not going down there.");
-
-    // =============================================
-    // WATER FEATURES
-    // =============================================
-
-    // Small lakes
-    paint_lake(300, 600, 4);  // western wilderness lake
-    paint_lake(1700, 500, 3); // northeastern lake
-    paint_lake(900, 1350, 5); // southern marsh
-    paint_lake(500, 350, 3);  // northwestern pond
-    paint_lake(1400, 1200, 4); // southeastern lake
-
-    // River segments (short chains of water tiles)
-    auto paint_river = [&](int x1, int y1, int x2, int y2) {
-        int steps = std::max(std::abs(x2-x1), std::abs(y2-y1));
-        for (int i = 0; i <= steps; i++) {
-            float t = (steps > 0) ? static_cast<float>(i) / steps : 0;
-            int rx = x1 + static_cast<int>((x2-x1) * t);
-            int ry = y1 + static_cast<int>((y2-y1) * t);
-            for (int dy = -1; dy <= 1; dy++) {
-                for (int dx = -1; dx <= 0; dx++) {
-                    int tx = rx + dx, ty = ry + dy;
-                    if (map_.in_bounds(tx, ty)) {
-                        auto& tile = map_.at(tx, ty);
-                        if (tile.type == TileType::FLOOR_GRASS || tile.type == TileType::FLOOR_DIRT)
-                            tile.type = TileType::WATER;
-                    }
-                }
-            }
-        }
-    };
-
-    paint_river(300, 580, 350, 620);  // flows into western lake
-    paint_river(1680, 490, 1720, 510); // northeastern stream
-    paint_river(880, 1330, 920, 1370); // southern marsh outflow
-
-    // =============================================
-    // TOWN DECORATIONS
-    // =============================================
-
-    // Town decoration clusters
-    static const struct { int x, y; } TOWN_POS[] = {
-        {500,375}, {375,325}, {650,335}, {425,475}, {600,465},
-        {525,225}, {325,400}, {700,375}, {500,550}, {400,200},
-        {625,550}, {275,275}, {725,250}, {450,600}, {550,150},
-        {350,525}, {675,500}, {575,275}, {300,350}, {750,425},
-    };
-
-    // Helper: check if a tile is adjacent to a wall (building exterior)
-    auto is_wall = [&](int x, int y) -> bool {
-        if (!map_.in_bounds(x, y)) return false;
-        auto t = map_.at(x, y).type;
-        return t == TileType::WALL_STONE_BRICK || t == TileType::WALL_STONE_ROUGH ||
-               t == TileType::WALL_DIRT || t == TileType::WALL_WOOD || t == TileType::DOOR_CLOSED;
-    };
-    auto adjacent_to_wall = [&](int x, int y) -> bool {
-        return is_wall(x-1,y) || is_wall(x+1,y) || is_wall(x,y-1) || is_wall(x,y+1);
-    };
-
-    // Helper: place doodads against building walls in a town
-    auto place_against_walls = [&](int cx, int cy, int radius, int count,
-                                    int sx, int sy) {
-        int placed = 0;
-        for (int attempt = 0; attempt < count * 10 && placed < count; attempt++) {
-            int tx = cx + rng_.range(-radius, radius);
-            int ty = cy + rng_.range(-radius, radius);
-            if (!map_.in_bounds(tx, ty) || !map_.is_walkable(tx, ty)) continue;
-            if (!adjacent_to_wall(tx, ty)) continue;
-            // Don't block doors
-            if (map_.at(tx, ty).type == TileType::DOOR_OPEN) continue;
-            Entity e = world_.create();
-            world_.add<Position>(e, {tx, ty});
-            world_.add<Renderable>(e, {SHEET_TILES, sx, sy, {255,255,255,255}, 0});
-            placed++;
-        }
-    };
-
-    // Helper: place plants on open ground (not near walls)
-    auto place_on_open_ground = [&](int cx, int cy, int radius, int count,
-                                     int sx, int sy) {
-        int placed = 0;
-        for (int attempt = 0; attempt < count * 8 && placed < count; attempt++) {
-            int tx = cx + rng_.range(-radius, radius);
-            int ty = cy + rng_.range(-radius, radius);
-            if (!map_.in_bounds(tx, ty)) continue;
-            auto tt = map_.at(tx, ty).type;
-            if (tt != TileType::FLOOR_GRASS && tt != TileType::FLOOR_DIRT) continue;
-            if (adjacent_to_wall(tx, ty)) continue; // not against buildings
-            Entity e = world_.create();
-            world_.add<Position>(e, {tx, ty});
-            world_.add<Renderable>(e, {SHEET_TILES, sx, sy, {255,255,255,255}, 0});
-            placed++;
-        }
-    };
-
-    // Helper: place animated light sources against walls
-    auto place_lights = [&](int cx, int cy, int radius, int count, int anim_row) {
-        int placed = 0;
-        for (int attempt = 0; attempt < count * 15 && placed < count; attempt++) {
-            int tx = cx + rng_.range(-radius, radius);
-            int ty = cy + rng_.range(-radius, radius);
-            if (!map_.in_bounds(tx, ty) || !map_.is_walkable(tx, ty)) continue;
-            if (!adjacent_to_wall(tx, ty)) continue;
-            Entity e = world_.create();
-            world_.add<Position>(e, {tx, ty});
-            world_.add<Renderable>(e, {SHEET_ANIMATED, 0, anim_row, {255,255,255,255}, 0});
-            placed++;
-        }
-    };
-
-    for (auto& tp : TOWN_POS) {
-        // Braziers against building walls (1-2 per town)
-        place_lights(tp.x, tp.y, 18, rng_.range(1, 2), 1); // brazier lit = row 1
-        // Barrels against building walls (3-5 per town)
-        place_against_walls(tp.x, tp.y, 18, rng_.range(3, 5), 4, 17);
-        // Log piles against walls (1-3)
-        place_against_walls(tp.x, tp.y, 18, rng_.range(1, 3), 6, 17);
-        // Ore sacks against walls (0-1)
-        if (rng_.chance(40))
-            place_against_walls(tp.x, tp.y, 15, 1, 5, 17);
-        // Crops/plants on open ground at town outskirts (4-8)
-        int crop = rng_.range(0, 15);
-        place_on_open_ground(tp.x, tp.y, 25, rng_.range(4, 8), crop, 19);
-    }
-
-    // =============================================
-    // WOOD BUILDINGS — cabins, outposts, hamlets
-    // =============================================
-
-    // Helper: build a small wood cabin (exterior walls + dirt floor + door)
-    auto build_cabin = [&](int cx, int cy, int w, int h) {
-        for (int dy = 0; dy < h; dy++) {
-            for (int dx = 0; dx < w; dx++) {
-                int tx = cx + dx, ty = cy + dy;
-                if (!map_.in_bounds(tx, ty)) continue;
-                auto& t = map_.at(tx, ty);
-                if (t.type == TileType::TREE || t.type == TileType::ROCK) continue; // don't overwrite trees
-                bool is_edge = (dx == 0 || dx == w-1 || dy == 0 || dy == h-1);
-                if (is_edge) {
-                    t.type = TileType::WALL_WOOD;
-                } else {
-                    t.type = TileType::FLOOR_DIRT;
-                }
-            }
-        }
-        // Door on the south wall (bottom center)
-        int door_x = cx + w / 2;
-        int door_y = cy + h - 1;
-        if (map_.in_bounds(door_x, door_y))
-            map_.at(door_x, door_y).type = TileType::DOOR_CLOSED;
-    };
-
-    // Isolated cabins with hermits/NPCs
-    struct CabinDef { int x, y, w, h; const char* npc_name; const char* dialogue; };
-    static const CabinDef CABINS[] = {
-        {180, 450, 5, 4, "Woodsman",
-         "I built this place with my hands. The forest gives. The forest takes."},
-        {1750, 350, 4, 4, "Recluse",
-         "Go away. No, wait. When did you last see another person on the road?"},
-        {450, 1150, 5, 4, "Swamp Hermit",
-         "The water here glows some nights. I don't drink from it."},
-        {1650, 950, 4, 4, "Retired Soldier",
-         "I fought in the wars before the barrows opened. We thought THAT was bad."},
-        {350, 250, 5, 4, "Old Hunter",
-         "There's a standing stone to the east. Don't touch it."},
-        {1550, 200, 4, 4, "Cartographer",
-         "I've mapped every road. The map changes. I don't think the roads are moving."},
-    };
-
-    for (auto& cd : CABINS) {
-        build_cabin(cd.x, cd.y, cd.w, cd.h);
-        // Spawn NPC inside the cabin
-        spawn_ow_npc(cd.x + cd.w/2, cd.y + cd.h/2, cd.npc_name, cd.dialogue,
-                      NPCRole::FARMER, 4, 7); // elderly man sprite
-        // Barrel or log pile against the outside wall
-        place_against_walls(cd.x - 1, cd.y, cd.w + 2, 1, 4, 17); // barrel
-        place_against_walls(cd.x - 1, cd.y, cd.w + 2, 1, 6, 17); // log pile
-        // Torch by the door
-        place_lights(cd.x + cd.w/2, cd.y + cd.h, 3, 1, 5); // torch lit = row 5
-    }
-
-    // Small hamlets — 2-3 cabins clustered together
-    struct HamletDef { int x, y; const char* name; };
-    static const HamletDef HAMLETS[] = {
-        {300, 650, "Thornbrook"},
-        {1200, 200, "Icewind Post"},
-        {1100, 1250, "Dry Creek"},
-        {500, 900, "Mosshaven"},
-    };
-
-    for (auto& hm : HAMLETS) {
-        // 2-3 cabins in a cluster
-        build_cabin(hm.x, hm.y, 5, 4);
-        build_cabin(hm.x + 7, hm.y + 1, 4, 4);
-        if (rng_.chance(60))
-            build_cabin(hm.x + 2, hm.y + 6, 5, 3);
-
-        // Hamlet NPCs
-        spawn_ow_npc(hm.x + 2, hm.y + 2, "Villager",
-            "This place has no name on the maps. We like it that way.", NPCRole::FARMER, 1, 6);
-        spawn_ow_npc(hm.x + 9, hm.y + 3, "Villager",
-            "Trade comes through once a season. If we're lucky.", NPCRole::FARMER, 0, 6);
-
-        // Doodads around hamlet
-        place_against_walls(hm.x - 1, hm.y - 1, 14, rng_.range(2, 4), 4, 17); // barrels
-        place_against_walls(hm.x - 1, hm.y - 1, 14, rng_.range(1, 2), 6, 17); // log piles
-    }
-
-    // Outposts — single fortified structures (guard post at crossroads)
-    struct OutpostDef { int x, y; const char* dialogue; };
-    static const OutpostDef OUTPOSTS[] = {
-        {1050, 660, "Road's clear, last I checked. That was yesterday."},
-        {850, 500, "I watch the northern pass. Nothing human comes through anymore."},
-        {700, 950, "The southern road gets worse every year. We need more guards."},
-    };
-
-    for (auto& op : OUTPOSTS) {
-        build_cabin(op.x, op.y, 6, 5);
-        spawn_ow_npc(op.x + 3, op.y + 2, "Road Guard", op.dialogue, NPCRole::GUARD, 3, 1);
-        place_against_walls(op.x - 1, op.y - 1, 8, 2, 4, 17); // barrels
-        place_lights(op.x + 3, op.y + 5, 3, 1, 5); // torch at entrance
-    }
-
-    // =============================================
-    // OVERWORLD VEGETATION BY REGION
-    // =============================================
-
-    // Temperate zone: varied flowers and grasses
-    for (int i = 0; i < 80; i++) {
-        int x = rng_.range(100, 1900);
-        int y = rng_.range(500, 900);
-        if (!map_.in_bounds(x, y)) continue;
-        auto tt = map_.at(x, y).type;
-        if (tt != TileType::FLOOR_GRASS) continue;
-        int crop = rng_.range(0, 15); // random plant
-        Entity e = world_.create();
-        world_.add<Position>(e, {x, y});
-        world_.add<Renderable>(e, {SHEET_TILES, crop, 19, {255,255,255,255}, 0});
-    }
-
-    // Northern cold zone: sparse, icy-blue tinted plants
-    for (int i = 0; i < 30; i++) {
-        int x = rng_.range(100, 1900);
-        int y = rng_.range(100, 400);
-        if (!map_.in_bounds(x, y)) continue;
-        auto tt = map_.at(x, y).type;
-        if (tt != TileType::FLOOR_GRASS && tt != TileType::FLOOR_ICE) continue;
-        Entity e = world_.create();
-        world_.add<Position>(e, {x, y});
-        // Frosty blue-tinted plants
-        world_.add<Renderable>(e, {SHEET_TILES, rng_.range(0, 5), 19,
-                                    {180, 200, 240, 255}, 0});
-    }
-
-    // Southern warm zone: warm-tinted plants, more variety
-    for (int i = 0; i < 60; i++) {
-        int x = rng_.range(100, 1900);
-        int y = rng_.range(1000, 1400);
-        if (!map_.in_bounds(x, y)) continue;
-        auto tt = map_.at(x, y).type;
-        if (tt != TileType::FLOOR_GRASS && tt != TileType::FLOOR_SAND
-            && tt != TileType::FLOOR_DIRT) continue;
-        int crop = rng_.range(0, 15);
-        Entity e = world_.create();
-        world_.add<Position>(e, {x, y});
-        SDL_Color tint = (tt == TileType::FLOOR_SAND)
-            ? SDL_Color{220, 200, 140, 255}  // sandy tint
-            : SDL_Color{255, 255, 255, 255};
-        world_.add<Renderable>(e, {SHEET_TILES, crop, 19, tint, 0});
-    }
-
-    // Mushrooms near dungeon entrances and in dark forest areas
-    for (int i = 0; i < 25; i++) {
-        int x = rng_.range(100, 1900);
-        int y = rng_.range(100, 1400);
-        if (!map_.in_bounds(x, y)) continue;
-        // Only place near trees (forest areas)
-        bool near_tree = false;
-        for (int dy = -2; dy <= 2 && !near_tree; dy++)
-            for (int dx = -2; dx <= 2 && !near_tree; dx++)
-                if (map_.in_bounds(x+dx, y+dy) && map_.at(x+dx, y+dy).type == TileType::TREE)
-                    near_tree = true;
-        if (!near_tree) continue;
-        if (!map_.is_walkable(x, y)) continue;
-        Entity e = world_.create();
-        world_.add<Position>(e, {x, y});
-        world_.add<Renderable>(e, {SHEET_TILES, rng_.range(0, 1), 20, {255,255,255,255}, 0});
-    }
-
-    // =============================================
-    // SIGNPOSTS — directions to nearby POIs
-    // =============================================
-
-    struct POI { int x, y; const char* name; bool is_dungeon; };
-    std::vector<POI> pois;
-    // Towns
-    struct { int x, y; const char* name; } town_list[] = {
-        {1000, 750, "Thornwall"}, {750, 650, "Ashford"}, {1300, 670, "Greywatch"},
-        {850, 950, "Millhaven"}, {1200, 930, "Stonehollow"}, {1050, 450, "Frostmere"},
-        {650, 800, "Bramblewood"}, {1400, 750, "Ironhearth"}, {1000, 1100, "Dustfall"},
-        {800, 400, "Whitepeak"}, {1250, 1100, "Drywell"}, {550, 550, "Hollowgate"},
-        {1450, 500, "Candlemere"}, {900, 1200, "Sandmoor"}, {1100, 300, "Glacierveil"},
-        {700, 1050, "Tanglewood"}, {1350, 1000, "Redrock"}, {1150, 550, "Ravenshold"},
-        {600, 700, "Fenwatch"}, {1500, 850, "Endgate"},
-    };
-    for (auto& t : town_list) pois.push_back({t.x, t.y, t.name, false});
-    // Named dungeons from registry
-    for (auto& de : dungeon_registry_) {
-        if (!de.quest.empty()) // only named quest dungeons
-            pois.push_back({de.x, de.y, de.name.c_str(), true});
-    }
-
-    // Compass direction helper
-    auto compass_dir = [](int from_x, int from_y, int to_x, int to_y) -> const char* {
-        int dx = to_x - from_x, dy = to_y - from_y;
-        float angle = std::atan2(static_cast<float>(dy), static_cast<float>(dx));
-        // Convert to 8 directions (atan2: 0=E, pi/2=S, -pi/2=N)
-        if (angle < -2.749f) return "W";
-        if (angle < -1.963f) return "NW";
-        if (angle < -1.178f) return "N";
-        if (angle < -0.393f) return "NE";
-        if (angle < 0.393f)  return "E";
-        if (angle < 1.178f)  return "SE";
-        if (angle < 1.963f)  return "S";
-        if (angle < 2.749f)  return "SW";
-        return "W";
-    };
-
-    auto dist = [](int x1, int y1, int x2, int y2) -> float {
-        float dx = static_cast<float>(x1 - x2), dy = static_cast<float>(y1 - y2);
-        return std::sqrt(dx * dx + dy * dy);
-    };
-
-    // Generate sign text for a position: list 2-4 nearest POIs with directions
-    auto make_sign_text = [&](int sx, int sy, int max_entries = 3) -> std::string {
-        struct Nearby { float d; const char* name; const char* dir; };
-        std::vector<Nearby> nearby;
-        for (auto& p : pois) {
-            float d = dist(sx, sy, p.x, p.y);
-            if (d < 30) continue; // skip the POI we're standing at
-            nearby.push_back({d, p.name, compass_dir(sx, sy, p.x, p.y)});
-        }
-        std::sort(nearby.begin(), nearby.end(),
-                  [](const Nearby& a, const Nearby& b) { return a.d < b.d; });
-
-        std::string text = "Signpost:";
-        int count = std::min(max_entries, static_cast<int>(nearby.size()));
-        for (int i = 0; i < count; i++) {
-            text += "  ";
-            text += nearby[i].name;
-            text += " (";
-            text += nearby[i].dir;
-            text += ")";
-        }
-        return text;
-    };
-
-    // Place a sign entity at a walkable tile near (x,y)
-    auto place_sign = [&](int x, int y) {
-        for (int a = 0; a < 20; a++) {
-            int tx = x + rng_.range(-2, 2);
-            int ty = y + rng_.range(-2, 2);
-            if (!map_.in_bounds(tx, ty)) continue;
-            if (!map_.is_walkable(tx, ty)) continue;
-            // Don't place on top of existing entities
-            if (combat::entity_at(world_, tx, ty, NULL_ENTITY) != NULL_ENTITY) continue;
-            Entity e = world_.create();
-            world_.add<Position>(e, {tx, ty});
-            world_.add<Renderable>(e, {SHEET_TILES, 7, 17, {255, 255, 255, 255}, 3});
-            world_.add<Sign>(e, {make_sign_text(tx, ty)});
-            return;
-        }
-    };
-
-    // Signs outside each town (offset from center toward cardinal directions)
-    for (auto& t : town_list) {
-        // Place 1-2 signs on the outskirts of each town
-        place_sign(t.x + 25, t.y);      // east side
-        place_sign(t.x - 25, t.y);      // west side
-        if (rng_.chance(50))
-            place_sign(t.x, t.y + 25);  // south side
-    }
-
-    // Signs near named dungeon entrances
-    for (auto& de : dungeon_registry_) {
-        if (!de.quest.empty())
-            place_sign(de.x - 5, de.y);
-    }
-
-    // Signs at road crossings / midpoints between towns
-    // Sample points along major routes
-    struct { int x, y; } road_signs[] = {
-        // Heartlands crossroads
-        {900, 700},   // between Thornwall and Ashford
-        {1150, 710},  // between Thornwall and Greywatch
-        {950, 850},   // between Thornwall and Millhaven
-        // Pale Reach
-        {1050, 600},  // between Thornwall and Frostmere
-        {1200, 500},  // between Ravenshold and Candlemere
-        {1075, 375},  // between Frostmere and Glacierveil
-        {900, 575},   // between Whitepeak and Thornwall
-        // Greenwood
-        {625, 650},   // between Fenwatch and Hollowgate
-        {675, 900},   // between Bramblewood and Tanglewood
-        // Iron Coast
-        {1375, 650},  // between Greywatch and Ironhearth
-        {1475, 675},  // between Ironhearth and Candlemere
-        {1425, 925},  // between Ironhearth and Redrock
-        // Dust Provinces
-        {950, 1050},  // between Millhaven and Dustfall
-        {1125, 1100}, // between Dustfall and Drywell
-        {850, 1150},  // between Sandmoor and Tanglewood
-        // Far routes
-        {775, 525},   // between Whitepeak and Hollowgate
-        {1500, 700},  // approaching Endgate
-        {1050, 200},  // approaching The Sepulchre
-    };
-    for (auto& rs : road_signs) {
-        place_sign(rs.x, rs.y);
-    }
+    overworld::populate(world_, map_, rng_, dungeon_registry_);
 }
 
 void Engine::spawn_pet_visual(int pet_id) {
@@ -4708,157 +2564,36 @@ void Engine::sepulchre_ambient() {
 }
 
 void Engine::render_victory() {
-    // Darken screen
-    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
-    SDL_Rect overlay = {0, 0, width_, height_};
-    SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 180);
-    SDL_RenderFillRect(renderer_, &overlay);
+    int god_id = static_cast<int>(GodId::NONE);
+    if (world_.has<GodAlignment>(player_))
+        god_id = static_cast<int>(world_.get<GodAlignment>(player_).god);
+    render_victory_screen(renderer_, font_, font_title_, width_, height_,
+                          god_id, newly_unlocked_);
+}
 
-    if (!font_ || !font_title_) return;
-
-    // God-specific ending text
-    GodId god = GodId::NONE;
-    if (world_.has<GodAlignment>(player_)) {
-        god = world_.get<GodAlignment>(player_).god;
-    }
-
-    const char* title = "You hold the Reliquary.";
-    const char* ending = nullptr;
-    switch (god) {
-        case GodId::VETHRIK:
-            ending = "Vethrik claims the Reliquary.\n"
-                     "The dead lie still. The undead crumble to dust.\n"
-                     "The graveyards are quiet again.\n"
-                     "It is done.";
-            break;
-        case GodId::THESSARKA:
-            ending = "Thessarka takes the Reliquary.\n"
-                     "Every secret in the world is laid bare.\n"
-                     "The price is madness. You pay it gladly.";
-            break;
-        case GodId::MORRETH:
-            ending = "Morreth takes the Reliquary.\n"
-                     "The wars end. The strong rule.\n"
-                     "You are the strongest. That is enough.";
-            break;
-        case GodId::YASHKHET:
-            ending = "Yashkhet takes the Reliquary.\n"
-                     "The blood price is paid in full.\n"
-                     "Your hands will never stop shaking.";
-            break;
-        case GodId::KHAEL:
-            ending = "Khael takes the Reliquary.\n"
-                     "The forest reclaims the cities.\n"
-                     "Mankind is no longer the dominant species.";
-            break;
-        case GodId::SOLETH:
-            ending = "Soleth takes the Reliquary.\n"
-                     "The Sepulchre burns. The old places burn.\n"
-                     "Everything unclean burns.\n"
-                     "There is a lot of burning.";
-            break;
-        case GodId::IXUUL:
-            ending = "Ixuul takes the Reliquary.\n"
-                     "It becomes something else. So does everything.\n"
-                     "The world is unrecognizable by morning.";
-            break;
-        case GodId::ZHAVEK:
-            ending = "Zhavek takes the Reliquary.\n"
-                     "It disappears. The gods cannot find it.\n"
-                     "Neither can you.";
-            break;
-        case GodId::THALARA:
-            ending = "Thalara takes the Reliquary.\n"
-                     "The sea rises. The lowlands flood.\n"
-                     "The age of land is over.";
-            break;
-        case GodId::OSSREN:
-            ending = "Ossren takes the Reliquary.\n"
-                     "It is sealed in iron and stone.\n"
-                     "No one will ever open it again.";
-            break;
-        case GodId::LETHIS:
-            ending = "Lethis takes the Reliquary.\n"
-                     "The world falls asleep.\n"
-                     "Some of it wakes up. Most does not.";
-            break;
-        case GodId::GATHRUUN:
-            ending = "Gathruun takes the Reliquary.\n"
-                     "It sinks into the earth.\n"
-                     "The mountains grow taller. The tunnels go deeper.";
-            break;
-        case GodId::SYTHARA:
-            ending = "Sythara takes the Reliquary.\n"
-                     "It decays. So does everything else.\n"
-                     "This was always going to happen.";
-            break;
-        default:
-            ending = "No god claims the Reliquary.\n"
-                     "You hold it in faithless hands.\n"
-                     "It is yours. You are not sure what that means.";
-            break;
-    }
-
-    // Render title
-    SDL_Color gold = {255, 220, 100, 255};
-    SDL_Surface* title_surf = TTF_RenderText_Blended(font_title_, title, gold);
-    if (title_surf) {
-        SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer_, title_surf);
-        SDL_Rect dst = {width_ / 2 - title_surf->w / 2, height_ / 4, title_surf->w, title_surf->h};
-        SDL_RenderCopy(renderer_, tex, nullptr, &dst);
-        SDL_DestroyTexture(tex);
-        SDL_FreeSurface(title_surf);
-    }
-
-    // Render ending text line by line
-    SDL_Color text_col = {200, 190, 170, 255};
-    int y_pos = height_ / 4 + 60;
-    const char* p = ending;
-    while (p && *p) {
-        // Extract one line (up to \n)
-        char line[256];
-        int len = 0;
-        while (*p && *p != '\n' && len < 255) {
-            line[len++] = *p++;
-        }
-        line[len] = '\0';
-        if (*p == '\n') p++;
-
-        if (len > 0) {
-            SDL_Surface* surf = TTF_RenderText_Blended(font_, line, text_col);
-            if (surf) {
-                SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer_, surf);
-                SDL_Rect dst = {width_ / 2 - surf->w / 2, y_pos, surf->w, surf->h};
-                SDL_RenderCopy(renderer_, tex, nullptr, &dst);
-                SDL_DestroyTexture(tex);
-                SDL_FreeSurface(surf);
-            }
-        }
-        y_pos += 24;
-    }
-
-    // Newly unlocked classes
-    if (!newly_unlocked_.empty()) {
-        int uy = y_pos + 20;
-        SDL_Color unlock_gold = {255, 220, 100, 255};
-        ui::draw_text_centered(renderer_, font_, "Class unlocked:", unlock_gold, width_ / 2, uy);
-        uy += TTF_FontLineSkip(font_) + 4;
-        for (auto& name : newly_unlocked_) {
-            ui::draw_text_centered(renderer_, font_title_, name.c_str(), unlock_gold, width_ / 2, uy);
-            uy += TTF_FontLineSkip(font_title_) + 4;
-        }
-    }
-
-    // "Press any key"
-    SDL_Color dim = {140, 130, 120, 255};
-    SDL_Surface* prompt = TTF_RenderText_Blended(font_, "Press any key.", dim);
-    if (prompt) {
-        SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer_, prompt);
-        SDL_Rect dst = {width_ / 2 - prompt->w / 2, height_ - 40, prompt->w, prompt->h};
-        SDL_RenderCopy(renderer_, tex, nullptr, &dst);
-        SDL_DestroyTexture(tex);
-        SDL_FreeSurface(prompt);
-    }
+void Engine::reset_to_main_menu() {
+    player_ = NULL_ENTITY;
+    pet_entity_ = NULL_ENTITY;
+    run_kills_ = 0;
+    hardcore_ = false;
+    dungeon_level_ = -1;
+    game_turn_ = 0;
+    gold_ = 0;
+    journal_ = {};
+    overworld_return_x_ = 0;
+    overworld_return_y_ = 0;
+    floor_cache_.clear();
+    overworld_loaded_ = false;
+    current_dungeon_idx_ = -1;
+    build_traits_.clear();
+    world_ = World();
+    state_ = GameState::MAIN_MENU;
+    main_menu_.set_can_continue(false);
+    log_ = MessageLog();
+    audio_.stop_all_ambient(800);
+    audio_.play_music(MusicId::TITLE, 3000);
+    audio_.play_ambient(AmbientId::FIRE_CRACKLE, 4000);
+    audio_.play_ambient(AmbientId::FOREST_NIGHT_RAIN, 5000);
 }
 
 void Engine::try_pickup() {
@@ -4945,7 +2680,7 @@ void Engine::try_pickup() {
             auto sp = get_sacred_profane(ga.god);
             if (sp.sacred && (item.tags & sp.sacred)) {
                 auto& ginfo = get_god_info(ga.god);
-                adjust_favor(1);
+                god_system::adjust_favor(world_, player_, log_, 1);
                 char sbuf[128];
                 snprintf(sbuf, sizeof(sbuf), "A sacred item. %s approves.", ginfo.name);
                 log_.add(sbuf, {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255});
@@ -5043,10 +2778,6 @@ void Engine::try_rest() {
             Entity mob = world_.create();
             world_.add<Position>(mob, {mx, my});
 
-            // Pick a random monster from the depth-appropriate range
-            int max_idx = std::min(17, 4 + dungeon_level_ * 2);
-            int idx = rng_.range(0, max_idx);
-
             // Depth-scaled ambush monster
             Stats ms;
             ms.name = "something";
@@ -5058,8 +2789,6 @@ void Engine::try_rest() {
             world_.add<Renderable>(mob, {SHEET_MONSTERS, 11, 6, {255, 255, 255, 255}, 5});
             world_.add<AI>(mob, {AIState::HUNTING, ppos.x, ppos.y, 0, 20});
             world_.add<Energy>(mob, {0, 100});
-
-            (void)idx;
             world_.add<Stats>(mob, std::move(ms));
 
             log_.add("Your rest is interrupted!", {255, 120, 80, 255});
@@ -5114,7 +2843,7 @@ void Engine::try_rest() {
     if (world_.has<GodAlignment>(player_)) {
         auto& align = world_.get<GodAlignment>(player_);
         if (align.god == GodId::YASHKHET) {
-            adjust_favor(-2);
+            god_system::adjust_favor(world_, player_, log_, -2);
         }
     }
 
@@ -5141,7 +2870,11 @@ void Engine::handle_inventory_action(InvAction action) {
                 break;
             }
             if (inv.is_equipped(item_e)) {
-                // Cursed items can't be unequipped
+                // Relics and cursed items can't be unequipped
+                if (item.curse_state == 1 && item.relic_god >= 0) {
+                    log_.add("The relic is bound to you. It cannot be removed.", {255, 200, 100, 255});
+                    break;
+                }
                 if (item.curse_state == 1) {
                     log_.add("The item is cursed! It won't come off.", {200, 80, 80, 255});
                     audio_.play(SfxId::CURSE);
@@ -5157,12 +2890,17 @@ void Engine::handle_inventory_action(InvAction action) {
                     despawn_pet_visual();
                 }
             } else {
-                // Unequip existing item in that slot (check curse)
+                // Unequip existing item in that slot (check curse/relic)
                 Entity prev = inv.get_equipped(item.slot);
                 if (prev != NULL_ENTITY && world_.has<Item>(prev) &&
                     world_.get<Item>(prev).curse_state == 1) {
-                    log_.add("You can't remove what's already equipped — it's cursed.", {200, 80, 80, 255});
-                    world_.get<Item>(prev).identified = true;
+                    auto& prev_item = world_.get<Item>(prev);
+                    if (prev_item.relic_god >= 0)
+                        log_.add("The relic is bound to you. It cannot be replaced.", {255, 200, 100, 255});
+                    else {
+                        log_.add("You can't remove what's already equipped — it's cursed.", {200, 80, 80, 255});
+                        prev_item.identified = true;
+                    }
                     break;
                 }
                 if (prev != NULL_ENTITY) {
@@ -5176,8 +2914,11 @@ void Engine::handle_inventory_action(InvAction action) {
                 log_.add(buf, {170, 180, 160, 255});
                 audio_.play(SfxId::EQUIP);
                 item.identified = true;
-                // Reveal curse on equip
-                if (item.curse_state == 1) {
+                // Reveal curse/binding on equip
+                if (item.curse_state == 1 && item.relic_god >= 0) {
+                    log_.add("The relic binds to you. It cannot be removed.", {255, 200, 100, 255});
+                    audio_.play(SfxId::PRAYER);
+                } else if (item.curse_state == 1) {
                     log_.add("A dark chill runs through you. The item is cursed!", {200, 80, 80, 255});
                     audio_.play(SfxId::CURSE);
                 }
@@ -5187,11 +2928,31 @@ void Engine::handle_inventory_action(InvAction action) {
                     auto sp = get_sacred_profane(ga.god);
                     if (sp.profane && (item.tags & sp.profane)) {
                         auto& ginfo = get_god_info(ga.god);
-                        adjust_favor(-2);
+                        god_system::adjust_favor(world_, player_, log_, -2);
                         char pbuf[128];
                         snprintf(pbuf, sizeof(pbuf), "%s recoils. This item is profane.", ginfo.name);
                         log_.add(pbuf, {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255});
                         turn_actions_.equipped_profane = true;
+                    }
+                }
+                // God relic — equipping another god's relic causes massive favor loss
+                if (item.relic_god >= 0 && world_.has<GodAlignment>(player_)) {
+                    auto& ga = world_.get<GodAlignment>(player_);
+                    if (ga.god != GodId::NONE && item.relic_god != static_cast<int>(ga.god)) {
+                        auto& ginfo = get_god_info(ga.god);
+                        auto& rinfo = get_god_info(static_cast<GodId>(item.relic_god));
+                        god_system::adjust_favor(world_, player_, log_, -50);
+                        char rbuf[128];
+                        snprintf(rbuf, sizeof(rbuf),
+                            "%s is ENRAGED! You wield a relic of %s! (-50 favor)", ginfo.name, rinfo.name);
+                        log_.add(rbuf, {220, 40, 40, 255});
+                    } else if (ga.god != GodId::NONE) {
+                        auto& ginfo = get_god_info(ga.god);
+                        god_system::adjust_favor(world_, player_, log_, 20);
+                        char rbuf[128];
+                        snprintf(rbuf, sizeof(rbuf),
+                            "%s rejoices! You carry a divine relic! (+20 favor)", ginfo.name);
+                        log_.add(rbuf, {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255});
                     }
                 }
                 // Pet equipped — spawn visual following entity
@@ -5876,30 +3637,7 @@ void Engine::handle_input() {
                 // Save meta-progression
                 if (dungeon_level_ >= 4) meta_.died_deep = true;
                 update_meta_on_end();
-                // Reset game state for new game
-                player_ = NULL_ENTITY;
-                pet_entity_ = NULL_ENTITY;
-                run_kills_ = 0;
-                hardcore_ = false;
-                dungeon_level_ = -1;
-                game_turn_ = 0;
-                gold_ = 0;
-                journal_ = {};
-                overworld_return_x_ = 0;
-                overworld_return_y_ = 0;
-                floor_cache_.clear();
-                overworld_loaded_ = false;
-                current_dungeon_idx_ = -1;
-                build_traits_.clear();
-                // Clear all entities
-                world_ = World();
-                state_ = GameState::MAIN_MENU;
-                main_menu_.set_can_continue(false);
-                log_ = MessageLog();
-                audio_.stop_all_ambient(800);
-                audio_.play_music(MusicId::TITLE, 3000);
-                audio_.play_ambient(AmbientId::FIRE_CRACKLE, 4000);
-                audio_.play_ambient(AmbientId::FOREST_NIGHT_RAIN, 5000);
+                reset_to_main_menu();
                 return;
             }
 
@@ -5913,28 +3651,7 @@ void Engine::handle_input() {
                     if (gi >= 0 && gi < GOD_COUNT) meta_.gods_completed[gi] = true;
                 }
                 update_meta_on_end();
-                player_ = NULL_ENTITY;
-                pet_entity_ = NULL_ENTITY;
-                run_kills_ = 0;
-                hardcore_ = false;
-                dungeon_level_ = -1;
-                game_turn_ = 0;
-                gold_ = 0;
-                journal_ = {};
-                overworld_return_x_ = 0;
-                overworld_return_y_ = 0;
-                floor_cache_.clear();
-                overworld_loaded_ = false;
-                current_dungeon_idx_ = -1;
-                build_traits_.clear();
-                world_ = World();
-                state_ = GameState::MAIN_MENU;
-                main_menu_.set_can_continue(false);
-                log_ = MessageLog();
-                audio_.stop_all_ambient(800);
-                audio_.play_music(MusicId::TITLE, 3000);
-                audio_.play_ambient(AmbientId::FIRE_CRACKLE, 4000);
-                audio_.play_ambient(AmbientId::FOREST_NIGHT_RAIN, 5000);
+                reset_to_main_menu();
                 return;
             }
 
@@ -6153,197 +3870,7 @@ void Engine::handle_input() {
 }
 
 void Engine::render_god_visuals(const Camera& cam, int y_offset) {
-    if (!world_.has<GodAlignment>(player_) || !world_.has<Position>(player_)) return;
-    auto& ga = world_.get<GodAlignment>(player_);
-    if (ga.god == GodId::NONE) return;
-    auto& pos = world_.get<Position>(player_);
-    auto& ginfo = get_god_info(ga.god);
-
-    int TS = cam.tile_size;
-    int px = (pos.x - cam.x) * TS;
-    int py = (pos.y - cam.y) * TS + y_offset;
-    int cx = px + TS / 2;
-    int cy = py + TS / 2;
-
-    Uint32 ticks = SDL_GetTicks();
-    float t = ticks / 1000.0f; // time in seconds
-    uint8_t r = ginfo.color.r, g = ginfo.color.g, b = ginfo.color.b;
-
-    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
-    int ds = std::max(3, TS / 12); // dot/drip size scales with tile
-
-
-    switch (ga.god) {
-    case GodId::VETHRIK: {
-        // Rising bone motes (matches creation screen)
-        for (int i = 0; i < 4; i++) {
-            float phase = std::fmod(t * 0.8f + i * 0.25f, 1.0f);
-            int mx = cx + static_cast<int>(std::sin(t * 0.5f + i * 1.7f) * TS * 0.4f);
-            int my = py + TS - static_cast<int>(phase * TS * 1.2f);
-            int ma = static_cast<int>((1.0f - phase) * 180);
-            SDL_SetRenderDrawColor(renderer_, 200, 200, 220, static_cast<Uint8>(ma));
-            SDL_Rect mote = {mx - ds, my - ds, ds * 2, ds * 2};
-            SDL_RenderFillRect(renderer_, &mote);
-        }
-        break;
-    }
-    case GodId::THESSARKA: {
-        for (int i = 0; i < 4; i++) {
-            float angle = t * 1.8f + i * 1.5708f;
-            int ox = cx + static_cast<int>(std::cos(angle) * TS * 0.6f);
-            int oy = cy + static_cast<int>(std::sin(angle) * TS * 0.4f);
-            SDL_SetRenderDrawColor(renderer_, r, g, b, 170);
-            SDL_Rect dot = {ox - ds * 2, oy - ds * 2, ds * 4, ds * 4};
-            SDL_RenderFillRect(renderer_, &dot);
-        }
-        break;
-    }
-    case GodId::MORRETH: {
-        for (int i = 0; i < 3; i++) {
-            float phase = std::fmod(t * 2.0f + i * 0.33f, 1.0f);
-            if (phase < 0.3f) {
-                int spx = cx + static_cast<int>((phase - 0.15f) * TS * 3.0f * (i % 2 ? 1 : -1));
-                int spy = py + TS - static_cast<int>(phase * TS * 0.5f);
-                int sa = static_cast<int>((0.3f - phase) * 600);
-                SDL_SetRenderDrawColor(renderer_, 220, 180, 120, static_cast<Uint8>(std::min(sa, 200)));
-                SDL_Rect spark = {spx - ds, spy - ds, ds * 2, ds * 2};
-                SDL_RenderFillRect(renderer_, &spark);
-            }
-        }
-        break;
-    }
-    case GodId::YASHKHET: {
-        for (int i = 0; i < 5; i++) {
-            float phase = std::fmod(t * 0.6f + i * 0.2f, 1.0f);
-            int dx2 = cx + static_cast<int>(std::sin(i * 2.3f) * TS * 0.4f);
-            int dy2 = py + static_cast<int>(phase * TS * 1.4f);
-            int da = static_cast<int>((1.0f - phase) * 180);
-            SDL_SetRenderDrawColor(renderer_, 200, 40, 40, static_cast<Uint8>(da));
-            SDL_Rect drip = {dx2 - ds / 2, dy2, ds, ds * 3};
-            SDL_RenderFillRect(renderer_, &drip);
-        }
-        break;
-    }
-    case GodId::KHAEL: {
-        for (int i = 0; i < 5; i++) {
-            float phase = std::fmod(t * 0.4f + i * 0.2f, 1.0f);
-            float angle = i * 1.257f + t * 0.3f;
-            int lx = cx + static_cast<int>(std::cos(angle) * phase * TS * 0.8f);
-            int ly = cy + static_cast<int>(std::sin(angle) * phase * TS * 0.5f);
-            int la = static_cast<int>((1.0f - phase) * 150);
-            SDL_SetRenderDrawColor(renderer_, 80, 180, 60, static_cast<Uint8>(la));
-            SDL_Rect leaf = {lx - ds, ly - ds / 2, ds * 2, ds};
-            SDL_RenderFillRect(renderer_, &leaf);
-        }
-        break;
-    }
-    case GodId::SOLETH: {
-        int fl = static_cast<int>(45 + 25 * std::sin(t * 6.0f));
-        SDL_SetRenderDrawColor(renderer_, 255, 220, 100, static_cast<Uint8>(fl));
-        SDL_Rect halo = {cx - TS / 2, py - TS / 5, TS, TS / 5};
-        SDL_RenderFillRect(renderer_, &halo);
-        for (int i = 0; i < 4; i++) {
-            float phase = std::fmod(t * 1.0f + i * 0.25f, 1.0f);
-            int ex = cx + static_cast<int>(std::sin(t * 0.7f + i * 2.1f) * TS * 0.4f);
-            int ey = py + TS - static_cast<int>(phase * TS * 1.3f);
-            int ea = static_cast<int>((1.0f - phase) * 170);
-            SDL_SetRenderDrawColor(renderer_, 255, 180, 60, static_cast<Uint8>(ea));
-            SDL_Rect ember = {ex - ds, ey - ds, ds * 2, ds * 2};
-            SDL_RenderFillRect(renderer_, &ember);
-        }
-        break;
-    }
-    case GodId::IXUUL: {
-        if ((ticks / 50) % 4 == 0) {
-            int off = (ticks / 25) % 9 - 4;
-            SDL_SetRenderDrawColor(renderer_, r, g, b, 90);
-            SDL_Rect tear = {px + off * 3, py + TS / 3, TS + 4, ds * 2};
-            SDL_RenderFillRect(renderer_, &tear);
-            SDL_Rect tear2 = {px - off * 4, py + TS * 2 / 3, TS + 6, ds + 1};
-            SDL_RenderFillRect(renderer_, &tear2);
-            SDL_Rect tear3 = {px + off * 2, py + TS / 6, TS / 2, ds};
-            SDL_RenderFillRect(renderer_, &tear3);
-        }
-        break;
-    }
-    case GodId::ZHAVEK: {
-        for (int i = 1; i <= 3; i++) {
-            int off = i * TS / 8;
-            int alpha = 45 - i * 12;
-            SDL_SetRenderDrawColor(renderer_, 15, 15, 30, static_cast<Uint8>(alpha));
-            SDL_Rect trail = {px + off, py + off, TS - off / 2, TS - off / 2};
-            SDL_RenderFillRect(renderer_, &trail);
-        }
-        break;
-    }
-    case GodId::THALARA: {
-        for (int i = 0; i < 3; i++) {
-            float rp = std::fmod(t * 1.2f + i * 0.33f, 1.0f);
-            int rs = static_cast<int>(rp * TS * 1.2f);
-            int ra = static_cast<int>((1.0f - rp) * 60);
-            SDL_SetRenderDrawColor(renderer_, 80, 180, 200, static_cast<Uint8>(ra));
-            SDL_Rect ring = {cx - rs / 2, py + TS - rs / 3, rs, rs * 2 / 3};
-            SDL_RenderDrawRect(renderer_, &ring);
-            SDL_Rect ring2 = {cx - rs / 2 + 1, py + TS - rs / 3 + 1, rs - 2, rs * 2 / 3 - 2};
-            SDL_RenderDrawRect(renderer_, &ring2);
-        }
-        break;
-    }
-    case GodId::OSSREN: {
-        for (int i = 0; i < 3; i++) {
-            float phase = std::fmod(t * 1.5f + i * 0.33f, 1.0f);
-            if (phase < 0.4f) {
-                int spx = cx + static_cast<int>(std::sin(i * 3.1f) * TS * 0.4f);
-                int spy = py + TS - static_cast<int>(phase * TS * 0.7f);
-                int sa = static_cast<int>((0.4f - phase) * 500);
-                SDL_SetRenderDrawColor(renderer_, 255, 180, 60, static_cast<Uint8>(std::min(sa, 200)));
-                SDL_Rect spark = {spx - ds, spy - ds, ds * 2, ds * 2};
-                SDL_RenderFillRect(renderer_, &spark);
-            }
-        }
-        break;
-    }
-    case GodId::LETHIS: {
-        for (int ei = 0; ei < 2; ei++) {
-            float ep = std::fmod(t * 0.6f + ei * 1.5f, 3.0f);
-            if (ep < 0.6f) {
-                int ea = static_cast<int>((0.6f - std::abs(ep - 0.3f)) * 500);
-                SDL_SetRenderDrawColor(renderer_, 200, 160, 240, static_cast<Uint8>(std::min(ea, 220)));
-                float eangle = t * 0.3f + ei * 3.14f;
-                int ex2 = cx + static_cast<int>(std::cos(eangle) * TS * 0.5f);
-                int ey2 = cy - TS / 6 + static_cast<int>(std::sin(eangle * 0.7f) * TS * 0.1f);
-                SDL_Rect eye = {ex2 - ds * 2, ey2 - ds, ds * 4, ds * 2};
-                SDL_RenderFillRect(renderer_, &eye);
-            }
-        }
-        break;
-    }
-    case GodId::GATHRUUN: {
-        for (int i = 0; i < 4; i++) {
-            float angle = t * 1.2f + i * 1.5708f;
-            int ox = cx + static_cast<int>(std::cos(angle) * TS * 0.55f);
-            int oy = py + TS - ds * 2 + static_cast<int>(std::sin(angle) * TS * 0.08f);
-            SDL_SetRenderDrawColor(renderer_, 160, 130, 90, 190);
-            SDL_Rect peb = {ox - ds * 2, oy - ds, ds * 3, ds * 2};
-            SDL_RenderFillRect(renderer_, &peb);
-        }
-        break;
-    }
-    case GodId::SYTHARA: {
-        for (int i = 0; i < 6; i++) {
-            float phase = std::fmod(t * 0.5f + i * 0.167f, 1.0f);
-            float angle = i * 1.047f + t * 0.2f;
-            int spx = cx + static_cast<int>(std::cos(angle) * phase * TS * 0.7f);
-            int spy = cy + static_cast<int>(std::sin(angle) * phase * TS * 0.5f);
-            int sa = static_cast<int>((1.0f - phase) * 150);
-            SDL_SetRenderDrawColor(renderer_, 100, 160, 40, static_cast<Uint8>(sa));
-            SDL_Rect spore = {spx - ds, spy - ds, ds * 2, ds * 2};
-            SDL_RenderFillRect(renderer_, &spore);
-        }
-        break;
-    }
-    default: break;
-    }
+    god_system::render_god_visuals(world_, player_, renderer_, cam, y_offset);
 }
 
 void Engine::render_hud() {
@@ -6598,100 +4125,11 @@ void Engine::render() {
     // Death overlay — fades in over 2 seconds, accepts input after 3 seconds
     if (state_ == GameState::DEAD && font_) {
         Uint32 elapsed = SDL_GetTicks() - end_screen_time_;
-        // Fade-in: 0→255 alpha over 2 seconds
-        int fade_alpha = std::min(255, static_cast<int>(elapsed * 255 / 2000));
-
-        SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
-        SDL_Rect overlay = {0, 0, width_, height_};
-        SDL_SetRenderDrawColor(renderer_, 0, 0, 0, static_cast<Uint8>(std::min(200, fade_alpha)));
-        SDL_RenderFillRect(renderer_, &overlay);
-
-        // Text fades in after 500ms
-        int text_alpha = std::max(0, std::min(255, static_cast<int>((elapsed - 500) * 255 / 1500)));
-        if (elapsed >= 500) {
-            // "You have died." — large, red
-            SDL_Color red = {200, 50, 50, static_cast<Uint8>(text_alpha)};
-            TTF_Font* death_font = font_title_ ? font_title_ : font_;
-            SDL_Surface* surf = TTF_RenderText_Blended(death_font, "You have died.", red);
-            if (surf) {
-                SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer_, surf);
-                SDL_SetTextureAlphaMod(tex, static_cast<Uint8>(text_alpha));
-                SDL_Rect dst = {width_ / 2 - surf->w / 2, height_ / 3 - 20, surf->w, surf->h};
-                SDL_RenderCopy(renderer_, tex, nullptr, &dst);
-                SDL_DestroyTexture(tex);
-                SDL_FreeSurface(surf);
-            }
-        }
-
-        // Killed-by line — fades in after 1 second
-        int cause_alpha = std::max(0, std::min(255, static_cast<int>((elapsed - 1000) * 255 / 1000)));
-        if (elapsed >= 1000 && !death_cause_.empty()) {
-            char cause_buf[128];
-            snprintf(cause_buf, sizeof(cause_buf), "Killed by %s.", death_cause_.c_str());
-            SDL_Color cause_col = {180, 140, 140, static_cast<Uint8>(cause_alpha)};
-            SDL_Surface* csurf = TTF_RenderText_Blended(font_, cause_buf, cause_col);
-            if (csurf) {
-                SDL_Texture* ctex = SDL_CreateTextureFromSurface(renderer_, csurf);
-                SDL_SetTextureAlphaMod(ctex, static_cast<Uint8>(cause_alpha));
-                SDL_Rect cdst = {width_ / 2 - csurf->w / 2, height_ / 3 + 30, csurf->w, csurf->h};
-                SDL_RenderCopy(renderer_, ctex, nullptr, &cdst);
-                SDL_DestroyTexture(ctex);
-                SDL_FreeSurface(csurf);
-            }
-        }
-
-        // God-flavored death text — fades in after 1.5 seconds
-        int god_alpha = std::max(0, std::min(255, static_cast<int>((elapsed - 1500) * 255 / 1000)));
-        if (elapsed >= 1500) {
-            const char* death_line = nullptr;
-            GodId dgod = GodId::NONE;
-            if (world_.has<GodAlignment>(player_))
-                dgod = world_.get<GodAlignment>(player_).god;
-            switch (dgod) {
-                case GodId::VETHRIK:  death_line = "Vethrik adds your bones to the collection."; break;
-                case GodId::THESSARKA: death_line = "Thessarka records your death. She forgets nothing."; break;
-                case GodId::MORRETH:  death_line = "Morreth found you wanting."; break;
-                case GodId::YASHKHET: death_line = "Yashkhet accepts the offering."; break;
-                case GodId::KHAEL:    death_line = "Your body feeds the roots."; break;
-                case GodId::SOLETH:   death_line = "The flame goes out."; break;
-                case GodId::IXUUL:    death_line = "Ixuul is already making something new from the pieces."; break;
-                case GodId::ZHAVEK:   death_line = "You vanish. No one notices."; break;
-                case GodId::THALARA:  death_line = "The sea takes you back."; break;
-                case GodId::OSSREN:   death_line = "You were not built to last."; break;
-                case GodId::LETHIS:   death_line = "You fall asleep. You do not wake up."; break;
-                case GodId::GATHRUUN: death_line = "The stone closes over you."; break;
-                case GodId::SYTHARA:  death_line = "Rot takes you before you hit the ground."; break;
-                default:              death_line = "You die alone."; break;
-            }
-            SDL_Color dim = {160, 120, 120, static_cast<Uint8>(god_alpha)};
-            SDL_Surface* dsurf = TTF_RenderText_Blended(font_, death_line, dim);
-            if (dsurf) {
-                SDL_Texture* dtex = SDL_CreateTextureFromSurface(renderer_, dsurf);
-                SDL_SetTextureAlphaMod(dtex, static_cast<Uint8>(god_alpha));
-                SDL_Rect ddst = {width_ / 2 - dsurf->w / 2, height_ / 3 + 60, dsurf->w, dsurf->h};
-                SDL_RenderCopy(renderer_, dtex, nullptr, &ddst);
-                SDL_DestroyTexture(dtex);
-                SDL_FreeSurface(dsurf);
-            }
-        }
-
-        // Newly unlocked classes
-        if (!newly_unlocked_.empty()) {
-            int uy = height_ / 2 + 20;
-            SDL_Color gold = {255, 220, 100, 255};
-            ui::draw_text_centered(renderer_, font_, "Class unlocked:", gold, width_ / 2, uy);
-            uy += TTF_FontLineSkip(font_) + 4;
-            for (auto& name : newly_unlocked_) {
-                ui::draw_text_centered(renderer_, font_title_ ? font_title_ : font_,
-                                        name.c_str(), gold, width_ / 2, uy);
-                uy += (font_title_ ? TTF_FontLineSkip(font_title_) : TTF_FontLineSkip(font_)) + 4;
-            }
-        }
-
-        if (elapsed >= 3000) {
-            ui::draw_text_centered(renderer_, font_, "Press any key.",
-                                    {100, 95, 90, 255}, width_ / 2, height_ - 40);
-        }
+        int god_id = static_cast<int>(GodId::NONE);
+        if (world_.has<GodAlignment>(player_))
+            god_id = static_cast<int>(world_.get<GodAlignment>(player_).god);
+        render_death_screen(renderer_, font_, font_title_, width_, height_,
+                            elapsed, death_cause_, god_id, newly_unlocked_);
     }
 
     if (state_ == GameState::VICTORY) {

@@ -27,11 +27,11 @@ def climate(y):
 
 def base_tile(y):
     c = climate(y)
-    if c == 'ice': return 'i'
-    if c == 'cold': return '.' if random.random() < 0.6 else 'i'
+    if c == 'ice': return 'I'       # snow ground
+    if c == 'cold': return 'I' if random.random() < 0.7 else '.'
     if c == 'temperate': return '.'
     if c == 'warm': return '.' if random.random() < 0.5 else 's'
-    return 's'
+    return 's'                       # sand ground
 
 print("Initializing map...", flush=True)
 grid = [[base_tile(y) for x in range(W)] for y in range(H)]
@@ -57,7 +57,7 @@ brush_types = ['t', 'b', 'c']
 for y in range(H):
     c = climate(y)
     for x in range(W):
-        if grid[y][x] not in '.is': continue
+        if grid[y][x] not in '.isI': continue
         r = random.random()
         brush = random.choice(brush_types)
         if c == 'temperate':
@@ -80,33 +80,65 @@ for y in range(H):
 print("Creating forests...", flush=True)
 for _ in range(250):
     fx = random.randint(30, W - 30)
-    fy = random.randint(100, 1200)
+    fy = random.randint(300, 1200)  # no forests in ice zone (y < 250)
     fr = random.randint(12, 45)
-    density = random.uniform(0.15, 0.4)
+    # Smaller, sparser forests in cold zone
+    c = climate(fy)
+    if c == 'cold':
+        fr = min(fr, 20)
+        density = random.uniform(0.08, 0.2)
+    else:
+        density = random.uniform(0.15, 0.4)
     for dy in range(-fr, fr + 1):
         for dx in range(-fr, fr + 1):
             dist = math.sqrt(dx * dx + dy * dy)
             if dist > fr: continue
             nx, ny = fx + dx, fy + dy
             if not (0 <= nx < W and 0 <= ny < H): continue
+            if climate(ny) == 'ice': continue  # no trees on ice
             falloff = 1.0 - dist / fr
             if random.random() < density * falloff:
                 grid[ny][nx] = 'T' if random.random() < 0.35 else 't'
 
 # === ROCKY AREAS ===
+# Concentrated in mountain bands and desert, sparse elsewhere
 print("Creating rocky areas...", flush=True)
-for _ in range(100):
-    rx, ry = random.randint(30, W - 30), random.randint(30, H - 30)
-    rr = random.randint(6, 20)
+# Mountain band at north edge of temperate zone (y 350-500)
+for _ in range(40):
+    rx = random.randint(30, W - 30)
+    ry = random.randint(350, 500)
+    rr = random.randint(8, 25)
     for dy in range(-rr, rr + 1):
         for dx in range(-rr, rr + 1):
             if dx * dx + dy * dy > rr * rr: continue
             nx, ny = rx + dx, ry + dy
             if not (0 <= nx < W and 0 <= ny < H): continue
             r = random.random()
-            if r < 0.25: set_tile(nx, ny, 'R')
+            if r < 0.3: set_tile(nx, ny, 'R')
             elif r < 0.5: set_tile(nx, ny, ',')
-            else: set_tile(nx, ny, '.')
+# Desert rocky outcrops
+for _ in range(30):
+    rx = random.randint(30, W - 30)
+    ry = random.randint(1250, H - 30)
+    rr = random.randint(5, 15)
+    for dy in range(-rr, rr + 1):
+        for dx in range(-rr, rr + 1):
+            if dx * dx + dy * dy > rr * rr: continue
+            nx, ny = rx + dx, ry + dy
+            if not (0 <= nx < W and 0 <= ny < H): continue
+            r = random.random()
+            if r < 0.2: set_tile(nx, ny, 'R')
+# Scattered small rocky patches in temperate/warm (much fewer)
+for _ in range(20):
+    rx = random.randint(30, W - 30)
+    ry = random.randint(500, 1200)
+    rr = random.randint(4, 10)
+    for dy in range(-rr, rr + 1):
+        for dx in range(-rr, rr + 1):
+            if dx * dx + dy * dy > rr * rr: continue
+            nx, ny = rx + dx, ry + dy
+            if not (0 <= nx < W and 0 <= ny < H): continue
+            if random.random() < 0.15: set_tile(nx, ny, 'R')
 
 # === RIVERS ===
 print("Drawing rivers...", flush=True)
@@ -203,8 +235,18 @@ towns = [
 def place_town(tx, ty, is_start, town_rng, is_city=False, province_idx=2):
     """Place a town or city with structured grid layout."""
     lat = ty / H
-    stone_prob = max(0, min(1, 1.0 - lat * 1.2))
-    wall_ch = '#' if (is_city or town_rng.random() < stone_prob) else 'w'
+    # Regional wall types:
+    #   Greenwood (province 3, Khael) → grass walls 'g'
+    #   Dust Provinces (province 5, Sythara) → sandstone walls 'n'
+    #   Others → stone '#' for cities, wood 'w' or stone '#' based on latitude
+    if province_idx == 3:  # Greenwood — Khael (nature)
+        wall_ch = 'g'
+    elif province_idx == 5:  # Dust Provinces — Sythara (plague/decay)
+        wall_ch = 'n'
+    else:
+        stone_prob = max(0, min(1, 1.0 - lat * 1.2))
+        wall_ch = '#' if (is_city or town_rng.random() < stone_prob) else 'w'
+    # Cities always use their regional wall (not downgraded to wood)
     floor_ch = ':' if is_city else ':'  # stone floor inside buildings always
 
     if is_city:

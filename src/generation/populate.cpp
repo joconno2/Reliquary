@@ -187,6 +187,63 @@ static const ItemDef LEGENDARY_ARMOR_TABLE[] = {
     {"Cross Pendant",  "+2 atk, +1 AC.",   ItemType::AMULET,      EquipSlot::AMULET,  4, 16, 0, 1, 2, 0, 0, 0, ""},  // 17.e cross pendant
 };
 
+// God relics — one per god, index matches GodId enum (0-12).
+// Each has powerful bonuses + a stat penalty (str/dex/con_bonus on ItemDef are repurposed).
+// Relics are always blessed, can't be unequipped, and priceless.
+struct RelicDef {
+    const char* name;
+    const char* description;
+    ItemType type;
+    EquipSlot slot;
+    int sprite_x, sprite_y;
+    int damage_bonus, armor_bonus, attack_bonus, dodge_bonus;
+    int str_bonus, dex_bonus, con_bonus;
+};
+
+static const RelicDef RELIC_TABLE[] = {
+    // [0] VETHRIK (death) — bone crown
+    {"Skull of the Ossuary",  "+3 dmg, +3 CON, -3 CHA.",
+     ItemType::ARMOR_HEAD, EquipSlot::HEAD,       7, 15,   3, 1, 0, 0,   0, 0, 3},
+    // [1] THESSARKA (knowledge) — all-seeing pendant
+    {"Eye of the Eyeless",    "+3 atk, +5 INT, -3 STR.",
+     ItemType::AMULET,    EquipSlot::AMULET,      6, 16,   0, 0, 3, 0,  -3, 0, 0},
+    // [2] MORRETH (war) — iron gauntlet weapon
+    {"Fist of the Iron Father", "+10 dmg, +3 STR, -3 DEX.",
+     ItemType::WEAPON,    EquipSlot::MAIN_HAND,   9, 0,   10, 0, 0, 0,   3,-3, 0},
+    // [3] YASHKHET (blood) — sacrificial dagger
+    {"Heartseeker",           "+7 dmg, +2 atk, +3 CON, -3 WIL.",
+     ItemType::WEAPON,    EquipSlot::MAIN_HAND,   6, 0,    7, 0, 2, 0,   0, 0, 3},
+    // [4] KHAEL (nature) — antler crown
+    {"Antler Crown",          "+3 AC, +3 CON, -3 INT.",
+     ItemType::ARMOR_HEAD, EquipSlot::HEAD,       7, 15,   0, 3, 0, 0,   0, 0, 3},
+    // [5] SOLETH (fire) — flame ring
+    {"Ember of the Pale Flame", "+3 dmg, +2 atk, -3 DEX.",
+     ItemType::RING,      EquipSlot::RING_1,      3, 17,   3, 0, 2, 0,   0,-3, 0},
+    // [6] IXUUL (chaos) — void shard ring
+    {"Void Shard",            "+4 dmg, +2 dodge, -3 CON.",
+     ItemType::RING,      EquipSlot::RING_1,      5, 17,   4, 0, 0, 2,   0, 0,-3},
+    // [7] ZHAVEK (shadow) — shadow cloak amulet
+    {"Shroud of the Unseen",  "+4 dodge, +2 atk, -3 STR.",
+     ItemType::AMULET,    EquipSlot::AMULET,      2, 16,   0, 0, 2, 4,  -3, 0, 0},
+    // [8] THALARA (sea) — drowned queen's trident
+    {"Tide of the Drowned",   "+8 dmg, +3 DEX, -3 CON.",
+     ItemType::WEAPON,    EquipSlot::MAIN_HAND,   4, 6,    8, 0, 0, 0,   0, 3,-3},
+    // [9] OSSREN (craft) — perfect hammer
+    {"Hammer Unworn",         "+7 dmg, +4 AC, -3 DEX.",
+     ItemType::WEAPON,    EquipSlot::MAIN_HAND,   0, 5,    7, 4, 0, 0,   0,-3, 0},
+    // [10] LETHIS (dreams) — dream veil pendant
+    {"Dream Veil",            "+2 AC, +2 dodge, -3 STR.",
+     ItemType::AMULET,    EquipSlot::AMULET,      3, 16,   0, 2, 0, 2,  -3, 0, 0},
+    // [11] GATHRUUN (stone) — heart of the mountain ring
+    {"Heart of the Mountain", "+5 AC, +3 CON, -3 DEX.",
+     ItemType::RING,      EquipSlot::RING_1,      4, 18,   0, 5, 0, 0,   0,-3, 3},
+    // [12] SYTHARA (plague) — rot blossom ring
+    {"Rot Blossom",           "+3 dmg, +3 CON, -3 CHA.",
+     ItemType::RING,      EquipSlot::RING_1,      2, 18,   3, 0, 0, 0,   0, 0, 3},
+};
+
+static constexpr int RELIC_COUNT = sizeof(RELIC_TABLE) / sizeof(RELIC_TABLE[0]);
+
 //                                                                                            sx sy dmg arm atk dge heal gold unid          range
 static const ItemDef RANGED_TABLE[] = {
     {"short bow",      "+3 dmg, +1 atk, range 6.",       ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 9,  3, 0, 1, 0, 0,  25, "",  6},
@@ -683,6 +740,49 @@ void spawn_items(World& world, const TileMap& map,
 static constexpr int LEGENDARY_WEAPON_COUNT = sizeof(LEGENDARY_WEAPON_TABLE) / sizeof(LEGENDARY_WEAPON_TABLE[0]);
 static constexpr int LEGENDARY_ARMOR_COUNT = sizeof(LEGENDARY_ARMOR_TABLE) / sizeof(LEGENDARY_ARMOR_TABLE[0]);
 
+Entity spawn_relic(World& world, const std::vector<Room>& rooms, RNG& rng,
+                    int patron_god_idx) {
+    if (rooms.size() < 2 || patron_god_idx < 0 || patron_god_idx >= RELIC_COUNT)
+        return NULL_ENTITY;
+
+    auto& def = RELIC_TABLE[patron_god_idx];
+
+    // Place in the last room (deepest point), offset from center
+    auto& room = rooms.back();
+    int x = room.cx() + rng.range(-1, 1);
+    int y = room.cy() + rng.range(-1, 1);
+
+    Entity e = world.create();
+    world.add<Position>(e, {x, y});
+
+    // God-colored tint for the relic
+    auto& ginfo = get_god_info(static_cast<GodId>(patron_god_idx));
+    Uint8 tr = static_cast<Uint8>(200 + (255 - ginfo.color.r) / 4);
+    Uint8 tg = static_cast<Uint8>(200 + (255 - ginfo.color.g) / 4);
+    Uint8 tb = static_cast<Uint8>(200 + (255 - ginfo.color.b) / 4);
+    world.add<Renderable>(e, {SHEET_ITEMS, def.sprite_x, def.sprite_y,
+                               {tr, tg, tb, 255}, 3}); // high z-order
+
+    Item item;
+    item.name = def.name;
+    item.description = def.description;
+    item.type = def.type;
+    item.slot = def.slot;
+    item.damage_bonus = def.damage_bonus;
+    item.armor_bonus = def.armor_bonus;
+    item.attack_bonus = def.attack_bonus;
+    item.dodge_bonus = def.dodge_bonus;
+    item.str_bonus = def.str_bonus;
+    item.dex_bonus = def.dex_bonus;
+    item.con_bonus = def.con_bonus;
+    item.gold_value = 0;
+    item.identified = true;
+    item.curse_state = 1; // can't unequip
+    item.relic_god = patron_god_idx;
+    world.add<Item>(e, std::move(item));
+    return e;
+}
+
 Entity spawn_legendary(World& world, const std::vector<Room>& rooms, [[maybe_unused]] RNG& rng,
                         const std::string& dungeon_name) {
     if (rooms.size() < 2) return NULL_ENTITY;
@@ -725,7 +825,8 @@ Entity spawn_legendary(World& world, const std::vector<Room>& rooms, [[maybe_unu
 
 void spawn_doodads(World& world, const TileMap& map,
                     const std::vector<Room>& rooms, RNG& rng,
-                    int dungeon_level, const std::string& zone) {
+                    int dungeon_level, const std::string& zone,
+                    int patron_god_idx) {
     // Sprite coordinates (row = group-1, col = letter index)
     // Row 17: chest closed(0), chest open(1), jar closed(2), jar open(3), barrel(4), ore sack(5), log pile(6)
     // Row 20: mushrooms small(0), large(1)
@@ -868,16 +969,18 @@ void spawn_doodads(World& world, const TileMap& map,
     }
 
     // God shrine — ~20% chance per floor, placed in a mid-room
+    // Uses the dungeon's patron god if available, otherwise random
     if (rng.chance(20) && rooms.size() >= 3) {
         int room_idx = rng.range(1, static_cast<int>(rooms.size()) - 2);
         auto& room = rooms[room_idx];
         int sx = room.cx();
         int sy = room.cy();
         if (map.in_bounds(sx, sy) && map.is_walkable(sx, sy)) {
-            // Set tile to SHRINE — variant stores a pseudo-random god index for this shrine
             auto& tile = const_cast<TileMap&>(map).at(sx, sy);
             tile.type = TileType::SHRINE;
-            tile.variant = static_cast<uint8_t>(rng.range(0, GOD_COUNT - 1));
+            tile.variant = (patron_god_idx >= 0)
+                ? static_cast<uint8_t>(patron_god_idx)
+                : static_cast<uint8_t>(rng.range(0, GOD_COUNT - 1));
         }
     }
 }

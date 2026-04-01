@@ -25,10 +25,11 @@ Entity spawn_boss(World& world, const TileMap& map,
                    int hp, int str, int dex, int con,
                    int dmg, int armor, int speed, int xp_value);
 
-// Spawn dungeon doodads (chests, jars, mushrooms, coffins, blood splatters)
+// Spawn dungeon doodads (chests, jars, mushrooms, coffins, blood splatters, god shrines)
 void spawn_doodads(World& world, const TileMap& map,
                     const std::vector<Room>& rooms, RNG& rng,
-                    int dungeon_level, const std::string& zone = "");
+                    int dungeon_level, const std::string& zone = "",
+                    int patron_god_idx = -1);
 
 // Spawn a rival paragon (PC-like enemy with god affiliation).
 // Returns the entity, or NULL_ENTITY if no suitable room/spawn.
@@ -36,6 +37,11 @@ void spawn_doodads(World& world, const TileMap& map,
 Entity spawn_paragon(World& world, const TileMap& map,
                       const std::vector<Room>& rooms, RNG& rng,
                       int dungeon_level, GodId player_god);
+
+// Spawn a god relic on the bottom floor of a dungeon with a patron god.
+// One relic per run, late-game only (effective level 6+).
+Entity spawn_relic(World& world, const std::vector<Room>& rooms, RNG& rng,
+                    int patron_god_idx);
 
 // Spawn a legendary item on the bottom floor of a named dungeon.
 // Returns the entity, or NULL_ENTITY if this dungeon has no legendary.

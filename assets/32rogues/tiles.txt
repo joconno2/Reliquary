@@ -13,9 +13,13 @@
 
 4.a. igneous wall (top)
 4.b. igneous wall (side)
+4.c. grass wall (top)
+4.d. grass wall (side)
 
 5.a. large stone wall (top)
 5.b. large stone wall (side)
+5.c. sandstone wall (top)
+5.d. sandstone wall (side)
 
 6.a. catacombs / skull wall (top)
 6.b. catacombs / skull walls (side)
@@ -23,19 +27,32 @@
 7.a. blank floor (dark grey)
 7.b. floor stone 1
 7.c. floor stone 2
-7.d. floor stone 3 
+7.d. floor stone 3
 7.e. floor stone 1 (no bg)
 7.f. floor stone 2 (no bg)
 7.g. floor stone 3 (no bg)
+7.h. blank snow (white)
+7.i. snow stone 1
+7.j. snow stone 2
+7.k. snow stone 3
+7.l. snow stone 1 (no bg)
+7.m. snow stone 2 (no bg)
+7.n. snow stone 3 (no bg)
 
 8.a. blank floor (dark purple)
 8.b. grass 1
 8.c. grass 2
-8.d. grass 3 
+8.d. grass 3
 8.e. grass 1 (no bg)
 8.f. grass 2 (no bg)
 8.g. grass 3 (no bg)
-
+8.h. blank sand (yellow)
+8.i. sand stone 1
+8.j. sand stone 2
+8.k. sand stone 3
+8.l. sand stone 1 (no bg)
+8.m. sand stone 2 (no bg)
+8.n. sand stone 3 (no bg)
 
 9.a. empty
 9.b. dirt 1

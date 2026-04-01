@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include "components/god.h"
 
 enum class NPCRole : int {
     SHOPKEEPER,
@@ -16,4 +17,5 @@ struct NPC {
     std::string dialogue = "...";
     int quest_id = -1;  // quest to give on interaction (-1 = none)
     int home_x = 0, home_y = 0;  // spawn position — wander anchor
+    GodId god_affiliation = GodId::NONE; // town's patron god
 };

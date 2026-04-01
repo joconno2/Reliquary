@@ -220,49 +220,46 @@ F11 fullscreen | F12 screenshot
 - [x] Material damage modifiers applied (bone -1, wood -2, steel +1, obsidian/mithril +2, adamantine +4)
 - [x] Save/load for material and tags fields
 
-**5C. God Shrines** — interactive dungeon objects
-- [ ] Shrine tile type in tilemap (reuse altar/shrine sprite from 32rogues)
-- [ ] Each dungeon zone spawns 0-1 shrines of its associated god (from dungeons.json zone data)
-- [ ] Shrine interactions (bump): identify curse/bless status, pray for free (costs no favor), gain small heal
-- [ ] Same-god shrine: +5 favor, free prayer cooldown reset
-- [ ] Rival-god shrine: option to desecrate (-10 rival god's NPC disposition, +5 own favor)
-- [ ] Wrong-god shrine: warning, Ixuul tenet forbids praying at other shrines
+**5C. God Shrines** — interactive dungeon objects ✅
+- [x] Shrine tile type (TileType::SHRINE) with altar sprite
+- [x] ~20% chance per floor, placed in mid-room center
+- [x] Shrines now spawn with dungeon's patron god (from dungeons.json patron_god_idx) instead of random
+- [x] Same-god shrine: +5 favor, small heal, identify all equipped items
+- [x] Rival-god shrine: +2 own favor, message
+- [x] Godless player: "It means nothing to you"
+- [x] Excommunicated conversion at rival shrine (see 5D)
 
-**5D. Excommunication & Conversion**
-- [ ] At favor <= -100: excommunicated state — prayers always fail, passive punishments (random damage, stat drain, divine enemies spawned)
-- [ ] Divine enemies: god-themed monsters spawned periodically when excommunicated
-- [ ] Conversion: interact with another god's shrine while excommunicated — lose all favor, start at 0 with new god, permanent -10% prayer power penalty
-- [ ] NPC reaction to excommunicated players: priests hostile, merchants charge double
+**5D. Excommunication & Conversion** ✅
+- [x] Prayers always fail when excommunicated (favor <= -100)
+- [x] Periodic divine damage (~60% every 15 turns, 2-6 dmg) with god-colored message + crit flash
+- [x] Periodic stat drain (~40% every 40 turns, -1 random attribute)
+- [x] Conversion at rival god's shrine: reset to 0 favor, -2 all attributes, sprite tint update
+- [x] Priests refuse interaction with excommunicated players
+- [x] Merchants charge double (200% price multiplier) with warning message
 
-**5E. NPC God Factions** — BLOCKED: needs town visual identity first
-- [ ] **Prerequisite: God-affiliated town generation** — each town assigned a patron god, generator produces visually distinct layouts:
-  - Soleth towns: central brazier/temple, torch-lined streets, stone construction
-  - Khael towns: trees inside walls, dirt floors, organic layout
-  - Vethrik towns: bone-floor cemetery district, ossuary building
-  - Morreth towns: blacksmith + arena, barracks, iron/stone heavy
-  - Thessarka towns: library building, scholar NPCs, inscribed walls
-  - Yashkhet towns: red stone floors, blood altar, small and isolated
-  - Ixuul towns: half-ruined, irregular geometry, no central structure
-  - Thalara towns: water features, docks, coastal layout
-  - Ossren towns: forge district, well-maintained walls, symmetrical
-  - Lethis towns: quiet, overgrown, beds/dream imagery
-  - Gathruun towns: built into hillside, stone-heavy, underground sections
-  - Sythara towns: mushrooms, overgrown, decaying structures
-  - Zhavek towns: dark alleys, few torches, hidden passages
-  - God symbols/banners on buildings (decorative tile markers)
-  - Town-specific NPC rosters (Morreth = blacksmith+arena, no scholar; Thessarka = library+scholar, no blacksmith)
-- [ ] Assign god affiliations to all 20 towns in generate_overworld.py
-- [ ] Add god_affiliation field to NPC component
-- [ ] Same-god NPCs: better prices (-15%), free healing, quest priority
-- [ ] Rival-god NPCs: higher prices (+25%), hostile dialogue, may refuse service
-- [ ] Hostile factions: Soleth NPCs attack Ixuul followers on sight
-- [ ] Wandering priests of all 13 gods on roads
+**5E. NPC God Factions** ✅
+- [x] Province→god lookup: 6 provinces map to 6 patron gods (Heartlands=Morreth, Pale Reach=Soleth, Frozen Marches=Gathruun, Greenwood=Khael, Iron Coast=Ossren, Dust Provinces=Sythara)
+- [x] god_affiliation field on NPC component (GodId)
+- [x] All 20 town NPCs auto-assigned god affiliation based on province position
+- [x] Extra NPCs (herbalists, merchants) also get town god affiliation
+- [x] Same-god shopkeepers: -15% prices + "fellow believer" message
+- [x] Rival-god shopkeepers: +25% prices + "wary of your faith" message
+- [x] Same-god priests: free healing (+10 HP) + god-colored welcome
+- [x] Rival-god priests: territorial warning dialogue
+- [x] Hostile faction: Soleth priests refuse Ixuul followers
+- [x] Excommunicated: priests refuse, merchants charge double (from 5D)
+- [x] 7 wandering priests for non-provincial gods (Vethrik, Thessarka, Yashkhet, Ixuul, Zhavek, Thalara, Lethis) on wilderness roads with god affiliations
+- [ ] Town visual identity (god-themed decorations in generate_overworld.py) — deferred to polish
 
-**5F. God Relics** — 13 unique legendary items
-- [ ] One relic per god, extremely rare (one per run, late-game dungeon only)
-- [ ] Each relic has powerful effect + permanent trade-off (can't be unequipped, stat drain, etc.)
-- [ ] Relics detected by god (your god's relic glows in inventory/on ground)
-- [ ] Using another god's relic: massive favor loss + potential excommunication
+**5F. God Relics** — 13 unique legendary items ✅
+- [x] One relic per god (13 total): Skull of the Ossuary (Vethrik), Eye of the Eyeless (Thessarka), Fist of the Iron Father (Morreth), Heartseeker (Yashkhet), Antler Crown (Khael), Ember of the Pale Flame (Soleth), Void Shard (Ixuul), Shroud of the Unseen (Zhavek), Tide of the Drowned (Thalara), Hammer Unworn (Ossren), Dream Veil (Lethis), Heart of the Mountain (Gathruun), Rot Blossom (Sythara)
+- [x] Spawn on bottom floor of late-game dungeons (zone_difficulty >= 6) with patron god, ~30% chance
+- [x] God-colored tint, high z-order rendering, always identified, priceless
+- [x] Can't be unequipped (bound, not cursed — distinct messaging)
+- [x] Each has powerful combat/stat bonuses + a stat penalty trade-off
+- [x] Equipping own god's relic: +20 favor
+- [x] Equipping rival god's relic: -50 favor (potential excommunication trigger)
+- [x] relic_god field on Item, fully serialized in save/load
 
 **5G. Material System** — weapon/armor materials ✅
 - [x] MaterialType enum: NONE, BONE, SILVER, MITHRIL, ADAMANTINE (Iron is default/untagged)
@@ -302,13 +299,14 @@ src/
 │                    corpse, item, inventory, god, class_def, background, traits,
 │                    spellbook, npc, quest, quest_target, dynamic_quest, tenet,
 │                    prayer, buff, status_effect, container, sign, disease, pet
-├── systems/       — render, fov, combat, ai, magic
-├── generation/    — dungeon, populate, mapfile, village, quest_gen
+├── data/          — world_data.h (canonical town/province data, shared constants)
+├── systems/       — render, fov, combat, ai, magic, god_system, npc_interaction, status
+├── generation/    — dungeon, populate, mapfile, village, quest_gen, overworld, player_setup
 ├── ui/            — message_log, inventory_screen, character_sheet, spell_screen,
 │                    creation_screen, background_select, trait_select,
 │                    main_menu, pause_menu, settings_screen, help_screen,
 │                    quest_log, quest_offer, levelup_screen, shop_screen,
-│                    world_map, ui_draw
+│                    world_map, ui_draw, death_screen
 ├── save/          — save.cpp/.h (JSON serialization)
 data/
 ├── maps/          — overworld.map (2000x1500)
@@ -321,14 +319,19 @@ assets/
 ```
 
 ## Key Files to Know
-- **engine.cpp** — ~6500+ lines, the main game loop. Most gameplay logic lives here (combat, movement, NPC interaction, god system, overworld population, sign placement, death screen, quests).
+- **engine.cpp** — ~4200 lines, core game loop: movement, combat, input, rendering, level generation. Refactored 2026-04-01 from ~6900 lines.
+- **world_data.h** — canonical town coordinates, province→god mapping, compass helpers. Single source of truth for all 20 towns.
+- **god_system.cpp** — prayers (26 total), tenet checks, favor adjustments, god aura rendering. All god logic consolidated here.
+- **overworld.cpp** — overworld population (wilderness NPCs, cabins, hamlets, vegetation, signs, water, wandering priests)
+- **npc_interaction.cpp** — NPC bump handling: shops, quests, priest reactions, god-faction pricing
+- **status.cpp** — status effect ticking, disease effects, buff expiration, god passives, negative favor punishments
+- **player_setup.cpp** — player entity creation (class/god/trait/background setup, starting gear/spells)
+- **quest_gen.cpp** — quest boss/item spawning, dynamic quest generation
+- **death_screen.cpp** — death and victory screen rendering
 - **quest.h** — all 17 main quest + 7 side quest definitions with compass direction text
 - **god.h** — 13 gods: GodInfo, GodColor, GodAlignment, favor system
 - **tenet.h** — tenet checks, PlayerActions, sacred/profane items per god
-- **spellbook.h** — 50 SpellId entries, SpellInfo, per-school organization
 - **magic.cpp** — all 50 spell implementations (AoE, summons, status effects, blood magic)
-- **populate.cpp** — monster/item/legendary spawning with depth + zone difficulty scaling, material assignment, palette swaps
+- **populate.cpp** — monster/item/legendary/relic spawning with depth + zone difficulty scaling
 - **generate_overworld.py** — province system, capital cities, structured town generation
 - **dungeons.json** — runtime dungeon registry with zone/quest/province links
-- **sign.h** — signpost entity component
-- **release.yml** — CI/CD workflow for Linux + Windows cross-compilation

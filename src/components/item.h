@@ -147,6 +147,9 @@ struct Item {
     // Item tags for sacred/profane system (bitmask from tenet.h ItemTag)
     uint32_t tags = 0;
 
+    // God relic: -1 = not a relic, 0-12 = GodId of owning god
+    int relic_god = -1;
+
     // Display name respecting identification and material
     std::string display_name() const {
         if (!identified && !unid_name.empty()) return unid_name;

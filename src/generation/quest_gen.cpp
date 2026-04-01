@@ -1,7 +1,14 @@
 #include "generation/quest_gen.h"
 #include "components/position.h"
+#include "components/renderable.h"
 #include "components/npc.h"
+#include "components/item.h"
+#include "components/quest.h"
+#include "components/quest_target.h"
 #include "components/dynamic_quest.h"
+#include "core/spritesheet.h"
+#include "generation/populate.h"
+#include "ui/message_log.h"
 #include <cmath>
 #include <cstdio>
 
@@ -320,6 +327,193 @@ void generate_town_quests(World& world, [[maybe_unused]] const TileMap& map, RNG
 
         world.add<DynamicQuest>(e, std::move(dq));
         quests_assigned++;
+    }
+}
+
+void spawn_quest_content(World& world, const TileMap& map,
+                          const std::vector<Room>& rooms,
+                          int dungeon_level,
+                          const DungeonContext* dungeon_ctx,
+                          QuestJournal& journal, MessageLog& log) {
+    // Spawn quest bosses at specific depths
+    if (dungeon_level == 3) {
+        // Barrow Wight — bottom of The Warrens (first dungeon)
+        // Uses death knight sprite (row 4 col 3) for a menacing undead look
+        Entity wight = populate::spawn_boss(world, map, rooms,
+            "Barrow Wight", SHEET_MONSTERS, 3, 4,
+            45, 16, 12, 14, 8, 3, 90, 100);
+        if (wight != NULL_ENTITY) {
+            world.add<QuestTarget>(wight, {QuestId::MQ_01_BARROW_WIGHT, true});
+        }
+    }
+
+    // The Sepulchre depth-triggered quests (MQ_15/16/17)
+    bool in_sepulchre = dungeon_ctx && dungeon_ctx->zone == "sepulchre";
+    if (in_sepulchre) {
+        // MQ_15: auto-activate on entering The Sepulchre
+        if (dungeon_level == 1 && !journal.has_quest(QuestId::MQ_15_THE_SEPULCHRE)) {
+            auto prereq = QuestId::MQ_14_HOLLOWGATE_SEAL;
+            if (journal.has_quest(prereq) && journal.get_state(prereq) == QuestState::FINISHED) {
+                journal.add_quest(QuestId::MQ_15_THE_SEPULCHRE);
+                log.add("Quest started: Enter The Sepulchre", {220, 200, 100, 255});
+                log.add("Your god is screaming.", {180, 80, 80, 255});
+            }
+        }
+        // MQ_16: auto-activate at depth 4+
+        if (dungeon_level >= 4 && !journal.has_quest(QuestId::MQ_16_THE_DESCENT)) {
+            if (journal.has_quest(QuestId::MQ_15_THE_SEPULCHRE) &&
+                journal.get_state(QuestId::MQ_15_THE_SEPULCHRE) == QuestState::ACTIVE) {
+                journal.set_state(QuestId::MQ_15_THE_SEPULCHRE, QuestState::COMPLETE);
+                journal.set_state(QuestId::MQ_15_THE_SEPULCHRE, QuestState::FINISHED);
+                journal.add_quest(QuestId::MQ_16_THE_DESCENT);
+                log.add("Quest started: The Descent", {220, 200, 100, 255});
+                log.add("The architecture stops making sense. You hear other footsteps.", {180, 80, 80, 255});
+            }
+        }
+        // MQ_17: auto-activate at depth 6 (the bottom)
+        if (dungeon_level >= 6 && !journal.has_quest(QuestId::MQ_17_CLAIM_RELIQUARY)) {
+            if (journal.has_quest(QuestId::MQ_16_THE_DESCENT) &&
+                journal.get_state(QuestId::MQ_16_THE_DESCENT) == QuestState::ACTIVE) {
+                journal.set_state(QuestId::MQ_16_THE_DESCENT, QuestState::COMPLETE);
+                journal.set_state(QuestId::MQ_16_THE_DESCENT, QuestState::FINISHED);
+                journal.add_quest(QuestId::MQ_17_CLAIM_RELIQUARY);
+                log.add("Quest started: Claim the Reliquary", {220, 200, 100, 255});
+                log.add("You see it. A vessel of light that hurts to look at.", {255, 220, 100, 255});
+            }
+        }
+        // Sepulchre atmospheric entry messages
+        static const char* SEPULCHRE_ENTRY[] = {
+            "The air changes. Something is wrong with this place.",
+            "The walls here are older than stone should be.",
+            "The geometry stops making sense. Corners that shouldn't exist.",
+            "You hear footsteps that aren't yours.",
+            "The walls are breathing.",
+            "The Reliquary is here. You can feel it pulling.",
+        };
+        if (dungeon_level >= 1 && dungeon_level <= 6) {
+            log.add(SEPULCHRE_ENTRY[dungeon_level - 1], {160, 100, 140, 255});
+        }
+    }
+
+    // Spawn quest items at the bottom of their respective dungeons
+    if (dungeon_ctx) {
+        // Helper: spawn a quest item in the last room
+        auto spawn_quest_item = [&](const char* name, const char* desc,
+                                    int sprite_x, int sprite_y,
+                                    QuestId qid,
+                                    SDL_Color tint = {255,255,255,255}) {
+            if (rooms.size() < 2) return;
+            auto& room = rooms.back();
+            int x = room.cx();
+            int y = room.cy() + 1;
+            Entity e = world.create();
+            world.add<Position>(e, {x, y});
+            world.add<Renderable>(e, {SHEET_ITEMS, sprite_x, sprite_y, tint, 2});
+            Item item;
+            item.name = name;
+            item.description = desc;
+            item.type = ItemType::KEY;
+            item.identified = true;
+            item.quest_id = static_cast<int>(qid);
+            item.gold_value = 0;
+            world.add<Item>(e, std::move(item));
+        };
+
+        // Determine the zone's max depth to know if we're at the bottom
+        struct ZoneMax { const char* key; int max_depth; };
+        static const ZoneMax ZONE_DEPTHS[] = {
+            {"warrens", 3}, {"stonekeep", 6}, {"deep_halls", 9},
+            {"catacombs", 12}, {"molten", 15}, {"sunken", 18},
+            {"sepulchre", 6}, // Sepulchre has 6 levels
+        };
+        int zone_max = 3; // default
+        for (auto& zd : ZONE_DEPTHS) {
+            if (dungeon_ctx->zone == zd.key) { zone_max = zd.max_depth; break; }
+        }
+        bool is_bottom = (dungeon_level >= zone_max);
+
+        if (is_bottom) {
+            // MQ_03: Stone Tablet in Ashford Ruins
+            if (dungeon_ctx->quest == "MQ_03") {
+                spawn_quest_item("Stone Tablet",
+                    "A heavy stone tablet. The inscriptions shift when you aren't looking.",
+                    0, 21, QuestId::MQ_03_ASHFORD_TABLET);
+            }
+            // MQ_05: Ancient Inscription in Stonekeep
+            if (dungeon_ctx->quest == "MQ_05") {
+                spawn_quest_item("Ancient Inscription",
+                    "A page of burned stone. The words are too heavy for the rock.",
+                    7, 21, QuestId::MQ_05_STONEKEEP_DEPTHS);
+            }
+            // MQ_07: Frozen Key in Frostmere Depths
+            if (dungeon_ctx->quest == "MQ_07") {
+                spawn_quest_item("Frozen Key",
+                    "A key of impossible cold. It burns your hand.",
+                    2, 22, QuestId::MQ_07_FROZEN_KEY);
+            }
+            // MQ_09: Reliquary Fragment in The Catacombs
+            if (dungeon_ctx->quest == "MQ_08") {
+                spawn_quest_item("Reliquary Fragment",
+                    "A shard of solidified memory. It hums with warmth.",
+                    2, 16, QuestId::MQ_09_OSSUARY_FRAGMENT);
+            }
+            // MQ_11: Molten Fragment in The Molten Depths
+            if (dungeon_ctx->quest == "MQ_11") {
+                spawn_quest_item("Molten Fragment",
+                    "Cold even in the heart of the furnace. Two of three.",
+                    2, 16, QuestId::MQ_11_MOLTEN_TRIAL,
+                    {255, 120, 80, 255}); // red tint
+            }
+            // MQ_13: Sunken Fragment in The Sunken Halls
+            if (dungeon_ctx->quest == "MQ_13") {
+                spawn_quest_item("Sunken Fragment",
+                    "The water remembers. Three fragments. They pull toward each other.",
+                    2, 16, QuestId::MQ_13_SUNKEN_FRAGMENT,
+                    {100, 160, 255, 255}); // blue tint
+            }
+            // MQ_14: Seal Stone in The Hollowgate
+            if (dungeon_ctx->quest == "MQ_14") {
+                spawn_quest_item("Seal Stone",
+                    "The fragments resonate near it. Break the seal.",
+                    5, 16, QuestId::MQ_14_HOLLOWGATE_SEAL);
+            }
+            // MQ_17: The Reliquary in The Sepulchre (depth 6)
+            if (dungeon_ctx->quest == "MQ_15" && dungeon_level >= 6) {
+                spawn_quest_item("The Reliquary",
+                    "A vessel of light that hurts to look at. It was here before the gods.",
+                    6, 16, QuestId::MQ_17_CLAIM_RELIQUARY,
+                    {255, 220, 100, 255}); // golden tint
+
+                // Spawn The Keeper — final boss guarding the Reliquary
+                Entity keeper = populate::spawn_boss(world, map, rooms,
+                    "The Keeper", SHEET_MONSTERS, 0, 11,
+                    150, 24, 14, 20, 20, 5, 85, 500);
+                if (keeper != NULL_ENTITY) {
+                    // Give the Keeper a golden tint to match the Reliquary's glow
+                    world.get<Renderable>(keeper).tint = {255, 220, 100, 255};
+                }
+            }
+        }
+    }
+
+    // Side quest items — spawn in any dungeon when quest is active
+    if (journal.has_quest(QuestId::SQ_LOST_AMULET) &&
+        journal.get_state(QuestId::SQ_LOST_AMULET) == QuestState::ACTIVE &&
+        dungeon_level >= 1 && rooms.size() >= 3) {
+        auto& room = rooms[rooms.size() / 2]; // mid dungeon
+        int ax = room.cx(), ay = room.cy();
+        Entity ae = world.create();
+        world.add<Position>(ae, {ax, ay});
+        world.add<Renderable>(ae, {SHEET_ITEMS, 0, 16, {255, 255, 255, 255}, 1});
+        Item amulet;
+        amulet.name = "family amulet";
+        amulet.description = "A tarnished silver amulet. Worthless to anyone but its owner.";
+        amulet.type = ItemType::AMULET;
+        amulet.slot = EquipSlot::NONE;
+        amulet.quest_id = static_cast<int>(QuestId::SQ_LOST_AMULET);
+        amulet.identified = true;
+        amulet.gold_value = 0;
+        world.add<Item>(ae, std::move(amulet));
     }
 }
 

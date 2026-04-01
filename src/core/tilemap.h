@@ -22,11 +22,14 @@ enum class TileType : uint8_t {
     WATER,
     TREE,
     BRUSH,       // walkable vegetation — looks like forest but passable
-    FLOOR_SAND,  // desert terrain
-    FLOOR_ICE,   // frozen terrain
+    FLOOR_SAND,      // desert terrain (proper sand sprites)
+    FLOOR_ICE,       // frozen terrain (blue stone — dungeons)
+    FLOOR_SNOW,      // snow terrain (overworld cold/ice zones)
     ROCK,        // impassable rocky outcrop (blocks movement, not sight)
-    WALL_WOOD,   // wooden wall (houses, cabins)
-    SHRINE,      // god shrine — interactive altar
+    WALL_WOOD,       // wooden wall (houses, cabins)
+    WALL_GRASS,      // grass/vine-covered wall (Greenwood region)
+    WALL_SANDSTONE,  // sandstone wall (Dust Provinces region)
+    SHRINE,          // god shrine — interactive altar
     COUNT
 };
 

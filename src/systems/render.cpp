@@ -16,7 +16,7 @@ static bool is_floor_type(TileType type) {
     return type == TileType::FLOOR_STONE || type == TileType::FLOOR_DIRT ||
            type == TileType::FLOOR_GRASS || type == TileType::FLOOR_BONE ||
            type == TileType::FLOOR_RED_STONE || type == TileType::FLOOR_SAND ||
-           type == TileType::FLOOR_ICE;
+           type == TileType::FLOOR_ICE || type == TileType::FLOOR_SNOW;
 }
 
 // Floor tile row in spritesheet (tiles.txt group - 1)
@@ -27,17 +27,25 @@ static int floor_row(TileType type) {
         case TileType::FLOOR_DIRT:      return 8;
         case TileType::FLOOR_BONE:      return 10;
         case TileType::FLOOR_RED_STONE: return 11;
-        case TileType::FLOOR_SAND:      return 8;  // reuse dirt sprites with tint
-        case TileType::FLOOR_ICE:       return 12;  // reuse blue stone floor
+        case TileType::FLOOR_SAND:      return 7;  // row 8 in tiles.txt = row 7, cols 7-13
+        case TileType::FLOOR_ICE:       return 12;  // blue stone floor (dungeons)
+        case TileType::FLOOR_SNOW:      return 6;   // row 7 in tiles.txt = row 6, cols 7-13
         default: return 6;
     }
 }
 
-// Sand and ice get color tints applied during rendering
+// Column offset for floor types that use the second half of a row
+static int floor_col_offset(TileType type) {
+    switch (type) {
+        case TileType::FLOOR_SNOW: return 7;  // cols 7-13 on stone floor row
+        case TileType::FLOOR_SAND: return 7;  // cols 7-13 on grass floor row
+        default: return 0;
+    }
+}
+
 static SDL_Color floor_tint(TileType type) {
     switch (type) {
-        case TileType::FLOOR_SAND: return {220, 200, 140, 255}; // warm sandy tint
-        case TileType::FLOOR_ICE:  return {160, 200, 240, 255}; // cold blue tint
+        case TileType::FLOOR_ICE:  return {160, 200, 240, 255}; // cold blue tint (dungeon ice)
         default: return {255, 255, 255, 255};
     }
 }
@@ -45,13 +53,14 @@ static SDL_Color floor_tint(TileType type) {
 // Two-layer floor: blank base + scattered detail overlay
 FloorSprite floor_sprite(TileType type, uint8_t variant) {
     int row = floor_row(type);
+    int off = floor_col_offset(type);
     FloorSprite fs;
-    fs.base = {SHEET_TILES, 0, row}; // col 0 = blank colored floor
+    fs.base = {SHEET_TILES, off + 0, row}; // col 0 (or 7) = blank colored floor
 
     // variant 0 = no detail, just the blank floor (most common)
-    // variant 1-2 = detail overlay using no-bg sprites (cols 4-5)
+    // variant 1-2 = detail overlay using no-bg sprites (cols 4-5, or 11-12)
     if (variant > 0) {
-        fs.overlay = {SHEET_TILES, 3 + (variant % 3), row};
+        fs.overlay = {SHEET_TILES, off + 3 + (variant % 3), row};
         fs.has_overlay = true;
     } else {
         fs.overlay = {-1, 0, 0};
@@ -141,7 +150,9 @@ void draw_map(SDL_Renderer* renderer, const SpriteManager& sprites,
                     draw_sprite_scaled(SHEET_TILES, 0, 8, tint);
                     draw_sprite_scaled(SHEET_TILES, 0, 18, tint); // large rock sprite
                 } else if ((tile.type >= TileType::WALL_DIRT && tile.type <= TileType::WALL_CATACOMB)
-                           || tile.type == TileType::WALL_WOOD) {
+                           || tile.type == TileType::WALL_WOOD
+                           || tile.type == TileType::WALL_GRASS
+                           || tile.type == TileType::WALL_SANDSTONE) {
                     // Walls: side view if tile below is not a wall (player sees the face)
                     // top view if tile below is also a wall (looking down at it)
                     int top_col = 0, side_col = 1, wall_row = 0;
@@ -153,11 +164,15 @@ void draw_map(SDL_Renderer* renderer, const SpriteManager& sprites,
                         case TileType::WALL_LARGE_STONE: wall_row = 4; break;
                         case TileType::WALL_CATACOMB:    wall_row = 5; break;
                         case TileType::WALL_WOOD:        wall_row = 1; top_col = 2; side_col = 3; break;
+                        case TileType::WALL_GRASS:       wall_row = 3; top_col = 2; side_col = 3; break;
+                        case TileType::WALL_SANDSTONE:   wall_row = 4; top_col = 2; side_col = 3; break;
                         default: wall_row = 2; break;
                     }
                     auto is_any_wall = [](TileType t) {
                         return (t >= TileType::WALL_DIRT && t <= TileType::WALL_CATACOMB)
-                               || t == TileType::WALL_WOOD;
+                               || t == TileType::WALL_WOOD
+                               || t == TileType::WALL_GRASS
+                               || t == TileType::WALL_SANDSTONE;
                     };
                     bool show_side = true;
                     if (y + 1 < map.height()) {
