@@ -101,6 +101,8 @@ private:
     Audio audio_;
     ParticleSystem particles_;
     std::vector<WeatherParticle> weather_particles_;
+    float shake_intensity_ = 0.0f; // screen shake (pixels, decays per frame)
+    float shake_dx_ = 0.0f, shake_dy_ = 0.0f; // current shake offset
     Camera camera_;
     MessageLog log_;
     GameState state_ = GameState::MAIN_MENU;
@@ -226,6 +228,9 @@ private:
     void render_god_visuals(const Camera& cam, int y_offset);
     void render_weather();
     void render_day_night();
+    void render_zone_tint();
+    void update_screen_shake();
+    void trigger_screen_shake(float intensity);
     void update_death_anims();
     void fire_ranged();
     void describe_tile(int x, int y);

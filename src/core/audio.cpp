@@ -39,30 +39,64 @@ bool Audio::init() {
     // === Load SFX ===
     struct SfxDef { SfxId id; const char* file; };
     static const SfxDef DEFS[] = {
-        {SfxId::HIT1,       "assets/sfx/hit1.wav"},
-        {SfxId::HIT2,       "assets/sfx/hit2.wav"},
-        {SfxId::HIT3,       "assets/sfx/hit3.wav"},
-        {SfxId::CRIT,       "assets/sfx/crit.wav"},
-        {SfxId::MISS,       "assets/sfx/miss.wav"},
-        {SfxId::ARROW_FIRE, "assets/sfx/arrow_fire.wav"},
-        {SfxId::ARROW_HIT,  "assets/sfx/arrow_hit.wav"},
-        {SfxId::DEATH,      "assets/sfx/death.wav"},
-        {SfxId::PICKUP,     "assets/sfx/pickup.wav"},
-        {SfxId::EQUIP,      "assets/sfx/equip.wav"},
-        {SfxId::POTION,     "assets/sfx/potion.wav"},
-        {SfxId::GOLD,       "assets/sfx/gold.wav"},
-        {SfxId::SPELL,      "assets/sfx/spell.wav"},
-        {SfxId::HEAL,       "assets/sfx/heal.wav"},
-        {SfxId::PRAYER,     "assets/sfx/prayer.wav"},
-        {SfxId::LEVELUP,    "assets/sfx/levelup.wav"},
-        {SfxId::QUEST,      "assets/sfx/quest.wav"},
-        {SfxId::DOOR,       "assets/sfx/door.ogg"},
-        {SfxId::REST,       "assets/sfx/rest.wav"},
-        {SfxId::STAIRS,     "assets/sfx/stairs.ogg"},
-        {SfxId::POISON,     "assets/sfx/poison.wav"},
-        {SfxId::BURN,       "assets/sfx/burn.wav"},
-        {SfxId::CURSE,      "assets/sfx/curse.wav"},
-        {SfxId::SELECT,     "assets/sfx/select.wav"},
+        // Combat — Fantasy SFX Pack (sword impacts, parries, bow)
+        {SfxId::HIT1,         "assets/sfx/hit1.ogg"},
+        {SfxId::HIT2,         "assets/sfx/hit2.ogg"},
+        {SfxId::HIT3,         "assets/sfx/hit3.ogg"},
+        {SfxId::CRIT,         "assets/sfx/crit.ogg"},
+        {SfxId::MISS,         "assets/sfx/miss.ogg"},
+        {SfxId::BLOCK1,       "assets/sfx/block1.ogg"},
+        {SfxId::BLOCK2,       "assets/sfx/block2.ogg"},
+        {SfxId::ARROW_FIRE,   "assets/sfx/bow_fire1.ogg"},
+        {SfxId::ARROW_FIRE2,  "assets/sfx/bow_fire2.ogg"},
+        {SfxId::ARROW_HIT,    "assets/sfx/bow_hit1.ogg"},
+        {SfxId::ARROW_HIT2,   "assets/sfx/bow_hit2.ogg"},
+        // Death (keep sox-generated — no pack equivalent)
+        {SfxId::DEATH,        "assets/sfx/death.wav"},
+        // Items
+        {SfxId::PICKUP,       "assets/sfx/pickup.wav"},
+        {SfxId::EQUIP,        "assets/sfx/equip.ogg"},
+        {SfxId::POTION,       "assets/sfx/potion.wav"},
+        {SfxId::GOLD,         "assets/sfx/gold.wav"},
+        {SfxId::CHEST_OPEN,   "assets/sfx/chest_open.ogg"},
+        {SfxId::CHEST_OPEN2,  "assets/sfx/chest_open2.ogg"},
+        // Magic — per-school Fantasy SFX Pack + sox fallbacks
+        {SfxId::SPELL,        "assets/sfx/spell.wav"},
+        {SfxId::HEAL,         "assets/sfx/heal.wav"},
+        {SfxId::PRAYER,       "assets/sfx/prayer.wav"},
+        {SfxId::SPELL_FIRE,   "assets/sfx/spell_fire.ogg"},
+        {SfxId::SPELL_ICE,    "assets/sfx/spell_ice.ogg"},
+        {SfxId::SPELL_EARTH,  "assets/sfx/spell_earth.ogg"},
+        {SfxId::SPELL_WATER,  "assets/sfx/spell_water.ogg"},
+        {SfxId::SPELL_IMPACT, "assets/sfx/spell_impact.ogg"},
+        {SfxId::SPELL_BUFF,   "assets/sfx/spell_buff.ogg"},
+        {SfxId::SPELL_FREEZE, "assets/sfx/spell_freeze.ogg"},
+        // Progression
+        {SfxId::LEVELUP,      "assets/sfx/levelup.wav"},
+        {SfxId::QUEST,        "assets/sfx/quest.wav"},
+        // World interaction — Fantasy SFX Pack door
+        {SfxId::DOOR,         "assets/sfx/door_open.ogg"},
+        {SfxId::REST,         "assets/sfx/rest.wav"},
+        {SfxId::STAIRS,       "assets/sfx/stairs.ogg"},
+        // Status effects
+        {SfxId::POISON,       "assets/sfx/poison.wav"},
+        {SfxId::BURN,         "assets/sfx/burn.wav"},
+        {SfxId::CURSE,        "assets/sfx/curse.wav"},
+        // Terrain footsteps — Fantasy SFX Pack
+        {SfxId::STEP_STONE1,  "assets/sfx/step_stone1.ogg"},
+        {SfxId::STEP_STONE2,  "assets/sfx/step_stone2.ogg"},
+        {SfxId::STEP_STONE3,  "assets/sfx/step_stone3.ogg"},
+        {SfxId::STEP_DIRT1,   "assets/sfx/step_dirt1.ogg"},
+        {SfxId::STEP_DIRT2,   "assets/sfx/step_dirt2.ogg"},
+        {SfxId::STEP_DIRT3,   "assets/sfx/step_dirt3.ogg"},
+        {SfxId::STEP_WATER1,  "assets/sfx/step_water1.ogg"},
+        {SfxId::STEP_WATER2,  "assets/sfx/step_water2.ogg"},
+        {SfxId::STEP_WATER3,  "assets/sfx/step_water3.ogg"},
+        {SfxId::STEP_WOOD1,   "assets/sfx/step_wood1.ogg"},
+        {SfxId::STEP_WOOD2,   "assets/sfx/step_wood2.ogg"},
+        {SfxId::STEP_WOOD3,   "assets/sfx/step_wood3.ogg"},
+        // UI
+        {SfxId::SELECT,       "assets/sfx/select.wav"},
     };
     for (auto& def : DEFS) {
         chunks_[static_cast<int>(def.id)] = load_chunk(def.file);
@@ -146,6 +180,23 @@ void Audio::play(SfxId id) {
 void Audio::play_hit() {
     SfxId hits[] = {SfxId::HIT1, SfxId::HIT2, SfxId::HIT3};
     play(hits[rand() % 3]);
+}
+
+void Audio::play_miss() {
+    SfxId misses[] = {SfxId::MISS, SfxId::BLOCK1, SfxId::BLOCK2};
+    play(misses[rand() % 3]);
+}
+
+void Audio::play_bow_fire() {
+    play(rand() % 2 ? SfxId::ARROW_FIRE : SfxId::ARROW_FIRE2);
+}
+
+void Audio::play_bow_hit() {
+    play(rand() % 2 ? SfxId::ARROW_HIT : SfxId::ARROW_HIT2);
+}
+
+void Audio::play_chest_open() {
+    play(rand() % 2 ? SfxId::CHEST_OPEN : SfxId::CHEST_OPEN2);
 }
 
 void Audio::play_music(MusicId id, int fade_ms) {

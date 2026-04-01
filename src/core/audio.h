@@ -6,13 +6,23 @@
 // One-shot sound effects
 enum class SfxId {
     HIT1, HIT2, HIT3, CRIT, MISS,
-    ARROW_FIRE, ARROW_HIT,
+    BLOCK1, BLOCK2,                     // additional miss/block variants
+    ARROW_FIRE, ARROW_FIRE2, ARROW_HIT, ARROW_HIT2,
     DEATH,
     PICKUP, EQUIP, POTION, GOLD,
+    CHEST_OPEN, CHEST_OPEN2,            // container interaction
     SPELL, HEAL, PRAYER,
+    SPELL_FIRE, SPELL_ICE, SPELL_EARTH, // per-school spell sounds
+    SPELL_WATER, SPELL_IMPACT,
+    SPELL_BUFF, SPELL_FREEZE,           // buff/debuff
     LEVELUP, QUEST,
     DOOR, REST, STAIRS,
     POISON, BURN, CURSE,
+    // Terrain footsteps (3 variants each)
+    STEP_STONE1, STEP_STONE2, STEP_STONE3,
+    STEP_DIRT1, STEP_DIRT2, STEP_DIRT3,
+    STEP_WATER1, STEP_WATER2, STEP_WATER3,
+    STEP_WOOD1, STEP_WOOD2, STEP_WOOD3,
     SELECT,
     COUNT
 };
@@ -60,7 +70,11 @@ public:
 
     // SFX (one-shot, any available channel)
     void play(SfxId id);
-    void play_hit(); // random hit variant
+    void play_hit();        // random hit variant (HIT1-3)
+    void play_miss();       // random miss/block variant
+    void play_bow_fire();   // random bow fire variant
+    void play_bow_hit();    // random bow hit variant
+    void play_chest_open(); // random chest open variant
 
     // Music (one track at a time, loops)
     void play_music(MusicId id, int fade_ms = 1000);

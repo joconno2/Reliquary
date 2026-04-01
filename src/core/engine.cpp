@@ -1472,10 +1472,10 @@ void Engine::try_move_player(int dx, int dy) {
             }
         }
 
-        if (atk_result.hit && atk_result.critical) { audio_.play(SfxId::CRIT); particles_.crit_flash((float)nx, (float)ny); }
+        if (atk_result.hit && atk_result.critical) { audio_.play(SfxId::CRIT); particles_.crit_flash((float)nx, (float)ny); trigger_screen_shake(4.0f); }
         else if (atk_result.hit) { audio_.play_hit(); particles_.blood((float)nx, (float)ny); }
-        else audio_.play(SfxId::MISS);
-        if (atk_result.killed) { audio_.play(SfxId::DEATH); particles_.death_burst((float)nx, (float)ny); }
+        else audio_.play_miss();
+        if (atk_result.killed) { audio_.play(SfxId::DEATH); particles_.death_burst((float)nx, (float)ny); trigger_screen_shake(3.0f); }
 
         // Quest target killed?
         if (atk_result.quest_target_id >= 0) {
@@ -1684,6 +1684,35 @@ void Engine::try_move_player(int dx, int dy) {
     pos.y = ny;
     player_acted_ = true;
 
+    // Terrain-aware footsteps (not every step — ~40% chance)
+    if (rng_.chance(40)) {
+        auto dest_type = map_.at(nx, ny).type;
+        SfxId step;
+        switch (dest_type) {
+            case TileType::WATER:
+                step = static_cast<SfxId>(static_cast<int>(SfxId::STEP_WATER1) + rng_.range(0, 2));
+                break;
+            case TileType::FLOOR_GRASS:
+            case TileType::FLOOR_DIRT:
+            case TileType::FLOOR_SAND:
+            case TileType::BRUSH:
+                step = static_cast<SfxId>(static_cast<int>(SfxId::STEP_DIRT1) + rng_.range(0, 2));
+                break;
+            case TileType::FLOOR_STONE:
+            case TileType::FLOOR_RED_STONE:
+            case TileType::FLOOR_ICE:
+            case TileType::FLOOR_SNOW:
+            case TileType::FLOOR_COBBLE:
+            case TileType::FLOOR_BONE:
+                step = static_cast<SfxId>(static_cast<int>(SfxId::STEP_STONE1) + rng_.range(0, 2));
+                break;
+            default:
+                step = static_cast<SfxId>(static_cast<int>(SfxId::STEP_STONE1) + rng_.range(0, 2));
+                break;
+        }
+        audio_.play(step);
+    }
+
     // Stairs message
     if (tile.type == TileType::STAIRS_DOWN) {
         log_.add("Stairs descend further into the dark.", {150, 140, 130, 255});
@@ -1858,7 +1887,7 @@ void Engine::process_turn() {
             auto mresult = combat::melee_attack(world_, e, player_, rng_, log_);
             if (mresult.hit) {
                 auto& pp = world_.get<Position>(player_);
-                if (mresult.critical) particles_.crit_flash(pp.x, pp.y);
+                if (mresult.critical) { particles_.crit_flash(pp.x, pp.y); trigger_screen_shake(5.0f); }
                 else particles_.blood(pp.x, pp.y);
                 // Track what hit us for death screen
                 if (world_.has<Stats>(e))
@@ -2017,9 +2046,9 @@ void Engine::process_turn() {
             if (map_.in_bounds(mpos.x, mpos.y) && map_.at(mpos.x, mpos.y).visible) {
                 auto& pp = world_.get<Position>(player_);
                 particles_.arrow_trail(mpos.x, mpos.y, pp.x, pp.y);
-                audio_.play(SfxId::ARROW_FIRE);
+                audio_.play_bow_fire();
                 auto rresult = combat::ranged_attack(world_, e, player_, ai_comp.ranged_damage, rng_, log_);
-                if (rresult.hit) particles_.hit_spark(pp.x, pp.y);
+                if (rresult.hit) { audio_.play_bow_hit(); particles_.hit_spark(pp.x, pp.y); }
                 if (rresult.killed) { audio_.play(SfxId::DEATH); }
             }
         } else if (dist <= 6 && dist > 1 && world_.has<Stats>(e) &&
@@ -2201,10 +2230,11 @@ void Engine::fire_ranged() {
     auto& shooter = world_.get<Position>(player_);
     auto result = combat::ranged_attack(world_, player_, target, weapon.damage_bonus, rng_, log_);
     player_acted_ = true;
-    audio_.play(SfxId::ARROW_FIRE);
+    audio_.play_bow_fire();
     particles_.arrow_trail(shooter.x, shooter.y, tgt_x, tgt_y);
-    if (result.hit) { audio_.play(SfxId::ARROW_HIT); particles_.hit_spark(tgt_x, tgt_y); }
-    if (result.killed) { audio_.play(SfxId::DEATH); particles_.death_burst(tgt_x, tgt_y); }
+    if (result.hit) { audio_.play_bow_hit(); particles_.hit_spark(tgt_x, tgt_y); }
+    if (result.critical) { trigger_screen_shake(4.0f); }
+    if (result.killed) { audio_.play(SfxId::DEATH); particles_.death_burst(tgt_x, tgt_y); trigger_screen_shake(3.0f); }
 
     // Quest target killed?
     if (result.quest_target_id >= 0) {
@@ -2770,6 +2800,7 @@ void Engine::try_pickup() {
 
         // Open the container — change sprite, spawn loot item
         cont.opened = true;
+        audio_.play_chest_open();
         if (world_.has<Renderable>(e)) {
             auto& rend = world_.get<Renderable>(e);
             rend.sprite_x = cont.open_sprite_x;
@@ -3702,6 +3733,28 @@ void Engine::handle_input() {
                                                    map_, rng_, log_);
                         if (result.consumed_turn) player_acted_ = true;
                         if (result.success) {
+                            // Per-school spell sound
+                            switch (sinfo.school) {
+                                case SpellSchool::CONJURATION: audio_.play(SfxId::SPELL_FIRE); break;
+                                case SpellSchool::TRANSMUTATION: audio_.play(SfxId::SPELL_BUFF); break;
+                                case SpellSchool::DIVINATION: audio_.play(SfxId::SPELL_ICE); break;
+                                case SpellSchool::HEALING: audio_.play(SfxId::HEAL); break;
+                                case SpellSchool::NATURE: audio_.play(SfxId::SPELL_EARTH); break;
+                                case SpellSchool::DARK_ARTS: audio_.play(SfxId::SPELL_IMPACT); break;
+                                default: audio_.play(SfxId::SPELL); break;
+                            }
+                            // Override for specific spells
+                            if (spell == SpellId::FROST_NOVA || spell == SpellId::ICE_SHARD)
+                                audio_.play(SfxId::SPELL_ICE);
+                            else if (spell == SpellId::EARTHQUAKE || spell == SpellId::STONE_FIST)
+                                audio_.play(SfxId::SPELL_EARTH);
+                            else if (spell == SpellId::POISON_CLOUD)
+                                audio_.play(SfxId::SPELL_WATER);
+                            else if (spell == SpellId::SHIELD_OF_FAITH || spell == SpellId::IRON_BODY ||
+                                     spell == SpellId::BARKSKIN || spell == SpellId::HASTEN)
+                                audio_.play(SfxId::SPELL_BUFF);
+                            else if (spell == SpellId::HEX || spell == SpellId::DOOM || spell == SpellId::WITHER)
+                                audio_.play(SfxId::SPELL_FREEZE);
                             if (sinfo.school == SpellSchool::DARK_ARTS) {
                                 meta_.total_dark_arts_casts++;
                                 turn_actions_.used_dark_arts = true;
@@ -4360,6 +4413,58 @@ void Engine::render_day_night() {
     SDL_RenderFillRect(renderer_, &overlay);
 }
 
+void Engine::render_zone_tint() {
+    // Subtle color tint per dungeon zone
+    if (dungeon_level_ <= 0 || state_ != GameState::PLAYING) return;
+
+    std::string zone_str;
+    if (current_dungeon_idx_ >= 0 &&
+        current_dungeon_idx_ < static_cast<int>(dungeon_registry_.size())) {
+        zone_str = dungeon_registry_[current_dungeon_idx_].zone;
+    }
+
+    uint8_t r = 0, g = 0, b = 0;
+    int alpha = 0;
+    if (zone_str == "molten") {
+        r = 60; g = 15; b = 5; alpha = 25;  // warm red
+    } else if (zone_str == "sunken") {
+        r = 5; g = 15; b = 45; alpha = 22;  // deep blue
+    } else if (zone_str == "warrens") {
+        r = 10; g = 25; b = 8; alpha = 18;  // damp green
+    } else if (zone_str == "catacombs") {
+        r = 20; g = 15; b = 25; alpha = 18; // dusty purple
+    } else if (zone_str == "sepulchre") {
+        r = 8; g = 5; b = 15; alpha = 28;   // dark violet
+    } else if (zone_str == "deep_halls") {
+        r = 12; g = 12; b = 18; alpha = 15; // cool grey
+    }
+    // stonekeep and fallback: no tint
+
+    if (alpha <= 0) return;
+
+    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer_, r, g, b, static_cast<Uint8>(alpha));
+    SDL_Rect overlay = {0, HUD_HEIGHT, width_, height_ - HUD_HEIGHT - LOG_HEIGHT};
+    SDL_RenderFillRect(renderer_, &overlay);
+}
+
+void Engine::update_screen_shake() {
+    if (shake_intensity_ <= 0.2f) {
+        shake_intensity_ = 0.0f;
+        shake_dx_ = shake_dy_ = 0.0f;
+        return;
+    }
+    // Random offset within intensity, decay quickly
+    float angle = static_cast<float>(rand()) / RAND_MAX * 6.283f;
+    shake_dx_ = std::cos(angle) * shake_intensity_;
+    shake_dy_ = std::sin(angle) * shake_intensity_;
+    shake_intensity_ *= 0.75f; // fast decay
+}
+
+void Engine::trigger_screen_shake(float intensity) {
+    shake_intensity_ = intensity;
+}
+
 void Engine::render_hud() {
     if (!font_) return;
     if (!world_.has<Stats>(player_)) return;
@@ -4570,11 +4675,14 @@ void Engine::render() {
 
     Camera render_cam = camera_;
 
+    // Screen shake: pixel-level offset passed through y_offset
+    int y_off = HUD_HEIGHT + static_cast<int>(shake_dy_);
+
     // Draw map
-    render::draw_map(renderer_, sprites_, map_, render_cam, HUD_HEIGHT);
+    render::draw_map(renderer_, sprites_, map_, render_cam, y_off);
 
     // Draw entities
-    render::draw_entities(renderer_, sprites_, world_, map_, render_cam, HUD_HEIGHT);
+    render::draw_entities(renderer_, sprites_, world_, map_, render_cam, y_off);
 
     // Quest NPC indicators — gold "!" rendered as text above their heads
     if (font_) {
@@ -4590,7 +4698,7 @@ void Engine::render() {
             if (!map_.in_bounds(np.x, np.y) || !map_.at(np.x, np.y).visible) continue;
             if (!blink) continue;
             int sx = (np.x - render_cam.x) * TS + TS / 2;
-            int sy = (np.y - render_cam.y) * TS + HUD_HEIGHT - 4;
+            int sy = (np.y - render_cam.y) * TS + y_off - 4;
             SDL_Color gold = {255, 220, 80, 255};
             SDL_Surface* surf = TTF_RenderText_Blended(font_, "!", gold);
             if (surf) {
@@ -4604,13 +4712,16 @@ void Engine::render() {
     }
 
     // God visual effects on player (rendered every frame)
-    render_god_visuals(render_cam, HUD_HEIGHT);
+    render_god_visuals(render_cam, y_off);
 
     // Overworld weather particles (screen-space, after entities, before HUD)
     render_weather();
 
     // Day/night overlay (subtle darkening during night phase)
     render_day_night();
+
+    // Dungeon zone color tint
+    render_zone_tint();
 
     // HUD
     render_hud();
@@ -4651,9 +4762,9 @@ void Engine::render() {
         render_victory();
     }
 
-    // Particles
+    // Particles (use shake-offset y)
     if (!particles_.empty()) {
-        particles_.render(renderer_, camera_.x, camera_.y, camera_.tile_size, HUD_HEIGHT);
+        particles_.render(renderer_, camera_.x, camera_.y, camera_.tile_size, y_off);
     }
 
     // Pet naming overlay
@@ -4696,6 +4807,7 @@ void Engine::run() {
         process_turn();
         particles_.update(); // smooth animation between turns
         update_death_anims();
+        update_screen_shake();
         render();
         SDL_Delay(16); // ~60fps cap
     }
