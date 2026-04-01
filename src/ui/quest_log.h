@@ -2,6 +2,7 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 #include "components/quest.h"
+#include "core/ecs.h"
 
 class QuestLog {
 public:
@@ -14,7 +15,8 @@ public:
     bool handle_input(SDL_Event& event);
 
     void render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_title,
-                const QuestJournal& journal, int w, int h) const;
+                const QuestJournal& journal, int w, int h,
+                World* world = nullptr) const;
 
 private:
     bool open_ = false;

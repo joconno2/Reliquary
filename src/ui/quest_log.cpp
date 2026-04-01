@@ -1,6 +1,7 @@
 #include <algorithm>
 #include "ui/quest_log.h"
 #include "ui/ui_draw.h"
+#include "components/dynamic_quest.h"
 #include <cstdio>
 
 bool QuestLog::handle_input(SDL_Event& event) {
@@ -26,7 +27,8 @@ bool QuestLog::handle_input(SDL_Event& event) {
 }
 
 void QuestLog::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_title,
-                       const QuestJournal& journal, int w, int h) const {
+                       const QuestJournal& journal, int w, int h,
+                       World* world) const {
     if (!open_ || !font) return;
 
     int line_h = TTF_FontLineSkip(font);
@@ -134,6 +136,27 @@ void QuestLog::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_tit
                                    panel_x + 24, y, panel_w - 48);
         } else if (entry.state == QuestState::COMPLETE) {
             ui::draw_text(renderer, font, "Return to turn in.", complete_col, panel_x + 16, y);
+        }
+    }
+
+    // Dynamic quests (from NPC entities)
+    if (world) {
+        auto& dq_pool = world->pool<DynamicQuest>();
+        bool header_shown = false;
+        for (size_t di = 0; di < dq_pool.size(); di++) {
+            auto& dq = dq_pool.at_index(di);
+            if (!dq.accepted || dq.completed) continue;
+            if (!header_shown) {
+                y += line_h;
+                ui::draw_text(renderer, font, "--- Side Tasks ---", dim_col, panel_x + 10, y);
+                y += line_h + 4;
+                header_shown = true;
+            }
+            ui::draw_text(renderer, font, dq.name.c_str(), active_col, panel_x + 16, y);
+            y += line_h;
+            ui::draw_text_wrapped(renderer, font, dq.objective.c_str(), dim_col,
+                                   panel_x + 24, y, panel_w - 48);
+            y += line_h * 2;
         }
     }
 

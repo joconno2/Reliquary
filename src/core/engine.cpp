@@ -6423,7 +6423,7 @@ void Engine::render() {
     inventory_screen_.render(renderer_, font_, sprites_, world_, width_, height_);
     spell_screen_.render(renderer_, font_, world_, width_, height_);
     char_sheet_.render(renderer_, font_, font_title_, sprites_, world_, width_, height_);
-    quest_log_.render(renderer_, font_, font_title_, journal_, width_, height_);
+    quest_log_.render(renderer_, font_, font_title_, journal_, width_, height_, &world_);
     quest_offer_.render(renderer_, font_, font_title_, width_, height_);
     help_screen_.render(renderer_, font_, font_title_, width_, height_);
     levelup_screen_.render(renderer_, font_, width_, height_);

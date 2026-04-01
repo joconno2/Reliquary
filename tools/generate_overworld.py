@@ -163,93 +163,68 @@ towns = [
 ]
 
 def place_town(tx, ty, is_start, town_rng):
-    """Place a town with randomized layout, size, orientation, and climate materials."""
-    # Climate determines building material: north=stone (#), south=wood (W)
-    lat = ty / H  # 0=north, 1=south
-    # Normal distribution: stone probability decreases south
+    """Place a town with structured grid layout and climate-appropriate materials."""
+    lat = ty / H
     stone_prob = max(0, min(1, 1.0 - lat * 1.2))
     wall_ch = '#' if town_rng.random() < stone_prob else 'w'
 
-    # Randomize town shape: rotation angle and size variance
-    town_radius = town_rng.randint(14, 22)
-    aspect = town_rng.uniform(0.5, 1.0)  # elongation
+    # Town size varies slightly
+    size = town_rng.choice(['small', 'medium', 'large'])
+    if size == 'small':
+        half_w, half_h = 12, 10
+        building_slots = [(-9, -7, 6, 5), (3, -7, 6, 5), (-9, 3, 6, 5), (3, 3, 6, 5)]
+    elif size == 'medium':
+        half_w, half_h = 16, 12
+        building_slots = [(-13, -9, 7, 5), (-4, -9, 7, 5), (5, -9, 7, 5),
+                          (-13, 4, 7, 5), (5, 4, 7, 5)]
+    else:
+        half_w, half_h = 20, 14
+        building_slots = [(-17, -11, 7, 5), (-8, -11, 7, 5), (3, -11, 7, 5),
+                          (-17, -4, 7, 5), (10, -4, 7, 5),
+                          (-17, 5, 7, 5), (-4, 5, 7, 5), (10, 5, 7, 5)]
 
-    # Clear ground
-    for dy in range(-town_radius - 4, town_radius + 5):
-        for dx in range(-int(town_radius / aspect) - 4, int(town_radius / aspect) + 5):
-            dist = math.sqrt(dx * dx * aspect + dy * dy)
-            if dist < town_radius: set_tile(tx + dx, ty + dy, '.')
-            elif dist < town_radius + 3 and town_rng.random() < 0.4: set_tile(tx + dx, ty + dy, '.')
+    # Clear rectangular ground
+    for dy in range(-half_h - 2, half_h + 3):
+        for dx in range(-half_w - 2, half_w + 3):
+            set_tile(tx + dx, ty + dy, '.')
 
-    # Roads — randomize orientation (cross, L-shape, or single)
-    road_style = town_rng.choice(['cross', 'vert', 'horiz', 'L'])
-    road_len = town_radius + 4
-    if road_style in ('cross', 'horiz'):
-        for dx in range(-road_len, road_len + 1):
-            set_tile(tx + dx, ty, ',')
-            set_tile(tx + dx, ty + 1, ',')
-    if road_style in ('cross', 'vert'):
-        for dy in range(-road_len, road_len + 1):
-            set_tile(tx, ty + dy, ',')
-            set_tile(tx + 1, ty + dy, ',')
-    if road_style == 'L':
-        for dx in range(-road_len, road_len + 1):
-            set_tile(tx + dx, ty, ',')
-        for dy in range(0, road_len + 1):
-            set_tile(tx + town_rng.randint(-3, 3), ty + dy, ',')
+    # Main road — east-west through center, 2 tiles wide
+    for dx in range(-half_w - 4, half_w + 5):
+        set_tile(tx + dx, ty, ',')
+        set_tile(tx + dx, ty + 1, ',')
 
-    # Generate randomized building positions — must be fully on cleared ground
-    num_buildings = town_rng.randint(4, 7)
+    # Cross road — north-south, offset slightly based on seed
+    cross_x = town_rng.choice([-2, 0, 2])
+    for dy in range(-half_h - 4, half_h + 5):
+        set_tile(tx + cross_x, ty + dy, ',')
+        set_tile(tx + cross_x + 1, ty + dy, ',')
+
+    # Place buildings on grid slots
     npcs = ['S', 'B', 'P', 'G', 'F']
     town_rng.shuffle(npcs)
-    buildings = []
 
-    def building_on_clear_ground(bx, by, bw, bh):
-        """Check that every tile of the building footprint is on cleared floor."""
-        for dy in range(bh):
-            for dx in range(bw):
-                gx, gy = tx + bx + dx, ty + by + dy
-                if not (0 <= gx < W and 0 <= gy < H): return False
-                if grid[gy][gx] not in '.,:': return False
-        return True
-
-    for _ in range(num_buildings * 10):  # more attempts to find valid spots
-        if len(buildings) >= num_buildings: break
-        bw = town_rng.randint(5, 8)
-        bh = town_rng.randint(4, 6)
-        bx = town_rng.randint(-town_radius + 3, town_radius - bw - 3)
-        by = town_rng.randint(-town_radius + 3, town_radius - bh - 3)
-        # Don't overlap road center
-        if abs(bx + bw // 2) < 3 and abs(by + bh // 2) < 3: continue
-        # Don't overlap other buildings (2-tile gap)
-        overlap = False
-        for obx, oby, obw, obh in buildings:
-            if bx < obx + obw + 2 and bx + bw + 2 > obx and by < oby + obh + 2 and by + bh + 2 > oby:
-                overlap = True; break
-        if overlap: continue
-        # Must be entirely on cleared ground
-        if not building_on_clear_ground(bx, by, bw, bh): continue
-        buildings.append((bx, by, bw, bh))
-
-    for idx, (bx, by, bw, bh) in enumerate(buildings):
+    # Slight randomization of slot positions
+    for idx, (bx, by, bw, bh) in enumerate(building_slots):
+        bx += town_rng.randint(-1, 1)
+        by += town_rng.randint(-1, 1)
         ax, ay = tx + bx, ty + by
-        # Walls — complete rectangle
+
+        # Verify in bounds and not on road
+        if not (2 < ax < W - 2 and 2 < ay < H - 2): continue
+
+        # Walls
         fill_rect(ax, ay, ax + bw, ay + bh, wall_ch)
-        # Floor inside
+        # Floor
         fill_rect(ax + 1, ay + 1, ax + bw - 1, ay + bh - 1, ':')
-        # Door on a random wall (centered on that wall)
-        door_side = town_rng.choice(['N', 'S', 'E', 'W'])
-        if door_side == 'N': set_tile(ax + bw // 2, ay, '+')
-        elif door_side == 'S': set_tile(ax + bw // 2, ay + bh - 1, '+')
-        elif door_side == 'E': set_tile(ax + bw - 1, ay + bh // 2, '+')
-        else: set_tile(ax, ay + bh // 2, '+')
-        # NPC inside (centered, not random edge)
+        # Door — always face the nearest road
+        if by < 0:  # building north of road
+            set_tile(ax + bw // 2, ay + bh - 1, '+')  # door on south wall
+        else:  # building south of road
+            set_tile(ax + bw // 2, ay, '+')  # door on north wall
+
+        # NPC inside
         if idx < len(npcs):
             set_tile(ax + bw // 2, ay + bh // 2, npcs[idx])
-
-    if is_start:
-        # Elder quest giver right next to player spawn (@=tx,ty)
-        set_tile(tx + 1, ty, 'E')
 
 for i, (tx, ty, name, is_start) in enumerate(towns):
     if 25 < tx < W - 25 and 25 < ty < H - 25:
@@ -444,8 +419,9 @@ for y in range(H):
 for x in range(W):
     for y in range(2): grid[y][x] = 'T'; grid[H - 1 - y][x] = 'T'
 
-# === PLAYER START (last, can't be overwritten) ===
+# === PLAYER START + ELDER (last, can't be overwritten) ===
 set_tile(CX, CY, '@')
+set_tile(CX + 1, CY, 'E')  # Elder quest giver right next to spawn
 
 # === OUTPUT MAP ===
 print("Writing map...", flush=True)
