@@ -1101,6 +1101,61 @@ void Engine::generate_level() {
         rooms_ = std::move(result.rooms);
         start_x = result.start_x;
         start_y = result.start_y;
+
+        // Zone-specific terrain features (post-carving)
+        if (zone_key == "sunken") {
+            // Shallow water pools along room edges
+            for (size_t ri = 1; ri < rooms_.size(); ri++) {
+                if (!rng_.chance(45)) continue; // ~45% of rooms get water
+                auto& rm = rooms_[ri];
+                // Fill edge strip with water (1-2 tiles from walls)
+                int side = rng_.range(0, 3);
+                for (int s = 0; s < rm.w && s < rm.h; s++) {
+                    int wx, wy;
+                    switch (side) {
+                        case 0: wx = rm.x + s; wy = rm.y; break;
+                        case 1: wx = rm.x + s; wy = rm.y + rm.h - 1; break;
+                        case 2: wx = rm.x; wy = rm.y + s; break;
+                        default: wx = rm.x + rm.w - 1; wy = rm.y + s; break;
+                    }
+                    if (map_.in_bounds(wx, wy) &&
+                        map_.at(wx, wy).type == params.floor_type) {
+                        map_.at(wx, wy).type = TileType::WATER;
+                    }
+                }
+            }
+        } else if (zone_key == "catacombs") {
+            // Scattered bone floor patches
+            for (size_t ri = 1; ri < rooms_.size(); ri++) {
+                if (!rng_.chance(35)) continue;
+                auto& rm = rooms_[ri];
+                int count = rng_.range(3, 8);
+                for (int c = 0; c < count; c++) {
+                    int bx = rng_.range(rm.x, rm.x + rm.w - 1);
+                    int by = rng_.range(rm.y, rm.y + rm.h - 1);
+                    if (map_.in_bounds(bx, by) &&
+                        map_.at(bx, by).type == params.floor_type) {
+                        map_.at(bx, by).type = TileType::FLOOR_BONE;
+                    }
+                }
+            }
+        } else if (zone_key == "deep_halls") {
+            // Scattered rock pillars in large rooms
+            for (size_t ri = 1; ri < rooms_.size(); ri++) {
+                auto& rm = rooms_[ri];
+                if (rm.w < 10 || rm.h < 10) continue;
+                if (!rng_.chance(40)) continue;
+                int pillars = rng_.range(2, 4);
+                for (int p = 0; p < pillars; p++) {
+                    int px = rng_.range(rm.x + 2, rm.x + rm.w - 3);
+                    int py = rng_.range(rm.y + 2, rm.y + rm.h - 3);
+                    if (map_.in_bounds(px, py) &&
+                        map_.at(px, py).type == params.floor_type) {
+                        map_.at(px, py).type = TileType::ROCK;
+                    }
+                }
+            }
+        }
     }
 
     // Create or reposition player

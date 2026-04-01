@@ -20,7 +20,7 @@ The game is fully playable from character creation through a 17-step main quest 
 
 ### Core Engine
 - SDL2/C++20/CMake, custom ECS, tilemap, spritesheet loading (32rogues + pre-flipped copies for sprite mirroring)
-- BSP dungeon generation, 6 themed zones (Warrens, Stonekeep, Deep Halls, Catacombs, Molten Depths, Sunken Halls)
+- BSP dungeon generation, 6 themed zones with **zone-specific terrain** (water pools in Sunken Halls, bone floors in Catacombs, rock pillars in Deep Halls)
 - FOV (recursive shadowcasting), camera (resolution-scaled tiles), energy/speed turn system
 - Message log (top-down, color-coded), fullscreen by default, F11 toggle, resolution scaling (1080p baseline, auto-scales fonts/tiles/UI for ultrawide/4K)
 - Bundled fonts: Press Start (body), Jacquard (titles)
@@ -40,7 +40,7 @@ The game is fully playable from character creation through a 17-step main quest 
 - Permanent diseases: 7 Daggerfall-style diseases (lycanthropy, vampirism, stonescale, mindfire, sporebloom, hollow bones, blackblood) — contracted from monster hits, CON resist, permanent stat trade-offs, HUD + character sheet display
 - Rival paragons: 13 god-affiliated PC-like enemies (Osric/Mirael/Dain/Sera/Theron/Lucan/The Unnamed/Whisper/Nerissa/Varn/The Sleeper/Borek/Mother Rot), depth 4+ in named dungeons, 15% spawn rate, depth-scaled, class-based sprites with god-colored tints
 - 18+ monster types, HP/damage scale with depth (+20%/+15% per level)
-- 9 overworld enemy types: wolves, wild boars, highwaymen, giant spiders, bears, bandits, snakes, dire wolves, wandering skeletons
+- 9 overworld enemy types, **climate-zoned by province**: dire wolves/wolves in Frozen Marches, spiders/boars in Greenwood, snakes/skeletons in Dust Provinces, bandits on Iron Coast, etc.
 - Monster AI: idle/wander, LOS hunting, flee at low HP, ranged attacks (goblin archers)
 - Death → corpse, XP, level-up choice screen (attribute/HP/MP/speed/damage picks)
 - Rest system (r key — 25% HP/MP, 10 turns, 30% interruption in dungeons)
@@ -97,8 +97,8 @@ The game is fully playable from character creation through a 17-step main quest 
 - 18+ wandering wilderness NPCs (travelers, pilgrims, hunters, hermits, refugees, sellswords, field scholars)
 - Points of interest: 3 standing stones with ancient lore, graveyard, old battlefield, ancient shrine, watchtower ruins, witch's hut
 - 5 small lakes, 3 river segments, animated water with wave overlay
-- Town doodads (barrels, log piles against walls), overworld vegetation by climate zone, mushrooms near forests
-- Dungeon doodads: lootable chests/jars, mushrooms, blood splatters, coffins, barrels, animated torches/braziers with warm glow
+- **Town visual identity** — god-themed decorations per province: Soleth towns are brazier-heavy, Khael towns are lush with crops, Ossren towns have ore sacks and forges, Sythara towns are bleak with bone piles, Gathruun towns have stone/rocks, Morreth towns are supply depots
+- **Dungeon zone doodads** — zone-specific decorations: warrens (extra slime, mushrooms), molten (ore sacks, extra braziers for glow), sunken (mushrooms, slime near water), deep halls (large rocks/rubble), catacombs (bone piles, extra coffins), sepulchre (bones, coffins, blood). Torch density varies by zone (bright molten, dim catacombs/warrens)
 - Wood wall tile type for cabins and hamlets
 - 27 dungeons: 9 named quest-linked + 18 generic exploration
 - **6 provinces** (Pale Reach, Frozen Marches, Heartlands, Greenwood, Iron Coast, Dust Provinces) with god affiliations and province-tinted walls
@@ -254,7 +254,7 @@ F11 fullscreen | F12 screenshot
 - [x] Hostile faction: Soleth priests refuse Ixuul followers
 - [x] Excommunicated: priests refuse, merchants charge double (from 5D)
 - [x] 7 wandering priests for non-provincial gods (Vethrik, Thessarka, Yashkhet, Ixuul, Zhavek, Thalara, Lethis) on wilderness roads with god affiliations
-- [ ] Town visual identity (god-themed decorations in generate_overworld.py) — deferred to polish
+- [x] Town visual identity (god-themed decorations per province — Soleth braziers, Khael vegetation, Ossren forges, Sythara decay, Gathruun stone, Morreth supplies)
 
 **5F. God Relics** — 13 unique legendary items ✅
 - [x] One relic per god (13 total): Skull of the Ossuary (Vethrik), Eye of the Eyeless (Thessarka), Fist of the Iron Father (Morreth), Heartseeker (Yashkhet), Antler Crown (Khael), Ember of the Pale Flame (Soleth), Void Shard (Ixuul), Shroud of the Unseen (Zhavek), Tide of the Drowned (Thalara), Hammer Unworn (Ossren), Dream Veil (Lethis), Heart of the Mountain (Gathruun), Rot Blossom (Sythara)

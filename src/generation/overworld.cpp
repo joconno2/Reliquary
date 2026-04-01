@@ -334,18 +334,51 @@ void populate(World& world, TileMap& map, RNG& rng,
 
     for (int i = 0; i < TOWN_COUNT; i++) {
         int tx = ALL_TOWNS[i].x, ty = ALL_TOWNS[i].y;
-        // Braziers against building walls (1-2 per town)
-        place_lights(tx, ty, 36, rng.range(1, 2), 1); // brazier lit = row 1
-        // Barrels against building walls (3-5 per town)
-        place_against_walls(tx, ty, 36, rng.range(3, 5), 4, 17);
-        // Log piles against walls (1-3)
-        place_against_walls(tx, ty, 36, rng.range(1, 3), 6, 17);
-        // Ore sacks against walls (0-1)
-        if (rng.chance(40))
-            place_against_walls(tx, ty, 30, 1, 5, 17);
-        // Crops/plants on open ground at town outskirts (4-8)
-        int crop = rng.range(0, 15);
-        place_on_open_ground(tx, ty, 50, rng.range(4, 8), crop, 19);
+        GodId town_god = get_town_god(tx, ty);
+
+        // Base doodads all towns get
+        place_against_walls(tx, ty, 36, rng.range(2, 4), 4, 17); // barrels
+        place_against_walls(tx, ty, 36, rng.range(1, 2), 6, 17); // log piles
+
+        // Province-themed decorations based on patron god
+        switch (town_god) {
+            case GodId::SOLETH: // Pale Reach — fire/light, brazier-heavy
+                place_lights(tx, ty, 36, rng.range(4, 6), 1); // many braziers
+                place_lights(tx, ty, 36, rng.range(2, 3), 5); // wall torches
+                place_on_open_ground(tx, ty, 50, rng.range(2, 4), rng.range(0, 15), 19);
+                break;
+            case GodId::GATHRUUN: // Frozen Marches — stone/earth, rocks, sparse
+                place_lights(tx, ty, 36, rng.range(1, 2), 1); // few braziers
+                place_on_open_ground(tx, ty, 40, rng.range(2, 4), rng.range(0, 1), 18); // large rocks
+                break;
+            case GodId::MORRETH: // Heartlands — war, supply depots
+                place_lights(tx, ty, 36, rng.range(2, 3), 1);
+                place_against_walls(tx, ty, 36, rng.range(2, 4), 5, 17); // ore sacks (supplies)
+                place_against_walls(tx, ty, 30, rng.range(1, 2), 4, 17); // extra barrels
+                place_on_open_ground(tx, ty, 50, rng.range(4, 7), rng.range(0, 15), 19); // crops
+                break;
+            case GodId::KHAEL: // Greenwood — nature, lush vegetation
+                place_lights(tx, ty, 36, rng.range(1, 2), 1);
+                place_on_open_ground(tx, ty, 50, rng.range(8, 14), rng.range(0, 15), 19); // many crops
+                place_on_open_ground(tx, ty, 40, rng.range(2, 4), 0, 20); // mushrooms
+                break;
+            case GodId::OSSREN: // Iron Coast — forge/craft, industrial
+                place_lights(tx, ty, 36, rng.range(3, 5), 1); // forge braziers
+                place_against_walls(tx, ty, 36, rng.range(3, 5), 5, 17); // ore sacks
+                place_against_walls(tx, ty, 30, rng.range(2, 3), 6, 17); // extra log piles (fuel)
+                place_on_open_ground(tx, ty, 50, rng.range(2, 4), rng.range(0, 15), 19);
+                break;
+            case GodId::SYTHARA: // Dust Provinces — decay, sparse and bleak
+                place_lights(tx, ty, 36, rng.range(1, 2), 5); // dim torches only
+                place_on_open_ground(tx, ty, 40, rng.range(1, 3), rng.range(0, 1), 18); // rocks
+                // Bone piles scattered around
+                place_on_open_ground(tx, ty, 30, rng.range(1, 3), rng.range(0, 1), 21);
+                break;
+            default: // Fallback
+                place_lights(tx, ty, 36, rng.range(1, 2), 1);
+                place_on_open_ground(tx, ty, 50, rng.range(4, 8), rng.range(0, 15), 19);
+                break;
+        }
     }
 
     // =============================================
@@ -731,18 +764,27 @@ void try_spawn_overworld_enemy(World& world, TileMap& map, RNG& rng,
         const char* name;
         int sheet, sx, sy, hp, str, dex, con, dmg, armor, speed, flee, xp;
     };
+    // All overworld enemy definitions (indexed below by climate tables)
+    enum OWId { WOLF, BOAR, HIGHWAYMAN, SPIDER, BEAR, BANDIT, SNAKE, DIRE_WOLF, SKELETON };
     static const OWMonster OW_TABLE[] = {
-        {"wolf",         SHEET_ANIMALS,  6, 4, 12, 10, 14,  8, 3, 0, 120, 30, 15}, // wolf = 5.g (row4,col6)
-        {"wild boar",    SHEET_ANIMALS,  7, 9, 18, 14,  8, 12, 4, 1,  90, 20, 20}, // boar = 10.h (row9,col7)
-        {"highwayman",   SHEET_ROGUES,   4, 0, 16, 12, 12, 10, 3, 1, 100, 25, 25}, // bandit sprite
+        {"wolf",         SHEET_ANIMALS,  6, 4, 12, 10, 14,  8, 3, 0, 120, 30, 15},
+        {"wild boar",    SHEET_ANIMALS,  7, 9, 18, 14,  8, 12, 4, 1,  90, 20, 20},
+        {"highwayman",   SHEET_ROGUES,   4, 0, 16, 12, 12, 10, 3, 1, 100, 25, 25},
         {"giant spider", SHEET_MONSTERS, 8, 6, 10,  8, 14,  6, 3, 0, 120, 30, 15},
-        {"bear",         SHEET_ANIMALS,  0, 0, 24, 16,  8, 14, 5, 2,  80, 15, 30}, // grizzly
+        {"bear",         SHEET_ANIMALS,  0, 0, 24, 16,  8, 14, 5, 2,  80, 15, 30},
         {"bandit",       SHEET_ROGUES,   4, 0, 14, 11, 13, 10, 3, 1, 105, 30, 20},
         {"snake",        SHEET_ANIMALS,  0, 7,  6,  6, 16,  6, 2, 0, 130, 40, 10},
-        {"dire wolf",    SHEET_ANIMALS,  6, 4, 20, 14, 14, 12, 5, 1, 125, 15, 35}, // wolf sprite (row4,col6)
+        {"dire wolf",    SHEET_ANIMALS,  6, 4, 20, 14, 14, 12, 5, 1, 125, 15, 35},
         {"wandering skeleton", SHEET_MONSTERS, 0, 4, 16, 10, 10, 10, 3, 2, 90, 0, 20},
     };
-    static constexpr int OW_COUNT = sizeof(OW_TABLE) / sizeof(OW_TABLE[0]);
+
+    // Climate-zoned enemy tables per province
+    static const OWId FROZEN[]    = {DIRE_WOLF, WOLF, WOLF, SKELETON, BEAR};
+    static const OWId PALE[]      = {WOLF, BEAR, SPIDER, HIGHWAYMAN, SKELETON};
+    static const OWId GREENWOOD[] = {SPIDER, BOAR, SNAKE, BEAR, WOLF};
+    static const OWId HEARTLAND[] = {WOLF, BOAR, HIGHWAYMAN, BANDIT, SPIDER};
+    static const OWId IRON[]      = {BANDIT, HIGHWAYMAN, SPIDER, BOAR, SKELETON};
+    static const OWId DUST[]      = {SNAKE, SKELETON, BANDIT, SNAKE, HIGHWAYMAN};
 
     // Try to spawn at edge of visibility
     for (int attempt = 0; attempt < 15; attempt++) {
@@ -759,7 +801,19 @@ void try_spawn_overworld_enemy(World& world, TileMap& map, RNG& rng,
             tt != TileType::FLOOR_SAND && tt != TileType::FLOOR_ICE &&
             tt != TileType::BRUSH) continue;
 
-        auto& def = OW_TABLE[rng.range(0, OW_COUNT - 1)];
+        // Pick enemy from climate-appropriate table
+        const OWId* table = HEARTLAND;
+        int table_size = 5;
+        GodId region = get_town_god(sx, sy);
+        switch (region) {
+            case GodId::GATHRUUN: table = FROZEN;    break; // Frozen Marches
+            case GodId::SOLETH:   table = PALE;      break; // Pale Reach
+            case GodId::KHAEL:    table = GREENWOOD;  break; // Greenwood
+            case GodId::OSSREN:   table = IRON;      break; // Iron Coast
+            case GodId::SYTHARA:  table = DUST;      break; // Dust Provinces
+            default:              table = HEARTLAND;  break; // Heartlands
+        }
+        auto& def = OW_TABLE[table[rng.range(0, table_size - 1)]];
 
         Entity e = world.create();
         world.add<Position>(e, {sx, sy});
