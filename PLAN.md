@@ -1,10 +1,10 @@
 # Reliquary — Project Plan
 
-> Last updated: 2026-03-30
+> Last updated: 2026-03-31
 
-## Current Status: Feature-Complete Alpha
+## Current Status: v0.2.0 Alpha Release
 
-The game is fully playable from character creation through a 17-step main quest chain. 17 classes (4 base + 13 unlockable), **13 gods** (expanded from 7), 15 backgrounds, 22 traits, 7 permanent diseases, 8 pets, **13 rival paragons**. Full audio system with 19 music tracks, 12 ambient loops, 24 SFX. Animated torches/braziers/water. 20 towns + 4 hamlets + 6 cabins + 3 outposts, 27 dungeons, wilderness POIs, wandering NPCs. Meta-save progression, hardcore mode, persistent bestiary/potion IDs. Resolution scaling for ultrawide/4K. **God-specific player aura particles on every god.**
+The game is fully playable from character creation through a 17-step main quest chain. 17 classes (4 base + 13 unlockable), **13 gods** (expanded from 7) with deep tenet system and sacred/profane items, 15 backgrounds, 22 traits, 7 permanent diseases, 8 pets, **13 rival paragons**, **50 spells** across 6 schools, **80+ items** with material palette swaps (bone/silver/mithril/adamantine). 8 status effects (poison/burn/bleed/frozen/stunned/confused/blind/feared). Full audio system with 19 music tracks, 12 ambient loops, 24 SFX. Animated torches/braziers/water with circular warm glow. 6 provinces with capital cities, 20 towns + 4 hamlets + 6 cabins + 3 outposts, 27 dungeons, wilderness POIs, wandering NPCs. **Signpost navigation** (~80+ signs with compass directions to nearby POIs). Meta-save progression, hardcore mode, persistent bestiary/potion IDs. Dungeon floor persistence across save/load. Resolution scaling for ultrawide/4K. **CI/CD pipeline** builds Linux + Windows. **God-specific player aura particles on every god.** NPC sprites properly assigned (rows 6-7 for NPCs, rows 0-5 for PCs/special named NPCs).
 
 **Repo:** https://github.com/joconno2/Reliquary.git
 **Location:** ~/Reliquary
@@ -24,13 +24,15 @@ The game is fully playable from character creation through a 17-step main quest 
 - Bundled fonts: Press Start (body), Jacquard (titles)
 - Pixel-art panel borders (SNES-style), proportional UI layouts
 - Animated tiles: flickering torches/braziers with warm glow, animated water waves
-- Save/load (JSON — full world state, player, inventory, quests, map, return position)
+- Save/load (JSON — full world state, player, inventory, quests, map, return position, buffs, traits)
+- **Dungeon floor persistence** — `floor_cache_` with full entity serialization (Stats, AI, Energy, Items, Containers, StatusEffects, GodAlignment), separate `floors.dat` file
+- **F5/F6 quicksave/quickload**
 - Full audio system: 24 real SFX (pixel combat pack), 19 music tracks (Ifness — title/overworld/dungeon/boss/death/victory/sepulchre), 12 ambient loops (Fantasy SFX — cave/forest/interior/fire/rain/river). Title screen: Gethsemane + fire crackle + rain. Music/ambient crossfade on location change.
 
 ### Combat & Creatures
 - Melee combat with atmospheric messages (weapon-aware, body parts, damage in parens)
 - Ranged combat (f key — bows/crossbows, DEX-based, auto-target nearest visible enemy)
-- Status effects: poison (spider/naga 25%), burn (dragon 30%), bleed (ghoul 20%) — tick damage, HUD indicators (PSN/BRN/BLD)
+- **8 status effects**: poison (spider/naga), burn (dragon), bleed (ghoul), frozen, stunned, confused, blind, feared — tick damage, HUD indicators, monster abilities (troll regen, spider poison, wraith confuse, death knight fear, basilisk blind, orc warchief buff)
 - Permanent diseases: 7 Daggerfall-style diseases (lycanthropy, vampirism, stonescale, mindfire, sporebloom, hollow bones, blackblood) — contracted from monster hits, CON resist, permanent stat trade-offs, HUD + character sheet display
 - Rival paragons: 13 god-affiliated PC-like enemies (Osric/Mirael/Dain/Sera/Theron/Lucan/The Unnamed/Whisper/Nerissa/Varn/The Sleeper/Borek/Mother Rot), depth 4+ in named dungeons, 15% spawn rate, depth-scaled, class-based sprites with god-colored tints
 - 18+ monster types, HP/damage scale with depth (+20%/+15% per level)
@@ -42,11 +44,14 @@ The game is fully playable from character creation through a 17-step main quest 
 - Examine mode (x key) — cursor to inspect tiles, creatures (with HP), items, NPCs, corpses
 
 ### Items & Equipment
-- 9+ melee weapon types, 4 ranged weapons (short/hunting/long bow, crossbow), 11+ armor types, potions, food, gold, quest items, spellbooks
+- **80+ items**: 28 melee weapons (tiered), 5 ranged, 6 staves, 23 armor pieces, 6 amulets, 7 rings, 9 consumables, 9 legendaries
 - Cursed items (can't unequip, bait stats), blessed items (+1 bonus), revealed on equip/identify
 - Pet system: 8 pets (rat/dog/cat/owl/snake/bat/imp/crow), PET equip slot, invincible sprite follows behind player, passive bonuses (crow scavenges gold)
 - Paper doll inventory with mouse support, item sprites in equip slots
 - Item quality tiers: Fine (+1), Superior (+2), Masterwork (+3) at depth 5/10/15
+- **Material system**: 5 materials (Iron default, Bone, Silver, Mithril, Adamantine) with palette swap sprites, depth-scaled distribution, damage modifiers (bone -1, silver +1 & +50% vs undead, mithril +2, adamantine +4)
+- Weighted item distribution (`weighted_item_pick`) spreading gear across difficulty zones
+- Material weapons in shops at difficulty 5+
 - Item stats visible on selection + effective damage display ("Effective: X dmg (STR/DEX)")
 - 9 consumables: healing/strong healing/mana potions, antidote, speed draught, strength elixir, bread, cheese, dried meat
 - Shops: buy (random stock, sprites, stats), sell (half price)
@@ -71,11 +76,13 @@ The game is fully playable from character creation through a 17-step main quest 
 - ~~Hunger clock~~ REMOVED from scope
 
 ### Magic
-- 15 spells across 6 schools (Conjuration, Transmutation, Divination, Healing, Nature, Dark Arts)
-- Spell screen (z key), MP system, INT scaling, auto-targeting
+- **50 spells** across 6 schools (Conjuration, Transmutation, Divination, Healing, Nature, Dark Arts)
+- Includes: Chain Lightning, Frost Nova, Polymorph, Phase (teleport), Beast Call/Swarm (summon allies), Raise Dead, Poison Cloud, Thornwall, Earthquake, Blood Pact, Doom, Wither, and more
+- Spell screen (z key) with spell description panel, MP system, INT scaling, auto-targeting
 - Spell failure from heavy armor (chain 15%, plate 25% per piece)
 - Spellbooks drop in dungeons — "Tome of X" teaches spell on use
 - Class starting spells (Wizard 3, Ranger 1, others Minor Heal)
+- Blood magic: Yashkhet spells cost HP instead of MP
 
 ### World
 - 2000x1500 tile overworld (hand-editable text map + programmatic decoration pass)
@@ -90,7 +97,9 @@ The game is fully playable from character creation through a 17-step main quest 
 - Dungeon doodads: lootable chests/jars, mushrooms, blood splatters, coffins, barrels, animated torches/braziers with warm glow
 - Wood wall tile type for cabins and hamlets
 - 27 dungeons: 9 named quest-linked + 18 generic exploration
+- **6 provinces** (Pale Reach, Frozen Marches, Heartlands, Greenwood, Iron Coast, Dust Provinces) with god affiliations and province-tinted walls
 - 5 climate zones (ice/cold/temperate/warm/desert) with tinted floor tiles and region-appropriate plants
+- **Signpost system** — ~80+ signs at town outskirts, dungeon entrances, and road crossings with auto-generated compass directions to nearest POIs
 - Wall rendering: correct top/side view based on wall depth (bottom row = side face, upper rows = top view)
 - Town/boss music triggers based on proximity and enemy presence
 - The Sepulchre: atmospheric entry messages per depth, ambient text every ~18 turns
@@ -255,22 +264,25 @@ F11 fullscreen | F12 screenshot
 - [ ] Relics detected by god (your god's relic glows in inventory/on ground)
 - [ ] Using another god's relic: massive favor loss + potential excommunication
 
-**5G. Material System** — weapon/armor materials
-- [ ] MaterialType enum: BONE, WOOD, IRON, STEEL, SILVER, OBSIDIAN, MITHRIL, ADAMANTINE
-- [ ] Material affects: damage_mod, weight_mod, special properties (silver vs undead, obsidian shatters, mithril light)
-- [ ] Palette swap sprite selection based on material (items-palette-swaps.png exists in 32rogues)
-- [ ] Material determines sacred/profane status per god
-- [ ] Integrate into item generation (populate.cpp) — deeper = better materials
+**5G. Material System** — weapon/armor materials ✅
+- [x] MaterialType enum: NONE, BONE, SILVER, MITHRIL, ADAMANTINE (Iron is default/untagged)
+- [x] Material affects: damage_mod, special properties (silver +50% vs undead)
+- [x] Palette swap sprite selection based on material (items-palette-swaps.png)
+- [x] Material determines sacred/profane status per god
+- [x] Integrate into item generation (populate.cpp) — deeper = better materials
+- [x] Material weapons in shops at difficulty 5+
 
-**5H. Expanded Spells** — 15 → ~45 spells
-- [ ] 5-8 spells per school (Conjuration, Transmutation, Divination, Healing, Nature, Dark Arts)
-- [ ] Dark Souls-style evocative descriptions
-- [ ] Spellbook drops scale with dungeon depth and school affinity of zone
-- [ ] God-profane spells: casting Dark Arts as Soleth/Vethrik = tenet violation
+**5H. Expanded Spells** — 15 → 50 spells ✅
+- [x] 50 spells across 6 schools (Conjuration, Transmutation, Divination, Healing, Nature, Dark Arts)
+- [x] Spellbook UI shows spell descriptions on highlight
+- [x] Spellbook drops scale with dungeon depth and school affinity of zone
+- [x] God-profane spells: casting Dark Arts as Soleth/Vethrik = tenet violation
+- [x] Blood magic: Yashkhet spells cost HP instead of MP
 
-**5I. More Status Effects**
-- [ ] Frozen, confused, blind, paralyzed, feared, charmed, stunned, wet, entangled (design doc lists 12, only 3 implemented)
-- [ ] Each status has visual indicator on HUD + particle effect
+**5I. More Status Effects** ✅
+- [x] 8 status effects: poison, burn, bleed, frozen, stunned, confused, blind, feared
+- [x] Monster abilities: troll regen, spider poison, wraith confuse, death knight fear, basilisk blind, orc warchief buff
+- [x] Each status has visual indicator on HUD
 
 ### Tier 6 — Ship
 - [ ] Steamworks integration
@@ -288,7 +300,8 @@ src/
 ├── core/          — engine, ecs, tilemap, spritesheet, rng
 ├── components/    — position, renderable, player, blocker, stats, ai, energy,
 │                    corpse, item, inventory, god, class_def, background, traits,
-│                    spellbook, npc, quest, quest_target, dynamic_quest
+│                    spellbook, npc, quest, quest_target, dynamic_quest, tenet,
+│                    prayer, buff, status_effect, container, sign, disease, pet
 ├── systems/       — render, fov, combat, ai, magic
 ├── generation/    — dungeon, populate, mapfile, village, quest_gen
 ├── ui/            — message_log, inventory_screen, character_sheet, spell_screen,
@@ -308,8 +321,14 @@ assets/
 ```
 
 ## Key Files to Know
-- **engine.cpp** — ~1400 lines, the main game loop. Most gameplay logic lives here.
-- **quest.h** — all 17 main quest + 7 side quest definitions
-- **populate.cpp** — monster/item spawning with depth scaling
-- **generate_overworld.py** — generates overworld.map + dungeons.json
-- **dungeons.json** — runtime dungeon registry linking map positions to zone themes and quests
+- **engine.cpp** — ~6500+ lines, the main game loop. Most gameplay logic lives here (combat, movement, NPC interaction, god system, overworld population, sign placement, death screen, quests).
+- **quest.h** — all 17 main quest + 7 side quest definitions with compass direction text
+- **god.h** — 13 gods: GodInfo, GodColor, GodAlignment, favor system
+- **tenet.h** — tenet checks, PlayerActions, sacred/profane items per god
+- **spellbook.h** — 50 SpellId entries, SpellInfo, per-school organization
+- **magic.cpp** — all 50 spell implementations (AoE, summons, status effects, blood magic)
+- **populate.cpp** — monster/item/legendary spawning with depth + zone difficulty scaling, material assignment, palette swaps
+- **generate_overworld.py** — province system, capital cities, structured town generation
+- **dungeons.json** — runtime dungeon registry with zone/quest/province links
+- **sign.h** — signpost entity component
+- **release.yml** — CI/CD workflow for Linux + Windows cross-compilation
