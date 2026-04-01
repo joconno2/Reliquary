@@ -170,14 +170,22 @@ void WorldMap::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_tit
         SDL_RenderDrawRect(renderer, &pdot);
     }
 
-    // Region labels (faint)
+    // Province labels
     SDL_Color region_col = {180, 170, 150, 80};
-    ui::draw_text_centered(renderer, font, "The Frozen North", region_col,
-                            screen_w / 2, map_y0 + static_cast<int>(100 * scale));
-    ui::draw_text_centered(renderer, font, "Temperate Heartlands", region_col,
-                            screen_w / 2, map_y0 + static_cast<int>(375 * scale));
-    ui::draw_text_centered(renderer, font, "The Southern Wastes", region_col,
-                            screen_w / 2, map_y0 + static_cast<int>(650 * scale));
+    struct ProvLabel { int tx, ty; const char* name; };
+    static const ProvLabel PROV_LABELS[] = {
+        {1000, 200, "The Frozen Marches"},
+        {1100, 500, "The Pale Reach"},
+        {1000, 750, "The Heartlands"},
+        {600,  700, "The Greenwood"},
+        {1400, 750, "The Iron Coast"},
+        {1000, 1100,"The Dust Provinces"},
+    };
+    for (auto& pl : PROV_LABELS) {
+        int lx = map_x0 + static_cast<int>(pl.tx * scale);
+        int ly = map_y0 + static_cast<int>(pl.ty * scale);
+        ui::draw_text_centered(renderer, font, pl.name, region_col, lx, ly);
+    }
 
     // Hint
     SDL_Color hint_col = {120, 110, 100, 255};

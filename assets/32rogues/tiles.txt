@@ -115,6 +115,7 @@
 18.e. barrel
 18.f. ore sack
 18.g. log pile
+18.h. sign
 
 19.a. large rock 1
 19.b. large rock 2

@@ -57,157 +57,137 @@ inline const QuestInfo& get_quest_info(QuestId id) {
     static const QuestInfo QUESTS[] = {
         // MQ_01_BARROW_WIGHT
         {"The Barrow Wight",
-         "A wight has risen in the barrow east of Thornwall. People have died. "
-         "The elder asked you to put it down.",
-         "Enter the barrow east of town and slay the wight.",
-         "The wight is dead. Thornwall sleeps easier tonight. But something "
-         "deeper stirred when it fell — you felt it.",
+         "A wight has risen in the barrow just east of Thornwall. "
+         "The elder wants it put down before more die.",
+         "Go east from Thornwall. Enter The Barrow. Kill the wight on floor 3.",
+         "The wight is dead. Something deeper stirred when it fell.",
          true, 50, 30},
 
         // MQ_02_SCHOLAR_CLUE
         {"What Stirs Below",
-         "When the wight fell, something answered from deeper down. "
-         "The scholar in Thornwall spends his nights reading texts no one else can. "
-         "He may know what woke.",
-         "Speak to the scholar in Thornwall.",
-         "The scholar's hands trembled as he spoke. 'The old texts mention a tablet "
-         "in Ashford — a warning carved before the gods had names.'",
+         "Something answered from the deep when the wight died. "
+         "The scholar in Thornwall reads texts no one else can.",
+         "Speak to Scholar Aldric in Thornwall. He is in one of the town buildings.",
+         "The scholar spoke of a tablet in the ruins near Ashford, "
+         "to the west. A warning older than the gods.",
          true, 60, 0},
 
         // MQ_03_ASHFORD_TABLET
         {"The Ashford Tablet",
-         "A stone tablet lies somewhere in the Warrens near Ashford. "
-         "The scholar believes it predates the barrow by centuries. "
-         "Whatever is written there, the dead didn't want it found.",
-         "Find the stone tablet in the Warrens near Ashford.",
-         "The tablet is heavier than stone should be. The inscriptions seem to shift "
-         "when you aren't looking directly at them.",
+         "A stone tablet in the Ashford Ruins, west of Thornwall. "
+         "The ruins are near the town of Ashford in the western Heartlands.",
+         "Travel west to Ashford. Enter the dungeon nearby. Find the tablet on floor 3.",
+         "The tablet is heavy. The inscriptions are old.",
          true, 80, 20},
 
         // MQ_04_GREYWATCH_WARNING
         {"The Captain's Warning",
-         "The tablet's inscriptions speak of a seal weakening beneath the hills. "
-         "The guard captain in Greywatch commands the largest garrison in the region. "
-         "He needs to see this.",
-         "Deliver the tablet to the captain in Greywatch.",
-         "The captain read the tablet in silence. Then he said one word: 'Stonekeep.' "
-         "Something in the deep has been scratching at the walls for a long time.",
+         "The tablet describes a seal failing beneath the hills. "
+         "The guard captain in Greywatch has the largest garrison. "
+         "Greywatch lies to the east-northeast of Thornwall, in the Pale Reach.",
+         "Travel northeast to Greywatch. Show the tablet to Captain Voss.",
+         "The captain read the tablet. 'Stonekeep,' he said. "
+         "'Northeast of here. Something has been scratching at the walls.'",
          true, 100, 40},
 
         // MQ_05_STONEKEEP_DEPTHS
         {"The First Inscription",
-         "Stonekeep was sealed generations ago. The captain unsealed it. "
-         "Deep in the lowest level, there is said to be an inscription — "
-         "the first thing ever written in this land. Or the last.",
-         "Descend Stonekeep to find the First Inscription.",
-         "The inscription is not carved. It is burned into the stone, as though "
-         "the words themselves were too heavy for the rock to hold.",
+         "Stonekeep is northeast of Greywatch. Sealed for generations, "
+         "now unsealed by the captain's order.",
+         "Go northeast to Stonekeep. Descend to the bottom. Find the inscription.",
+         "The inscription is burned into the stone.",
          true, 120, 50},
 
         // MQ_06_FROSTMERE_SAGE
         {"The Ice Sage",
-         "The First Inscription mentions a name: Vehlkyr. No one in the south knows it. "
-         "But in Frostmere, far to the north, an old sage studies things that should "
-         "stay frozen.",
-         "Travel to Frostmere and consult the ice sage.",
-         "The sage stared at your transcription for a long time. "
-         "'Vehlkyr was the first to find the Reliquary. He did not survive the finding.'",
+         "The inscription mentions the name Vehlkyr. Nobody in the Heartlands knows it. "
+         "In Frostmere, due north of Thornwall in the Pale Reach, "
+         "an old sage studies forbidden things.",
+         "Travel north to Frostmere. Speak to Sage Yeva.",
+         "The sage said Vehlkyr was the first to find the Reliquary. "
+         "He did not survive.",
          true, 140, 30},
 
         // MQ_07_FROZEN_KEY
         {"The Frozen Key",
-         "The sage spoke of a key — forged in cold so deep that fire cannot touch it. "
-         "It lies in the ice dungeon north of Frostmere, guarded by things that "
-         "stopped being human long ago.",
-         "Retrieve the Frozen Key from the ice dungeon near Frostmere.",
-         "The key burns your hand with cold. It is shaped like no lock you've ever seen.",
+         "A key forged in cold lies in the ice dungeon near Frostmere, "
+         "north-northeast of Thornwall in the Pale Reach.",
+         "Go to Frostmere Depths, north of Frostmere. Find the Frozen Key.",
+         "The key burns cold. It fits no lock you have seen.",
          true, 160, 0},
 
         // MQ_08_CATACOMBS_GATE
         {"The Sealed Gate",
-         "The Catacombs gate has stood sealed since before Thornwall was built. "
-         "The Frozen Key is the only thing that opens it. "
-         "What waits beyond has been patient for a very long time.",
-         "Use the Frozen Key to open the Catacombs gate.",
-         "The gate screamed when it opened. Not metal on stone. Something else.",
+         "The Catacombs are southwest of Thornwall, near Millhaven. "
+         "The gate has been sealed since before the town was built. "
+         "The Frozen Key opens it.",
+         "Travel southwest to The Catacombs near Millhaven. Use the key.",
+         "The gate opened. Something has been waiting.",
          true, 180, 0},
 
         // MQ_09_OSSUARY_FRAGMENT
         {"The First Fragment",
-         "Beyond the gate, the Catacombs stretch into places the maps don't show. "
-         "Somewhere in the deepest ossuary lies the first fragment of the Reliquary — "
-         "a piece of something that should never have been broken apart.",
-         "Find the first Reliquary Fragment in the Catacombs.",
-         "The fragment hums in your pack. It is warm. It should not be warm.",
+         "The Catacombs go deeper than the maps show. "
+         "The first fragment of the Reliquary is on the lowest floor.",
+         "Descend The Catacombs (southwest of Thornwall). Find the fragment.",
+         "The fragment is warm. Two more remain.",
          true, 200, 60},
 
         // MQ_10_IRONHEARTH_FORGE
         {"The Master Smith",
-         "The fragment is unlike any material you've seen. The master smith in Ironhearth "
-         "works metals that others won't touch. If anyone can tell you what this is, "
-         "it's her.",
-         "Travel to Ironhearth and have the fragment analyzed.",
-         "'This isn't metal,' she said. 'It's memory. Solidified memory. "
-         "There are two more pieces. Without all three, you hold nothing.'",
+         "The fragment is unknown material. The master smith in Ironhearth, "
+         "far to the east on the Iron Coast, works metals others won't touch.",
+         "Travel far east to Ironhearth on the Iron Coast. Show the fragment to the smith.",
+         "The smith said there are two more pieces. Without all three, you hold nothing.",
          true, 220, 50},
 
         // MQ_11_MOLTEN_TRIAL
         {"The Molten Trial",
-         "The smith's analysis points to the Molten Depths — volcanic tunnels beneath "
-         "Ironhearth where the earth itself bleeds. The second fragment lies in the "
-         "deepest chamber, where the heat would kill anything that isn't already dead.",
-         "Descend the Molten Depths to find the second fragment.",
-         "The second fragment is cold, even in the heart of the furnace. "
-         "Two of three. The pieces want to be together.",
+         "The second fragment is in the Molten Depths, volcanic tunnels "
+         "east of Ironhearth on the Iron Coast.",
+         "Enter The Molten Depths east of Ironhearth. Find the second fragment.",
+         "The second fragment is cold even in the furnace. Two of three.",
          true, 260, 80},
 
         // MQ_12_CANDLEMERE_RITUAL
         {"The Binding Ritual",
-         "Two fragments are not enough. They must be bound. "
-         "The Soleth priests in Candlemere have preserved the old rituals — "
-         "the ones the gods tried to make everyone forget.",
-         "Travel to Candlemere and learn the binding ritual from the priests.",
-         "The priests taught you the words. They also taught you the price. "
-         "Nothing this old comes free.",
+         "Two fragments must be bound. The Soleth priests in Candlemere, "
+         "far northeast in the Pale Reach, preserve the old rituals.",
+         "Travel far northeast to Candlemere in the Pale Reach. Learn the ritual.",
+         "The priests taught you the words and the price.",
          true, 280, 40},
 
         // MQ_13_SUNKEN_FRAGMENT
         {"The Drowned Shard",
-         "The third fragment lies in the Sunken Halls — flooded ruins that sink "
-         "deeper with each passing year. The water there doesn't behave like water. "
-         "It remembers.",
-         "Retrieve the third fragment from the Sunken Halls.",
-         "Three fragments. They pull toward each other in your pack. "
-         "The Reliquary is almost whole.",
+         "The third fragment is in the Sunken Halls, flooded ruins "
+         "far to the northeast, past Candlemere on the Iron Coast border.",
+         "Enter The Sunken Halls, far northeast. Find the third fragment.",
+         "Three fragments. The Reliquary is almost whole.",
          true, 320, 100},
 
         // MQ_14_HOLLOWGATE_SEAL
         {"The Final Seal",
-         "Hollowgate marks the entrance to the oldest place in the world. "
-         "A seal bars the way — the last thing standing between you and The Sepulchre. "
-         "The fragments resonate when you hold them near the gate.",
-         "Travel to Hollowgate and break the final seal.",
-         "The seal shattered. The fragments fused into a key that fits no door "
-         "you can see. But the way is open. Down.",
+         "Hollowgate is far to the west, deep in the Greenwood. "
+         "A seal bars the entrance to the Sepulchre. "
+         "The fragments will break it.",
+         "Travel far west to Hollowgate in the Greenwood. Break the seal.",
+         "The seal broke. The way down is open.",
          true, 360, 0},
 
         // MQ_15_THE_SEPULCHRE
         {"Enter The Sepulchre",
-         "The final seal is broken. Beneath Hollowgate, a passage opens into "
-         "something older than any dungeon you've seen. The walls are not stone. "
-         "The air is not air. Your god is screaming.",
-         "Enter The Sepulchre and descend to its depths.",
-         "Each level is older than the last. The walls stop being stone. "
-         "The floor stops being solid. But you keep going down.",
+         "The Sepulchre lies beneath the far north, past the Pale Reach, "
+         "in the Frozen Marches. The oldest place in the world.",
+         "Travel far north. Enter The Sepulchre.",
+         "Each floor is older than the last. You keep going down.",
          true, 400, 0},
 
         // MQ_16_THE_DESCENT
         {"The Descent",
-         "The Sepulchre goes deeper than it should. Each level is older than "
-         "the last. The architecture stops making sense after the third floor. "
-         "You hear other footsteps.",
-         "Descend past the fourth floor of The Sepulchre.",
-         "The Vault is open. The Reliquary is here. It has been waiting.",
+         "The Sepulchre is 13 floors deep. What waits at the bottom "
+         "has been there since before the gods.",
+         "Descend past floor 4 of The Sepulchre.",
+         "The Reliquary vault is open.",
          true, 450, 0},
 
         // MQ_17_CLAIM_RELIQUARY

@@ -164,7 +164,32 @@ void draw_map(SDL_Renderer* renderer, const SpriteManager& sprites,
                         if (is_any_wall(map.at(x, y + 1).type))
                             show_side = false;
                     }
-                    draw_sprite_scaled(SHEET_TILES, show_side ? side_col : top_col, wall_row, tint);
+                    // Province-based subtle wall tinting (overworld towns)
+                    SDL_Color wall_tint = tint;
+                    if (map.width() > 500) { // only on overworld
+                        int dx = x - map.width() / 2, dy = y - map.height() / 2;
+                        // Province god colors
+                        SDL_Color prov_colors[] = {
+                            {255,230,140,255}, // Pale Reach (Soleth gold)
+                            {180,160,120,255}, // Frozen Marches (Gathruun brown)
+                            {220,200,170,255}, // Heartlands (Morreth warm)
+                            {140,200,140,255}, // Greenwood (Khael green)
+                            {230,200,120,255}, // Iron Coast (Ossren gold)
+                            {160,200,140,255}, // Dust Provinces (Sythara pale green)
+                        };
+                        int prov = 2; // default heartlands
+                        if (dy < -350) prov = 1;
+                        else if (dy < -100) prov = 0;
+                        else if (dy > 250) prov = 5;
+                        else if (dx < -200) prov = 3;
+                        else if (dx > 200) prov = 4;
+                        auto& pc = prov_colors[prov];
+                        // Subtle blend: 80% original, 20% province color
+                        wall_tint.r = static_cast<Uint8>((wall_tint.r * 4 + pc.r) / 5);
+                        wall_tint.g = static_cast<Uint8>((wall_tint.g * 4 + pc.g) / 5);
+                        wall_tint.b = static_cast<Uint8>((wall_tint.b * 4 + pc.b) / 5);
+                    }
+                    draw_sprite_scaled(SHEET_TILES, show_side ? side_col : top_col, wall_row, wall_tint);
                 } else if (tile.type == TileType::SHRINE) {
                     // Shrine: draw stone floor base + altar sprite on top
                     draw_sprite_scaled(SHEET_TILES, 0, 6, tint); // stone floor

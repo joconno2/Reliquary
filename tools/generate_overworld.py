@@ -135,100 +135,157 @@ for lx, ly, lrx, lry in [(500, 400, 30, 20), (1200, 350, 25, 18),
             if dist < 0.85:
                 set_tile(lx + dx, ly + dy, '~')
 
-# === TOWNS (20) ===
+# === PROVINCES & TOWNS ===
 print("Placing towns...", flush=True)
 CX, CY = W // 2, H // 2  # 1000, 750
 
-towns = [
-    (CX, CY, "Thornwall", True),
-    (CX - 250, CY - 100, "Ashford", False),
-    (CX + 300, CY - 80, "Greywatch", False),
-    (CX - 150, CY + 200, "Millhaven", False),
-    (CX + 200, CY + 180, "Stonehollow", False),
-    (CX + 50, CY - 300, "Frostmere", False),
-    (CX - 350, CY + 50, "Bramblewood", False),
-    (CX + 400, CY, "Ironhearth", False),
-    (CX, CY + 350, "Dustfall", False),
-    (CX - 200, CY - 350, "Whitepeak", False),
-    (CX + 250, CY + 350, "Drywell", False),
-    (CX - 450, CY - 200, "Hollowgate", False),
-    (CX + 450, CY - 250, "Candlemere", False),
-    (CX - 100, CY + 450, "Sandmoor", False),
-    (CX + 100, CY - 450, "Glacierveil", False),
-    (CX - 300, CY + 300, "Tanglewood", False),
-    (CX + 350, CY + 250, "Redrock", False),
-    (CX + 150, CY - 200, "Ravenshold", False),
-    (CX - 400, CY - 50, "Fenwatch", False),
-    (CX + 500, CY + 100, "Endgate", False),
+# 6 provinces, each with a patron god and a capital city
+# Province boundaries are approximate — based on position relative to center
+#   god_idx: maps to GodId enum (0=Vethrik..12=Sythara). Used for wall tinting.
+PROVINCES = [
+    {"name": "The Pale Reach",   "god": "Soleth",   "god_idx": 5,  "region": "north"},      # north-central: fire/purification
+    {"name": "The Frozen Marches","god": "Gathruun", "god_idx": 11, "region": "far_north"},   # far north: stone/earth
+    {"name": "The Heartlands",   "god": "Morreth",  "god_idx": 2,  "region": "center"},      # center: war/iron (neutral)
+    {"name": "The Greenwood",    "god": "Khael",    "god_idx": 4,  "region": "west"},         # west: nature/beasts
+    {"name": "The Iron Coast",   "god": "Ossren",   "god_idx": 9,  "region": "east"},         # east: craft/forge
+    {"name": "The Dust Provinces","god": "Sythara",  "god_idx": 12, "region": "south"},        # south: plague/decay
 ]
 
-def place_town(tx, ty, is_start, town_rng):
-    """Place a town with structured grid layout and climate-appropriate materials."""
+def get_province(x, y):
+    """Return province index (0-5) based on world position."""
+    dx, dy = x - CX, y - CY
+    if dy < -350: return 1  # far north = Frozen Marches
+    if dy < -100: return 0  # north = Pale Reach
+    if dy > 250:  return 5  # south = Dust Provinces
+    if dx < -200: return 3  # west = Greenwood
+    if dx > 200:  return 4  # east = Iron Coast
+    return 2                # center = Heartlands
+
+# God colors for wall tinting (R, G, B) — matches god.h GodColor
+GOD_COLORS = {
+    0: (160,160,200), 1: (140,140,220), 2: (200,180,140), 3: (200,60,60),
+    4: (80,200,80),   5: (255,220,100), 6: (180,100,255), 7: (60,60,100),
+    8: (80,180,200),  9: (220,180,80), 10: (160,120,200), 11: (160,130,90),
+    12: (120,180,60),
+}
+
+# Towns: (x, y, name, is_start, is_city, province_idx)
+# Each province has 1 city (capital) + 2-3 towns
+towns = [
+    # === The Heartlands (province 2, Morreth) ===
+    (CX,        CY,      "Thornwall",    True,  True, 2),   # Capital — player start
+    (CX - 250,  CY - 100,"Ashford",      False, False, 2),
+    (CX - 150,  CY + 200,"Millhaven",    False, False, 2),
+    (CX + 150,  CY - 200,"Ravenshold",   False, False, 2),
+    # === The Pale Reach (province 0, Soleth) ===
+    (CX + 450,  CY - 250,"Candlemere",   False, True, 0),   # Capital — Soleth temple city
+    (CX + 50,   CY - 300,"Frostmere",    False, False, 0),
+    (CX + 300,  CY - 80, "Greywatch",    False, False, 0),
+    # === The Frozen Marches (province 1, Gathruun) ===
+    (CX + 100,  CY - 450,"Glacierveil",  False, True, 1),   # Capital — stone fortress
+    (CX - 200,  CY - 350,"Whitepeak",    False, False, 1),
+    # === The Greenwood (province 3, Khael) ===
+    (CX - 350,  CY + 50, "Bramblewood",  False, True, 3),   # Capital — nature city
+    (CX - 450,  CY - 200,"Hollowgate",   False, False, 3),
+    (CX - 400,  CY - 50, "Fenwatch",     False, False, 3),
+    (CX - 300,  CY + 300,"Tanglewood",   False, False, 3),
+    # === The Iron Coast (province 4, Ossren) ===
+    (CX + 400,  CY,      "Ironhearth",   False, True, 4),   # Capital — forge city
+    (CX + 200,  CY + 180,"Stonehollow",   False, False, 4),
+    (CX + 500,  CY + 100,"Endgate",      False, False, 4),
+    # === The Dust Provinces (province 5, Sythara) ===
+    (CX,        CY + 350,"Dustfall",      False, True, 5),   # Capital — decaying city
+    (CX + 250,  CY + 350,"Drywell",      False, False, 5),
+    (CX - 100,  CY + 450,"Sandmoor",     False, False, 5),
+    (CX + 350,  CY + 250,"Redrock",      False, False, 5),
+]
+
+def place_town(tx, ty, is_start, town_rng, is_city=False, province_idx=2):
+    """Place a town or city with structured grid layout."""
     lat = ty / H
     stone_prob = max(0, min(1, 1.0 - lat * 1.2))
-    wall_ch = '#' if town_rng.random() < stone_prob else 'w'
+    wall_ch = '#' if (is_city or town_rng.random() < stone_prob) else 'w'
+    floor_ch = ':' if is_city else ':'  # stone floor inside buildings always
 
-    # Town size varies slightly
-    size = town_rng.choice(['small', 'medium', 'large'])
-    if size == 'small':
-        half_w, half_h = 12, 10
-        building_slots = [(-9, -7, 6, 5), (3, -7, 6, 5), (-9, 3, 6, 5), (3, 3, 6, 5)]
-    elif size == 'medium':
-        half_w, half_h = 16, 12
-        building_slots = [(-13, -9, 7, 5), (-4, -9, 7, 5), (5, -9, 7, 5),
-                          (-13, 4, 7, 5), (5, 4, 7, 5)]
+    if is_city:
+        # Cities: large walled compound with stone ground
+        half_w, half_h = 24, 18
+        building_slots = [
+            (-20, -14, 7, 5), (-11, -14, 7, 5), (-2, -14, 7, 5), (7, -14, 7, 5),
+            (-20, -7, 7, 5), (13, -7, 7, 5),
+            (-20, 4, 7, 5), (-11, 4, 7, 5), (4, 4, 7, 5), (13, 4, 7, 5),
+        ]
     else:
-        half_w, half_h = 20, 14
-        building_slots = [(-17, -11, 7, 5), (-8, -11, 7, 5), (3, -11, 7, 5),
-                          (-17, -4, 7, 5), (10, -4, 7, 5),
-                          (-17, 5, 7, 5), (-4, 5, 7, 5), (10, 5, 7, 5)]
+        # Regular towns: smaller
+        size = town_rng.choice(['small', 'medium'])
+        if size == 'small':
+            half_w, half_h = 12, 10
+            building_slots = [(-9, -7, 6, 5), (3, -7, 6, 5), (-9, 3, 6, 5), (3, 3, 6, 5)]
+        else:
+            half_w, half_h = 16, 12
+            building_slots = [(-13, -9, 7, 5), (-4, -9, 7, 5), (5, -9, 7, 5),
+                              (-13, 4, 7, 5), (5, 4, 7, 5)]
 
-    # Clear rectangular ground
+    # Clear ground — cities get stone floor, towns get dirt
+    ground_ch = ':' if is_city else '.'
     for dy in range(-half_h - 2, half_h + 3):
         for dx in range(-half_w - 2, half_w + 3):
-            set_tile(tx + dx, ty + dy, '.')
+            set_tile(tx + dx, ty + dy, ground_ch)
+
+    # City outer wall
+    if is_city:
+        for dx in range(-half_w - 1, half_w + 2):
+            set_tile(tx + dx, ty - half_h - 1, '#')
+            set_tile(tx + dx, ty + half_h + 1, '#')
+        for dy in range(-half_h - 1, half_h + 2):
+            set_tile(tx - half_w - 1, ty + dy, '#')
+            set_tile(tx + half_w + 1, ty + dy, '#')
+        # Gates: north, south, east, west
+        set_tile(tx, ty - half_h - 1, '+')
+        set_tile(tx, ty + half_h + 1, '+')
+        set_tile(tx - half_w - 1, ty, '+')
+        set_tile(tx + half_w + 1, ty, '+')
 
     # Main road — east-west through center, 2 tiles wide
-    for dx in range(-half_w - 4, half_w + 5):
+    road_extent = half_w + (6 if is_city else 4)
+    for dx in range(-road_extent, road_extent + 1):
         set_tile(tx + dx, ty, ',')
         set_tile(tx + dx, ty + 1, ',')
 
-    # Cross road — north-south, offset slightly based on seed
+    # Cross road — north-south
     cross_x = town_rng.choice([-2, 0, 2])
-    for dy in range(-half_h - 4, half_h + 5):
+    road_extent_v = half_h + (6 if is_city else 4)
+    for dy in range(-road_extent_v, road_extent_v + 1):
         set_tile(tx + cross_x, ty + dy, ',')
         set_tile(tx + cross_x + 1, ty + dy, ',')
 
     # Place buildings on grid slots
     npcs = ['S', 'B', 'P', 'G', 'F']
+    if is_city:
+        npcs = ['S', 'B', 'P', 'G', 'F', 'S', 'B', 'G', 'F', 'P']  # more NPCs in cities
     town_rng.shuffle(npcs)
 
-    # Slight randomization of slot positions
     for idx, (bx, by, bw, bh) in enumerate(building_slots):
         bx += town_rng.randint(-1, 1)
         by += town_rng.randint(-1, 1)
         ax, ay = tx + bx, ty + by
 
-        # Verify in bounds and not on road
         if not (2 < ax < W - 2 and 2 < ay < H - 2): continue
 
-        # Walls
         fill_rect(ax, ay, ax + bw, ay + bh, wall_ch)
-        # Floor
         fill_rect(ax + 1, ay + 1, ax + bw - 1, ay + bh - 1, ':')
-        # Door — always face the nearest road
-        if by < 0:  # building north of road
-            set_tile(ax + bw // 2, ay + bh - 1, '+')  # door on south wall
-        else:  # building south of road
-            set_tile(ax + bw // 2, ay, '+')  # door on north wall
 
-        # NPC inside
+        if by < 0:
+            set_tile(ax + bw // 2, ay + bh - 1, '+')
+        else:
+            set_tile(ax + bw // 2, ay, '+')
+
         if idx < len(npcs):
             set_tile(ax + bw // 2, ay + bh // 2, npcs[idx])
 
-for i, (tx, ty, name, is_start) in enumerate(towns):
+for i, (tx, ty, name, is_start, is_city, prov_idx) in enumerate(towns):
     if 25 < tx < W - 25 and 25 < ty < H - 25:
-        place_town(tx, ty, is_start, random.Random(42 + i * 7))
+        place_town(tx, ty, is_start, random.Random(42 + i * 7), is_city, prov_idx)
 
 # === NAMED QUEST DUNGEONS + GENERIC DUNGEONS ===
 print("Placing dungeons...", flush=True)
@@ -256,7 +313,7 @@ def too_close(x, y, min_dist=80):
         if abs(x - px) < min_dist and abs(y - py) < min_dist:
             return True
     # Also don't place on top of towns
-    for tx, ty, _, _ in towns:
+    for tx, ty, _, _, _, _ in towns:
         if abs(x - tx) < 40 and abs(y - ty) < 40:
             return True
     return False
@@ -352,7 +409,7 @@ for dx_pos, dy_pos, name, zone, quest in named_dungeons:
     # Find nearest town and draw road
     best_dist = float('inf')
     best_town = None
-    for tx, ty, tname, _ in towns:
+    for tx, ty, tname, *_ in towns:
         d = math.hypot(dx_pos - tx, dy_pos - ty)
         if d < best_dist:
             best_dist = d
@@ -437,12 +494,17 @@ registry = []
 for dx_pos, dy_pos, name, zone, quest in all_dungeons:
     dx_pos = max(15, min(W - 15, dx_pos))
     dy_pos = max(15, min(H - 15, dy_pos))
+    prov = get_province(dx_pos, dy_pos)
     entry = {
         "name": name if name else f"Dungeon ({dx_pos}, {dy_pos})",
         "x": dx_pos,
         "y": dy_pos,
         "zone": zone,
         "quest": quest,
+        "province": prov,
+        "province_name": PROVINCES[prov]["name"],
+        "patron_god": PROVINCES[prov]["god"],
+        "patron_god_idx": PROVINCES[prov]["god_idx"],
     }
     registry.append(entry)
 

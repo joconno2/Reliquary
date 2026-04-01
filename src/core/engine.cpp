@@ -13,6 +13,7 @@
 #include "components/class_def.h"
 #include "components/spellbook.h"
 #include "components/npc.h"
+#include "components/sign.h"
 #include "components/prayer.h"
 #include "components/status_effect.h"
 #include "components/container.h"
@@ -739,7 +740,7 @@ void Engine::generate_level() {
                     npc_comp.role = NPCRole::SHOPKEEPER;
                     npc_comp.name = "Shopkeeper";
                     npc_comp.dialogue = "Browse, if you like. I don't haggle.";
-                    sx = 2; sy = 6;
+                    sx = 2; sy = 7; // shopkeep sprite (row 8)
                     // Side quest: Ashford shopkeeper — rats in the cellar
                     if (town_idx == 1 && !sq_ratcellar_assigned) {
                         npc_comp.quest_id = static_cast<int>(QuestId::SQ_RAT_CELLAR);
@@ -769,7 +770,7 @@ void Engine::generate_level() {
                     npc_comp.role = NPCRole::PRIEST;
                     npc_comp.name = "Scholar";
                     npc_comp.dialogue = pick_dialogue(SCHOLAR_DIALOGUE, 3, me.x, me.y);
-                    sx = 3; sy = 4; // desert sage sprite (scholar sprite is empty)
+                    sx = 5; sy = 6; // scholar sprite (group 7)
                     // MQ_02: Thornwall scholar
                     if (town_idx == 0 && !mq_assigned[1]) {
                         npc_comp.quest_id = static_cast<int>(QuestId::MQ_02_SCHOLAR_CLUE);
@@ -841,7 +842,12 @@ void Engine::generate_level() {
                     npc_comp.role = NPCRole::GUARD;
                     npc_comp.name = "Guard";
                     npc_comp.dialogue = pick_dialogue(GUARD_DIALOGUE, 3, me.x, me.y);
-                    sx = 0; sy = 1;
+                    { // vary guard sprites: knight, female knight, female knight helmetless
+                        int guard_var = (me.x * 7 + me.y * 13) % 3;
+                        if (guard_var == 0) { sx = 0; sy = 1; }      // knight
+                        else if (guard_var == 1) { sx = 2; sy = 1; }  // female knight
+                        else { sx = 3; sy = 1; }                      // female knight helmetless
+                    }
                     // Side quest: Thornwall guard
                     if (town_idx == 0 && !sq_guard_assigned) {
                         npc_comp.quest_id = static_cast<int>(QuestId::SQ_KILL_BEAR);
@@ -852,6 +858,7 @@ void Engine::generate_level() {
                         npc_comp.quest_id = static_cast<int>(QuestId::SQ_UNDEAD_PATROL);
                         npc_comp.name = "Sergeant Breck";
                         npc_comp.dialogue = "The dead walk in the tunnels south of here. Thin their numbers.";
+                        sx = 2; sy = 1; // female knight
                         sq_undead_assigned = true;
                     }
                     // MQ_04: Greywatch guard (receives tablet)
@@ -859,6 +866,7 @@ void Engine::generate_level() {
                         npc_comp.quest_id = static_cast<int>(QuestId::MQ_04_GREYWATCH_WARNING);
                         npc_comp.name = "Captain Voss";
                         npc_comp.dialogue = "I command the largest garrison in the region. Speak plainly.";
+                        sx = 0; sy = 1; // knight
                         mq_assigned[3] = true;
                     }
                     // MQ_07: Frostmere guard (frozen key location)
@@ -904,20 +912,17 @@ void Engine::generate_level() {
                 case 'E':
                     npc_comp.role = NPCRole::ELDER;
                     npc_comp.name = "Elder Maren";
-                    npc_comp.dialogue = "A wight has risen in the barrow east of here. "
-                                        "People have died. Will you put it down?";
+                    npc_comp.dialogue = "A wight has risen in the barrow just east of town. "
+                                        "Follow the road east. You will see the entrance.";
                     npc_comp.quest_id = static_cast<int>(QuestId::MQ_01_BARROW_WIGHT);
                     mq_assigned[0] = true;
-                    sx = 4; sy = 6;
+                    sx = 4; sy = 7; // elderly man sprite (group 8)
                     break;
             }
             npc_comp.home_x = me.x;
             npc_comp.home_y = me.y;
-            bool has_quest = (npc_comp.quest_id >= 0);
             world_.add<NPC>(npc, std::move(npc_comp));
-            // Quest NPCs get gold tint so they stand out
-            SDL_Color npc_tint = has_quest ? SDL_Color{255, 230, 140, 255} : SDL_Color{255, 255, 255, 255};
-            world_.add<Renderable>(npc, {SHEET_ROGUES, sx, sy, npc_tint, 5});
+            world_.add<Renderable>(npc, {SHEET_ROGUES, sx, sy, {255, 255, 255, 255}, 5});
 
             // NPCs have stats but aren't killable (no AI component = won't fight)
             Stats npc_stats;
@@ -1627,6 +1632,21 @@ void Engine::try_move_player(int dx, int dy) {
         open_door(nx, ny);
         player_acted_ = true;
         return;
+    }
+
+    // Check for sign at target tile (signs don't have Stats, so entity_at won't find them)
+    {
+        auto& positions = world_.pool<Position>();
+        for (size_t i = 0; i < positions.size(); i++) {
+            Entity se = positions.entity_at(i);
+            auto& sp = positions.at_index(i);
+            if (sp.x == nx && sp.y == ny && world_.has<Sign>(se)) {
+                auto& sign = world_.get<Sign>(se);
+                log_.add(sign.text, {200, 190, 150, 255});
+                player_acted_ = true;
+                return;
+            }
+        }
     }
 
     // Check for entity at target tile
@@ -3487,6 +3507,10 @@ void Engine::describe_tile(int x, int y) {
             snprintf(buf, sizeof(buf), "%s.", npc.name.c_str());
             log_.add(buf, {180, 180, 140, 255});
             found_entity = true;
+        } else if (world_.has<Sign>(e)) {
+            auto& sign = world_.get<Sign>(e);
+            log_.add(sign.text, {200, 190, 150, 255});
+            found_entity = true;
         } else if (world_.has<Stats>(e) && world_.has<AI>(e)) {
             auto& st = world_.get<Stats>(e);
             if (tile.visible) {
@@ -4055,17 +4079,17 @@ void Engine::populate_overworld() {
     }
 
     // Pilgrims (near dungeon entrances or holy sites)
-    spawn_ow_npc(1060, 730, "Pilgrim", "The barrow calls to the faithful. And the foolish.", NPCRole::FARMER, 7, 0);
-    spawn_ow_npc(1450, 520, "Pilgrim", "Soleth's fire burns in Candlemere. I go to pray.", NPCRole::FARMER, 7, 0);
-    spawn_ow_npc(580, 560, "Pilgrim", "The seal at Hollowgate. Have you seen it? It's cracking.", NPCRole::FARMER, 7, 0);
+    spawn_ow_npc(1060, 730, "Pilgrim", "The barrow calls to the faithful. And the foolish.", NPCRole::FARMER, 4, 7);
+    spawn_ow_npc(1450, 520, "Pilgrim", "Soleth's fire burns in Candlemere. I go to pray.", NPCRole::FARMER, 4, 7);
+    spawn_ow_npc(580, 560, "Pilgrim", "The seal at Hollowgate. Have you seen it? It's cracking.", NPCRole::FARMER, 4, 7);
 
     // Hunters in the deep wilderness
-    spawn_ow_npc(300, 500, "Hunter", "The game's thin out here. Something's scaring them deeper into the woods.", NPCRole::FARMER, 2, 0);
-    spawn_ow_npc(1700, 700, "Hunter", "I track wolves. They've been moving in packs larger than I've ever seen.", NPCRole::FARMER, 2, 0);
-    spawn_ow_npc(500, 1100, "Hunter", "Don't go south. The swamp takes people.", NPCRole::FARMER, 2, 0);
+    spawn_ow_npc(300, 500, "Hunter", "The game's thin out here. Something's scaring them deeper into the woods.", NPCRole::FARMER, 2, 6);
+    spawn_ow_npc(1700, 700, "Hunter", "I track wolves. They've been moving in packs larger than I've ever seen.", NPCRole::FARMER, 1, 6);
+    spawn_ow_npc(500, 1100, "Hunter", "Don't go south. The swamp takes people.", NPCRole::FARMER, 2, 6);
 
     // Hermits (isolated, deeper dialogue)
-    spawn_ow_npc(200, 300, "Hermit", "I left the towns years ago. The gods are louder out here.", NPCRole::PRIEST, 7, 0);
+    spawn_ow_npc(200, 300, "Hermit", "I left the towns years ago. The gods are louder out here.", NPCRole::PRIEST, 4, 7);
     spawn_ow_npc(1800, 400, "Old Woman", "I remember when there were no dungeons. Then the ground opened.", NPCRole::FARMER, 3, 7);
     spawn_ow_npc(400, 1200, "Hermit", "The Reliquary isn't what they think. It was here before the gods.", NPCRole::PRIEST, 4, 7);
     spawn_ow_npc(1600, 1100, "Madman", "I HEARD IT. Under the stone. Breathing.", NPCRole::FARMER, 1, 7);
@@ -4078,11 +4102,11 @@ void Engine::populate_overworld() {
     paint_ruin(650, 600);
     place_lore(650, 600, "abandoned journal",
         "Day 3. We found the entrance. Day 5. Markus didn't come back. Day 7. None of us are going back in.");
-    spawn_ow_npc(655, 600, "Deserter", "I was a guard once. Then I saw what's down there.", NPCRole::GUARD, 0, 1);
+    spawn_ow_npc(655, 600, "Deserter", "I was a guard once. Then I saw what's down there.", NPCRole::FARMER, 1, 7);
 
     // Mercenary camp — between Greywatch and Ironhearth
-    spawn_ow_npc(1350, 720, "Sellsword", "We're waiting for a contract. Know anyone who needs killing?", NPCRole::GUARD, 1, 1);
-    spawn_ow_npc(1355, 725, "Sellsword", "Gold talks. Everything else walks.", NPCRole::GUARD, 1, 1);
+    spawn_ow_npc(1350, 720, "Sellsword", "We're waiting for a contract. Know anyone who needs killing?", NPCRole::GUARD, 0, 7);
+    spawn_ow_npc(1355, 725, "Sellsword", "Gold talks. Everything else walks.", NPCRole::GUARD, 0, 7);
 
     // Scholar's camp — between Frostmere and Glacierveil
     spawn_ow_npc(1080, 370, "Field Scholar", "The inscriptions up north predate the current pantheon by centuries.", NPCRole::PRIEST, 5, 6);
@@ -4142,7 +4166,7 @@ void Engine::populate_overworld() {
 
     // Watchtower ruins — hilltop between Whitepeak and Frostmere
     paint_ruin(920, 420);
-    spawn_ow_npc(920, 420, "Tower Guard", "I watch the north. Nothing comes from there anymore. That worries me.", NPCRole::GUARD, 0, 1);
+    spawn_ow_npc(920, 420, "Tower Guard", "I watch the north. Nothing comes from there anymore. That worries me.", NPCRole::GUARD, 3, 1);
 
     // Witch's hut — deep forest
     spawn_ow_npc(350, 700, "Hedge Witch", "I know what you seek. Everyone who comes here seeks the same thing.", NPCRole::PRIEST, 4, 7);
@@ -4321,7 +4345,7 @@ void Engine::populate_overworld() {
         build_cabin(cd.x, cd.y, cd.w, cd.h);
         // Spawn NPC inside the cabin
         spawn_ow_npc(cd.x + cd.w/2, cd.y + cd.h/2, cd.npc_name, cd.dialogue,
-                      NPCRole::FARMER, 7, 0); // elderly man sprite
+                      NPCRole::FARMER, 4, 7); // elderly man sprite
         // Barrel or log pile against the outside wall
         place_against_walls(cd.x - 1, cd.y, cd.w + 2, 1, 4, 17); // barrel
         place_against_walls(cd.x - 1, cd.y, cd.w + 2, 1, 6, 17); // log pile
@@ -4366,7 +4390,7 @@ void Engine::populate_overworld() {
 
     for (auto& op : OUTPOSTS) {
         build_cabin(op.x, op.y, 6, 5);
-        spawn_ow_npc(op.x + 3, op.y + 2, "Road Guard", op.dialogue, NPCRole::GUARD, 0, 1);
+        spawn_ow_npc(op.x + 3, op.y + 2, "Road Guard", op.dialogue, NPCRole::GUARD, 3, 1);
         place_against_walls(op.x - 1, op.y - 1, 8, 2, 4, 17); // barrels
         place_lights(op.x + 3, op.y + 5, 3, 1, 5); // torch at entrance
     }
@@ -4435,6 +4459,138 @@ void Engine::populate_overworld() {
         Entity e = world_.create();
         world_.add<Position>(e, {x, y});
         world_.add<Renderable>(e, {SHEET_TILES, rng_.range(0, 1), 20, {255,255,255,255}, 0});
+    }
+
+    // =============================================
+    // SIGNPOSTS — directions to nearby POIs
+    // =============================================
+
+    struct POI { int x, y; const char* name; bool is_dungeon; };
+    std::vector<POI> pois;
+    // Towns
+    struct { int x, y; const char* name; } town_list[] = {
+        {1000, 750, "Thornwall"}, {750, 650, "Ashford"}, {1300, 670, "Greywatch"},
+        {850, 950, "Millhaven"}, {1200, 930, "Stonehollow"}, {1050, 450, "Frostmere"},
+        {650, 800, "Bramblewood"}, {1400, 750, "Ironhearth"}, {1000, 1100, "Dustfall"},
+        {800, 400, "Whitepeak"}, {1250, 1100, "Drywell"}, {550, 550, "Hollowgate"},
+        {1450, 500, "Candlemere"}, {900, 1200, "Sandmoor"}, {1100, 300, "Glacierveil"},
+        {700, 1050, "Tanglewood"}, {1350, 1000, "Redrock"}, {1150, 550, "Ravenshold"},
+        {600, 700, "Fenwatch"}, {1500, 850, "Endgate"},
+    };
+    for (auto& t : town_list) pois.push_back({t.x, t.y, t.name, false});
+    // Named dungeons from registry
+    for (auto& de : dungeon_registry_) {
+        if (!de.quest.empty()) // only named quest dungeons
+            pois.push_back({de.x, de.y, de.name.c_str(), true});
+    }
+
+    // Compass direction helper
+    auto compass_dir = [](int from_x, int from_y, int to_x, int to_y) -> const char* {
+        int dx = to_x - from_x, dy = to_y - from_y;
+        float angle = std::atan2(static_cast<float>(dy), static_cast<float>(dx));
+        // Convert to 8 directions (atan2: 0=E, pi/2=S, -pi/2=N)
+        if (angle < -2.749f) return "W";
+        if (angle < -1.963f) return "NW";
+        if (angle < -1.178f) return "N";
+        if (angle < -0.393f) return "NE";
+        if (angle < 0.393f)  return "E";
+        if (angle < 1.178f)  return "SE";
+        if (angle < 1.963f)  return "S";
+        if (angle < 2.749f)  return "SW";
+        return "W";
+    };
+
+    auto dist = [](int x1, int y1, int x2, int y2) -> float {
+        float dx = static_cast<float>(x1 - x2), dy = static_cast<float>(y1 - y2);
+        return std::sqrt(dx * dx + dy * dy);
+    };
+
+    // Generate sign text for a position: list 2-4 nearest POIs with directions
+    auto make_sign_text = [&](int sx, int sy, int max_entries = 3) -> std::string {
+        struct Nearby { float d; const char* name; const char* dir; };
+        std::vector<Nearby> nearby;
+        for (auto& p : pois) {
+            float d = dist(sx, sy, p.x, p.y);
+            if (d < 30) continue; // skip the POI we're standing at
+            nearby.push_back({d, p.name, compass_dir(sx, sy, p.x, p.y)});
+        }
+        std::sort(nearby.begin(), nearby.end(),
+                  [](const Nearby& a, const Nearby& b) { return a.d < b.d; });
+
+        std::string text = "Signpost:";
+        int count = std::min(max_entries, static_cast<int>(nearby.size()));
+        for (int i = 0; i < count; i++) {
+            text += "  ";
+            text += nearby[i].name;
+            text += " (";
+            text += nearby[i].dir;
+            text += ")";
+        }
+        return text;
+    };
+
+    // Place a sign entity at a walkable tile near (x,y)
+    auto place_sign = [&](int x, int y) {
+        for (int a = 0; a < 20; a++) {
+            int tx = x + rng_.range(-2, 2);
+            int ty = y + rng_.range(-2, 2);
+            if (!map_.in_bounds(tx, ty)) continue;
+            if (!map_.is_walkable(tx, ty)) continue;
+            // Don't place on top of existing entities
+            if (combat::entity_at(world_, tx, ty, NULL_ENTITY) != NULL_ENTITY) continue;
+            Entity e = world_.create();
+            world_.add<Position>(e, {tx, ty});
+            world_.add<Renderable>(e, {SHEET_TILES, 7, 17, {255, 255, 255, 255}, 3});
+            world_.add<Sign>(e, {make_sign_text(tx, ty)});
+            return;
+        }
+    };
+
+    // Signs outside each town (offset from center toward cardinal directions)
+    for (auto& t : town_list) {
+        // Place 1-2 signs on the outskirts of each town
+        place_sign(t.x + 25, t.y);      // east side
+        place_sign(t.x - 25, t.y);      // west side
+        if (rng_.chance(50))
+            place_sign(t.x, t.y + 25);  // south side
+    }
+
+    // Signs near named dungeon entrances
+    for (auto& de : dungeon_registry_) {
+        if (!de.quest.empty())
+            place_sign(de.x - 5, de.y);
+    }
+
+    // Signs at road crossings / midpoints between towns
+    // Sample points along major routes
+    struct { int x, y; } road_signs[] = {
+        // Heartlands crossroads
+        {900, 700},   // between Thornwall and Ashford
+        {1150, 710},  // between Thornwall and Greywatch
+        {950, 850},   // between Thornwall and Millhaven
+        // Pale Reach
+        {1050, 600},  // between Thornwall and Frostmere
+        {1200, 500},  // between Ravenshold and Candlemere
+        {1075, 375},  // between Frostmere and Glacierveil
+        {900, 575},   // between Whitepeak and Thornwall
+        // Greenwood
+        {625, 650},   // between Fenwatch and Hollowgate
+        {675, 900},   // between Bramblewood and Tanglewood
+        // Iron Coast
+        {1375, 650},  // between Greywatch and Ironhearth
+        {1475, 675},  // between Ironhearth and Candlemere
+        {1425, 925},  // between Ironhearth and Redrock
+        // Dust Provinces
+        {950, 1050},  // between Millhaven and Dustfall
+        {1125, 1100}, // between Dustfall and Drywell
+        {850, 1150},  // between Sandmoor and Tanglewood
+        // Far routes
+        {775, 525},   // between Whitepeak and Hollowgate
+        {1500, 700},  // approaching Endgate
+        {1050, 200},  // approaching The Sepulchre
+    };
+    for (auto& rs : road_signs) {
+        place_sign(rs.x, rs.y);
     }
 }
 
@@ -6384,11 +6540,11 @@ void Engine::render() {
     // Draw entities
     render::draw_entities(renderer_, sprites_, world_, map_, render_cam, HUD_HEIGHT);
 
-    // Quest NPC indicators — gold "!" above their heads
-    {
+    // Quest NPC indicators — gold "!" rendered as text above their heads
+    if (font_) {
         int TS = render_cam.tile_size;
-        SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
         auto& npc_pool = world_.pool<NPC>();
+        Uint32 blink = (SDL_GetTicks() / 600) % 2;
         for (size_t i = 0; i < npc_pool.size(); i++) {
             Entity e = npc_pool.entity_at(i);
             auto& npc = npc_pool.at_index(i);
@@ -6396,16 +6552,17 @@ void Engine::render() {
             if (!world_.has<Position>(e)) continue;
             auto& np = world_.get<Position>(e);
             if (!map_.in_bounds(np.x, np.y) || !map_.at(np.x, np.y).visible) continue;
-            int sx = (np.x - render_cam.x) * TS;
-            int sy = (np.y - render_cam.y) * TS + HUD_HEIGHT;
-            // Gold exclamation mark indicator
-            Uint32 blink = (SDL_GetTicks() / 500) % 2;
-            if (blink) {
-                SDL_SetRenderDrawColor(renderer_, 255, 220, 80, 220);
-                SDL_Rect mark = {sx + TS / 2 - 2, sy - TS / 4, 4, TS / 4};
-                SDL_RenderFillRect(renderer_, &mark);
-                SDL_Rect dot = {sx + TS / 2 - 2, sy - 2, 4, 3};
-                SDL_RenderFillRect(renderer_, &dot);
+            if (!blink) continue;
+            int sx = (np.x - render_cam.x) * TS + TS / 2;
+            int sy = (np.y - render_cam.y) * TS + HUD_HEIGHT - 4;
+            SDL_Color gold = {255, 220, 80, 255};
+            SDL_Surface* surf = TTF_RenderText_Blended(font_, "!", gold);
+            if (surf) {
+                SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer_, surf);
+                SDL_Rect dst = {sx - surf->w / 2, sy - surf->h, surf->w, surf->h};
+                SDL_RenderCopy(renderer_, tex, nullptr, &dst);
+                SDL_DestroyTexture(tex);
+                SDL_FreeSurface(surf);
             }
         }
     }
