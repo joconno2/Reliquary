@@ -276,7 +276,7 @@ def place_town(tx, ty, is_start, town_rng, is_city=False, province_idx=2):
                               (-13, 4, 7, 5), (5, 4, 7, 5)]
 
     # Clear ground — cities get cobblestone streets, towns get dirt
-    ground_ch = 'p' if is_city else '.'
+    ground_ch = ':' if is_city else '.'  # stone floor for cities (cobble looked bad)
     for dy in range(-half_h - 2, half_h + 3):
         for dx in range(-half_w - 2, half_w + 3):
             set_tile(tx + dx, ty + dy, ground_ch)
@@ -537,15 +537,46 @@ with open(out_path, 'w') as f:
     for row in grid:
         f.write(''.join(row) + '\n')
 
+# === PROCEDURAL DUNGEON NAME GENERATOR ===
+_dungeon_name_prefixes = {
+    "warrens":    ["Rat", "Mud", "Root", "Burrow", "Worm", "Crawl"],
+    "stonekeep":  ["Grey", "Iron", "Old", "Fallen", "Broken", "Silent"],
+    "deep_halls": ["Deep", "Vast", "Sunless", "Echoing", "Ancient", "Hollow"],
+    "catacombs":  ["Bone", "Dead", "Dust", "Grave", "Tomb", "Pale"],
+    "molten":     ["Ember", "Slag", "Char", "Cinder", "Scorch", "Ash"],
+    "sunken":     ["Drowned", "Tide", "Murk", "Flood", "Salt", "Damp"],
+}
+_dungeon_name_suffixes = {
+    "warrens":    ["Warren", "Tunnels", "Burrows", "Holes", "Dens", "Crawlway"],
+    "stonekeep":  ["Keep", "Hold", "Fortress", "Vault", "Bastion", "Citadel"],
+    "deep_halls": ["Halls", "Galleries", "Chambers", "Expanse", "Underhall", "Caverns"],
+    "catacombs":  ["Catacombs", "Ossuary", "Crypts", "Sepulcher", "Barrows", "Tombs"],
+    "molten":     ["Forge", "Crucible", "Furnace", "Pit", "Core", "Depths"],
+    "sunken":     ["Grotto", "Cistern", "Pools", "Reservoir", "Abyss", "Basin"],
+}
+_used_dungeon_names = set()
+
+def generate_dungeon_name(zone, rng):
+    """Generate a unique procedural name for a generic dungeon."""
+    prefixes = _dungeon_name_prefixes.get(zone, ["Dark", "Lost", "Hidden"])
+    suffixes = _dungeon_name_suffixes.get(zone, ["Dungeon", "Caves", "Ruins"])
+    for _ in range(50):
+        name = f"The {rng.choice(prefixes)} {rng.choice(suffixes)}"
+        if name not in _used_dungeon_names:
+            _used_dungeon_names.add(name)
+            return name
+    return f"The {prefixes[0]} {suffixes[0]}"  # fallback
+
 # === OUTPUT DUNGEON REGISTRY ===
 print("Writing dungeon registry...", flush=True)
+name_rng = random.Random(42)  # deterministic naming
 registry = []
 for dx_pos, dy_pos, name, zone, quest in all_dungeons:
     dx_pos = max(15, min(W - 15, dx_pos))
     dy_pos = max(15, min(H - 15, dy_pos))
     prov = get_province(dx_pos, dy_pos)
     entry = {
-        "name": name if name else f"Dungeon ({dx_pos}, {dy_pos})",
+        "name": name if name else generate_dungeon_name(zone, name_rng),
         "x": dx_pos,
         "y": dy_pos,
         "zone": zone,

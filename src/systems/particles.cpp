@@ -75,6 +75,33 @@ void ParticleSystem::trail(float x0, float y0, float x1, float y1, int count,
     }
 }
 
+void ParticleSystem::projectile(float x0, float y0, float x1, float y1, int count,
+                                 uint8_t r, uint8_t g, uint8_t b, float speed, int size) {
+    float dx = x1 - x0, dy = y1 - y0;
+    float dist = std::sqrt(dx * dx + dy * dy);
+    if (dist < 0.01f) dist = 1.0f;
+    float vx = (dx / dist) * speed;
+    float vy = (dy / dist) * speed;
+    float lifetime = dist / speed; // frames to reach target
+    float decay = 1.0f / std::max(1.0f, lifetime);
+
+    for (int i = 0; i < count; i++) {
+        // Stagger spawn: particles start at source with slight time offset
+        // Earlier particles are further along the path
+        float t_offset = static_cast<float>(i) / count * 0.3f; // 30% spread
+        float px = x0 + 0.5f + vx * t_offset * lifetime + randf_signed() * 0.15f;
+        float py = y0 + 0.5f + vy * t_offset * lifetime + randf_signed() * 0.15f;
+        // Add slight perpendicular jitter to velocity
+        float jx = randf_signed() * speed * 0.1f;
+        float jy = randf_signed() * speed * 0.1f;
+        particles_.push_back({
+            px, py,
+            vx + jx, vy + jy,
+            r, g, b, 0.8f + randf() * 0.2f, decay * (0.8f + randf() * 0.4f), size
+        });
+    }
+}
+
 // --- Presets (large, visible) ---
 
 void ParticleSystem::blood(float wx, float wy) {

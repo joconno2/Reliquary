@@ -4,10 +4,50 @@
 #include <cstdio>
 #include <algorithm>
 
+static void render_run_summary(SDL_Renderer* renderer, TTF_Font* font,
+                                int screen_w, int y_start, const RunSummary& s) {
+    if (s.turns == 0 && s.kills == 0) return; // no data
+    SDL_Color label = {120, 115, 110, 255};
+    SDL_Color value = {180, 175, 165, 255};
+    int line_h = TTF_FontLineSkip(font);
+    int y = y_start;
+    int cx = screen_w / 2;
+
+    ui::draw_text_centered(renderer, font, "-- Run Summary --", {140, 130, 120, 255}, cx, y);
+    y += line_h + 4;
+
+    char buf[128];
+    auto draw_stat = [&](const char* lbl, const char* val) {
+        SDL_Surface* ls = TTF_RenderText_Blended(font, lbl, label);
+        SDL_Surface* vs = TTF_RenderText_Blended(font, val, value);
+        if (ls && vs) {
+            int total_w = ls->w + 8 + vs->w;
+            SDL_Texture* lt = SDL_CreateTextureFromSurface(renderer, ls);
+            SDL_Texture* vt = SDL_CreateTextureFromSurface(renderer, vs);
+            SDL_Rect ld = {cx - total_w / 2, y, ls->w, ls->h};
+            SDL_Rect vd = {cx - total_w / 2 + ls->w + 8, y, vs->w, vs->h};
+            SDL_RenderCopy(renderer, lt, nullptr, &ld);
+            SDL_RenderCopy(renderer, vt, nullptr, &vd);
+            SDL_DestroyTexture(lt); SDL_DestroyTexture(vt);
+        }
+        if (ls) SDL_FreeSurface(ls);
+        if (vs) SDL_FreeSurface(vs);
+        y += line_h + 2;
+    };
+
+    if (!s.class_name.empty()) draw_stat("Class:", s.class_name.c_str());
+    snprintf(buf, sizeof(buf), "%d", s.turns); draw_stat("Turns:", buf);
+    snprintf(buf, sizeof(buf), "%d", s.kills); draw_stat("Kills:", buf);
+    snprintf(buf, sizeof(buf), "%d", s.deepest_floor); draw_stat("Deepest floor:", buf);
+    snprintf(buf, sizeof(buf), "%d", s.gold_earned); draw_stat("Gold earned:", buf);
+    snprintf(buf, sizeof(buf), "%d", s.quests_completed); draw_stat("Quests completed:", buf);
+}
+
 void render_death_screen(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_title,
                          int screen_w, int screen_h,
                          Uint32 elapsed_ms, const std::string& death_cause,
-                         int god_id, const std::vector<std::string>& newly_unlocked) {
+                         int god_id, const std::vector<std::string>& newly_unlocked,
+                         const RunSummary& summary) {
     // Fade-in: 0->255 alpha over 2 seconds
     int fade_alpha = std::min(255, static_cast<int>(elapsed_ms * 255 / 2000));
 
@@ -83,9 +123,14 @@ void render_death_screen(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_
         }
     }
 
+    // Run summary — fades in after 2 seconds
+    if (elapsed_ms >= 2000) {
+        render_run_summary(renderer, font, screen_w, screen_h / 3 + 100, summary);
+    }
+
     // Newly unlocked classes
     if (!newly_unlocked.empty()) {
-        int uy = screen_h / 2 + 20;
+        int uy = screen_h * 3 / 4;
         SDL_Color gold = {255, 220, 100, 255};
         ui::draw_text_centered(renderer, font, "Class unlocked:", gold, screen_w / 2, uy);
         uy += TTF_FontLineSkip(font) + 4;
@@ -104,7 +149,8 @@ void render_death_screen(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_
 
 void render_victory_screen(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_title,
                            int screen_w, int screen_h,
-                           int god_id, const std::vector<std::string>& newly_unlocked) {
+                           int god_id, const std::vector<std::string>& newly_unlocked,
+                           const RunSummary& summary) {
     // Darken screen
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     SDL_Rect overlay = {0, 0, screen_w, screen_h};
@@ -230,9 +276,12 @@ void render_victory_screen(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* fon
         y_pos += 24;
     }
 
+    // Run summary
+    render_run_summary(renderer, font, screen_w, y_pos + 10, summary);
+
     // Newly unlocked classes
     if (!newly_unlocked.empty()) {
-        int uy = y_pos + 20;
+        int uy = y_pos + 130;
         SDL_Color unlock_gold = {255, 220, 100, 255};
         ui::draw_text_centered(renderer, font, "Class unlocked:", unlock_gold, screen_w / 2, uy);
         uy += TTF_FontLineSkip(font) + 4;

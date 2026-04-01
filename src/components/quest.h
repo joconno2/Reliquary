@@ -359,4 +359,12 @@ struct QuestJournal {
             }
         }
     }
+
+    int count_completed() const {
+        int n = 0;
+        for (auto& e : entries)
+            if (e.state == QuestState::COMPLETE || e.state == QuestState::FINISHED)
+                n++;
+        return n;
+    }
 };

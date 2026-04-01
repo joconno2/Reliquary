@@ -27,6 +27,7 @@
 #include "ui/help_screen.h"
 #include "ui/world_map.h"
 #include "systems/particles.h"
+#include "ui/death_screen.h"
 #include "components/tenet.h"
 #include "components/traits.h"
 #include "components/stats.h"
@@ -35,6 +36,7 @@
 #include "components/status_effect.h"
 #include "components/god.h"
 #include "components/container.h"
+#include "components/spellbook.h"
 #include "core/audio.h"
 #include <vector>
 #include <string>
@@ -163,6 +165,8 @@ private:
     bool player_acted_ = false;
     MetaSave meta_; // persistent cross-run progression
     int run_kills_ = 0; // kills this run (for tracking)
+    int run_gold_earned_ = 0; // total gold picked up this run
+    int run_deepest_ = 0; // deepest dungeon floor reached
     std::vector<TraitId> build_traits_; // player's chosen traits (for runtime checks)
     bool hardcore_ = false; // permadeath mode
     PlayerActions turn_actions_; // action flags for tenet checking
@@ -175,6 +179,8 @@ private:
     Entity pet_naming_item_ = NULL_ENTITY; // the pet item being named
     std::vector<std::string> newly_unlocked_; // classes unlocked this run (for display)
     std::set<int> visited_towns_; // town indices visited this run (for arrival text)
+    int cached_near_town_ = -1; // cached near_town result (updated on move, not every frame)
+    const char* cached_location_ = "Wilderness"; // cached location string for HUD
 
     // UI
     InventoryScreen inventory_screen_;
@@ -191,6 +197,7 @@ private:
     LevelUpScreen levelup_screen_;
     bool pending_levelup_ = false;
     bool prayer_mode_ = false;
+    SpellId quick_cast_ = SpellId::COUNT; // COUNT = no spell equipped
     bool look_mode_ = false;
     int look_x_ = 0, look_y_ = 0;
     std::map<std::string, BestiaryEntry> bestiary_;
@@ -245,6 +252,7 @@ private:
     void update_music_for_location();
     void render_victory();
     void reset_to_main_menu();
+    RunSummary build_run_summary() const;
     void do_save();
     void do_load();
 };

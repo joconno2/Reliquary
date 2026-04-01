@@ -226,6 +226,10 @@ void Engine::do_save() {
     data.hardcore = hardcore_;
     data.traits = build_traits_;
     data.current_dungeon_idx = current_dungeon_idx_;
+    data.visited_towns = visited_towns_;
+    data.run_kills = run_kills_;
+    data.run_gold_earned = run_gold_earned_;
+    data.run_deepest = run_deepest_;
 
     if (save::save_game(save::default_path(), data, world_, player_, map_)) {
         // Save floor cache as separate file
@@ -258,6 +262,10 @@ void Engine::do_load() {
     hardcore_ = data.hardcore;
     build_traits_ = data.traits;
     current_dungeon_idx_ = data.current_dungeon_idx;
+    visited_towns_ = data.visited_towns;
+    run_kills_ = data.run_kills;
+    run_gold_earned_ = data.run_gold_earned;
+    run_deepest_ = data.run_deepest;
     floor_cache_.clear();
     load_floor_cache("save/floors.dat"); // restore all cached dungeon floors
 
@@ -581,6 +589,7 @@ void Engine::clear_entities_except_player() {
 
 void Engine::generate_level() {
     dungeon_level_++;
+    if (dungeon_level_ > run_deepest_) run_deepest_ = dungeon_level_;
 
     // Mark dynamic quests that require dungeon visits
     if (dungeon_level_ > 0) {
@@ -1719,7 +1728,7 @@ void Engine::try_move_player(int dx, int dy) {
             if (pet_item != NULL_ENTITY && world_.has<Item>(pet_item)
                 && world_.get<Item>(pet_item).pet_id == static_cast<int>(PetId::CROW)) {
                 int scav = rng_.range(1, 5 + dungeon_level_);
-                gold_ += scav;
+                gold_ += scav; run_gold_earned_ += scav;
                 char sbuf[64];
                 snprintf(sbuf, sizeof(sbuf), "Your crow scavenges %d gold.", scav);
                 log_.add(sbuf, {200, 190, 100, 255});
@@ -1778,6 +1787,13 @@ void Engine::try_move_player(int dx, int dy) {
     pos.y = ny;
     player_acted_ = true;
 
+    // Update cached location for HUD (avoids per-frame near_town calls)
+    if (dungeon_level_ == 0) {
+        cached_near_town_ = near_town(nx, ny, 25);
+        cached_location_ = (cached_near_town_ >= 0) ? ALL_TOWNS[cached_near_town_].name
+                                                      : get_province_name(nx, ny);
+    }
+
     // Town arrival text (first visit only)
     if (dungeon_level_ == 0) {
         int ti = near_town(nx, ny, 20);
@@ -1800,7 +1816,7 @@ void Engine::try_move_player(int dx, int dy) {
         if (ev <= 20) {
             // Find a small pouch of gold
             int amount = rng_.range(5, 20);
-            gold_ += amount;
+            gold_ += amount; run_gold_earned_ += amount;
             char buf[96];
             snprintf(buf, sizeof(buf), "You find a dropped coin purse. (%d gold)", amount);
             log_.add(buf, {255, 220, 80, 255});
@@ -2581,6 +2597,8 @@ void Engine::describe_tile(int x, int y) {
                     else if (st.name == "orc warchief") note = " Buffs nearby orcs.";
                     else if (st.name == "goblin archer") note = " Ranged attack.";
                     else if (st.name == "ghoul") note = " Causes bleeding.";
+                    else if (st.name == "bat") note = " Fast. Flees when hurt.";
+                    else if (st.name == "slime") note = " Slow. Regenerates.";
                     else if (is_undead(st.name.c_str())) note = " Undead.";
                     else if (is_animal(st.name.c_str())) note = " Beast.";
                     snprintf(buf, sizeof(buf), "%s. HP %d/%d, Dmg %d, Arm %d.%s",
@@ -2951,18 +2969,30 @@ void Engine::sepulchre_ambient() {
     }
 }
 
+RunSummary Engine::build_run_summary() const {
+    RunSummary s;
+    s.turns = game_turn_;
+    s.kills = run_kills_;
+    s.deepest_floor = run_deepest_;
+    s.gold_earned = run_gold_earned_;
+    s.quests_completed = journal_.count_completed();
+    auto build = creation_screen_.get_build();
+    s.class_name = get_class_info(build.class_id).name;
+    return s;
+}
+
 void Engine::render_victory() {
     int god_id = static_cast<int>(GodId::NONE);
     if (world_.has<GodAlignment>(player_))
         god_id = static_cast<int>(world_.get<GodAlignment>(player_).god);
     render_victory_screen(renderer_, font_, font_title_, width_, height_,
-                          god_id, newly_unlocked_);
+                          god_id, newly_unlocked_, build_run_summary());
 }
 
 void Engine::reset_to_main_menu() {
     player_ = NULL_ENTITY;
     pet_entity_ = NULL_ENTITY;
-    run_kills_ = 0;
+    run_kills_ = 0; run_gold_earned_ = 0; run_deepest_ = 0;
     hardcore_ = false;
     dungeon_level_ = -1;
     game_turn_ = 0;
@@ -3043,7 +3073,7 @@ void Engine::try_pickup() {
 
         // Gold is auto-collected
         if (item.type == ItemType::GOLD) {
-            gold_ += item.gold_value;
+            gold_ += item.gold_value; run_gold_earned_ += item.gold_value;
             char buf[64];
             snprintf(buf, sizeof(buf), "You pick up %d gold.", item.gold_value);
             log_.add(buf, {220, 200, 80, 255});
@@ -3657,7 +3687,17 @@ void Engine::handle_input() {
                 state_ = GameState::QUIT;
                 return;
             }
-            creation_screen_.handle_input(event);
+            bool consumed = creation_screen_.handle_input(event);
+            if (consumed && event.type == SDL_KEYDOWN)
+                audio_.play(SfxId::SELECT);
+            if (creation_screen_.is_cancelled()) {
+                // Return to main menu
+                state_ = GameState::MAIN_MENU;
+                main_menu_.set_can_continue(false);
+                audio_.play_music(MusicId::TITLE, 2000);
+                audio_.play_ambient(AmbientId::FIRE_CRACKLE, 1000);
+                continue;
+            }
             if (creation_screen_.is_done()) {
                 // Full reset for new game — clear any leftover state from previous run
                 player_ = NULL_ENTITY;
@@ -3666,7 +3706,7 @@ void Engine::handle_input() {
                 dungeon_level_ = -1;
                 game_turn_ = 0;
                 gold_ = 0;
-                run_kills_ = 0;
+                run_kills_ = 0; run_gold_earned_ = 0; run_deepest_ = 0;
                 journal_ = {};
                 overworld_return_x_ = 0;
                 overworld_return_y_ = 0;
@@ -3925,6 +3965,16 @@ void Engine::handle_input() {
                 SpellAction act = spell_screen_.handle_input(event);
                 if (act == SpellAction::CLOSE) {
                     spell_screen_.close();
+                } else if (act == SpellAction::QUICKCAST) {
+                    SpellId qs = spell_screen_.get_selected_spell(world_);
+                    if (qs != SpellId::COUNT) {
+                        quick_cast_ = qs;
+                        auto& qsi = get_spell_info(qs);
+                        char qbuf[128];
+                        snprintf(qbuf, sizeof(qbuf), "Quick-cast set: %s", qsi.name);
+                        log_.add(qbuf, {160, 180, 220, 255});
+                        spell_screen_.close();
+                    }
                 } else if (act == SpellAction::CAST) {
                     SpellId spell = spell_screen_.get_selected_spell(world_);
                     if (spell != SpellId::COUNT) {
@@ -3977,17 +4027,20 @@ void Engine::handle_input() {
                             auto& sp = world_.get<Position>(player_);
                             switch (spell) {
                                 case SpellId::SPARK:
-                                    if (has_target) particles_.burst(tx, ty, 12, 255, 255, 100, 0.12f, 0.4f, 5);
+                                    if (has_target) {
+                                        particles_.projectile(sp.x, sp.y, tx, ty, 8, 255, 255, 100, 0.35f, 4);
+                                        particles_.burst(tx, ty, 10, 255, 255, 140, 0.1f, 0.3f, 3);
+                                    }
                                     break;
                                 case SpellId::FORCE_BOLT:
                                     if (has_target) {
-                                        particles_.trail(sp.x, sp.y, tx, ty, 10, 140, 160, 255, 4);
+                                        particles_.projectile(sp.x, sp.y, tx, ty, 12, 140, 160, 255, 0.3f, 5);
                                         particles_.burst(tx, ty, 15, 160, 180, 255, 0.1f, 0.5f, 6);
                                     }
                                     break;
                                 case SpellId::FIREBALL:
                                     if (has_target) {
-                                        particles_.trail(sp.x, sp.y, tx, ty, 12, 255, 140, 40, 4);
+                                        particles_.projectile(sp.x, sp.y, tx, ty, 15, 255, 140, 40, 0.25f, 6);
                                         particles_.burst(tx, ty, 25, 255, 120, 30, 0.15f, 0.6f, 8);
                                         particles_.burst(tx, ty, 15, 255, 200, 60, 0.1f, 0.4f, 6);
                                     }
@@ -4027,14 +4080,14 @@ void Engine::handle_input() {
                                 // --- Conjuration: fire/ice/lightning ---
                                 case SpellId::ICE_SHARD:
                                     if (has_target) {
-                                        particles_.trail(sp.x, sp.y, tx, ty, 8, 140, 200, 255, 3);
+                                        particles_.projectile(sp.x, sp.y, tx, ty, 10, 140, 200, 255, 0.35f, 4);
                                         particles_.drift(tx, ty, 12, 180, 220, 255, 0.6f, 4);
                                     }
                                     break;
                                 case SpellId::LIGHTNING:
                                 case SpellId::CHAIN_LIGHTNING:
                                     if (has_target) {
-                                        particles_.trail(sp.x, sp.y, tx, ty, 15, 255, 255, 180, 2);
+                                        particles_.projectile(sp.x, sp.y, tx, ty, 18, 255, 255, 180, 0.5f, 2);
                                         particles_.burst(tx, ty, 20, 255, 255, 140, 0.2f, 0.3f, 3);
                                     }
                                     break;
@@ -4050,13 +4103,13 @@ void Engine::handle_input() {
                                     break;
                                 case SpellId::ACID_SPLASH:
                                     if (has_target) {
-                                        particles_.trail(sp.x, sp.y, tx, ty, 8, 120, 200, 40, 3);
+                                        particles_.projectile(sp.x, sp.y, tx, ty, 10, 120, 200, 40, 0.3f, 4);
                                         particles_.fall(tx, ty, 15, 100, 220, 40, 0.8f, 4);
                                     }
                                     break;
                                 case SpellId::DISINTEGRATE:
                                     if (has_target) {
-                                        particles_.trail(sp.x, sp.y, tx, ty, 20, 200, 40, 200, 2);
+                                        particles_.projectile(sp.x, sp.y, tx, ty, 22, 200, 40, 200, 0.4f, 3);
                                         particles_.burst(tx, ty, 25, 220, 60, 220, 0.2f, 0.5f, 4);
                                     }
                                     break;
@@ -4293,6 +4346,59 @@ void Engine::handle_input() {
                 // Fire ranged weapon
                 case SDLK_f:
                     fire_ranged();
+                    break;
+
+                // Quick-cast spell (v key)
+                case SDLK_v:
+                    if (quick_cast_ != SpellId::COUNT && world_.has<Spellbook>(player_)) {
+                        auto& qbook = world_.get<Spellbook>(player_);
+                        bool known = false;
+                        for (auto s : qbook.known_spells) if (s == quick_cast_) { known = true; break; }
+                        if (known) {
+                            auto& sinfo = get_spell_info(quick_cast_);
+                            int tx = 0, ty = 0;
+                            bool has_target = false;
+                            if (sinfo.hostile && sinfo.range > 0) {
+                                Entity tgt = magic::nearest_enemy(world_, player_, map_, sinfo.range);
+                                if (tgt != NULL_ENTITY && world_.has<Position>(tgt)) {
+                                    auto& tp = world_.get<Position>(tgt);
+                                    tx = tp.x; ty = tp.y; has_target = true;
+                                }
+                            }
+                            auto result = magic::cast(world_, player_, quick_cast_, map_, rng_, log_);
+                            if (result.consumed_turn) player_acted_ = true;
+                            if (result.success) {
+                                switch (sinfo.school) {
+                                    case SpellSchool::CONJURATION: audio_.play(SfxId::SPELL_FIRE); break;
+                                    case SpellSchool::TRANSMUTATION: audio_.play(SfxId::SPELL_BUFF); break;
+                                    case SpellSchool::DIVINATION: audio_.play(SfxId::SPELL_ICE); break;
+                                    case SpellSchool::HEALING: audio_.play(SfxId::HEAL); break;
+                                    case SpellSchool::NATURE: audio_.play(SfxId::SPELL_EARTH); break;
+                                    case SpellSchool::DARK_ARTS: audio_.play(SfxId::SPELL_IMPACT); break;
+                                    default: audio_.play(SfxId::SPELL); break;
+                                }
+                                if (sinfo.school == SpellSchool::DARK_ARTS) {
+                                    meta_.total_dark_arts_casts++;
+                                    turn_actions_.used_dark_arts = true;
+                                }
+                                if (quick_cast_ == SpellId::FIREBALL) turn_actions_.used_fire_magic = true;
+                                if (sinfo.school == SpellSchool::HEALING) turn_actions_.used_healing_magic = true;
+                                // Particles for quick-cast (simplified — burst at target or self)
+                                auto& sp = world_.get<Position>(player_);
+                                if (has_target) {
+                                    particles_.trail(sp.x, sp.y, tx, ty, 10, 160, 180, 255, 3);
+                                    particles_.burst(tx, ty, 15, 180, 160, 220, 0.1f, 0.5f, 5);
+                                } else {
+                                    particles_.burst(sp.x, sp.y, 12, 140, 200, 160, 0.08f, 0.5f, 4);
+                                }
+                            }
+                        } else {
+                            log_.add("You no longer know that spell.", {180, 140, 120, 255});
+                            quick_cast_ = SpellId::COUNT;
+                        }
+                    } else if (quick_cast_ == SpellId::COUNT) {
+                        log_.add("No quick-cast spell set. Press z then q on a spell.", {140, 135, 130, 255});
+                    }
                     break;
 
                 // Rest
@@ -4836,6 +4942,23 @@ void Engine::render_hud() {
         }
     }
 
+    // Quick-cast spell indicator
+    if (quick_cast_ != SpellId::COUNT) {
+        auto& qsi = get_spell_info(quick_cast_);
+        char qbuf[64];
+        snprintf(qbuf, sizeof(qbuf), "[v] %s", qsi.name);
+        SDL_Color qc_col = {120, 140, 180, 255};
+        SDL_Surface* qs = TTF_RenderText_Blended(font_, qbuf, qc_col);
+        if (qs) {
+            SDL_Texture* qt = SDL_CreateTextureFromSurface(renderer_, qs);
+            SDL_Rect qd = {cursor + 4, bar_y, qs->w, qs->h};
+            SDL_RenderCopy(renderer_, qt, nullptr, &qd);
+            cursor += qs->w + 8;
+            SDL_DestroyTexture(qt);
+            SDL_FreeSurface(qs);
+        }
+    }
+
     // Help hint
     {
         SDL_Color hint = {65, 60, 55, 255};
@@ -4857,17 +4980,8 @@ void Engine::render_hud() {
     }
     char info[128];
     if (dungeon_level_ <= 0) {
-        // Show nearest town name, or province if in the wilderness
-        const char* location = "Wilderness";
-        if (world_.has<Position>(player_)) {
-            auto& pp = world_.get<Position>(player_);
-            int ti = near_town(pp.x, pp.y, 25);
-            if (ti >= 0) {
-                location = ALL_TOWNS[ti].name;
-            } else {
-                location = get_province_name(pp.x, pp.y);
-            }
-        }
+        // Use cached location (updated on player move, not every frame)
+        const char* location = cached_location_;
         // Day/night indicator
         int phase = game_turn_ % 100;
         const char* time_icon = (phase >= 50 && phase < 90) ? "Night" :
@@ -5003,7 +5117,7 @@ void Engine::render() {
         if (world_.has<GodAlignment>(player_))
             god_id = static_cast<int>(world_.get<GodAlignment>(player_).god);
         render_death_screen(renderer_, font_, font_title_, width_, height_,
-                            elapsed, death_cause_, god_id, newly_unlocked_);
+                            elapsed, death_cause_, god_id, newly_unlocked_, build_run_summary());
     }
 
     if (state_ == GameState::VICTORY) {

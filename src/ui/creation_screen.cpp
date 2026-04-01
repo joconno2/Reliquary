@@ -24,6 +24,7 @@ void CreationScreen::randomize_name() {
 void CreationScreen::reset() {
     phase_ = CreationPhase::CLASS_SELECT;
     selected_ = 0;
+    cancelled_ = false;
     build_ = {};
     bg_screen_.reset();
     trait_screen_.reset();
@@ -195,7 +196,9 @@ bool CreationScreen::handle_input(SDL_Event& event) {
             return true;
         case SDLK_ESCAPE:
         case SDLK_BACKSPACE:
-            if (phase_ == CreationPhase::GOD_SELECT) {
+            if (phase_ == CreationPhase::CLASS_SELECT) {
+                cancelled_ = true; // return to main menu
+            } else if (phase_ == CreationPhase::GOD_SELECT) {
                 phase_ = CreationPhase::NAME_ENTRY;
             }
             return true;
@@ -328,11 +331,14 @@ void CreationScreen::render_class_select(SDL_Renderer* renderer, TTF_Font* font,
         sprites.draw_sprite_sized(renderer, SHEET_ROGUES, c.sprite_x, c.sprite_y,
                                    sx, sy, sprite_sz, tint);
 
-        // Name below sprite (use title font for readability)
+        // Name below sprite (clipped to cell width to prevent overlap)
         SDL_Color ncol = unlocked ? (is_sel ? sel_col : normal_col) : lock_col;
+        SDL_Rect cell_clip = {margin + col * cell_w, sy + sprite_sz, cell_w, line_h + 8};
+        SDL_RenderSetClipRect(renderer, &cell_clip);
         ui::draw_text_centered(renderer, font_title ? font_title : font,
                                 unlocked ? c.name : "???", ncol,
                                 cx, sy + sprite_sz + 4);
+        SDL_RenderSetClipRect(renderer, nullptr);
     }
 
     // === Bottom info area: selected class details ===
@@ -481,12 +487,16 @@ void CreationScreen::render_god_select(SDL_Renderer* renderer, TTF_Font* font,
         SDL_Rect dot = {list_x - 2, gy + 6, 4, line_h - 4};
         SDL_RenderFillRect(renderer, &dot);
 
+        // Clip god text to list column width
+        SDL_Rect god_clip = {list_x, gy, list_w, god_item_h};
+        SDL_RenderSetClipRect(renderer, &god_clip);
         char buf[128];
         snprintf(buf, sizeof(buf), "%s, %s", god.name, god.title);
         ui::draw_text(renderer, font, buf, is_sel ? sel_col : normal_col, list_x + 6, gy + 4);
 
         snprintf(buf, sizeof(buf), "  %s", god.domain);
         ui::draw_text(renderer, font, buf, dim_col, list_x + 6, gy + line_h + 6);
+        SDL_RenderSetClipRect(renderer, nullptr);
     }
 
     // Detail panel

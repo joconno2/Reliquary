@@ -36,6 +36,7 @@ public:
 
     void reset();
     bool is_done() const { return phase_ == CreationPhase::DONE; }
+    bool is_cancelled() const { return cancelled_; }
     CharacterBuild get_build() const { return build_; }
     void set_unlocked(const bool* unlocks, int count); // called before rendering
     void set_unlock_progress(int class_idx, const char* progress); // "32/50 kills"
@@ -48,6 +49,7 @@ public:
 private:
     CreationPhase phase_ = CreationPhase::CLASS_SELECT;
     int selected_ = 0;
+    bool cancelled_ = false;
     CharacterBuild build_;
     bool cursor_blink_ = false;
     int blink_timer_ = 0;

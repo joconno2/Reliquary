@@ -127,6 +127,16 @@ bool save_game(const std::string& path, const SaveData& data,
         traits.push_back(static_cast<int>(t));
     root["traits"] = traits;
 
+    // Visited towns
+    json vtowns = json::array();
+    for (auto t : data.visited_towns) vtowns.push_back(t);
+    root["visited_towns"] = vtowns;
+
+    // Run stats
+    root["run_kills"] = data.run_kills;
+    root["run_gold_earned"] = data.run_gold_earned;
+    root["run_deepest"] = data.run_deepest;
+
     // Quest journal
     json quests = json::array();
     for (auto& e : data.journal.entries) {
@@ -350,6 +360,17 @@ SaveData load_game(const std::string& path, World& world, TileMap& map) {
         for (auto& t : root["traits"])
             data.traits.push_back(static_cast<TraitId>(t.get<int>()));
     }
+
+    // Visited towns
+    if (root.contains("visited_towns")) {
+        for (auto& t : root["visited_towns"])
+            data.visited_towns.insert(t.get<int>());
+    }
+
+    // Run stats
+    data.run_kills = root.value("run_kills", 0);
+    data.run_gold_earned = root.value("run_gold_earned", 0);
+    data.run_deepest = root.value("run_deepest", 0);
 
     // Quests
     if (root.contains("quests")) {

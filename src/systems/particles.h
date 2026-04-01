@@ -31,6 +31,10 @@ public:
     void trail(float x0, float y0, float x1, float y1, int count,
                uint8_t r, uint8_t g, uint8_t b, int size = 1);
 
+    // Streaming projectile — particles spawn at source with velocity toward target
+    void projectile(float x0, float y0, float x1, float y1, int count,
+                    uint8_t r, uint8_t g, uint8_t b, float speed = 0.3f, int size = 3);
+
     // Presets
     void blood(float wx, float wy);
     void hit_spark(float wx, float wy);

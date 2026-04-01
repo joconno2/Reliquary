@@ -7,7 +7,8 @@
 enum class SpellAction {
     NONE,
     CLOSE,
-    CAST, // cast selected spell
+    CAST,       // cast selected spell
+    QUICKCAST,  // set selected spell as quick-cast
 };
 
 class SpellScreen {

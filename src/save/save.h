@@ -7,6 +7,7 @@
 #include "generation/dungeon.h"
 #include <string>
 #include <vector>
+#include <set>
 
 struct SaveData {
     // Player state
@@ -30,6 +31,14 @@ struct SaveData {
 
     // Dungeon persistence
     int current_dungeon_idx = -1;
+
+    // Visited towns (for arrival text)
+    std::set<int> visited_towns;
+
+    // Run stats
+    int run_kills = 0;
+    int run_gold_earned = 0;
+    int run_deepest = 0;
 
     bool valid = false;
 };

@@ -126,6 +126,7 @@ void HelpScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_t
         {"Bump",      "Melee attack"},
         {"f",         "Ranged attack"},
         {"z then c",  "Cast a spell"},
+        {"v",         "Quick-cast spell"},
         {"p",         "Use god prayer"},
     };
     for (auto& b : combat) {

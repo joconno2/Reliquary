@@ -99,7 +99,7 @@
     "patron_god_idx": 11
   },
   {
-    "name": "Dungeon (167, 608)",
+    "name": "The Crawl Warren",
     "x": 167,
     "y": 608,
     "zone": "warrens",
@@ -110,7 +110,7 @@
     "patron_god_idx": 5
   },
   {
-    "name": "Dungeon (238, 894)",
+    "name": "The Grey Citadel",
     "x": 238,
     "y": 894,
     "zone": "stonekeep",
@@ -121,7 +121,7 @@
     "patron_god_idx": 4
   },
   {
-    "name": "Dungeon (605, 280)",
+    "name": "The Sunless Galleries",
     "x": 605,
     "y": 280,
     "zone": "deep_halls",
@@ -132,7 +132,7 @@
     "patron_god_idx": 11
   },
   {
-    "name": "Dungeon (1777, 138)",
+    "name": "The Dead Ossuary",
     "x": 1777,
     "y": 138,
     "zone": "catacombs",
@@ -143,7 +143,7 @@
     "patron_god_idx": 11
   },
   {
-    "name": "Dungeon (836, 1158)",
+    "name": "The Ash Forge",
     "x": 836,
     "y": 1158,
     "zone": "molten",
@@ -154,7 +154,7 @@
     "patron_god_idx": 12
   },
   {
-    "name": "Dungeon (1211, 740)",
+    "name": "The Damp Basin",
     "x": 1211,
     "y": 740,
     "zone": "sunken",
@@ -165,7 +165,7 @@
     "patron_god_idx": 9
   },
   {
-    "name": "Dungeon (757, 166)",
+    "name": "The Worm Warren",
     "x": 757,
     "y": 166,
     "zone": "warrens",
@@ -176,7 +176,7 @@
     "patron_god_idx": 11
   },
   {
-    "name": "Dungeon (386, 336)",
+    "name": "The Broken Vault",
     "x": 386,
     "y": 336,
     "zone": "stonekeep",
@@ -187,7 +187,7 @@
     "patron_god_idx": 11
   },
   {
-    "name": "Dungeon (750, 1208)",
+    "name": "The Deep Halls",
     "x": 750,
     "y": 1208,
     "zone": "deep_halls",
@@ -198,7 +198,7 @@
     "patron_god_idx": 12
   },
   {
-    "name": "Dungeon (743, 562)",
+    "name": "The Bone Ossuary",
     "x": 743,
     "y": 562,
     "zone": "catacombs",
@@ -209,7 +209,7 @@
     "patron_god_idx": 5
   },
   {
-    "name": "Dungeon (395, 63)",
+    "name": "The Slag Core",
     "x": 395,
     "y": 63,
     "zone": "molten",
@@ -220,7 +220,7 @@
     "patron_god_idx": 11
   },
   {
-    "name": "Dungeon (1915, 953)",
+    "name": "The Salt Grotto",
     "x": 1915,
     "y": 953,
     "zone": "sunken",
@@ -231,7 +231,7 @@
     "patron_god_idx": 9
   },
   {
-    "name": "Dungeon (1644, 239)",
+    "name": "The Worm Tunnels",
     "x": 1644,
     "y": 239,
     "zone": "warrens",
@@ -242,7 +242,7 @@
     "patron_god_idx": 11
   },
   {
-    "name": "Dungeon (1859, 1283)",
+    "name": "The Silent Citadel",
     "x": 1859,
     "y": 1283,
     "zone": "stonekeep",
@@ -253,7 +253,7 @@
     "patron_god_idx": 12
   },
   {
-    "name": "Dungeon (833, 203)",
+    "name": "The Hollow Underhall",
     "x": 833,
     "y": 203,
     "zone": "deep_halls",
@@ -264,7 +264,7 @@
     "patron_god_idx": 11
   },
   {
-    "name": "Dungeon (73, 706)",
+    "name": "The Grave Ossuary",
     "x": 73,
     "y": 706,
     "zone": "catacombs",
@@ -275,7 +275,7 @@
     "patron_god_idx": 4
   },
   {
-    "name": "Dungeon (1559, 978)",
+    "name": "The Cinder Core",
     "x": 1559,
     "y": 978,
     "zone": "molten",
@@ -286,7 +286,7 @@
     "patron_god_idx": 9
   },
   {
-    "name": "Dungeon (268, 149)",
+    "name": "The Murk Grotto",
     "x": 268,
     "y": 149,
     "zone": "sunken",

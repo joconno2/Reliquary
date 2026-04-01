@@ -23,6 +23,8 @@ SpellAction SpellScreen::handle_input(SDL_Event& event) {
         case SDLK_RETURN:
         case SDLK_c:
             return SpellAction::CAST;
+        case SDLK_q:
+            return SpellAction::QUICKCAST;
         default:
             // a-z quick select
             if (event.key.keysym.sym >= SDLK_a && event.key.keysym.sym <= SDLK_z) {
@@ -110,17 +112,23 @@ void SpellScreen::render(SDL_Renderer* renderer, TTF_Font* font,
 
         char letter = 'a' + static_cast<char>(i);
         char buf[128];
+        // Truncate spell name to fit before school/cost columns
+        int name_max = panel_w - 140; // leave room for school + cost
         snprintf(buf, sizeof(buf), "%c) %s", letter, info.name);
+        // Clip rendering to name column
+        SDL_Rect name_clip = {panel_x + 10, y, name_max, line_h + 2};
+        SDL_RenderSetClipRect(renderer, &name_clip);
         ui::draw_text(renderer, font, buf, is_sel ? sel_col : normal_col, panel_x + 10, y);
+        SDL_RenderSetClipRect(renderer, nullptr);
 
-        // School tag
+        // School tag + MP cost in fixed right columns
         static const char* SCHOOL_NAMES[] = {"CONJ", "TRAN", "DIV", "HEAL", "NAT", "DARK"};
         int si = static_cast<int>(info.school);
         if (si >= 0 && si < 6)
-            ui::draw_text(renderer, font, SCHOOL_NAMES[si], dim_col, panel_x + panel_w - 110, y);
+            ui::draw_text(renderer, font, SCHOOL_NAMES[si], dim_col, panel_x + panel_w - 115, y);
 
         char cost[16];
-        snprintf(cost, sizeof(cost), "%d mp", info.mp_cost);
+        snprintf(cost, sizeof(cost), "%dmp", info.mp_cost);
         ui::draw_text(renderer, font, cost, cost_col, panel_x + panel_w - 55, y);
 
         y += line_h + 2;
@@ -150,5 +158,5 @@ void SpellScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     }
 
     // Hint
-    ui::draw_text(renderer, font, "[enter]cast [esc]close", dim_col, panel_x + 10, panel_y + panel_h - line_h - 6);
+    ui::draw_text(renderer, font, "[enter]cast [q]quick-cast [esc]close", dim_col, panel_x + 10, panel_y + panel_h - line_h - 6);
 }
