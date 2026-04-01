@@ -34,7 +34,9 @@ struct MonsterDef {
 static const MonsterDef MONSTER_TABLE[] = {
     // Early game
     {"giant rat",       SHEET_MONSTERS, 11, 6,  6,   6, 14,  6,  2, 0, 130, 40,  10},
+    {"bat",             SHEET_MONSTERS, 11, 7,  4,   4, 16,  4,  1, 0, 150, 70,   5},
     {"kobold",          SHEET_MONSTERS,  0, 9,  6,   6, 12,  6,  1, 0, 120, 35,  10},
+    {"slime",           SHEET_MONSTERS,  7, 6, 16,   6,  4, 14,  2, 0,  60,  0,  15},
     {"goblin",          SHEET_MONSTERS,  2, 0,  8,   8, 12,  8,  2, 0, 110, 30,  15},
     {"giant spider",    SHEET_MONSTERS,  8, 6, 12,  10, 12,  8,  3, 1, 120, 20,  20},
     {"goblin archer",   SHEET_MONSTERS,  5, 0, 10,   8, 14,  8,  3, 0, 110, 25,  20},
@@ -61,10 +63,10 @@ void spawn_monsters(World& world, const TileMap& map,
                      const std::vector<Room>& rooms, RNG& rng,
                      int dungeon_level) {
     // Monster pool range scales with dungeon depth
-    // Depth 1: indices 0-5 (rats, kobolds, goblins, spiders)
-    // Depth 3+: indices 0-10 (adds warchiefs, trolls)
+    // Depth 1: indices 0-7 (rats, bats, kobolds, slimes, goblins, spiders)
+    // Depth 3+: indices 0-12 (adds warchiefs, trolls)
     // Depth 5+: full table including dragons
-    int max_idx = std::min(MONSTER_COUNT - 1, 4 + dungeon_level * 2);
+    int max_idx = std::min(MONSTER_COUNT - 1, 6 + dungeon_level * 2);
 
     for (size_t r = 1; r < rooms.size(); r++) {
         auto& room = rooms[r];

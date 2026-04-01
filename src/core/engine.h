@@ -39,6 +39,7 @@
 #include <vector>
 #include <string>
 #include <map>
+#include <set>
 
 // Screen-space weather particle (not tile-based)
 struct WeatherParticle {
@@ -173,6 +174,7 @@ private:
     std::string pet_name_buf_; // pet name being typed
     Entity pet_naming_item_ = NULL_ENTITY; // the pet item being named
     std::vector<std::string> newly_unlocked_; // classes unlocked this run (for display)
+    std::set<int> visited_towns_; // town indices visited this run (for arrival text)
 
     // UI
     InventoryScreen inventory_screen_;

@@ -132,6 +132,38 @@ void populate(World& world, TileMap& map, RNG& rng,
     spawn_ow_npc(1600, 1100, "Madman", "I HEARD IT. Under the stone. Breathing.", NPCRole::FARMER, 1, 6);
 
     // =============================================
+    // PROVINCE-SPECIFIC WANDERING NPCs
+    // =============================================
+
+    // Frozen Marches (Gathruun) — fur traders, mountain folk
+    spawn_ow_npc(1050, 350, "Fur Trader", "Pelts from the deep north fetch good coin in the Heartlands.", NPCRole::SHOPKEEPER, 2, 5);
+    spawn_ow_npc(900, 300, "Mountain Guide", "I know every pass in the Marches. For a price.", NPCRole::FARMER, 2, 5);
+    spawn_ow_npc(1200, 280, "Ice Miner", "The glacier caves have veins of mithril. If you survive the cold.", NPCRole::FARMER, 4, 5);
+
+    // Pale Reach (Soleth) — zealots, lamplighters
+    spawn_ow_npc(1100, 500, "Lamplighter", "I keep the road torches lit. Soleth's work, even out here.", NPCRole::FARMER, 1, 5);
+    spawn_ow_npc(1300, 550, "Soleth Zealot", "The pale flame cleanses all. Even you.", NPCRole::PRIEST, 5, 5);
+
+    // Greenwood (Khael) — druids, woodcutters, herbalists
+    spawn_ow_npc(500, 800, "Druid", "The forest remembers what you've done. Tread carefully.", NPCRole::PRIEST, 4, 5);
+    spawn_ow_npc(620, 900, "Woodcutter", "The trees grow back faster than we can cut them. Khael's blessing.", NPCRole::FARMER, 1, 5);
+    spawn_ow_npc(450, 700, "Herb Gatherer", "The best frostcap mushrooms grow near the old ruins.", NPCRole::SHOPKEEPER, 3, 5);
+
+    // Iron Coast (Ossren) — smiths, merchant caravans
+    spawn_ow_npc(1350, 800, "Caravan Guard", "We move iron from the coast to the Heartlands. Dangerous work.", NPCRole::GUARD, 0, 5);
+    spawn_ow_npc(1500, 750, "Itinerant Smith", "I shoe horses and mend armor. The road is my forge.", NPCRole::SHOPKEEPER, 4, 5);
+    spawn_ow_npc(1400, 900, "Ore Hauler", "Ossren's gift is heavy. My back can testify.", NPCRole::FARMER, 1, 5);
+
+    // Dust Provinces (Sythara) — refugees, scavengers, outcasts
+    spawn_ow_npc(1100, 1100, "Scavenger", "The old towns south of here have been picked clean. Almost.", NPCRole::FARMER, 1, 5);
+    spawn_ow_npc(850, 1150, "Outcast", "Exiled from three towns. The dust is my home now.", NPCRole::FARMER, 0, 5);
+    spawn_ow_npc(1200, 1200, "Plague Doctor", "I treat the blighted. Sythara's children need someone.", NPCRole::PRIEST, 5, 5);
+
+    // Heartlands (Morreth) — soldiers, farmers, merchants
+    spawn_ow_npc(1000, 800, "Patrol Soldier", "Morreth's reach keeps the roads safe. Mostly.", NPCRole::GUARD, 2, 5);
+    spawn_ow_npc(900, 700, "Merchant", "Good trade between Thornwall and Ashford. If the highwaymen don't get you.", NPCRole::SHOPKEEPER, 2, 5);
+
+    // =============================================
     // ENCAMPMENTS (small NPC + lore clusters)
     // =============================================
 

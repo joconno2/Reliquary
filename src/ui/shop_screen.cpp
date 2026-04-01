@@ -64,7 +64,7 @@ static ShopItem make_shop_item(const ShopItemDef& def) {
     return si;
 }
 
-void ShopScreen::generate_stock(RNG& rng, int difficulty) {
+void ShopScreen::generate_stock(RNG& rng, int difficulty, GodId province_god) {
     stock_.clear();
 
     // Difficulty scales: 0 = starting area, 4 = mid-game, 8 = endgame
@@ -74,11 +74,19 @@ void ShopScreen::generate_stock(RNG& rng, int difficulty) {
     int min_weapon = std::min(difficulty / 2, SHOP_WEAPON_COUNT - 2);
     int min_armor = std::min(difficulty / 2, SHOP_ARMOR_COUNT - 2);
 
+    // Province modifiers: more weapons/less on Iron Coast, more potions in Greenwood, etc.
+    int extra_weapons = 0, extra_armor = 0, extra_potions = 0;
+    bool stock_antidote = false;
+    if (province_god == GodId::OSSREN) { extra_weapons = 2; extra_armor = 1; } // Iron Coast — forge/craft
+    else if (province_god == GodId::KHAEL) { extra_potions = 2; stock_antidote = true; } // Greenwood — nature/herbs
+    else if (province_god == GodId::MORRETH) { extra_weapons = 1; extra_armor = 1; } // Heartlands — war
+    else if (province_god == GodId::SYTHARA) { stock_antidote = true; } // Dust Provinces — plague
+
     // Bonus damage/armor on items from higher-difficulty shops
     int stat_bonus = difficulty / 3; // +0 at diff 0-2, +1 at 3-5, +2 at 6-8
 
-    // Pick 3-4 weapons — assign materials based on town difficulty
-    int n_weapons = rng.range(3, 4);
+    // Pick 3-4 weapons (+ province bonus) — assign materials based on town difficulty
+    int n_weapons = rng.range(3, 4) + extra_weapons;
     for (int i = 0; i < n_weapons; i++) {
         int idx = rng.range(min_weapon, SHOP_WEAPON_COUNT - 1);
         auto si = make_shop_item(SHOP_WEAPONS[idx]);
@@ -119,8 +127,8 @@ void ShopScreen::generate_stock(RNG& rng, int difficulty) {
 
         stock_.push_back(std::move(si));
     }
-    // Pick 3-4 armor pieces
-    int n_armor = rng.range(3, 4);
+    // Pick 3-4 armor pieces (+ province bonus)
+    int n_armor = rng.range(3, 4) + extra_armor;
     for (int i = 0; i < n_armor; i++) {
         int idx = rng.range(min_armor, SHOP_ARMOR_COUNT - 1);
         auto si = make_shop_item(SHOP_ARMOR[idx]);
@@ -130,8 +138,8 @@ void ShopScreen::generate_stock(RNG& rng, int difficulty) {
         else if (stat_bonus >= 1) si.item.name = "Sturdy " + si.item.name;
         stock_.push_back(std::move(si));
     }
-    // Pick 2-3 consumables — more potent at higher difficulty
-    int n_cons = rng.range(2, 3);
+    // Pick 2-3 consumables (+ province bonus) — more potent at higher difficulty
+    int n_cons = rng.range(2, 3) + extra_potions;
     for (int i = 0; i < n_cons; i++) {
         int idx = rng.range(0, SHOP_CONS_COUNT - 1);
         auto si = make_shop_item(SHOP_CONSUMABLES[idx]);
@@ -140,6 +148,19 @@ void ShopScreen::generate_stock(RNG& rng, int difficulty) {
             si.item.heal_amount += difficulty * 2;
             si.item.gold_value += difficulty * 5;
         }
+        stock_.push_back(std::move(si));
+    }
+
+    // Province-specific: antidote in Greenwood/Dust Provinces
+    if (stock_antidote) {
+        ShopItem si;
+        si.item.name = "antidote";
+        si.item.description = "Cures poison.";
+        si.item.type = ItemType::POTION;
+        si.item.heal_amount = 0;
+        si.item.gold_value = 20;
+        si.item.unid_name = "green potion";
+        si.sprite_x = 1; si.sprite_y = 19;
         stock_.push_back(std::move(si));
     }
 
@@ -191,14 +212,14 @@ void ShopScreen::generate_stock(RNG& rng, int difficulty) {
     }
 }
 
-void ShopScreen::open(Entity player, [[maybe_unused]] World& world, RNG& rng, int* gold, int difficulty, int price_mult) {
+void ShopScreen::open(Entity player, [[maybe_unused]] World& world, RNG& rng, int* gold, int difficulty, int price_mult, GodId province_god) {
     open_ = true;
     selected_ = 0;
     player_ = player;
     gold_ = gold;
     price_mult_ = price_mult;
     buy_tab_ = true;
-    generate_stock(rng, difficulty);
+    generate_stock(rng, difficulty, province_god);
     // Apply price multiplier to stock
     if (price_mult_ != 100) {
         for (auto& si : stock_)

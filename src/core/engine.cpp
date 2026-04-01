@@ -1156,6 +1156,64 @@ void Engine::generate_level() {
                 }
             }
         }
+
+        // Special rooms — pick one mid-room (not first/last) for a special purpose
+        if (rooms_.size() >= 5 && dungeon_level_ >= 2) {
+            int special_idx = rng_.range(2, static_cast<int>(rooms_.size()) - 2);
+            auto& sr = rooms_[special_idx];
+            int roll = rng_.range(1, 100);
+
+            if (roll <= 20) {
+                // Flooded chamber — fill most of the room with water
+                for (int sy = sr.y; sy < sr.y + sr.h; sy++) {
+                    for (int sx = sr.x; sx < sr.x + sr.w; sx++) {
+                        if (!map_.in_bounds(sx, sy)) continue;
+                        // Leave a 1-tile dry border for walkability
+                        bool edge = (sx == sr.x || sx == sr.x + sr.w - 1 ||
+                                     sy == sr.y || sy == sr.y + sr.h - 1);
+                        if (!edge && map_.at(sx, sy).type == params.floor_type) {
+                            map_.at(sx, sy).type = TileType::WATER;
+                        }
+                    }
+                }
+            } else if (roll <= 40 && dungeon_level_ >= 3) {
+                // Treasure vault — extra chests spawned by populate, mark floor as distinct
+                for (int sy = sr.y; sy < sr.y + sr.h; sy++) {
+                    for (int sx = sr.x; sx < sr.x + sr.w; sx++) {
+                        if (!map_.in_bounds(sx, sy)) continue;
+                        if (map_.at(sx, sy).type == params.floor_type) {
+                            map_.at(sx, sy).type = TileType::FLOOR_RED_STONE;
+                        }
+                    }
+                }
+                // Spawn 2-4 extra chests in the vault
+                for (int ci = 0; ci < rng_.range(2, 4); ci++) {
+                    int cx = rng_.range(sr.x + 1, sr.x + sr.w - 2);
+                    int cy = rng_.range(sr.y + 1, sr.y + sr.h - 2);
+                    if (!map_.in_bounds(cx, cy) || !map_.is_walkable(cx, cy)) continue;
+                    Entity chest = world_.create();
+                    world_.add<Position>(chest, {cx, cy});
+                    world_.add<Renderable>(chest, {SHEET_TILES, 0, 17, {255,255,255,255}, 1});
+                    Container cont;
+                    cont.open_sprite_x = 1; cont.open_sprite_y = 17;
+                    cont.contents.name = "gold coins"; cont.contents.type = ItemType::GOLD;
+                    cont.contents.gold_value = rng_.range(20, 50 + dungeon_level_ * 10);
+                    cont.contents.stack = cont.contents.gold_value;
+                    cont.contents.stackable = true; cont.contents.identified = true;
+                    world_.add<Container>(chest, std::move(cont));
+                }
+            } else if (roll <= 55) {
+                // Bone crypt — floor littered with remains
+                for (int sy = sr.y; sy < sr.y + sr.h; sy++) {
+                    for (int sx = sr.x; sx < sr.x + sr.w; sx++) {
+                        if (!map_.in_bounds(sx, sy)) continue;
+                        if (map_.at(sx, sy).type == params.floor_type && rng_.chance(50)) {
+                            map_.at(sx, sy).type = TileType::FLOOR_BONE;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // Create or reposition player
@@ -1207,10 +1265,34 @@ void Engine::generate_level() {
             if (paragon != NULL_ENTITY) {
                 auto& pgalign = world_.get<GodAlignment>(paragon);
                 auto& ginfo = get_god_info(pgalign.god);
+                auto& pstats = world_.get<Stats>(paragon);
+                // Dramatic multi-line intro
+                log_.add("The air grows heavy.", {180, 140, 180, 255});
                 char pbuf[128];
                 snprintf(pbuf, sizeof(pbuf),
-                    "You sense a presence. Another paragon — a servant of %s.", ginfo.name);
-                log_.add(pbuf, {200, 160, 200, 255});
+                    "%s, Paragon of %s, bars your way.", pstats.name.c_str(), ginfo.name);
+                log_.add(pbuf, {220, 170, 220, 255});
+                // Taunt based on god
+                static const char* TAUNTS[] = {
+                    "\"The dead will claim you.\"",           // Vethrik
+                    "\"Your ignorance ends here.\"",          // Thessarka
+                    "\"Stand and face me.\"",                 // Morreth
+                    "\"I smell your blood already.\"",        // Yashkhet
+                    "\"Nature turns against you.\"",          // Khael
+                    "\"Burn in the pale flame.\"",            // Soleth
+                    "\"Chaos takes what order builds.\"",     // Ixuul
+                    "\"You won't see the blade.\"",           // Zhavek
+                    "\"The tide answers to me.\"",            // Thalara
+                    "\"My steel is harder than yours.\"",     // Ossren
+                    "\"Sleep now. Forever.\"",                // Lethis
+                    "\"The mountain will not move for you.\"", // Gathruun
+                    "\"Breathe deep. It will be your last.\"", // Sythara
+                };
+                int gi = static_cast<int>(pgalign.god);
+                if (gi >= 0 && gi < 13)
+                    log_.add(TAUNTS[gi], {200, 180, 220, 255});
+                audio_.play(SfxId::SPELL_IMPACT);
+                trigger_screen_shake(3.0f);
             }
         }
 
@@ -1483,10 +1565,22 @@ void Engine::try_move_player(int dx, int dy) {
             if (journal_.has_quest(qid) && journal_.get_state(qid) == QuestState::ACTIVE) {
                 journal_.set_state(qid, QuestState::COMPLETE);
                 auto& qinfo = get_quest_info(qid);
+                // Flavor text based on quest type
+                bool is_main = (static_cast<int>(qid) < 20); // main quests are low IDs
+                if (is_main) {
+                    log_.add("The threat is ended. The path forward opens.", {140, 220, 140, 255});
+                } else {
+                    static const char* DONE[] = {
+                        "It's done. Time to collect your reward.",
+                        "Another problem solved. Head back to town.",
+                        "The deed is done.",
+                    };
+                    log_.add(DONE[rng_.range(0, 2)], {120, 200, 120, 255});
+                }
                 char qbuf[128];
-                snprintf(qbuf, sizeof(qbuf), "Quest objective complete: %s", qinfo.name);
+                snprintf(qbuf, sizeof(qbuf), "Quest complete: %s", qinfo.name);
                 log_.add(qbuf, {120, 220, 120, 255});
-                log_.add("Return to the quest giver.", {160, 155, 140, 255});
+                audio_.play(SfxId::QUEST);
             }
         }
 
@@ -1683,6 +1777,88 @@ void Engine::try_move_player(int dx, int dy) {
     pos.x = nx;
     pos.y = ny;
     player_acted_ = true;
+
+    // Town arrival text (first visit only)
+    if (dungeon_level_ == 0) {
+        int ti = near_town(nx, ny, 20);
+        if (ti >= 0 && visited_towns_.find(ti) == visited_towns_.end()) {
+            visited_towns_.insert(ti);
+            char tbuf[128];
+            snprintf(tbuf, sizeof(tbuf), "You arrive at %s.", ALL_TOWNS[ti].name);
+            log_.add(tbuf, {200, 190, 160, 255});
+            // Province flavor
+            const char* province = get_province_name(nx, ny);
+            char pbuf[128];
+            snprintf(pbuf, sizeof(pbuf), "A settlement in the %s.", province);
+            log_.add(pbuf, {160, 155, 140, 255});
+        }
+    }
+
+    // Overworld travel events — rare roadside discoveries
+    if (dungeon_level_ == 0 && near_town(nx, ny, 40) < 0 && rng_.chance(2)) {
+        int ev = rng_.range(1, 100);
+        if (ev <= 20) {
+            // Find a small pouch of gold
+            int amount = rng_.range(5, 20);
+            gold_ += amount;
+            char buf[96];
+            snprintf(buf, sizeof(buf), "You find a dropped coin purse. (%d gold)", amount);
+            log_.add(buf, {255, 220, 80, 255});
+            audio_.play(SfxId::GOLD);
+        } else if (ev <= 35) {
+            // Abandoned campsite with supplies
+            static const char* FINDS[] = {
+                "An abandoned campsite. Bread left behind.",
+                "A traveler's pack, discarded. A potion inside.",
+                "An old camp. Dried meat, still edible.",
+            };
+            log_.add(FINDS[rng_.range(0, 2)], {180, 170, 140, 255});
+            // Spawn a food/potion item at player position
+            Entity loot = world_.create();
+            world_.add<Position>(loot, {nx, ny});
+            Item item;
+            if (ev <= 25) {
+                item.name = "bread"; item.description = "Restores 8 HP.";
+                item.type = ItemType::FOOD; item.heal_amount = 8;
+                item.gold_value = 5; item.identified = true;
+            } else {
+                item.name = "healing potion"; item.description = "Restores 15 HP.";
+                item.type = ItemType::POTION; item.heal_amount = 15;
+                item.gold_value = 25; item.unid_name = "red potion";
+            }
+            world_.add<Renderable>(loot, {SHEET_ITEMS, 1, item.type == ItemType::FOOD ? 25 : 19,
+                                          {255,255,255,255}, 1});
+            world_.add<Item>(loot, std::move(item));
+        } else if (ev <= 55) {
+            // Atmospheric flavor — no reward, just world-building
+            static const char* FLAVOR[] = {
+                "Old wheel ruts in the dirt. A cart passed recently.",
+                "A faded trail marker, half-buried.",
+                "Boot prints in the mud. Someone was running.",
+                "A crow watches you from a dead tree.",
+                "Wildflowers grow over an old grave.",
+                "Broken arrows scattered on the ground. A fight happened here.",
+                "A stone boundary marker. The inscription is worn smooth.",
+                "Wind carries the smell of smoke from somewhere distant.",
+            };
+            log_.add(FLAVOR[rng_.range(0, 7)], {140, 135, 120, 255});
+        } else if (ev <= 70) {
+            // Province-specific flavor
+            const char* prov = get_province_name(nx, ny);
+            if (std::string(prov) == "Frozen Marches")
+                log_.add("Frost clings to the rocks here. Even the air bites.", {160, 180, 200, 255});
+            else if (std::string(prov) == "Greenwood")
+                log_.add("The canopy thickens. Birdsong echoes between the trunks.", {100, 160, 100, 255});
+            else if (std::string(prov) == "Dust Provinces")
+                log_.add("Dust devils spin in the distance. The land is parched.", {180, 160, 120, 255});
+            else if (std::string(prov) == "Iron Coast")
+                log_.add("Salt air and the sound of distant hammers.", {150, 160, 170, 255});
+            else if (std::string(prov) == "Pale Reach")
+                log_.add("The wind carries ash. Braziers burn on a distant hill.", {180, 160, 140, 255});
+            else
+                log_.add("Rolling fields stretch to the horizon. Heartland country.", {150, 160, 130, 255});
+        }
+    }
 
     // Terrain-aware footsteps (not every step — ~40% chance)
     if (rng_.chance(40)) {
@@ -1922,11 +2098,13 @@ void Engine::process_turn() {
                 else if (mname == "basilisk" && rng_.chance(15))
                     fx.add(StatusType::BLIND, 0, 3);
             }
-            // Troll regeneration — heals 2 HP per turn if alive
+            // Troll/slime regeneration — heals HP per turn if alive
             if (world_.has<Stats>(e)) {
                 auto& ms = world_.get<Stats>(e);
                 if (ms.name == "troll" && ms.hp > 0 && ms.hp < ms.hp_max)
                     ms.hp = std::min(ms.hp_max, ms.hp + 2);
+                if (ms.name == "slime" && ms.hp > 0 && ms.hp < ms.hp_max)
+                    ms.hp = std::min(ms.hp_max, ms.hp + 1);
             }
             // Skeleton shield — 25% chance to block melee attacks entirely
             // (already handled implicitly by high natural_armor, but add message)
@@ -2675,8 +2853,13 @@ void Engine::sepulchre_ambient() {
             "The air is stale down here.",
             "Something rustles in the shadows.",
             "A distant grinding of stone.",
+            "Dust motes drift through your torchlight.",
+            "The passage narrows ahead.",
+            "An old cobweb brushes your face.",
+            "You hear your own breathing, and nothing else.",
+            "A pebble shifts under your boot.",
         };
-        log_.add(GENERIC[rng_.range(0, 4)], {120, 115, 110, 255});
+        log_.add(GENERIC[rng_.range(0, 9)], {120, 115, 110, 255});
         return;
     }
 
@@ -2705,36 +2888,52 @@ void Engine::sepulchre_ambient() {
             static const char* W[] = {
                 "Rats skitter in the walls.", "The dirt ceiling sags.", "A damp, earthy smell.",
                 "Roots hang from the ceiling like fingers.", "Something wet drips on your neck.",
+                "The tunnel narrows to a crawl ahead.", "Insect legs brush the back of your hand.",
+                "A nest of something. Recently abandoned.", "The walls are scored with claw marks.",
+                "Fungus grows thick on the ceiling. Some of it pulses faintly.",
             };
-            log_.add(W[rng_.range(0, 4)], {140, 130, 100, 255});
+            log_.add(W[rng_.range(0, 9)], {140, 130, 100, 255});
         } else if (zone == "stonekeep") {
             static const char* S[] = {
                 "Ancient mortar crumbles at your touch.", "The stonework here is older than the towns above.",
                 "A cold wind blows through cracks in the wall.", "Iron sconces, long since empty.",
                 "Your torch light catches old scratches on the walls.",
+                "A collapsed archway blocks a side passage.", "Someone carved a warning here. The words are worn away.",
+                "The flagstones are cracked from something heavy.", "An old iron chain hangs from the ceiling.",
+                "These halls were built to last. They did.",
             };
-            log_.add(S[rng_.range(0, 4)], {130, 130, 140, 255});
+            log_.add(S[rng_.range(0, 9)], {130, 130, 140, 255});
         } else if (zone == "catacombs") {
             static const char* C[] = {
                 "Bones are stacked floor to ceiling.", "The dead are everywhere, but not all of them stay still.",
                 "A faint moan from deeper in.", "The air tastes like dust and copper.",
                 "Names are carved into every surface. Thousands of them.",
+                "A jaw has fallen from its skull. It looks like it was screaming.",
+                "Candle stubs litter the floor. Someone was here recently.",
+                "The dead were laid to rest with care. That care has faded.",
+                "Grave offerings have been picked clean.", "The walls are lined with alcoves. Not all of them are empty.",
             };
-            log_.add(C[rng_.range(0, 4)], {140, 120, 130, 255});
+            log_.add(C[rng_.range(0, 9)], {140, 120, 130, 255});
         } else if (zone == "molten") {
             static const char* M[] = {
                 "The heat is almost unbearable.", "Lava glows in the cracks between stones.",
                 "The rock walls radiate warmth.", "Sulphur stings your nostrils.",
                 "The ground trembles slightly.",
+                "Smoke curls from vents in the floor.", "The metal of your gear is warm to the touch.",
+                "A distant rumble shakes loose dust from the ceiling.", "The air shimmers with heat haze.",
+                "Something molten drips from above. You step aside.",
             };
-            log_.add(M[rng_.range(0, 4)], {160, 120, 80, 255});
+            log_.add(M[rng_.range(0, 9)], {160, 120, 80, 255});
         } else if (zone == "sunken") {
             static const char* SU[] = {
                 "Water seeps through every crack.", "The walls are slick with moisture.",
                 "Your boots splash in shallow water.", "The water here is unnaturally still.",
                 "Something moves beneath the water.",
+                "The ceiling drips steadily. It sounds like a heartbeat.", "Waterlogged wood floats past.",
+                "The water level has risen since you entered this room.", "Pale fish dart away from your torchlight.",
+                "Salt crusts the walls at knee height. The water was deeper once.",
             };
-            log_.add(SU[rng_.range(0, 4)], {100, 130, 150, 255});
+            log_.add(SU[rng_.range(0, 9)], {100, 130, 150, 255});
         } else if (zone == "deep_halls") {
             static const char* D[] = {
                 "The architecture here predates anything on the surface.",
@@ -2742,8 +2941,12 @@ void Engine::sepulchre_ambient() {
                 "Old banners hang in tatters from the walls.",
                 "The stonework is precise beyond anything you've seen.",
                 "Something about the proportions is wrong. Built for something larger.",
+                "Pillars thick as ancient trees line the hall.", "Your footsteps echo for a long time.",
+                "A draft from below. There are deeper levels than this.",
+                "Carvings on the wall depict a civilization you don't recognize.",
+                "The silence here has weight.",
             };
-            log_.add(D[rng_.range(0, 4)], {130, 125, 140, 255});
+            log_.add(D[rng_.range(0, 9)], {130, 125, 140, 255});
         }
     }
 }
@@ -2771,6 +2974,7 @@ void Engine::reset_to_main_menu() {
     overworld_loaded_ = false;
     current_dungeon_idx_ = -1;
     build_traits_.clear();
+    visited_towns_.clear();
     world_ = World();
     state_ = GameState::MAIN_MENU;
     main_menu_.set_can_continue(false);
@@ -3471,6 +3675,7 @@ void Engine::handle_input() {
                 overworld_loaded_ = false;
                 current_dungeon_idx_ = -1;
                 build_traits_.clear();
+                visited_towns_.clear();
                 log_ = MessageLog();
                 bestiary_.clear();
 
@@ -3487,6 +3692,11 @@ void Engine::handle_input() {
                     entry.kills = 0; // kills reset per run, totals tracked in meta
                 }
                 generate_level();
+
+                // Opening messages
+                log_.add("You arrive at the outskirts of Thornwall.", {180, 170, 150, 255});
+                log_.add("Rumors of ancient evil stir beneath the land.", {150, 140, 130, 255});
+                log_.add("Press ? for help.  Press q for your quest journal.", {120, 130, 110, 255});
             }
             return;
         }
@@ -4145,6 +4355,44 @@ void Engine::handle_input() {
                         ascending_ = false; // going down
                         generate_level(); // increments dungeon_level_
                         audio_.play(SfxId::STAIRS);
+
+                        // Dungeon entrance text (first floor only)
+                        if (dungeon_level_ == 1 && current_dungeon_idx_ >= 0 &&
+                            current_dungeon_idx_ < static_cast<int>(dungeon_registry_.size())) {
+                            auto& de = dungeon_registry_[current_dungeon_idx_];
+                            char ebuf[128];
+                            snprintf(ebuf, sizeof(ebuf), "You descend into %s.", de.name.c_str());
+                            log_.add(ebuf, {180, 170, 150, 255});
+                            // Zone-flavored entrance line
+                            if (de.zone == "warrens")
+                                log_.add("Dirt walls close in around you. The air is thick.", {140, 130, 100, 255});
+                            else if (de.zone == "stonekeep")
+                                log_.add("Worked stone stretches into darkness. This place is old.", {130, 130, 140, 255});
+                            else if (de.zone == "catacombs")
+                                log_.add("The dead lie in their alcoves, watching.", {140, 120, 130, 255});
+                            else if (de.zone == "molten")
+                                log_.add("Heat hits you like a wall. The stone glows red.", {160, 120, 80, 255});
+                            else if (de.zone == "sunken")
+                                log_.add("Water echoes from every direction. The floor is wet.", {100, 130, 150, 255});
+                            else if (de.zone == "deep_halls")
+                                log_.add("The ceiling vanishes above you. Something vast was built here.", {130, 125, 140, 255});
+                            else if (de.zone == "sepulchre")
+                                log_.add("The air turns cold. You feel something notice you.", {130, 100, 130, 255});
+                        } else if (dungeon_level_ >= 2) {
+                            // Deeper floor descent text
+                            static const char* DEEPER[] = {
+                                "Deeper. The air grows heavier.",
+                                "The stairs crumble behind you.",
+                                "Darkness swallows the passage above.",
+                                "The walls press closer. Or is it your imagination?",
+                                "Something shifts in the dark below.",
+                                "You descend further. The silence thickens.",
+                            };
+                            log_.add(DEEPER[rng_.range(0, 5)], {140, 135, 130, 255});
+                            char dbuf[64];
+                            snprintf(dbuf, sizeof(dbuf), "Depth %d.", dungeon_level_);
+                            log_.add(dbuf, {120, 115, 110, 255});
+                        }
                     } else if (tile_type == TileType::STAIRS_UP &&
                                event.key.keysym.sym != SDLK_GREATER) {
                         if (dungeon_level_ > 1) {

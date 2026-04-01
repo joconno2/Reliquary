@@ -38,7 +38,7 @@ void HelpScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_t
     SDL_Color section_col = {170, 150, 120, 255};
     SDL_Color dim_col = {100, 95, 90, 255};
 
-    ui::draw_text_centered(renderer, font_title, "Keybinds", title_col, cx, y);
+    ui::draw_text_centered(renderer, font_title, "Help", title_col, cx, y);
     y += (font_title ? TTF_FontLineSkip(font_title) : line_h) + 10;
 
     int col1 = px + 20;
@@ -56,7 +56,7 @@ void HelpScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_t
     Bind movement[] = {
         {"Arrows/hjkl", "Move cardinal"},
         {"yubn/Numpad", "Move diagonal"},
-        {"./Numpad 5",  "Wait"},
+        {"./Numpad 5",  "Wait one turn"},
     };
     for (auto& b : movement) {
         ui::draw_text(renderer, font, b.key, key_col, col1, ly);
@@ -69,10 +69,12 @@ void HelpScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_t
     ly += line_h + 4;
 
     Bind actions[] = {
-        {"Enter / >",  "Descend stairs"},
-        {"< / Enter",  "Ascend stairs"},
-        {"g / ,",      "Pick up item"},
-        {"r",          "Rest (heal)"},
+        {"Enter / > / <", "Use stairs"},
+        {"g / ,",         "Pick up item"},
+        {"f",             "Fire ranged weapon"},
+        {"r",             "Rest (heal HP/MP)"},
+        {"p",             "Pray (god ability)"},
+        {"x",             "Examine / look"},
     };
     for (auto& b : actions) {
         ui::draw_text(renderer, font, b.key, key_col, col1, ly);
@@ -89,6 +91,8 @@ void HelpScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_t
         {"c",   "Character sheet"},
         {"z",   "Spellbook"},
         {"q",   "Quest journal"},
+        {"M",   "World map"},
+        {"Tab", "Bestiary"},
         {"Esc", "Pause menu"},
     };
     for (auto& b : screens) {
@@ -107,7 +111,6 @@ void HelpScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_t
         {"u",         "Use (eat/drink)"},
         {"d",         "Drop item"},
         {"Right-click","Equip"},
-        {"a-z",       "Quick select"},
     };
     for (auto& b : inv) {
         ui::draw_text(renderer, font, b.key, key_col, col3, ry);
@@ -116,32 +119,52 @@ void HelpScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_t
     }
 
     ry += 8;
-    ui::draw_text(renderer, font, "-- Spellbook --", section_col, col3, ry);
+    ui::draw_text(renderer, font, "-- Combat --", section_col, col3, ry);
     ry += line_h + 4;
 
-    Bind spells[] = {
-        {"c / Enter", "Cast spell"},
-        {"z / Esc",   "Close"},
+    Bind combat[] = {
+        {"Bump",      "Melee attack"},
+        {"f",         "Ranged attack"},
+        {"z then c",  "Cast a spell"},
+        {"p",         "Use god prayer"},
     };
-    for (auto& b : spells) {
+    for (auto& b : combat) {
         ui::draw_text(renderer, font, b.key, key_col, col3, ry);
         ui::draw_text(renderer, font, b.desc, desc_col, col4, ry);
         ry += line_h + 2;
     }
 
     ry += 8;
-    ui::draw_text(renderer, font, "-- Other --", section_col, col3, ry);
+    ui::draw_text(renderer, font, "-- System --", section_col, col3, ry);
     ry += line_h + 4;
 
-    Bind other[] = {
-        {"F11", "Fullscreen"},
+    Bind system[] = {
+        {"F5",  "Quicksave"},
+        {"F6",  "Quickload"},
+        {"F11", "Toggle fullscreen"},
         {"F12", "Screenshot"},
-        {"Tab", "Switch tabs"},
         {"?",   "This screen"},
     };
-    for (auto& b : other) {
+    for (auto& b : system) {
         ui::draw_text(renderer, font, b.key, key_col, col3, ry);
         ui::draw_text(renderer, font, b.desc, desc_col, col4, ry);
+        ry += line_h + 2;
+    }
+
+    ry += 8;
+    ui::draw_text(renderer, font, "-- Tips --", section_col, col3, ry);
+    ry += line_h + 4;
+
+    SDL_Color tip_col = {130, 140, 120, 255};
+    const char* tips[] = {
+        "Bump into NPCs to talk/trade.",
+        "Explore towns for quests.",
+        "Rest heals but may be interrupted.",
+        "Heavy armor causes spell failure.",
+        "Follow signs on roads for directions.",
+    };
+    for (auto& tip : tips) {
+        ui::draw_text(renderer, font, tip, tip_col, col3, ry);
         ry += line_h + 2;
     }
 

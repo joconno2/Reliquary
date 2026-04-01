@@ -13,6 +13,7 @@
 #include "components/stats.h"
 #include "components/position.h"
 #include "components/dynamic_quest.h"
+#include "data/world_data.h"
 #include "components/quest.h"
 #include "save/meta.h"
 #include <cstdio>
@@ -49,6 +50,13 @@ bool interact(Context& ctx, Entity target, int target_x, int target_y) {
         return std::min(8, static_cast<int>(d / 80.0f));
     };
 
+    // Province god for shop stock variety
+    auto calc_province_god = [&]() -> GodId {
+        if (!ctx.world.has<Position>(target)) return GodId::NONE;
+        auto& sp = ctx.world.get<Position>(target);
+        return get_town_god(sp.x, sp.y);
+    };
+
     // Shop pricing: excommunication, god faction loyalty/rivalry
     auto calc_shop_price_mult = [&]() -> int {
         if (!ctx.world.has<GodAlignment>(ctx.player)) return 100;
@@ -70,7 +78,7 @@ bool interact(Context& ctx, Entity target, int target_x, int target_y) {
             ctx.log.add("The merchant seems wary of your faith. Prices are higher.", {200, 180, 120, 255});
         else if (pm < 100)
             ctx.log.add("The merchant gives you a knowing nod. A fellow believer.", {140, 200, 160, 255});
-        ctx.shop_screen.open(ctx.player, ctx.world, ctx.rng, &ctx.gold, calc_shop_diff(), pm);
+        ctx.shop_screen.open(ctx.player, ctx.world, ctx.rng, &ctx.gold, calc_shop_diff(), pm, calc_province_god());
         return true;
     }
     // Merchant with dynamic quest: show dialogue + quest, then can shop next time
@@ -84,7 +92,7 @@ bool interact(Context& ctx, Entity target, int target_x, int target_y) {
                 ctx.log.add("The merchant seems wary of your faith. Prices are higher.", {200, 180, 120, 255});
             else if (pm < 100)
                 ctx.log.add("The merchant gives you a knowing nod. A fellow believer.", {140, 200, 160, 255});
-            ctx.shop_screen.open(ctx.player, ctx.world, ctx.rng, &ctx.gold, calc_shop_diff(), pm);
+            ctx.shop_screen.open(ctx.player, ctx.world, ctx.rng, &ctx.gold, calc_shop_diff(), pm, calc_province_god());
             return true;
         }
     }

@@ -5,6 +5,7 @@
 #include "core/rng.h"
 #include "core/spritesheet.h"
 #include "components/item.h"
+#include "components/god.h"
 #include <vector>
 #include <string>
 
@@ -25,7 +26,7 @@ class ShopScreen {
 public:
     ShopScreen() = default;
 
-    void open(Entity player, World& world, RNG& rng, int* gold, int difficulty = 0, int price_mult = 100);
+    void open(Entity player, World& world, RNG& rng, int* gold, int difficulty = 0, int price_mult = 100, GodId province_god = GodId::NONE);
     void close() { open_ = false; }
     bool is_open() const { return open_; }
 
@@ -47,5 +48,5 @@ private:
     bool buy_tab_ = true; // true = Buy, false = Sell
     std::vector<ShopItem> stock_;
 
-    void generate_stock(RNG& rng, int difficulty = 0);
+    void generate_stock(RNG& rng, int difficulty = 0, GodId province_god = GodId::NONE);
 };
