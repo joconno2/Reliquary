@@ -1,6 +1,7 @@
 #include "systems/render.h"
 #include "components/position.h"
 #include "components/renderable.h"
+#include "components/death_anim.h"
 #include <algorithm>
 #include <vector>
 #include <cmath>
@@ -16,7 +17,8 @@ static bool is_floor_type(TileType type) {
     return type == TileType::FLOOR_STONE || type == TileType::FLOOR_DIRT ||
            type == TileType::FLOOR_GRASS || type == TileType::FLOOR_BONE ||
            type == TileType::FLOOR_RED_STONE || type == TileType::FLOOR_SAND ||
-           type == TileType::FLOOR_ICE || type == TileType::FLOOR_SNOW;
+           type == TileType::FLOOR_ICE || type == TileType::FLOOR_SNOW ||
+           type == TileType::FLOOR_COBBLE;
 }
 
 // Floor tile row in spritesheet (tiles.txt group - 1)
@@ -30,6 +32,7 @@ static int floor_row(TileType type) {
         case TileType::FLOOR_SAND:      return 7;  // row 8 in tiles.txt = row 7, cols 7-13
         case TileType::FLOOR_ICE:       return 12;  // blue stone floor (dungeons)
         case TileType::FLOOR_SNOW:      return 6;   // row 7 in tiles.txt = row 6, cols 7-13
+        case TileType::FLOOR_COBBLE:    return 8;   // row 9 in tiles.txt = row 8, cols 7-13
         default: return 6;
     }
 }
@@ -38,7 +41,8 @@ static int floor_row(TileType type) {
 static int floor_col_offset(TileType type) {
     switch (type) {
         case TileType::FLOOR_SNOW: return 7;  // cols 7-13 on stone floor row
-        case TileType::FLOOR_SAND: return 7;  // cols 7-13 on grass floor row
+        case TileType::FLOOR_SAND: return 7;    // cols 7-13 on grass floor row
+        case TileType::FLOOR_COBBLE: return 7;  // cols 7-13 on dirt floor row
         default: return 0;
     }
 }
@@ -152,7 +156,8 @@ void draw_map(SDL_Renderer* renderer, const SpriteManager& sprites,
                 } else if ((tile.type >= TileType::WALL_DIRT && tile.type <= TileType::WALL_CATACOMB)
                            || tile.type == TileType::WALL_WOOD
                            || tile.type == TileType::WALL_GRASS
-                           || tile.type == TileType::WALL_SANDSTONE) {
+                           || tile.type == TileType::WALL_SANDSTONE
+                           || tile.type == TileType::WALL_ICE) {
                     // Walls: side view if tile below is not a wall (player sees the face)
                     // top view if tile below is also a wall (looking down at it)
                     int top_col = 0, side_col = 1, wall_row = 0;
@@ -166,13 +171,15 @@ void draw_map(SDL_Renderer* renderer, const SpriteManager& sprites,
                         case TileType::WALL_WOOD:        wall_row = 1; top_col = 2; side_col = 3; break;
                         case TileType::WALL_GRASS:       wall_row = 3; top_col = 2; side_col = 3; break;
                         case TileType::WALL_SANDSTONE:   wall_row = 4; top_col = 2; side_col = 3; break;
+                        case TileType::WALL_ICE:         wall_row = 0; top_col = 3; side_col = 4; break;
                         default: wall_row = 2; break;
                     }
                     auto is_any_wall = [](TileType t) {
                         return (t >= TileType::WALL_DIRT && t <= TileType::WALL_CATACOMB)
                                || t == TileType::WALL_WOOD
                                || t == TileType::WALL_GRASS
-                               || t == TileType::WALL_SANDSTONE;
+                               || t == TileType::WALL_SANDSTONE
+                               || t == TileType::WALL_ICE;
                     };
                     bool show_side = true;
                     if (y + 1 < map.height()) {
@@ -273,8 +280,23 @@ void draw_entities(SDL_Renderer* renderer, const SpriteManager& sprites,
         int screen_x = (pos.x - cam.x) * TS;
         int screen_y = (pos.y - cam.y) * TS + y_offset;
 
+        SDL_Color tint = rend.tint;
+        if (world.has<DeathAnim>(e)) {
+            auto& da = world.get<DeathAnim>(e);
+            float t = da.timer / da.duration; // 0..1 progress
+            if (t < 0.25f) {
+                // Flash white for first 25%
+                tint = {255, 255, 255, 255};
+            } else {
+                // Fade alpha from 255 to 0 over remaining 75%
+                float fade = 1.0f - (t - 0.25f) / 0.75f;
+                if (fade < 0.0f) fade = 0.0f;
+                tint.a = static_cast<Uint8>(fade * 255.0f);
+            }
+        }
+
         cmds.push_back({rend.z_order, rend.sprite_sheet, rend.sprite_x, rend.sprite_y,
-                         screen_x, screen_y, rend.tint, rend.flip_h});
+                         screen_x, screen_y, tint, rend.flip_h});
     }
 
     std::sort(cmds.begin(), cmds.end(),

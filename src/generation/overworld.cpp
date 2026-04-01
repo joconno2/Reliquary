@@ -574,6 +574,15 @@ void populate(World& world, TileMap& map, RNG& rng,
             int ty = y + rng.range(-2, 2);
             if (!map.in_bounds(tx, ty)) continue;
             if (!map.is_walkable(tx, ty)) continue;
+            // Don't place on or adjacent to doors (blocks entry)
+            bool near_door = false;
+            for (int dy = -1; dy <= 1 && !near_door; dy++)
+                for (int dx = -1; dx <= 1 && !near_door; dx++)
+                    if (map.in_bounds(tx+dx, ty+dy) &&
+                        (map.at(tx+dx, ty+dy).type == TileType::DOOR_CLOSED ||
+                         map.at(tx+dx, ty+dy).type == TileType::DOOR_OPEN))
+                        near_door = true;
+            if (near_door) continue;
             // Don't place on top of existing entities
             if (combat::entity_at(world, tx, ty, NULL_ENTITY) != NULL_ENTITY) continue;
             Entity e = world.create();

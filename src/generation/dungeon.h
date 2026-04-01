@@ -18,9 +18,12 @@ struct Room {
 struct DungeonParams {
     int width = 80;
     int height = 50;
-    int room_min = 5;
-    int room_max = 12;
+    int room_min_w = 5;    // minimum room width
+    int room_max_w = 12;   // maximum room width
+    int room_min_h = 5;    // minimum room height
+    int room_max_h = 12;   // maximum room height
     int max_rooms = 15;
+    int corridor_width = 1; // width of carved corridors (1-3)
     TileType wall_type = TileType::WALL_STONE_BRICK;
     TileType floor_type = TileType::FLOOR_STONE;
 };

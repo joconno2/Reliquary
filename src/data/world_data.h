@@ -93,6 +93,16 @@ inline const char* compass_dir(int from_x, int from_y, int to_x, int to_y) {
     return "west";
 }
 
+// Province name from world position (matches get_town_god zones).
+inline const char* get_province_name(int x, int y) {
+    if (y < 400) return "Frozen Marches";
+    if (y < 600 && x > 900) return "Pale Reach";
+    if (x < 700) return "Greenwood";
+    if (y > 1000) return "Dust Provinces";
+    if (x > 1100) return "Iron Coast";
+    return "Heartlands";
+}
+
 inline float world_dist(int x1, int y1, int x2, int y2) {
     float dx = static_cast<float>(x1 - x2);
     float dy = static_cast<float>(y1 - y2);

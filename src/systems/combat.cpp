@@ -6,6 +6,7 @@
 #include "components/energy.h"
 #include "components/player.h"
 #include "components/corpse.h"
+#include "components/death_anim.h"
 #include "components/inventory.h"
 #include "components/item.h"
 #include "components/quest_target.h"
@@ -396,11 +397,16 @@ int kill(World& world, Entity e, [[maybe_unused]] MessageLog& log) {
     if (world.has<AI>(e)) world.remove<AI>(e);
     if (world.has<Energy>(e)) world.remove<Energy>(e);
 
-    if (world.has<Renderable>(e)) {
+    if (world.has<Renderable>(e) && !world.has<DeathAnim>(e)) {
         auto& rend = world.get<Renderable>(e);
-        rend.sprite_sheet = SHEET_TILES;
-        rend.sprite_x = 0;
-        rend.sprite_y = 21;
+        DeathAnim da;
+        da.original_sheet = rend.sprite_sheet;
+        da.original_sx = rend.sprite_x;
+        da.original_sy = rend.sprite_y;
+        da.original_flip_h = rend.flip_h;
+        world.add<DeathAnim>(e, da);
+        // Keep original sprite visible during dissolve; z_order lowered so
+        // living entities draw on top
         rend.z_order = -1;
     }
 

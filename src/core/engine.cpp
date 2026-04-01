@@ -24,6 +24,7 @@
 #include "components/disease.h"
 #include "components/pet.h"
 #include "components/quest_target.h"
+#include "components/death_anim.h"
 #include "components/dynamic_quest.h"
 #include "ui/ui_draw.h"
 #include "ui/death_screen.h"
@@ -170,6 +171,7 @@ bool Engine::init() {
     }
 
     audio_.init();
+    settings_.set_audio(&audio_);
     meta_ = meta::load();
 
     // Title screen music + ambients — slow fade in
@@ -734,7 +736,7 @@ void Engine::generate_level() {
                     npc_comp.role = NPCRole::BLACKSMITH;
                     npc_comp.name = "Blacksmith";
                     npc_comp.dialogue = pick_dialogue(BLACKSMITH_DIALOGUE, 3, me.x, me.y);
-                    sx = 4; sy = 6;
+                    sx = 4; sy = 5; // blacksmith sprite (row 6)
                     // Side quest: Thornwall blacksmith
                     if (town_idx == 0 && !sq_blacksmith_assigned) {
                         npc_comp.quest_id = static_cast<int>(QuestId::SQ_DELIVER_WEAPON);
@@ -752,7 +754,7 @@ void Engine::generate_level() {
                     npc_comp.role = NPCRole::PRIEST;
                     npc_comp.name = "Scholar";
                     npc_comp.dialogue = pick_dialogue(SCHOLAR_DIALOGUE, 3, me.x, me.y);
-                    sx = 5; sy = 6; // scholar sprite (group 7)
+                    sx = 5; sy = 5; // scholar sprite (row 6)
                     // MQ_02: Thornwall scholar
                     if (town_idx == 0 && !mq_assigned[1]) {
                         npc_comp.quest_id = static_cast<int>(QuestId::MQ_02_SCHOLAR_CLUE);
@@ -800,7 +802,7 @@ void Engine::generate_level() {
                     npc_comp.role = NPCRole::FARMER;
                     npc_comp.name = "Farmer";
                     npc_comp.dialogue = pick_dialogue(FARMER_DIALOGUE, 3, me.x, me.y);
-                    sx = 0; sy = 6;
+                    sx = 0; sy = 5; // farmer sprite (row 6)
                     // Side quest: Thornwall farmer
                     if (town_idx == 0 && !sq_farmer_assigned) {
                         npc_comp.quest_id = static_cast<int>(QuestId::SQ_MISSING_PERSON);
@@ -1030,9 +1032,69 @@ void Engine::generate_level() {
         DungeonParams params;
         params.width = 80;
         params.height = 50;
-        params.max_rooms = 12 + dungeon_level_;
         params.wall_type = zone.wall;
         params.floor_type = zone.floor;
+
+        // Province-specific wall override (Frozen Marches dungeons get ice walls)
+        if (current_dungeon_idx_ >= 0 &&
+            current_dungeon_idx_ < static_cast<int>(dungeon_registry_.size())) {
+            auto& de = dungeon_registry_[current_dungeon_idx_];
+            GodId dgod = (de.patron_god_idx >= 0) ? static_cast<GodId>(de.patron_god_idx) : GodId::NONE;
+            if (dgod == GodId::GATHRUUN) {
+                params.wall_type = TileType::WALL_ICE;
+                params.floor_type = TileType::FLOOR_SNOW;
+            }
+        }
+
+        // Zone-specific generation parameters
+        std::string zone_key;
+        if (current_dungeon_idx_ >= 0 &&
+            current_dungeon_idx_ < static_cast<int>(dungeon_registry_.size())) {
+            zone_key = dungeon_registry_[current_dungeon_idx_].zone;
+        }
+
+        if (zone_key == "warrens") {
+            params.room_min_w = 4; params.room_max_w = 8;
+            params.room_min_h = 4; params.room_max_h = 8;
+            params.max_rooms = 15 + dungeon_level_;
+            params.corridor_width = 1;
+        } else if (zone_key == "stonekeep") {
+            params.room_min_w = 5; params.room_max_w = 10;
+            params.room_min_h = 5; params.room_max_h = 10;
+            params.max_rooms = 10 + dungeon_level_;
+            params.corridor_width = rng_.range(1, 2);
+        } else if (zone_key == "deep_halls") {
+            params.room_min_w = 8; params.room_max_w = 16;
+            params.room_min_h = 8; params.room_max_h = 16;
+            params.max_rooms = 6 + dungeon_level_;
+            params.corridor_width = rng_.range(2, 3);
+        } else if (zone_key == "catacombs") {
+            params.room_min_w = 4; params.room_max_w = 7;
+            params.room_min_h = 4; params.room_max_h = 7;
+            params.max_rooms = 14 + dungeon_level_;
+            params.corridor_width = 1;
+        } else if (zone_key == "molten") {
+            params.room_min_w = 6; params.room_max_w = 12;
+            params.room_min_h = 6; params.room_max_h = 12;
+            params.max_rooms = 8 + dungeon_level_;
+            params.corridor_width = 2;
+        } else if (zone_key == "sunken") {
+            params.room_min_w = 6; params.room_max_w = 14;
+            params.room_min_h = 6; params.room_max_h = 14;
+            params.max_rooms = 7 + dungeon_level_;
+            params.corridor_width = rng_.range(2, 3);
+        } else if (zone_key == "sepulchre") {
+            params.room_min_w = 7; params.room_max_w = 14;
+            params.room_min_h = 7; params.room_max_h = 14;
+            params.max_rooms = 8 + dungeon_level_;
+            params.corridor_width = 2;
+        } else {
+            // Fallback: depth-based defaults
+            params.room_min_w = 5; params.room_max_w = 12;
+            params.room_min_h = 5; params.room_max_h = 12;
+            params.max_rooms = 12 + dungeon_level_;
+            params.corridor_width = 1;
+        }
 
         auto result = dungeon::generate(rng_, params, !at_zone_bottom);
         map_ = std::move(result.map);
@@ -2313,6 +2375,9 @@ void Engine::update_music_for_location() {
             in_town = (near_town(pp.x, pp.y, 25) >= 0);
         }
 
+        // Day/night cycle: 100-turn period (day for first 50, night for last 50)
+        bool is_night = ((game_turn_ / 50) % 2) == 1;
+
         if (in_town) {
             // Only switch if not already playing town music
             if (audio_.current_music() != MusicId::TOWN1 &&
@@ -2320,7 +2385,7 @@ void Engine::update_music_for_location() {
                 audio_.stop_all_ambient(800);
                 MusicId town[] = {MusicId::TOWN1, MusicId::TOWN2};
                 audio_.play_music(town[rng_.range(0, 1)], 2000);
-                audio_.play_ambient(AmbientId::INTERIOR_DAY, 1000);
+                audio_.play_ambient(is_night ? AmbientId::INTERIOR_NIGHT : AmbientId::INTERIOR_DAY, 1500);
             }
         } else {
             // Only switch if not already playing overworld music
@@ -2330,7 +2395,17 @@ void Engine::update_music_for_location() {
                 audio_.stop_all_ambient(800);
                 MusicId ow_tracks[] = {MusicId::OVERWORLD1, MusicId::OVERWORLD2, MusicId::OVERWORLD3};
                 audio_.play_music(ow_tracks[rng_.range(0, 2)], 2000);
-                audio_.play_ambient(AmbientId::FOREST_DAY, 1000);
+                // Weather-aware ambient: rain in Greenwood, default forest elsewhere
+                bool in_rain = false;
+                if (world_.has<Position>(player_)) {
+                    auto& wp = world_.get<Position>(player_);
+                    in_rain = (wp.x < 700 && wp.y > 500 && wp.y < 1100);
+                }
+                if (in_rain) {
+                    audio_.play_ambient(is_night ? AmbientId::FOREST_NIGHT_RAIN : AmbientId::FOREST_DAY_RAIN, 1500);
+                } else {
+                    audio_.play_ambient(is_night ? AmbientId::FOREST_NIGHT : AmbientId::FOREST_DAY, 1500);
+                }
             }
         }
     } else {
@@ -2367,7 +2442,32 @@ void Engine::update_music_for_location() {
             MusicId dun[] = {MusicId::DUNGEON1, MusicId::DUNGEON2, MusicId::DUNGEON3};
             audio_.play_music(dun[rng_.range(0, 2)], 1500);
         }
-        audio_.play_ambient(AmbientId::CAVE, 1000);
+        // Clear previous ambients before setting zone-specific ones
+        audio_.stop_all_ambient(800);
+
+        // Zone-specific ambient sounds
+        std::string zone_str;
+        if (current_dungeon_idx_ >= 0 &&
+            current_dungeon_idx_ < static_cast<int>(dungeon_registry_.size())) {
+            zone_str = dungeon_registry_[current_dungeon_idx_].zone;
+        }
+
+        if (zone_str == "molten") {
+            audio_.play_ambient(AmbientId::FIRE_CRACKLE, 1500);
+            audio_.play_ambient(AmbientId::CAVE, 1500);
+        } else if (zone_str == "sunken") {
+            audio_.play_ambient(AmbientId::CAVE_RAIN, 1500);
+            audio_.play_ambient(AmbientId::RIVER, 1500);
+        } else if (zone_str == "deep_halls") {
+            audio_.play_ambient(AmbientId::CAVE, 1500);
+            audio_.play_ambient(AmbientId::CAVE_RAIN, 1500);
+        } else if (zone_str == "sepulchre") {
+            audio_.play_ambient(AmbientId::CAVE, 1500);
+            audio_.play_ambient(AmbientId::INTERIOR_NIGHT, 1500);
+        } else {
+            // warrens, stonekeep, catacombs, fallback
+            audio_.play_ambient(AmbientId::CAVE, 1500);
+        }
     }
 }
 
@@ -3606,9 +3706,136 @@ void Engine::handle_input() {
                                 case SpellId::ENTANGLE:
                                     particles_.burst(sp.x, sp.y, 20, 60, 160, 40, 0.12f, 0.7f, 6);
                                     break;
-                                default:
-                                    particles_.spell_effect(sp.x, sp.y, 160, 140, 200);
+                                // --- Conjuration: fire/ice/lightning ---
+                                case SpellId::ICE_SHARD:
+                                    if (has_target) {
+                                        particles_.trail(sp.x, sp.y, tx, ty, 8, 140, 200, 255, 3);
+                                        particles_.drift(tx, ty, 12, 180, 220, 255, 0.6f, 4);
+                                    }
                                     break;
+                                case SpellId::LIGHTNING:
+                                case SpellId::CHAIN_LIGHTNING:
+                                    if (has_target) {
+                                        particles_.trail(sp.x, sp.y, tx, ty, 15, 255, 255, 180, 2);
+                                        particles_.burst(tx, ty, 20, 255, 255, 140, 0.2f, 0.3f, 3);
+                                    }
+                                    break;
+                                case SpellId::FROST_NOVA:
+                                    particles_.burst(sp.x, sp.y, 30, 160, 220, 255, 0.15f, 0.8f, 5);
+                                    particles_.drift(sp.x, sp.y, 20, 200, 240, 255, 1.0f, 3);
+                                    break;
+                                case SpellId::METEOR:
+                                    if (has_target) {
+                                        particles_.fall(tx, ty, 15, 255, 160, 40, 0.5f, 8);
+                                        particles_.burst(tx, ty, 30, 255, 100, 20, 0.18f, 0.7f, 7);
+                                    }
+                                    break;
+                                case SpellId::ACID_SPLASH:
+                                    if (has_target) {
+                                        particles_.trail(sp.x, sp.y, tx, ty, 8, 120, 200, 40, 3);
+                                        particles_.fall(tx, ty, 15, 100, 220, 40, 0.8f, 4);
+                                    }
+                                    break;
+                                case SpellId::DISINTEGRATE:
+                                    if (has_target) {
+                                        particles_.trail(sp.x, sp.y, tx, ty, 20, 200, 40, 200, 2);
+                                        particles_.burst(tx, ty, 25, 220, 60, 220, 0.2f, 0.5f, 4);
+                                    }
+                                    break;
+                                // --- Transmutation: earthy/metallic ---
+                                case SpellId::HASTEN:
+                                    particles_.rise(sp.x, sp.y, 15, 255, 255, 140, 0.5f, 3);
+                                    break;
+                                case SpellId::STONE_FIST:
+                                    particles_.burst(sp.x, sp.y, 12, 160, 140, 100, 0.08f, 0.5f, 7);
+                                    break;
+                                case SpellId::PHASE:
+                                    particles_.burst(sp.x, sp.y, 20, 100, 140, 220, 0.15f, 0.4f, 3);
+                                    break;
+                                case SpellId::IRON_BODY:
+                                    particles_.burst(sp.x, sp.y, 18, 180, 180, 200, 0.05f, 0.8f, 6);
+                                    break;
+                                case SpellId::POLYMORPH:
+                                    if (has_target) particles_.burst(tx, ty, 20, 200, 140, 255, 0.12f, 0.6f, 5);
+                                    break;
+                                // --- Healing: green/white rising ---
+                                case SpellId::CLEANSE:
+                                case SpellId::RESTORE:
+                                    particles_.rise(sp.x, sp.y, 18, 140, 255, 180, 0.8f, 5);
+                                    break;
+                                case SpellId::SHIELD_OF_FAITH:
+                                    particles_.orbit(sp.x, sp.y, 12, 255, 240, 180, 0.5f, 1.0f, 4);
+                                    break;
+                                case SpellId::SANCTUARY:
+                                    particles_.orbit(sp.x, sp.y, 16, 200, 255, 200, 0.6f, 1.5f, 5);
+                                    particles_.rise(sp.x, sp.y, 10, 255, 255, 220, 1.0f, 3);
+                                    break;
+                                // --- Nature: green bursts/drifts ---
+                                case SpellId::BEAST_CALL:
+                                case SpellId::SWARM:
+                                    particles_.burst(sp.x, sp.y, 15, 80, 180, 60, 0.1f, 0.6f, 5);
+                                    break;
+                                case SpellId::POISON_CLOUD:
+                                    particles_.drift(sp.x, sp.y, 25, 100, 200, 60, 1.5f, 5);
+                                    break;
+                                case SpellId::EARTHQUAKE:
+                                    particles_.burst(sp.x, sp.y, 30, 140, 120, 80, 0.2f, 0.5f, 8);
+                                    break;
+                                case SpellId::BARKSKIN:
+                                    particles_.burst(sp.x, sp.y, 14, 100, 140, 60, 0.04f, 0.7f, 6);
+                                    break;
+                                case SpellId::LIGHTNING_STORM:
+                                    particles_.burst(sp.x, sp.y, 25, 255, 255, 160, 0.2f, 0.4f, 3);
+                                    particles_.burst(sp.x, sp.y, 15, 200, 200, 255, 0.15f, 0.6f, 5);
+                                    break;
+                                // --- Dark Arts: purple/red drains ---
+                                case SpellId::RAISE_DEAD:
+                                    particles_.rise(sp.x, sp.y, 15, 120, 60, 160, 1.0f, 5);
+                                    break;
+                                case SpellId::HEX:
+                                    if (has_target) particles_.drift(tx, ty, 15, 140, 60, 180, 1.0f, 4);
+                                    break;
+                                case SpellId::SOUL_REND:
+                                    if (has_target) {
+                                        particles_.trail(tx, ty, sp.x, sp.y, 15, 180, 60, 220, 3);
+                                        particles_.burst(tx, ty, 15, 200, 80, 255, 0.12f, 0.4f, 5);
+                                    }
+                                    break;
+                                case SpellId::DARKNESS:
+                                    particles_.burst(sp.x, sp.y, 25, 40, 20, 60, 0.12f, 1.0f, 7);
+                                    break;
+                                case SpellId::WITHER:
+                                    if (has_target) particles_.fall(tx, ty, 15, 100, 80, 40, 0.8f, 4);
+                                    break;
+                                case SpellId::BLOOD_PACT:
+                                    particles_.burst(sp.x, sp.y, 18, 200, 40, 40, 0.08f, 0.7f, 6);
+                                    break;
+                                case SpellId::DOOM:
+                                    if (has_target) {
+                                        particles_.fall(tx, ty, 20, 80, 0, 120, 1.2f, 6);
+                                        particles_.burst(tx, ty, 12, 160, 40, 200, 0.08f, 0.8f, 7);
+                                    }
+                                    break;
+                                // --- Fallback by school ---
+                                default: {
+                                    auto& si = get_spell_info(spell);
+                                    switch (si.school) {
+                                        case SpellSchool::CONJURATION:
+                                            particles_.burst(sp.x, sp.y, 15, 255, 180, 80, 0.1f, 0.5f, 5); break;
+                                        case SpellSchool::TRANSMUTATION:
+                                            particles_.burst(sp.x, sp.y, 12, 180, 160, 120, 0.06f, 0.6f, 5); break;
+                                        case SpellSchool::DIVINATION:
+                                            particles_.burst(sp.x, sp.y, 15, 120, 160, 240, 0.1f, 0.5f, 4); break;
+                                        case SpellSchool::HEALING:
+                                            particles_.rise(sp.x, sp.y, 15, 120, 240, 140, 0.8f, 5); break;
+                                        case SpellSchool::NATURE:
+                                            particles_.drift(sp.x, sp.y, 15, 80, 180, 60, 0.8f, 5); break;
+                                        case SpellSchool::DARK_ARTS:
+                                            particles_.burst(sp.x, sp.y, 15, 140, 60, 180, 0.1f, 0.6f, 5); break;
+                                        default:
+                                            particles_.spell_effect(sp.x, sp.y, 160, 140, 200); break;
+                                    }
+                                } break;
                             }
                         }
                         spell_screen_.close();
@@ -3873,6 +4100,211 @@ void Engine::render_god_visuals(const Camera& cam, int y_offset) {
     god_system::render_god_visuals(world_, player_, renderer_, cam, y_offset);
 }
 
+void Engine::update_death_anims() {
+    const float dt = 1.0f / 60.0f; // ~60fps frame time
+    auto& da_pool = world_.pool<DeathAnim>();
+    // Collect entities whose animations have finished
+    std::vector<Entity> finished;
+    for (size_t i = 0; i < da_pool.size(); i++) {
+        Entity e = da_pool.entity_at(i);
+        auto& da = da_pool.at_index(i);
+        da.timer += dt;
+
+        // Emit dissolve particles during the fade phase (after initial flash)
+        float t = da.timer / da.duration;
+        if (t > 0.25f && world_.has<Position>(e)) {
+            auto& pos = world_.get<Position>(e);
+            // 1-2 particles per frame, drifting outward
+            uint8_t r = 180, g = 160, b = 140;
+            if (world_.has<Renderable>(e)) {
+                auto& rend = world_.get<Renderable>(e);
+                r = rend.tint.r; g = rend.tint.g; b = rend.tint.b;
+            }
+            particles_.drift(static_cast<float>(pos.x), static_cast<float>(pos.y),
+                             1, r, g, b, 0.3f, 1);
+        }
+
+        if (da.timer >= da.duration) {
+            finished.push_back(e);
+        }
+    }
+    // Finalize deaths — swap to corpse sprite
+    for (Entity e : finished) {
+        if (world_.has<Renderable>(e)) {
+            auto& rend = world_.get<Renderable>(e);
+            rend.sprite_sheet = SHEET_TILES;
+            rend.sprite_x = 0;
+            rend.sprite_y = 21;
+            rend.z_order = -1;
+            rend.tint = {255, 255, 255, 255};
+            rend.flip_h = false;
+        }
+        world_.remove<DeathAnim>(e);
+    }
+}
+
+void Engine::render_weather() {
+    // Only on overworld, only during gameplay
+    if (dungeon_level_ != 0) { weather_particles_.clear(); return; }
+    if (state_ != GameState::PLAYING) return;
+    if (!world_.has<Position>(player_)) return;
+
+    auto& pos = world_.get<Position>(player_);
+    int py = pos.y;
+    int px = pos.x;
+    int map_h = map_.height(); // 1500 for overworld
+
+    // Determine climate zone and spawn parameters
+    enum Climate { CLEAR, ICE, COLD, RAIN, DUST };
+    Climate climate = CLEAR;
+
+    if (py < map_h / 6)                     climate = ICE;   // far north (y < 250)
+    else if (py < map_h * 4 / 15)           climate = COLD;  // cold zone (y < 400)
+    else if (px < 700 && py > 500 && py < 1100) climate = RAIN;  // Greenwood
+    else if (py > map_h * 5 / 6)            climate = DUST;  // desert (y > 1250)
+
+    if (climate == CLEAR) { weather_particles_.clear(); return; }
+
+    // Spawn new particles
+    int max_particles = 80;
+    int spawn_per_frame = 0;
+    auto randf = []() { return static_cast<float>(rand()) / RAND_MAX; };
+
+    switch (climate) {
+    case ICE:
+        spawn_per_frame = 3;
+        for (int i = 0; i < spawn_per_frame && (int)weather_particles_.size() < max_particles; i++) {
+            float sx = randf() * width_;
+            float drift_x = randf() * 0.6f - 0.2f; // slight rightward drift
+            float fall_speed = 0.4f + randf() * 0.4f;
+            uint8_t bright = 200 + static_cast<uint8_t>(randf() * 55);
+            weather_particles_.push_back({
+                sx, static_cast<float>(HUD_HEIGHT - 4 + randf() * 8),
+                drift_x, fall_speed,
+                bright, bright, bright,
+                static_cast<uint8_t>(120 + randf() * 80),
+                1.0f, 0.004f + randf() * 0.003f,
+                2, 2
+            });
+        }
+        break;
+
+    case COLD:
+        spawn_per_frame = 1;
+        for (int i = 0; i < spawn_per_frame && (int)weather_particles_.size() < max_particles; i++) {
+            float sx = randf() * width_;
+            float drift_x = randf() * 0.5f - 0.15f;
+            float fall_speed = 0.3f + randf() * 0.3f;
+            uint8_t bright = 190 + static_cast<uint8_t>(randf() * 50);
+            weather_particles_.push_back({
+                sx, static_cast<float>(HUD_HEIGHT - 4 + randf() * 8),
+                drift_x, fall_speed,
+                bright, bright, bright,
+                static_cast<uint8_t>(100 + randf() * 60),
+                1.0f, 0.005f + randf() * 0.004f,
+                2, 2
+            });
+        }
+        break;
+
+    case RAIN:
+        spawn_per_frame = 4;
+        for (int i = 0; i < spawn_per_frame && (int)weather_particles_.size() < max_particles; i++) {
+            float sx = randf() * width_;
+            float fall_speed = 2.5f + randf() * 1.5f;
+            uint8_t grey = static_cast<uint8_t>(140 + randf() * 40);
+            weather_particles_.push_back({
+                sx, static_cast<float>(HUD_HEIGHT - 4 + randf() * 8),
+                0.1f, fall_speed,
+                static_cast<uint8_t>(grey * 0.7f), static_cast<uint8_t>(grey * 0.8f), grey,
+                static_cast<uint8_t>(100 + randf() * 80),
+                1.0f, 0.006f + randf() * 0.004f,
+                1, 3
+            });
+        }
+        break;
+
+    case DUST:
+        spawn_per_frame = 1;
+        for (int i = 0; i < spawn_per_frame && (int)weather_particles_.size() < max_particles; i++) {
+            float sy = HUD_HEIGHT + randf() * (height_ - HUD_HEIGHT - LOG_HEIGHT);
+            float drift_x = 0.5f + randf() * 0.8f; // rightward drift
+            float drift_y = randf() * 0.3f - 0.15f; // slight vertical wander
+            weather_particles_.push_back({
+                -2.0f, sy,
+                drift_x, drift_y,
+                static_cast<uint8_t>(180 + randf() * 40),
+                static_cast<uint8_t>(160 + randf() * 30),
+                static_cast<uint8_t>(110 + randf() * 30),
+                static_cast<uint8_t>(80 + randf() * 60),
+                1.0f, 0.003f + randf() * 0.002f,
+                3, 3
+            });
+        }
+        break;
+
+    default:
+        break;
+    }
+
+    // Update and render
+    int game_area_bottom = height_ - LOG_HEIGHT;
+    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+
+    for (auto& p : weather_particles_) {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= p.decay;
+
+        // Draw only if within the game viewport (between HUD and log)
+        int ix = static_cast<int>(p.x);
+        int iy = static_cast<int>(p.y);
+        if (iy >= HUD_HEIGHT && iy < game_area_bottom && ix >= -p.w && ix < width_ + p.w) {
+            uint8_t a = static_cast<uint8_t>(p.alpha * std::max(0.0f, std::min(1.0f, p.life)));
+            SDL_SetRenderDrawColor(renderer_, p.r, p.g, p.b, a);
+            SDL_Rect rect = {ix, iy, p.w, p.h};
+            SDL_RenderFillRect(renderer_, &rect);
+        }
+    }
+
+    // Remove dead or off-screen particles
+    weather_particles_.erase(
+        std::remove_if(weather_particles_.begin(), weather_particles_.end(),
+            [&](const WeatherParticle& p) {
+                return p.life <= 0.0f ||
+                       p.y > static_cast<float>(game_area_bottom) ||
+                       p.x > static_cast<float>(width_ + 10) ||
+                       p.x < -10.0f;
+            }),
+        weather_particles_.end());
+}
+
+void Engine::render_day_night() {
+    // Only on overworld during gameplay
+    if (dungeon_level_ != 0 || state_ != GameState::PLAYING) return;
+
+    // 100-turn cycle: turns 0-39 day, 40-49 dusk, 50-89 night, 90-99 dawn
+    int phase = game_turn_ % 100;
+    float night_alpha = 0.0f;
+
+    if (phase >= 50 && phase < 90) {
+        night_alpha = 1.0f; // full night
+    } else if (phase >= 40 && phase < 50) {
+        night_alpha = static_cast<float>(phase - 40) / 10.0f; // dusk fade in
+    } else if (phase >= 90) {
+        night_alpha = 1.0f - static_cast<float>(phase - 90) / 10.0f; // dawn fade out
+    }
+
+    if (night_alpha <= 0.0f) return;
+
+    // Dark blue overlay on the game area (between HUD and log)
+    int a = static_cast<int>(night_alpha * 55.0f); // max alpha 55 — subtle
+    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer_, 10, 12, 35, static_cast<Uint8>(a));
+    SDL_Rect overlay = {0, HUD_HEIGHT, width_, height_ - HUD_HEIGHT - LOG_HEIGHT};
+    SDL_RenderFillRect(renderer_, &overlay);
+}
+
 void Engine::render_hud() {
     if (!font_) return;
     if (!world_.has<Stats>(player_)) return;
@@ -4017,11 +4449,33 @@ void Engine::render_hud() {
     }
     char info[128];
     if (dungeon_level_ <= 0) {
-        snprintf(info, sizeof(info), "%s  Thornwall  Gold:%d  T:%d",
-                 god_name, gold_, game_turn_);
+        // Show nearest town name, or province if in the wilderness
+        const char* location = "Wilderness";
+        if (world_.has<Position>(player_)) {
+            auto& pp = world_.get<Position>(player_);
+            int ti = near_town(pp.x, pp.y, 25);
+            if (ti >= 0) {
+                location = ALL_TOWNS[ti].name;
+            } else {
+                location = get_province_name(pp.x, pp.y);
+            }
+        }
+        // Day/night indicator
+        int phase = game_turn_ % 100;
+        const char* time_icon = (phase >= 50 && phase < 90) ? "Night" :
+                                (phase >= 40 && phase < 50) ? "Dusk" :
+                                (phase >= 90) ? "Dawn" : "Day";
+        snprintf(info, sizeof(info), "%s  %s  %s  Gold:%d  T:%d",
+                 god_name, location, time_icon, gold_, game_turn_);
     } else {
-        snprintf(info, sizeof(info), "%s  Depth:%d  Gold:%d  T:%d",
-                 god_name, dungeon_level_, gold_, game_turn_);
+        // Show dungeon name if available
+        const char* dname = "Dungeon";
+        if (current_dungeon_idx_ >= 0 &&
+            current_dungeon_idx_ < static_cast<int>(dungeon_registry_.size())) {
+            dname = dungeon_registry_[current_dungeon_idx_].name.c_str();
+        }
+        snprintf(info, sizeof(info), "%s  %s D:%d  Gold:%d  T:%d",
+                 god_name, dname, dungeon_level_, gold_, game_turn_);
     }
     SDL_Surface* surf = TTF_RenderText_Blended(font_, info, white);
     if (surf) {
@@ -4096,6 +4550,12 @@ void Engine::render() {
 
     // God visual effects on player (rendered every frame)
     render_god_visuals(render_cam, HUD_HEIGHT);
+
+    // Overworld weather particles (screen-space, after entities, before HUD)
+    render_weather();
+
+    // Day/night overlay (subtle darkening during night phase)
+    render_day_night();
 
     // HUD
     render_hud();
@@ -4180,6 +4640,7 @@ void Engine::run() {
         handle_input();
         process_turn();
         particles_.update(); // smooth animation between turns
+        update_death_anims();
         render();
         SDL_Delay(16); // ~60fps cap
     }

@@ -1,10 +1,12 @@
 # Reliquary — Project Plan
 
-> Last updated: 2026-03-31
+> Last updated: 2026-04-01
 
-## Current Status: v0.2.0 Alpha Release
+## Current Status: Post-Tier 5, Polish Phase
 
-The game is fully playable from character creation through a 17-step main quest chain. 17 classes (4 base + 13 unlockable), **13 gods** (expanded from 7) with deep tenet system and sacred/profane items, 15 backgrounds, 22 traits, 7 permanent diseases, 8 pets, **13 rival paragons**, **50 spells** across 6 schools, **80+ items** with material palette swaps (bone/silver/mithril/adamantine). 8 status effects (poison/burn/bleed/frozen/stunned/confused/blind/feared). Full audio system with 19 music tracks, 12 ambient loops, 24 SFX. Animated torches/braziers/water with circular warm glow. 6 provinces with capital cities, 20 towns + 4 hamlets + 6 cabins + 3 outposts, 27 dungeons, wilderness POIs, wandering NPCs. **Signpost navigation** (~80+ signs with compass directions to nearby POIs). Meta-save progression, hardcore mode, persistent bestiary/potion IDs. Dungeon floor persistence across save/load. Resolution scaling for ultrawide/4K. **CI/CD pipeline** builds Linux + Windows. **God-specific player aura particles on every god.** NPC sprites properly assigned (rows 6-7 for NPCs, rows 0-5 for PCs/special named NPCs).
+**Tier 5 complete.** All god systems implemented. Major codebase refactor done (engine.cpp −40%). Now in polish/content phase.
+
+The game is fully playable from character creation through a 17-step main quest chain. 17 classes (4 base + 13 unlockable), **13 gods** with deep tenet system, sacred/profane items, **13 god relics** (bound legendary items), god shrines (patron-god-linked), excommunication/conversion, **NPC god factions** (province-based pricing/healing/hostility, 7 wandering priests). 15 backgrounds, 22 traits, 7 permanent diseases, 8 pets, **13 rival paragons**, **50 spells** across 6 schools with **per-school particles**, **80+ items** with material palette swaps. 8 status effects. Full audio with 19 music + 12 ambient + 24 SFX. **Zone-specific dungeon generation** (cramped warrens, cavernous deep halls, narrow catacombs). **Zone-specific ambient sounds** (cave/fire/dripping/river). **Overworld weather** (snow, rain, dust by latitude). **Day/night cycle** (visual overlay + HUD indicator + ambient switching). **Death dissolve animation** (flash-then-fade with dissolve particles). **Regional building materials** (grass walls in Greenwood, sandstone in Dust Provinces, ice walls in Frozen Marches, cobblestone city streets). **Dynamic HUD** (nearest town/province name, dungeon name + depth, day/night indicator). 6 provinces with capital cities, 20 towns + 4 hamlets + 6 cabins + 3 outposts, 27 dungeons, wilderness POIs, wandering NPCs. Signpost navigation (~80+ signs). Meta-save progression, hardcore mode, persistent bestiary/potion IDs. Dungeon floor persistence + quicksave. Resolution scaling for ultrawide/4K. CI/CD for Linux + Windows.
 
 **Repo:** https://github.com/joconno2/Reliquary.git
 **Location:** ~/Reliquary
@@ -27,7 +29,9 @@ The game is fully playable from character creation through a 17-step main quest 
 - Save/load (JSON — full world state, player, inventory, quests, map, return position, buffs, traits)
 - **Dungeon floor persistence** — `floor_cache_` with full entity serialization (Stats, AI, Energy, Items, Containers, StatusEffects, GodAlignment), separate `floors.dat` file
 - **F5/F6 quicksave/quickload**
-- Full audio system: 24 real SFX (pixel combat pack), 19 music tracks (Ifness — title/overworld/dungeon/boss/death/victory/sepulchre), 12 ambient loops (Fantasy SFX — cave/forest/interior/fire/rain/river). Title screen: Gethsemane + fire crackle + rain. Music/ambient crossfade on location change.
+- Full audio system: 24 real SFX (pixel combat pack), 19 music tracks (Ifness — title/overworld/dungeon/boss/death/victory/sepulchre), 12 ambient loops (Fantasy SFX — cave/forest/interior/fire/rain/river). Title screen: Gethsemane + fire crackle + rain. Music/ambient crossfade on location change. Weather-aware ambient (rain variants in Greenwood).
+- **Day/night cycle** — 100-turn period: visual blue overlay (smooth dusk/dawn transitions), HUD time-of-day indicator (Day/Dusk/Night/Dawn), night ambient audio switching
+- **Death dissolve animation** — enemies flash white then fade to transparent with drifting dissolve particles before becoming corpse sprites
 
 ### Combat & Creatures
 - Melee combat with atmospheric messages (weapon-aware, body parts, damage in parens)
@@ -130,7 +134,7 @@ The game is fully playable from character creation through a 17-step main quest 
 ### UI Screens
 - Main menu: animated campfire, huge Jacquard title, New Game/Continue/Load/Settings/Quit
 - Pause menu (Esc): Continue/Save/Load/Settings/Exit to Menu
-- Settings: resolution presets, volume, UI scale (1.0-2.0x), keybinds reference
+- Settings: resolution presets, volume (live-adjusting), UI scale (1.0-2.0x), keybinds reference
 - Help screen (? key): all keybinds in 2-column layout
 - Character sheet (c key): 40+ derived stats
 - Inventory (i key): paper doll + item list + mouse support
@@ -141,6 +145,7 @@ The game is fully playable from character creation through a 17-step main quest 
 - Level-up choice screen: 3 random options per level
 - Quest offer modal: accept/decline with rewards shown
 - Victory screen: god-flavored ending text (8 variants + heretic), any key to return to menu
+- **Dynamic HUD**: overworld shows nearest town name or province, dungeon shows dungeon name + depth, day/night time indicator
 
 ### Keybinds
 Movement: arrows/hjkl/numpad (+ diagonals yubn) | Wait: ./numpad5

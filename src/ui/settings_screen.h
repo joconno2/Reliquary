@@ -2,9 +2,13 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 
+class Audio;
+
 class SettingsScreen {
 public:
     SettingsScreen() = default;
+
+    void set_audio(Audio* audio) { audio_ = audio; }
 
     bool handle_input(SDL_Event& event, SDL_Window* window);
 
@@ -22,6 +26,7 @@ private:
     int selected_ = 0;
     int resolution_index_ = 0;
     int volume_ = 50;
+    Audio* audio_ = nullptr;
     int scale_index_ = 0;
     bool should_close_ = false;
     bool scale_changed_ = false;

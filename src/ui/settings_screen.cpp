@@ -1,6 +1,7 @@
 #include <algorithm>
 #include "ui/settings_screen.h"
 #include "ui/ui_draw.h"
+#include "core/audio.h"
 #include <cstdio>
 
 bool SettingsScreen::handle_input(SDL_Event& event, SDL_Window* window) {
@@ -28,6 +29,7 @@ bool SettingsScreen::handle_input(SDL_Event& event, SDL_Window* window) {
                 resolution_index_ = (resolution_index_ - 1 + RES_COUNT) % RES_COUNT;
             } else if (selected_ == 1) {
                 if (volume_ > 0) volume_ -= 5;
+                if (audio_) { audio_->set_volume(volume_); audio_->set_music_volume(volume_); }
             } else if (selected_ == 2) {
                 scale_index_ = (scale_index_ - 1 + SCALE_COUNT) % SCALE_COUNT;
                 scale_changed_ = true;
@@ -40,6 +42,7 @@ bool SettingsScreen::handle_input(SDL_Event& event, SDL_Window* window) {
                 resolution_index_ = (resolution_index_ + 1) % RES_COUNT;
             } else if (selected_ == 1) {
                 if (volume_ < 100) volume_ += 5;
+                if (audio_) { audio_->set_volume(volume_); audio_->set_music_volume(volume_); }
             } else if (selected_ == 2) {
                 scale_index_ = (scale_index_ + 1) % SCALE_COUNT;
                 scale_changed_ = true;

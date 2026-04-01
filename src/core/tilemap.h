@@ -25,10 +25,12 @@ enum class TileType : uint8_t {
     FLOOR_SAND,      // desert terrain (proper sand sprites)
     FLOOR_ICE,       // frozen terrain (blue stone — dungeons)
     FLOOR_SNOW,      // snow terrain (overworld cold/ice zones)
+    FLOOR_COBBLE,    // cobblestone (city streets, distinct from dungeon stone)
     ROCK,        // impassable rocky outcrop (blocks movement, not sight)
     WALL_WOOD,       // wooden wall (houses, cabins)
     WALL_GRASS,      // grass/vine-covered wall (Greenwood region)
     WALL_SANDSTONE,  // sandstone wall (Dust Provinces region)
+    WALL_ICE,        // ice wall (Frozen Marches dungeons)
     SHRINE,          // god shrine — interactive altar
     COUNT
 };

@@ -19,6 +19,7 @@ static TileType char_to_tile(char c) {
         case 's': return TileType::FLOOR_SAND;
         case 'i': return TileType::FLOOR_ICE;
         case 'I': return TileType::FLOOR_SNOW;
+        case 'p': return TileType::FLOOR_COBBLE;
         case 'R': return TileType::ROCK;
         case '+': return TileType::DOOR_CLOSED;
         case '>': return TileType::STAIRS_DOWN;

@@ -19,6 +19,13 @@ Mix_Music* Audio::load_music(const char* path) {
 }
 
 bool Audio::init() {
+    int mix_flags = MIX_INIT_MP3 | MIX_INIT_OGG;
+    int mix_initted = Mix_Init(mix_flags);
+    if ((mix_initted & mix_flags) != mix_flags) {
+        fprintf(stderr, "Audio: Mix_Init incomplete (wanted 0x%x, got 0x%x): %s\n",
+                mix_flags, mix_initted, Mix_GetError());
+        // Continue anyway — WAV sfx may still work
+    }
     if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0) {
         fprintf(stderr, "Audio: Mix_OpenAudio failed: %s\n", Mix_GetError());
         return false;
@@ -126,6 +133,7 @@ void Audio::shutdown() {
         if (chunk) { Mix_FreeChunk(chunk); chunk = nullptr; }
     }
     Mix_CloseAudio();
+    Mix_Quit();
 }
 
 void Audio::play(SfxId id) {

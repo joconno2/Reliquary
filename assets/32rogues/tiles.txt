@@ -1,6 +1,8 @@
 1.a. dirt wall (top)
 1.b. dirt wall (side)
 1.c. inner wall
+1.d. ice wall (top)
+1.e. ice wall (side)
 
 2.a. rough stone wall (top)
 2.b. rough stone wall (side)
@@ -61,6 +63,7 @@
 9.e. dirt 1 (no bg)
 9.f. dirt 2 (no bg)
 9.g. dirt 3 (no bg)
+9.h. cobblestone
 
 10.a. empty
 10.b. stone floor 1

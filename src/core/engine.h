@@ -40,6 +40,17 @@
 #include <string>
 #include <map>
 
+// Screen-space weather particle (not tile-based)
+struct WeatherParticle {
+    float x, y;       // pixel position on screen
+    float vx, vy;     // pixel velocity per frame
+    uint8_t r, g, b;
+    uint8_t alpha;
+    float life;        // 0..1
+    float decay;       // life lost per frame
+    int w, h;          // rect size in pixels
+};
+
 struct BestiaryEntry {
     std::string name;
     int hp = 0, damage = 0, armor = 0, speed = 0;
@@ -89,6 +100,7 @@ private:
     RNG rng_;
     Audio audio_;
     ParticleSystem particles_;
+    std::vector<WeatherParticle> weather_particles_;
     Camera camera_;
     MessageLog log_;
     GameState state_ = GameState::MAIN_MENU;
@@ -212,6 +224,9 @@ private:
     void adjust_favor(int amount);
     void check_tenets();
     void render_god_visuals(const Camera& cam, int y_offset);
+    void render_weather();
+    void render_day_night();
+    void update_death_anims();
     void fire_ranged();
     void describe_tile(int x, int y);
     void sepulchre_ambient();

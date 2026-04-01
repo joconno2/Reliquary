@@ -235,19 +235,26 @@ towns = [
 def place_town(tx, ty, is_start, town_rng, is_city=False, province_idx=2):
     """Place a town or city with structured grid layout."""
     lat = ty / H
-    # Regional wall types:
-    #   Greenwood (province 3, Khael) → grass walls 'g'
-    #   Dust Provinces (province 5, Sythara) → sandstone walls 'n'
-    #   Others → stone '#' for cities, wood 'w' or stone '#' based on latitude
-    if province_idx == 3:  # Greenwood — Khael (nature)
-        wall_ch = 'g'
-    elif province_idx == 5:  # Dust Provinces — Sythara (plague/decay)
-        wall_ch = 'n'
-    else:
-        stone_prob = max(0, min(1, 1.0 - lat * 1.2))
-        wall_ch = '#' if (is_city or town_rng.random() < stone_prob) else 'w'
-    # Cities always use their regional wall (not downgraded to wood)
-    floor_ch = ':' if is_city else ':'  # stone floor inside buildings always
+    # Regional wall types based on province god affiliation:
+    #   Pale Reach (0, Soleth) → stone brick '#' (clean masonry, purification)
+    #   Frozen Marches (1, Gathruun) → large stone '#' (earth/stone god, fortress-like)
+    #   Heartlands (2, Morreth) → stone brick '#' (war/iron, strong construction)
+    #   Greenwood (3, Khael) → grass walls 'g' (nature god, organic)
+    #   Iron Coast (4, Ossren) → stone brick '#' (forge/craft, well-built)
+    #   Dust Provinces (5, Sythara) → sandstone walls 'n' (plague/decay, desert)
+    PROVINCE_WALLS = {
+        0: '#',  # Pale Reach — Soleth
+        1: '#',  # Frozen Marches — Gathruun
+        2: '#',  # Heartlands — Morreth
+        3: 'g',  # Greenwood — Khael
+        4: '#',  # Iron Coast — Ossren
+        5: 'n',  # Dust Provinces — Sythara
+    }
+    wall_ch = PROVINCE_WALLS.get(province_idx, '#')
+    # Non-city towns in temperate zones may use wood for smaller buildings
+    if not is_city and province_idx in (2, 0) and town_rng.random() < 0.3:
+        wall_ch = 'w'
+    floor_ch = ':'  # stone floor inside buildings always
 
     if is_city:
         # Cities: large walled compound with stone ground
@@ -268,8 +275,8 @@ def place_town(tx, ty, is_start, town_rng, is_city=False, province_idx=2):
             building_slots = [(-13, -9, 7, 5), (-4, -9, 7, 5), (5, -9, 7, 5),
                               (-13, 4, 7, 5), (5, 4, 7, 5)]
 
-    # Clear ground — cities get stone floor, towns get dirt
-    ground_ch = ':' if is_city else '.'
+    # Clear ground — cities get cobblestone streets, towns get dirt
+    ground_ch = 'p' if is_city else '.'
     for dy in range(-half_h - 2, half_h + 3):
         for dx in range(-half_w - 2, half_w + 3):
             set_tile(tx + dx, ty + dy, ground_ch)

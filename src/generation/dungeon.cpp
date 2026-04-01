@@ -22,26 +22,32 @@ static void carve_room(TileMap& map, const Room& room, TileType floor, RNG& rng)
     }
 }
 
-static void carve_h_tunnel(TileMap& map, int x1, int x2, int y, TileType floor, RNG& rng) {
+static void carve_h_tunnel(TileMap& map, int x1, int x2, int y, TileType floor, RNG& rng, int width = 1) {
     int start = std::min(x1, x2);
     int end = std::max(x1, x2);
+    int half = (width - 1) / 2;
     for (int x = start; x <= end; x++) {
-        if (map.in_bounds(x, y)) {
-            auto& tile = map.at(x, y);
-            tile.type = floor;
-            tile.variant = floor_variant(rng);
+        for (int dy = -half; dy <= -half + width - 1; dy++) {
+            if (map.in_bounds(x, y + dy)) {
+                auto& tile = map.at(x, y + dy);
+                tile.type = floor;
+                tile.variant = floor_variant(rng);
+            }
         }
     }
 }
 
-static void carve_v_tunnel(TileMap& map, int y1, int y2, int x, TileType floor, RNG& rng) {
+static void carve_v_tunnel(TileMap& map, int y1, int y2, int x, TileType floor, RNG& rng, int width = 1) {
     int start = std::min(y1, y2);
     int end = std::max(y1, y2);
+    int half = (width - 1) / 2;
     for (int y = start; y <= end; y++) {
-        if (map.in_bounds(x, y)) {
-            auto& tile = map.at(x, y);
-            tile.type = floor;
-            tile.variant = floor_variant(rng);
+        for (int dx = -half; dx <= -half + width - 1; dx++) {
+            if (map.in_bounds(x + dx, y)) {
+                auto& tile = map.at(x + dx, y);
+                tile.type = floor;
+                tile.variant = floor_variant(rng);
+            }
         }
     }
 }
@@ -62,8 +68,8 @@ DungeonResult generate(RNG& rng, const DungeonParams& params, bool place_stairs_
         if (static_cast<int>(result.rooms.size()) >= params.max_rooms) break;
 
         Room room;
-        room.w = rng.range(params.room_min, params.room_max);
-        room.h = rng.range(params.room_min, params.room_max);
+        room.w = rng.range(params.room_min_w, params.room_max_w);
+        room.h = rng.range(params.room_min_h, params.room_max_h);
         room.x = rng.range(1, params.width - room.w - 1);
         room.y = rng.range(1, params.height - room.h - 1);
 
@@ -82,12 +88,13 @@ DungeonResult generate(RNG& rng, const DungeonParams& params, bool place_stairs_
         // Connect to previous room
         if (!result.rooms.empty()) {
             auto& prev = result.rooms.back();
+            int cw = params.corridor_width;
             if (rng.chance(50)) {
-                carve_h_tunnel(result.map, prev.cx(), room.cx(), prev.cy(), params.floor_type, rng);
-                carve_v_tunnel(result.map, prev.cy(), room.cy(), room.cx(), params.floor_type, rng);
+                carve_h_tunnel(result.map, prev.cx(), room.cx(), prev.cy(), params.floor_type, rng, cw);
+                carve_v_tunnel(result.map, prev.cy(), room.cy(), room.cx(), params.floor_type, rng, cw);
             } else {
-                carve_v_tunnel(result.map, prev.cy(), room.cy(), prev.cx(), params.floor_type, rng);
-                carve_h_tunnel(result.map, prev.cx(), room.cx(), room.cy(), params.floor_type, rng);
+                carve_v_tunnel(result.map, prev.cy(), room.cy(), prev.cx(), params.floor_type, rng, cw);
+                carve_h_tunnel(result.map, prev.cx(), room.cx(), room.cy(), params.floor_type, rng, cw);
             }
         }
 
