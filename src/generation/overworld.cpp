@@ -116,9 +116,9 @@ void populate(World& world, TileMap& map, RNG& rng,
     }
 
     // Pilgrims (near dungeon entrances or holy sites)
-    spawn_ow_npc(1060, 730, "Pilgrim", "The barrow calls to the faithful. And the foolish.", NPCRole::FARMER, 4, 7);
-    spawn_ow_npc(1450, 520, "Pilgrim", "Soleth's fire burns in Candlemere. I go to pray.", NPCRole::FARMER, 4, 7);
-    spawn_ow_npc(580, 560, "Pilgrim", "The seal at Hollowgate. Have you seen it? It's cracking.", NPCRole::FARMER, 4, 7);
+    spawn_ow_npc(1060, 730, "Pilgrim", "The barrow calls to the faithful. And the foolish.", NPCRole::FARMER, 4, 6);
+    spawn_ow_npc(1450, 520, "Pilgrim", "Soleth's fire burns in Candlemere. I go to pray.", NPCRole::FARMER, 4, 6);
+    spawn_ow_npc(580, 560, "Pilgrim", "The seal at Hollowgate. Have you seen it? It's cracking.", NPCRole::FARMER, 4, 6);
 
     // Hunters in the deep wilderness
     spawn_ow_npc(300, 500, "Hunter", "The game's thin out here. Something's scaring them deeper into the woods.", NPCRole::FARMER, 2, 6);
@@ -126,10 +126,10 @@ void populate(World& world, TileMap& map, RNG& rng,
     spawn_ow_npc(500, 1100, "Hunter", "Don't go south. The swamp takes people.", NPCRole::FARMER, 2, 6);
 
     // Hermits (isolated, deeper dialogue)
-    spawn_ow_npc(200, 300, "Hermit", "I left the towns years ago. The gods are louder out here.", NPCRole::PRIEST, 4, 7);
-    spawn_ow_npc(1800, 400, "Old Woman", "I remember when there were no dungeons. Then the ground opened.", NPCRole::FARMER, 3, 7);
-    spawn_ow_npc(400, 1200, "Hermit", "The Reliquary isn't what they think. It was here before the gods.", NPCRole::PRIEST, 4, 7);
-    spawn_ow_npc(1600, 1100, "Madman", "I HEARD IT. Under the stone. Breathing.", NPCRole::FARMER, 1, 7);
+    spawn_ow_npc(200, 300, "Hermit", "I left the towns years ago. The gods are louder out here.", NPCRole::PRIEST, 4, 6);
+    spawn_ow_npc(1800, 400, "Old Woman", "I remember when there were no dungeons. Then the ground opened.", NPCRole::FARMER, 3, 6);
+    spawn_ow_npc(400, 1200, "Hermit", "The Reliquary isn't what they think. It was here before the gods.", NPCRole::PRIEST, 4, 6);
+    spawn_ow_npc(1600, 1100, "Madman", "I HEARD IT. Under the stone. Breathing.", NPCRole::FARMER, 1, 6);
 
     // =============================================
     // ENCAMPMENTS (small NPC + lore clusters)
@@ -139,11 +139,11 @@ void populate(World& world, TileMap& map, RNG& rng,
     paint_ruin(650, 600);
     place_lore(650, 600, "abandoned journal",
         "Day 3. We found the entrance. Day 5. Markus didn't come back. Day 7. None of us are going back in.");
-    spawn_ow_npc(655, 600, "Deserter", "I was a guard once. Then I saw what's down there.", NPCRole::FARMER, 1, 7);
+    spawn_ow_npc(655, 600, "Deserter", "I was a guard once. Then I saw what's down there.", NPCRole::FARMER, 1, 6);
 
     // Mercenary camp — between Greywatch and Ironhearth
-    spawn_ow_npc(1350, 720, "Sellsword", "We're waiting for a contract. Know anyone who needs killing?", NPCRole::GUARD, 0, 7);
-    spawn_ow_npc(1355, 725, "Sellsword", "Gold talks. Everything else walks.", NPCRole::GUARD, 0, 7);
+    spawn_ow_npc(1350, 720, "Sellsword", "We're waiting for a contract. Know anyone who needs killing?", NPCRole::GUARD, 0, 6);
+    spawn_ow_npc(1355, 725, "Sellsword", "Gold talks. Everything else walks.", NPCRole::GUARD, 0, 6);
 
     // Scholar's camp — between Frostmere and Glacierveil
     spawn_ow_npc(1080, 370, "Field Scholar", "The inscriptions up north predate the current pantheon by centuries.", NPCRole::PRIEST, 5, 6);
@@ -152,7 +152,7 @@ void populate(World& world, TileMap& map, RNG& rng,
 
     // Refugee camp — between Dustfall and Sandmoor
     spawn_ow_npc(950, 1150, "Refugee", "The southern dungeons drove us out. We can't go home.", NPCRole::FARMER, 0, 6);
-    spawn_ow_npc(955, 1155, "Refugee", "My children are hungry. The road north is dangerous.", NPCRole::FARMER, 3, 7);
+    spawn_ow_npc(955, 1155, "Refugee", "My children are hungry. The road north is dangerous.", NPCRole::FARMER, 3, 6);
 
     // =============================================
     // POINTS OF INTEREST
@@ -206,7 +206,7 @@ void populate(World& world, TileMap& map, RNG& rng,
     spawn_ow_npc(920, 420, "Tower Guard", "I watch the north. Nothing comes from there anymore. That worries me.", NPCRole::GUARD, 3, 1);
 
     // Witch's hut — deep forest
-    spawn_ow_npc(350, 700, "Hedge Witch", "I know what you seek. Everyone who comes here seeks the same thing.", NPCRole::PRIEST, 4, 7);
+    spawn_ow_npc(350, 700, "Hedge Witch", "I know what you seek. Everyone who comes here seeks the same thing.", NPCRole::PRIEST, 4, 6);
     place_lore(355, 700, "witch's note",
         "The herbs won't help. The prayers won't help. The only cure for what's down there is not going down there.");
 
@@ -396,7 +396,7 @@ void populate(World& world, TileMap& map, RNG& rng,
         build_cabin(cd.x, cd.y, cd.w, cd.h);
         // Spawn NPC inside the cabin
         spawn_ow_npc(cd.x + cd.w/2, cd.y + cd.h/2, cd.npc_name, cd.dialogue,
-                      NPCRole::FARMER, 4, 7); // elderly man sprite
+                      NPCRole::FARMER, 4, 6); // elderly man sprite
         // Barrel or log pile against the outside wall
         place_against_walls(cd.x - 1, cd.y, cd.w + 2, 1, 4, 17); // barrel
         place_against_walls(cd.x - 1, cd.y, cd.w + 2, 1, 6, 17); // log pile

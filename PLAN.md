@@ -281,12 +281,8 @@ F11 fullscreen | F12 screenshot
 - [x] Monster abilities: troll regen, spider poison, wraith confuse, death knight fear, basilisk blind, orc warchief buff
 - [x] Each status has visual indicator on HUD
 
-### Tier 6 — Ship
-- [ ] Steamworks integration
-- [ ] Windows/Mac builds
-- [ ] Store page, art
-- [ ] Balance pass
-- [ ] Playtesting
+### Tier 6 — Ship (deferred)
+Steamworks integration, Windows builds, store page, balance pass, playtesting — not in scope yet.
 
 ---
 

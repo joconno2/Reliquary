@@ -30,17 +30,17 @@
 5.c. druid
 5.d. desert sage
 5.e. dwarf mage
-6.f. warlock
+5.f. warlock
 
-7.a. farmer (wheat thresher)
-7.b. farmer (scythe)
-7.c. farmer (pitchfork)
-7.d. baker
-7.e. blacksmith
-7.f. scholar
+6.a. farmer (wheat thresher)
+6.b. farmer (scythe)
+6.c. farmer (pitchfork)
+6.d. baker
+6.e. blacksmith
+6.f. scholar
 
-8.a. peasant / coalburner
-8.b. peasant
-8.c. shopkeep
-8.d. elderly woman
-8.e. elderly man
+7.a. peasant / coalburner
+7.b. peasant
+7.c. shopkeep
+7.d. elderly woman
+7.e. elderly man

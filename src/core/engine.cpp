@@ -722,7 +722,7 @@ void Engine::generate_level() {
                     npc_comp.role = NPCRole::SHOPKEEPER;
                     npc_comp.name = "Shopkeeper";
                     npc_comp.dialogue = "Browse, if you like. I don't haggle.";
-                    sx = 2; sy = 7; // shopkeep sprite (row 8)
+                    sx = 2; sy = 6; // shopkeep sprite (row 7)
                     // Side quest: Ashford shopkeeper — rats in the cellar
                     if (town_idx == 1 && !sq_ratcellar_assigned) {
                         npc_comp.quest_id = static_cast<int>(QuestId::SQ_RAT_CELLAR);
@@ -898,7 +898,7 @@ void Engine::generate_level() {
                                         "Follow the road east. You will see the entrance.";
                     npc_comp.quest_id = static_cast<int>(QuestId::MQ_01_BARROW_WIGHT);
                     mq_assigned[0] = true;
-                    sx = 4; sy = 7; // elderly man sprite (group 8)
+                    sx = 4; sy = 6; // elderly man sprite (row 7)
                     break;
             }
             npc_comp.home_x = me.x;
