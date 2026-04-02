@@ -57,6 +57,10 @@ private:
     BackgroundSelectScreen bg_screen_;
     TraitSelectScreen trait_screen_;
     bool class_unlocked_[CLASS_COUNT] = {}; // true = available
+    // Cached grid layout for mouse hit-testing
+    mutable int grid_x_ = 0, grid_y_ = 0;
+    mutable int grid_cell_w_ = 0, grid_cell_h_ = 0;
+    mutable int grid_cols_ = 6;
     std::string unlock_progress_[CLASS_COUNT]; // progress text for locked classes
 
     void randomize_name();

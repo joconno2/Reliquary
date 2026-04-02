@@ -25,14 +25,15 @@ public:
 private:
     int selected_ = 0;
     int resolution_index_ = 0;
-    int volume_ = 50;
+    int sfx_volume_ = 50;
+    int music_volume_ = 35;
     Audio* audio_ = nullptr;
     int scale_index_ = 0;
     bool should_close_ = false;
     bool scale_changed_ = false;
     bool keybinds_open_ = false; // sub-screen showing keybind reference
 
-    static constexpr int OPTION_COUNT = 5; // Resolution, Volume, UI Scale, Keybinds, Back
+    static constexpr int OPTION_COUNT = 6; // Resolution, SFX Vol, Music Vol, UI Scale, Keybinds, Back
 
     struct Resolution {
         int w, h;

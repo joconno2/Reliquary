@@ -36,7 +36,7 @@ static const MonsterDef MONSTER_TABLE[] = {
     {"giant rat",       SHEET_MONSTERS, 11, 6,  6,   6, 14,  6,  2, 0, 130, 40,  10},
     {"bat",             SHEET_MONSTERS, 11, 7,  4,   4, 16,  4,  1, 0, 150, 70,   5},
     {"kobold",          SHEET_MONSTERS,  0, 9,  6,   6, 12,  6,  1, 0, 120, 35,  10},
-    {"slime",           SHEET_MONSTERS,  7, 6, 16,   6,  4, 14,  2, 0,  60,  0,  15},
+    {"slime",           SHEET_MONSTERS,  9, 6, 16,   6,  4, 14,  2, 0,  60,  0,  15},
     {"goblin",          SHEET_MONSTERS,  2, 0,  8,   8, 12,  8,  2, 0, 110, 30,  15},
     {"giant spider",    SHEET_MONSTERS,  8, 6, 12,  10, 12,  8,  3, 1, 120, 20,  20},
     {"goblin archer",   SHEET_MONSTERS,  5, 0, 10,   8, 14,  8,  3, 0, 110, 25,  20},

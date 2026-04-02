@@ -37,6 +37,51 @@ bool TraitSelectScreen::can_confirm() const {
 }
 
 bool TraitSelectScreen::handle_input(SDL_Event& event) {
+    // Helper: toggle trait at cursor
+    auto toggle_trait = [&]() {
+        if (can_confirm()) {
+            confirmed_ = true;
+            return;
+        }
+        TraitId id = static_cast<TraitId>(cursor_);
+        const TraitInfo& info = get_trait_info(id);
+        if (is_selected(id)) {
+            selected_traits_.erase(
+                std::remove(selected_traits_.begin(), selected_traits_.end(), id),
+                selected_traits_.end());
+        } else {
+            if (info.is_positive && positive_selected_count() < 3) {
+                selected_traits_.push_back(id);
+                // Auto-jump to negative section when 3 positives selected
+                if (positive_selected_count() >= 3 && cursor_ < POSITIVE_TRAIT_COUNT) {
+                    cursor_ = POSITIVE_TRAIT_COUNT; // jump to first negative
+                }
+            } else if (!info.is_positive && negative_selected_count() < 2) {
+                selected_traits_.push_back(id);
+            }
+        }
+    };
+
+    // Mouse support
+    if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
+        // Calculate which trait was clicked based on list layout
+        // List starts at approximately y=list_top, each row is row_h tall
+        // We store these as member estimates — row_h_ and list_y_ set during render
+        if (row_h_ > 0) {
+            int click_y = event.button.y;
+            int rel_y = click_y - list_y_;
+            if (rel_y >= 0) {
+                int idx = rel_y / row_h_;
+                if (idx >= 0 && idx < TRAIT_COUNT) {
+                    cursor_ = idx;
+                    toggle_trait();
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     if (event.type != SDL_KEYDOWN) return false;
 
     switch (event.key.keysym.sym) {
@@ -49,41 +94,15 @@ bool TraitSelectScreen::handle_input(SDL_Event& event) {
             if (cursor_ < TRAIT_COUNT - 1) cursor_++;
             return true;
         case SDLK_RETURN:
-        case SDLK_e: {
-            // If all selections done and this is the confirm action
-            if (can_confirm()) {
-                confirmed_ = true;
-                return true;
-            }
-            // Toggle selection on current cursor
-            TraitId id = static_cast<TraitId>(cursor_);
-            const TraitInfo& info = get_trait_info(id);
-            if (is_selected(id)) {
-                // Deselect
-                selected_traits_.erase(
-                    std::remove(selected_traits_.begin(), selected_traits_.end(), id),
-                    selected_traits_.end());
-            } else {
-                // Select only if within limits
-                if (info.is_positive && positive_selected_count() < 3) {
-                    selected_traits_.push_back(id);
-                } else if (!info.is_positive && negative_selected_count() < 2) {
-                    selected_traits_.push_back(id);
-                }
-            }
+        case SDLK_e:
+            toggle_trait();
             return true;
-        }
-        case SDLK_SPACE: {
-            // Confirm if ready
-            if (can_confirm()) {
-                confirmed_ = true;
-                return true;
-            }
+        case SDLK_SPACE:
+            if (can_confirm()) { confirmed_ = true; }
             return true;
-        }
         case SDLK_ESCAPE:
         case SDLK_BACKSPACE:
-            return false; // caller handles going back
+            return false;
         default:
             return false;
     }
@@ -127,6 +146,10 @@ void TraitSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     int list_bottom = h - line_h * 2;
     // Scale row height to fill available space (2 section headers + gap take ~3 rows)
     int row_h  = std::max(line_h + 6, (list_bottom - list_y - line_h * 2 - 16) / TRAIT_COUNT);
+
+    // Cache layout for mouse hit-testing
+    row_h_ = row_h;
+    list_y_ = list_y + line_h + 4; // skip section header
 
     // Section header: Positive
     ui::draw_text(renderer, font, "-- Positive Traits --", section_col, list_x, list_y);

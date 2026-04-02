@@ -17,6 +17,10 @@ enum class BackgroundId : int {
     PLAGUE_DOCTOR,
     EXECUTIONER,
     FARMER,
+    GLADIATOR,
+    BEAST_TAMER,
+    MONK_OF_ORDER,
+    CURSED_NOBLE,
     COUNT
 };
 
@@ -140,6 +144,34 @@ inline const BackgroundInfo& get_background_info(BackgroundId id) {
          "You regenerate 1 extra HP per rest and begin with +3 max HP.",
          1, 0, 2, 0, 0, 0, 0,
          3, 0},
+        // GLADIATOR
+        {"Gladiator",
+         "You killed for sport. The crowd loved you. The dead didn't.",
+         "Crowd Pleaser",
+         "Kills give +50% XP. You live for violence.",
+         2, 1, 0, 0, 0, 0, 1,
+         5, 1},
+        // BEAST TAMER
+        {"Beast Tamer",
+         "Animals listen to you. People are harder.",
+         "Animal Bond",
+         "Pets grant double their passive bonus.",
+         0, 1, 0, 0, 0, 2, 1,
+         0, 0},
+        // MONK OF THE ORDER
+        {"Monk of the Order",
+         "Silence, discipline, and empty hands. That was enough.",
+         "Meditation",
+         "Rest heals 40% HP/MP. Inner peace.",
+         0, 0, 1, 0, 3, 0, 0,
+         0, 0},
+        // CURSED NOBLE
+        {"Cursed Noble",
+         "Your bloodline carries a gift and a price.",
+         "Noble Curse",
+         "+1 to all attributes, but diseases contract 50% more often.",
+         1, 1, 1, 1, 1, 1, 1,
+         0, 0},
     };
     int idx = static_cast<int>(id);
     if (idx < 0 || idx >= BACKGROUND_COUNT) {

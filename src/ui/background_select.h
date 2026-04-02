@@ -19,4 +19,6 @@ public:
 private:
     int selected_ = 0;
     bool confirmed_ = false;
+    mutable int row_h_ = 0;
+    mutable int list_y_ = 0;
 };

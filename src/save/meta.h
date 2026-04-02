@@ -28,13 +28,16 @@ struct MetaSave {
     std::array<bool, GOD_COUNT> gods_completed = {};
 
     // Per-class max level achieved
-    static constexpr int MAX_CLASSES = 17; // 4 base + 13 unlockable
+    static constexpr int MAX_CLASSES = 21; // 4 base + 17 unlockable
     std::array<int, MAX_CLASSES> class_max_level = {};
 
     // One-time achievement flags
     bool killed_unarmed = false;       // killed an enemy with no weapon equipped
     bool died_deep = false;            // died on dungeon level 4+
     bool killed_paragon = false;       // killed a rival paragon
+    int total_deaths = 0;             // total deaths across all runs
+    bool killed_dragon = false;        // killed a dragon
+    int max_diseases = 0;             // max simultaneous diseases in one run
 
     // Persistent bestiary (name → stats + total kills across runs)
     std::map<std::string, MetaBestiaryEntry> bestiary;

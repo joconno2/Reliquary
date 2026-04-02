@@ -4,6 +4,22 @@
 #include <cstdio>
 
 bool BackgroundSelectScreen::handle_input(SDL_Event& event) {
+    // Mouse support
+    if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
+        if (row_h_ > 0) {
+            int rel_y = event.button.y - list_y_;
+            if (rel_y >= 0) {
+                int idx = rel_y / row_h_;
+                if (idx >= 0 && idx < BACKGROUND_COUNT) {
+                    selected_ = idx;
+                    confirmed_ = true;
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     if (event.type != SDL_KEYDOWN) return false;
 
     switch (event.key.keysym.sym) {
@@ -62,6 +78,8 @@ void BackgroundSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     int list_bottom = h - line_h * 2;
     // Scale row height to fill available list space
     int row_h = std::max(line_h + 6, (list_bottom - list_top) / BACKGROUND_COUNT);
+    row_h_ = row_h;
+    list_y_ = list_top;
 
     for (int i = 0; i < BACKGROUND_COUNT; i++) {
         const BackgroundInfo& bg = get_background_info(static_cast<BackgroundId>(i));

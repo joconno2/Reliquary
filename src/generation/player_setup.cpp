@@ -37,7 +37,7 @@ PlayerResult create_player(World& world, const CharacterBuild& build,
         player_tint.g = static_cast<Uint8>(255 - (255 - gi.color.g) / 5);
         player_tint.b = static_cast<Uint8>(255 - (255 - gi.color.b) / 5);
     }
-    world.add<Renderable>(player, {SHEET_ROGUES, cls.sprite_x, cls.sprite_y,
+    world.add<Renderable>(player, {cls.sprite_sheet, cls.sprite_x, cls.sprite_y,
                                      player_tint, 10});
     world.add<Energy>(player, {0, 100});
     world.add<Inventory>(player);
@@ -139,6 +139,20 @@ PlayerResult create_player(World& world, const CharacterBuild& build,
         case ClassId::TEMPLAR:
             book.learn(SpellId::MINOR_HEAL);
             break;
+        case ClassId::WYRMKIN:
+            book.learn(SpellId::FIREBALL);
+            break;
+        case ClassId::REVENANT:
+            book.learn(SpellId::DRAIN_LIFE);
+            book.learn(SpellId::MINOR_HEAL);
+            break;
+        case ClassId::SERPENTINE:
+            book.learn(SpellId::POISON_CLOUD);
+            book.learn(SpellId::HASTEN);
+            break;
+        case ClassId::TROLLBLOOD:
+            book.learn(SpellId::HARDEN_SKIN);
+            break;
         default:
             book.learn(SpellId::MINOR_HEAL); // everyone gets minor heal
             break;
@@ -222,6 +236,22 @@ PlayerResult create_player(World& world, const CharacterBuild& build,
             break;
         case ClassId::HERETIC:
             // Godless -- starts with nothing
+            break;
+        case ClassId::WYRMKIN:
+            give_item("great axe", "A massive, heavy blade.", ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 2, 7, 0, 0, 0, 0);
+            give_item("scale mail", "Thick dragon-like scales.", ItemType::ARMOR_CHEST, EquipSlot::CHEST, 2, 12, 0, 4, 0, 0, 0);
+            break;
+        case ClassId::REVENANT:
+            give_item("rusted sword", "A blade from beyond the grave.", ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 0, 4, 0, 1, 0, 0);
+            give_item("burial shroud", "Torn cloth of the dead.", ItemType::ARMOR_CHEST, EquipSlot::CHEST, 0, 12, 0, 1, 0, 0, 0);
+            break;
+        case ClassId::SERPENTINE:
+            give_item("curved blade", "A serpentine edge.", ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 0, 4, 0, 2, 1, 0);
+            give_item("snakeskin vest", "Supple and light.", ItemType::ARMOR_CHEST, EquipSlot::CHEST, 1, 12, 0, 2, 0, 0, 0);
+            break;
+        case ClassId::TROLLBLOOD:
+            give_item("stone club", "Crude but devastating.", ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 2, 8, 0, 0, 0, 0);
+            // No armor — trollbloods rely on HP and regen
             break;
         default: break;
     }

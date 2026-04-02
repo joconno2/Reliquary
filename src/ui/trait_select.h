@@ -21,6 +21,8 @@ private:
     int cursor_ = 0;             // index into the full trait list
     bool confirmed_ = false;
     std::vector<TraitId> selected_traits_;
+    mutable int row_h_ = 0;      // cached for mouse hit-testing
+    mutable int list_y_ = 0;     // cached for mouse hit-testing
 
     bool is_selected(TraitId id) const;
     int positive_selected_count() const;

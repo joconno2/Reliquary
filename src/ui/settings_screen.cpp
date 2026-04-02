@@ -28,9 +28,12 @@ bool SettingsScreen::handle_input(SDL_Event& event, SDL_Window* window) {
             if (selected_ == 0) {
                 resolution_index_ = (resolution_index_ - 1 + RES_COUNT) % RES_COUNT;
             } else if (selected_ == 1) {
-                if (volume_ > 0) volume_ -= 5;
-                if (audio_) { audio_->set_volume(volume_); audio_->set_music_volume(volume_); }
+                if (sfx_volume_ > 0) sfx_volume_ -= 5;
+                if (audio_) audio_->set_volume(sfx_volume_);
             } else if (selected_ == 2) {
+                if (music_volume_ > 0) music_volume_ -= 5;
+                if (audio_) audio_->set_music_volume(music_volume_);
+            } else if (selected_ == 3) {
                 scale_index_ = (scale_index_ - 1 + SCALE_COUNT) % SCALE_COUNT;
                 scale_changed_ = true;
             }
@@ -41,9 +44,12 @@ bool SettingsScreen::handle_input(SDL_Event& event, SDL_Window* window) {
             if (selected_ == 0) {
                 resolution_index_ = (resolution_index_ + 1) % RES_COUNT;
             } else if (selected_ == 1) {
-                if (volume_ < 100) volume_ += 5;
-                if (audio_) { audio_->set_volume(volume_); audio_->set_music_volume(volume_); }
+                if (sfx_volume_ < 100) sfx_volume_ += 5;
+                if (audio_) audio_->set_volume(sfx_volume_);
             } else if (selected_ == 2) {
+                if (music_volume_ < 100) music_volume_ += 5;
+                if (audio_) audio_->set_music_volume(music_volume_);
+            } else if (selected_ == 3) {
                 scale_index_ = (scale_index_ + 1) % SCALE_COUNT;
                 scale_changed_ = true;
             }
@@ -61,12 +67,10 @@ bool SettingsScreen::handle_input(SDL_Event& event, SDL_Window* window) {
                     SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
                 }
                 return true;
-            } else if (selected_ == 3) {
-                // Keybinds
+            } else if (selected_ == 4) {
                 keybinds_open_ = true;
                 return true;
-            } else if (selected_ == 4) {
-                // Back
+            } else if (selected_ == 5) {
                 should_close_ = true;
                 return true;
             }
@@ -139,57 +143,73 @@ void SettingsScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     }
     y += line_h + 16;
 
-    // Volume
+    // SFX Volume
     draw_option_bg(1);
-    ui::draw_text(renderer, font, "Volume", sel_or(1, normal_col), label_x, y);
+    ui::draw_text(renderer, font, "SFX Volume", sel_or(1, normal_col), label_x, y);
     {
-        int bar_w = 120;
-        int bar_h = 12;
+        int bar_w = 120, bar_h = 12;
         int bar_x = val_x - bar_w - 50;
         int bar_y_ = y + (line_h - bar_h) / 2;
         SDL_Rect bar_bg = {bar_x, bar_y_, bar_w, bar_h};
         SDL_SetRenderDrawColor(renderer, 40, 35, 50, 255);
         SDL_RenderFillRect(renderer, &bar_bg);
-        int fill_w = (volume_ * bar_w) / 100;
-        SDL_Rect bar_fill = {bar_x, bar_y_, fill_w, bar_h};
+        SDL_Rect bar_fill = {bar_x, bar_y_, (sfx_volume_ * bar_w) / 100, bar_h};
         SDL_SetRenderDrawColor(renderer, 140, 120, 160, 255);
         SDL_RenderFillRect(renderer, &bar_fill);
         SDL_SetRenderDrawColor(renderer, 60, 50, 70, 255);
         SDL_RenderDrawRect(renderer, &bar_bg);
-
-        char vol_buf[16];
-        snprintf(vol_buf, sizeof(vol_buf), "%d%%", volume_);
-        int tw = 0, th = 0;
-        TTF_SizeText(font, vol_buf, &tw, &th);
+        char vol_buf[16]; snprintf(vol_buf, sizeof(vol_buf), "%d%%", sfx_volume_);
+        int tw = 0, th = 0; TTF_SizeText(font, vol_buf, &tw, &th);
         ui::draw_text(renderer, font, vol_buf, sel_or(1, value_col), val_x - tw, y);
     }
     y += line_h + 16;
 
-    // UI Scale
+    // Music Volume
     draw_option_bg(2);
-    ui::draw_text(renderer, font, "UI Scale", sel_or(2, normal_col), label_x, y);
+    ui::draw_text(renderer, font, "Music Volume", sel_or(2, normal_col), label_x, y);
+    {
+        int bar_w = 120, bar_h = 12;
+        int bar_x = val_x - bar_w - 50;
+        int bar_y_ = y + (line_h - bar_h) / 2;
+        SDL_Rect bar_bg = {bar_x, bar_y_, bar_w, bar_h};
+        SDL_SetRenderDrawColor(renderer, 40, 35, 50, 255);
+        SDL_RenderFillRect(renderer, &bar_bg);
+        SDL_Rect bar_fill = {bar_x, bar_y_, (music_volume_ * bar_w) / 100, bar_h};
+        SDL_SetRenderDrawColor(renderer, 100, 140, 160, 255);
+        SDL_RenderFillRect(renderer, &bar_fill);
+        SDL_SetRenderDrawColor(renderer, 60, 50, 70, 255);
+        SDL_RenderDrawRect(renderer, &bar_bg);
+        char vol_buf[16]; snprintf(vol_buf, sizeof(vol_buf), "%d%%", music_volume_);
+        int tw = 0, th = 0; TTF_SizeText(font, vol_buf, &tw, &th);
+        ui::draw_text(renderer, font, vol_buf, sel_or(2, value_col), val_x - tw, y);
+    }
+    y += line_h + 16;
+
+    // UI Scale
+    draw_option_bg(3);
+    ui::draw_text(renderer, font, "UI Scale", sel_or(3, normal_col), label_x, y);
     {
         char buf[32];
         snprintf(buf, sizeof(buf), "< %s >", SCALE_LABELS[scale_index_]);
         int tw = 0, th = 0;
         TTF_SizeText(font, buf, &tw, &th);
-        ui::draw_text(renderer, font, buf, sel_or(2, value_col), val_x - tw, y);
+        ui::draw_text(renderer, font, buf, sel_or(3, value_col), val_x - tw, y);
     }
     y += line_h + 16;
 
     // Keybinds
-    draw_option_bg(3);
-    ui::draw_text(renderer, font, "Keybinds", sel_or(3, normal_col), label_x, y);
+    draw_option_bg(4);
+    ui::draw_text(renderer, font, "Keybinds", sel_or(4, normal_col), label_x, y);
     {
         int tw = 0, th = 0;
         TTF_SizeText(font, "View >", &tw, &th);
-        ui::draw_text(renderer, font, "View >", sel_or(3, dim_col), val_x - tw, y);
+        ui::draw_text(renderer, font, "View >", sel_or(4, dim_col), val_x - tw, y);
     }
     y += line_h + 16;
 
     // Back
-    draw_option_bg(4);
-    ui::draw_text(renderer, font, "Back", sel_or(4, normal_col), label_x, y);
+    draw_option_bg(5);
+    ui::draw_text(renderer, font, "Back", sel_or(5, normal_col), label_x, y);
 
     // Hints
     ui::draw_text_centered(renderer, font,

@@ -72,4 +72,5 @@ struct Diseases {
     }
 
     bool empty() const { return active.empty(); }
+    int count() const { return static_cast<int>(active.size()); }
 };

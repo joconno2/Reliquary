@@ -120,6 +120,30 @@ static const LevelUpChoice CLASS_PERKS[] = {
      static_cast<int>(Attr::DEX), 2, 0, 0, 0, 2, 0, ClassId::BANDIT},
     {"Slippery: +15 Speed, +2 PER", "Always one step ahead.",
      static_cast<int>(Attr::PER), 2, 0, 0, 15, 0, 0, ClassId::BANDIT},
+
+    // Wyrmkin
+    {"Dragon Fire: +3 CON, +1 Damage", "The flame burns hotter within you.",
+     static_cast<int>(Attr::CON), 3, 0, 0, 0, 1, 0, ClassId::WYRMKIN},
+    {"Scaled Hide: +2 Armor, +8 HP", "Your skin hardens to scale.",
+     -1, 0, 8, 0, 0, 0, 2, ClassId::WYRMKIN},
+
+    // Revenant
+    {"Undying Will: +3 WIL, +6 HP", "You refuse to stay dead.",
+     static_cast<int>(Attr::WIL), 3, 6, 0, 0, 0, 0, ClassId::REVENANT},
+    {"Death's Reach: +2 Damage, +4 MP", "The grave lends its strength.",
+     -1, 0, 0, 4, 0, 2, 0, ClassId::REVENANT},
+
+    // Serpentine
+    {"Venom Strike: +3 DEX, +1 Damage", "Every cut carries poison.",
+     static_cast<int>(Attr::DEX), 3, 0, 0, 0, 1, 0, ClassId::SERPENTINE},
+    {"Serpent's Grace: +15 Speed, +2 PER", "Strike before they blink.",
+     static_cast<int>(Attr::PER), 2, 0, 0, 15, 0, 0, ClassId::SERPENTINE},
+
+    // Trollblood
+    {"Regenerate: +15 HP, +2 CON", "Your wounds knit shut before your eyes.",
+     static_cast<int>(Attr::CON), 2, 15, 0, 0, 0, 0, ClassId::TROLLBLOOD},
+    {"Thick Skull: +2 Armor, +2 STR", "Built like a mountain that punches back.",
+     static_cast<int>(Attr::STR), 2, 0, 0, 0, 0, 2, ClassId::TROLLBLOOD},
 };
 static constexpr int CLASS_PERK_COUNT = sizeof(CLASS_PERKS) / sizeof(CLASS_PERKS[0]);
 

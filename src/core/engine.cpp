@@ -1541,6 +1541,35 @@ void Engine::try_move_player(int dx, int dy) {
         auto atk_result = combat::melee_attack(world_, player_, target, rng_, log_);
         player_acted_ = true;
 
+        // Clumsy: 10% chance to fumble (turn hit into miss)
+        if (atk_result.hit) {
+            for (auto tid : build_traits_) {
+                if (tid == TraitId::CLUMSY && rng_.chance(10)) {
+                    // Refund damage
+                    if (world_.has<Stats>(target))
+                        world_.get<Stats>(target).hp += atk_result.damage;
+                    atk_result.hit = false;
+                    atk_result.damage = 0;
+                    log_.add("You fumble the attack!", {200, 180, 100, 255});
+                    break;
+                }
+            }
+        }
+
+        // Sure-Handed: 10% chance to strike twice
+        if (atk_result.hit && !atk_result.killed && world_.has<Stats>(target)) {
+            for (auto tid : build_traits_) {
+                if (tid == TraitId::SURE_HANDED && rng_.chance(10)) {
+                    auto bonus_hit = combat::melee_attack(world_, player_, target, rng_, log_);
+                    if (bonus_hit.hit) {
+                        log_.add("Double strike!", {220, 220, 140, 255});
+                        if (bonus_hit.killed) atk_result.killed = true;
+                    }
+                    break;
+                }
+            }
+        }
+
         // God passive combat bonuses (applied as extra damage after hit)
         if (atk_result.hit && world_.has<GodAlignment>(player_) && world_.has<Stats>(target)) {
             auto& ga = world_.get<GodAlignment>(player_);
@@ -1718,6 +1747,7 @@ void Engine::try_move_player(int dx, int dy) {
             // Meta tracking
             meta_.total_kills++;
             run_kills_++;
+            if (victim_name == "dragon") meta_.killed_dragon = true;
             if (is_undead(victim_name.c_str())) {
                 meta_.total_undead_kills++;
                 journal_.add_progress(QuestId::SQ_UNDEAD_PATROL);
@@ -1807,6 +1837,19 @@ void Engine::try_move_player(int dx, int dy) {
             }
         }
 
+        // Trait: Venomous — 10% chance to poison on hit
+        if (atk_result.hit && !atk_result.killed) {
+            for (auto tid : build_traits_) {
+                if (tid == TraitId::VENOMOUS && rng_.chance(10) && world_.has<Stats>(target)) {
+                    if (!world_.has<StatusEffects>(target))
+                        world_.add<StatusEffects>(target, {});
+                    world_.get<StatusEffects>(target).add(StatusType::POISON, 2, 6);
+                    log_.add("Your venomous strike poisons the enemy.", {100, 200, 80, 255});
+                    break;
+                }
+            }
+        }
+
         // Trait: Bloodlust — heal on kill
         if (atk_result.killed && world_.has<Stats>(player_)) {
             for (TraitId tid : build_traits_) {
@@ -1817,7 +1860,7 @@ void Engine::try_move_player(int dx, int dy) {
                     if (heal > 0) {
                         ps.hp += heal;
                         char hbuf[64];
-                        snprintf(hbuf, sizeof(hbuf), "Bloodlust. (+%d HP)", heal);
+                        snprintf(hbuf, sizeof(hbuf), "Bloodlust! (+%d HP)", heal);
                         log_.add(hbuf, {200, 100, 100, 255});
                     }
                 }
@@ -2201,6 +2244,40 @@ void Engine::process_turn() {
             auto mresult = combat::melee_attack(world_, e, player_, rng_, log_);
             if (mresult.hit) {
                 auto& pp = world_.get<Position>(player_);
+                // Quick-Footed: 15% dodge (negate the hit)
+                if (mresult.hit && !mresult.critical) {
+                    for (auto tid : build_traits_) {
+                        if (tid == TraitId::QUICK_FOOTED && rng_.chance(15)) {
+                            // Refund the damage
+                            if (world_.has<Stats>(player_)) {
+                                world_.get<Stats>(player_).hp += mresult.damage;
+                                log_.add("You dodge the attack!", {140, 220, 140, 255});
+                            }
+                            mresult.hit = false;
+                            break;
+                        }
+                    }
+                }
+                // Frail: crits deal double damage
+                if (mresult.hit && mresult.critical && world_.has<Stats>(player_)) {
+                    for (auto tid : build_traits_) {
+                        if (tid == TraitId::FRAIL) {
+                            world_.get<Stats>(player_).hp -= mresult.damage; // extra damage = double
+                            break;
+                        }
+                    }
+                }
+                // Trait: Second Wind — 10% chance to heal 3 HP when hit
+                if (mresult.hit && world_.has<Stats>(player_)) {
+                    for (auto tid : build_traits_) {
+                        if (tid == TraitId::SECOND_WIND && rng_.chance(10)) {
+                            auto& ps = world_.get<Stats>(player_);
+                            int heal = std::min(3, ps.hp_max - ps.hp);
+                            if (heal > 0) { ps.hp += heal; }
+                            break;
+                        }
+                    }
+                }
                 // Background damage reduction
                 if (mresult.hit && mresult.damage > 0) {
                     auto& mname2 = world_.get<Stats>(e).name;
@@ -2279,6 +2356,13 @@ void Engine::process_turn() {
                     ms.hp = std::min(ms.hp_max, ms.hp + 2);
                 if (ms.name == "slime" && ms.hp > 0 && ms.hp < ms.hp_max)
                     ms.hp = std::min(ms.hp_max, ms.hp + 1);
+            }
+            // Trollblood player class: regenerate 1 HP every 3 turns
+            if (e == player_ && creation_screen_.get_build().class_id == ClassId::TROLLBLOOD
+                && world_.has<Stats>(player_) && game_turn_ % 3 == 0) {
+                auto& ps = world_.get<Stats>(player_);
+                if (ps.hp > 0 && ps.hp < ps.hp_max)
+                    ps.hp = std::min(ps.hp_max, ps.hp + 1);
             }
             // Skeleton shield — 25% chance to block melee attacks entirely
             // (already handled implicitly by high natural_armor, but add message)
@@ -2823,11 +2907,8 @@ void Engine::update_music_for_location() {
 
     if (dungeon_level_ <= 0) {
         // Overworld — check if near a town
-        bool in_town = false;
-        if (world_.has<Position>(player_)) {
-            auto& pp = world_.get<Position>(player_);
-            in_town = (near_town(pp.x, pp.y, 25) >= 0);
-        }
+        // Use cached near_town result (updated on player move)
+        bool in_town = (cached_near_town_ >= 0);
 
         // Day/night cycle: 100-turn period (day for first 50, night for last 50)
         bool is_night = ((game_turn_ / 50) % 2) == 1;
@@ -2871,13 +2952,19 @@ void Engine::update_music_for_location() {
         }
 
         // Check for boss/paragon on this level (has GodAlignment + AI = paragon, or QuestTarget = boss)
-        bool has_boss = false;
-        auto& ai_pool = world_.pool<AI>();
-        for (size_t i = 0; i < ai_pool.size(); i++) {
-            Entity e = ai_pool.entity_at(i);
-            if (world_.has<GodAlignment>(e) || world_.has<QuestTarget>(e)) {
-                has_boss = true;
-                break;
+        // Boss detection — only recheck on floor change (not every 10 turns)
+        static bool has_boss = false;
+        static int boss_check_floor = -999;
+        if (boss_check_floor != dungeon_level_) {
+            has_boss = false;
+            boss_check_floor = dungeon_level_;
+            auto& ai_pool = world_.pool<AI>();
+            for (size_t i = 0; i < ai_pool.size(); i++) {
+                Entity e = ai_pool.entity_at(i);
+                if (world_.has<GodAlignment>(e) || world_.has<QuestTarget>(e)) {
+                    has_boss = true;
+                    break;
+                }
             }
         }
 
@@ -2942,6 +3029,10 @@ bool Engine::is_class_unlocked(ClassId id) const {
         case ClassId::NECROMANCER:  return meta_.total_dark_arts_casts >= 30;
         case ClassId::SCHEMA_MONK:  return meta_.class_max_level[static_cast<int>(ClassId::MONK)] >= 12;
         case ClassId::HERETIC:      return meta_.gods_completed_count() >= GOD_COUNT;
+        case ClassId::WYRMKIN:      return meta_.killed_dragon;
+        case ClassId::REVENANT:     return meta_.total_deaths >= 10;
+        case ClassId::SERPENTINE:   return meta_.max_diseases >= 3;
+        case ClassId::TROLLBLOOD:   return meta_.max_dungeon_depth >= 8;
         default: return false;
     }
 }
@@ -2953,8 +3044,17 @@ void Engine::update_meta_on_end() {
         was_unlocked[i] = is_class_unlocked(static_cast<ClassId>(i));
 
     // Update max depth
-    if (dungeon_level_ > meta_.max_dungeon_depth)
-        meta_.max_dungeon_depth = dungeon_level_;
+    if (run_deepest_ > meta_.max_dungeon_depth)
+        meta_.max_dungeon_depth = run_deepest_;
+
+    // Track deaths (for Revenant unlock)
+    if (state_ == GameState::DEAD) meta_.total_deaths++;
+
+    // Track max simultaneous diseases (for Serpentine unlock)
+    if (world_.has<Diseases>(player_)) {
+        int dcount = world_.get<Diseases>(player_).count();
+        if (dcount > meta_.max_diseases) meta_.max_diseases = dcount;
+    }
 
     // Update max gold
     if (gold_ > meta_.max_gold_single_run)
@@ -3360,8 +3460,10 @@ void Engine::try_rest() {
         }
     }
 
-    // In dungeon: 40% chance of interruption (+ 3% per floor)
-    if (dungeon_level_ > 0 && rng_.chance(40 + dungeon_level_ * 3)) {
+    // In dungeon: 40% chance of interruption (+ 3% per floor, Heavy Sleeper: +20%)
+    int rest_interrupt = 40 + dungeon_level_ * 3;
+    for (auto tid : build_traits_) if (tid == TraitId::HEAVY_SLEEPER) rest_interrupt += 20;
+    if (dungeon_level_ > 0 && rng_.chance(rest_interrupt)) {
         // Spawn a wandering monster nearby
         auto& ppos = world_.get<Position>(player_);
         // Try to place monster within 3 tiles
@@ -3401,13 +3503,15 @@ void Engine::try_rest() {
     rested_this_floor_ = true;
     if (dungeon_level_ <= 0) turn_actions_.rested_on_surface = true;
 
-    // Rest succeeds — restore 15% of max HP and MP (Lethis: 30%, Farmer: 25%)
+    // Rest succeeds — restore 15% of max HP and MP (Lethis: 33%, Farmer: 25%, Monk of Order: 40%)
     int rest_pct = 7; // default: ~15% (divide by 7)
     if (world_.has<GodAlignment>(player_)) {
         auto& ga = world_.get<GodAlignment>(player_);
         if (ga.god == GodId::LETHIS) rest_pct = 3; // ~33%
     }
-    if (background_ == BackgroundId::FARMER && rest_pct > 4)
+    if (background_ == BackgroundId::MONK_OF_ORDER && rest_pct > 3)
+        rest_pct = 3; // ~33% (Meditation — stacks with Lethis for ~50%)
+    else if (background_ == BackgroundId::FARMER && rest_pct > 4)
         rest_pct = 4; // ~25% (Hardy Stock)
     int hp_restore = std::max(1, stats.hp_max / rest_pct);
     int mp_restore = std::max(1, stats.mp_max / rest_pct);
@@ -3581,6 +3685,9 @@ void Engine::handle_inventory_action(InvAction action) {
                         if (ga.god == GodId::YASHKHET) heal_amt = heal_amt / 2;
                         else if (ga.god == GodId::SYTHARA) heal_amt = heal_amt * 7 / 10;
                     }
+                    // Cursed Blood trait: healing potions -50%
+                    for (auto tid : build_traits_)
+                        if (tid == TraitId::CURSED_BLOOD) { heal_amt = heal_amt / 2; break; }
                     int healed = std::min(heal_amt, stats.hp_max - stats.hp);
                     stats.hp += healed;
                     if (healed > 0) meta_.total_hp_healed += healed;
@@ -4680,6 +4787,17 @@ void Engine::handle_input() {
                             char dbuf[64];
                             snprintf(dbuf, sizeof(dbuf), "Depth %d.", dungeon_level_);
                             log_.add(dbuf, {120, 115, 110, 255});
+                        }
+                        // Brittle Bones: take 1-3 damage from stairs
+                        for (auto tid : build_traits_) {
+                            if (tid == TraitId::BRITTLE_BONES && world_.has<Stats>(player_)) {
+                                int fall_dmg = rng_.range(1, 3);
+                                world_.get<Stats>(player_).hp -= fall_dmg;
+                                char fbuf[64];
+                                snprintf(fbuf, sizeof(fbuf), "The descent jars your bones. (-%d HP)", fall_dmg);
+                                log_.add(fbuf, {200, 160, 120, 255});
+                                break;
+                            }
                         }
                     } else if (tile_type == TileType::STAIRS_UP &&
                                event.key.keysym.sym != SDLK_GREATER) {

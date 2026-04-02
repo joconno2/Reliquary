@@ -159,8 +159,28 @@ bool CreationScreen::handle_input(SDL_Event& event) {
     if (phase_ == CreationPhase::CLASS_SELECT) max_sel = CLASS_COUNT;
     else if (phase_ == CreationPhase::GOD_SELECT) max_sel = GOD_COUNT;
 
-    // Grid navigation for class select (6 columns), linear for god select
-    int grid_cols = (phase_ == CreationPhase::CLASS_SELECT) ? 6 : 1;
+    // Mouse click: select item by position
+    if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
+        if (phase_ == CreationPhase::CLASS_SELECT && grid_cell_w_ > 0 && grid_cell_h_ > 0) {
+            int col = (event.button.x - grid_x_) / grid_cell_w_;
+            int row = (event.button.y - grid_y_) / grid_cell_h_;
+            int cols = grid_cols_;
+            int idx = row * cols + col;
+            if (idx >= 0 && idx < CLASS_COUNT && col >= 0 && col < cols) {
+                selected_ = idx;
+                if (class_unlocked_[selected_]) {
+                    build_.class_id = static_cast<ClassId>(selected_);
+                    randomize_name();
+                    phase_ = CreationPhase::NAME_ENTRY;
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Grid navigation for class select (uses cached column count), linear for god select
+    int grid_cols = (phase_ == CreationPhase::CLASS_SELECT) ? grid_cols_ : 1;
 
     switch (event.key.keysym.sym) {
         case SDLK_UP:
@@ -284,24 +304,30 @@ void CreationScreen::render_class_select(SDL_Renderer* renderer, TTF_Font* font,
 
     // === Sprite grid — fill most of the screen ===
     // Reserve bottom strip for selected class info
-    int info_area_h = title_h + line_h * 5 + 20;
+    int info_area_h = title_h + line_h * 4 + 16;
     int grid_top = margin + title_h;
     int grid_bottom = h - info_area_h;
     int grid_h = grid_bottom - grid_top;
     int grid_w = w - margin * 2;
 
     // Compute cell size: try to fit all CLASS_COUNT in a grid
-    // Target: ~6 columns, let rows be flexible
-    int cols = 6;
-    if (w < 1200) cols = 5;
+    // Target: ~7 columns for 21+ classes, flexible for smaller screens
+    int cols = 7;
+    if (w < 1400) cols = 6;
+    if (w < 1000) cols = 5;
     if (w < 800) cols = 4;
     int rows = (CLASS_COUNT + cols - 1) / cols;
 
     int cell_w = grid_w / cols;
     int cell_h = grid_h / rows;
-    // Sprite at ~70% of cell, centered with room for name
-    int sprite_sz = std::min(cell_w - 12, cell_h - line_h - 12) * 7 / 10;
-    if (sprite_sz < 32) sprite_sz = 32;
+    // Sprite at ~55% of cell, centered with room for name below
+    int sprite_sz = std::min(cell_w - 10, cell_h - line_h - 10) * 55 / 100;
+    if (sprite_sz < 24) sprite_sz = 24;
+
+    // Cache grid layout for mouse hit-testing
+    grid_x_ = margin; grid_y_ = grid_top;
+    grid_cell_w_ = cell_w; grid_cell_h_ = cell_h;
+    grid_cols_ = cols;
 
     for (int i = 0; i < CLASS_COUNT; i++) {
         int col = i % cols;
@@ -328,16 +354,16 @@ void CreationScreen::render_class_select(SDL_Renderer* renderer, TTF_Font* font,
         int sx = cx - sprite_sz / 2;
         int sy = box_y + pad;
         SDL_Color tint = unlocked ? SDL_Color{255,255,255,255} : SDL_Color{50,45,40,255};
-        sprites.draw_sprite_sized(renderer, SHEET_ROGUES, c.sprite_x, c.sprite_y,
+        sprites.draw_sprite_sized(renderer, c.sprite_sheet, c.sprite_x, c.sprite_y,
                                    sx, sy, sprite_sz, tint);
 
-        // Name below sprite (clipped to cell width to prevent overlap)
+        // Name below sprite — use body font (smaller, fits better in grid)
         SDL_Color ncol = unlocked ? (is_sel ? sel_col : normal_col) : lock_col;
-        SDL_Rect cell_clip = {margin + col * cell_w, sy + sprite_sz, cell_w, line_h + 8};
+        SDL_Rect cell_clip = {margin + col * cell_w, sy + sprite_sz, cell_w, cell_h - sprite_sz - pad};
         SDL_RenderSetClipRect(renderer, &cell_clip);
-        ui::draw_text_centered(renderer, font_title ? font_title : font,
+        ui::draw_text_centered(renderer, font,
                                 unlocked ? c.name : "???", ncol,
-                                cx, sy + sprite_sz + 4);
+                                cx, sy + sprite_sz + 2);
         SDL_RenderSetClipRect(renderer, nullptr);
     }
 
@@ -395,7 +421,7 @@ void CreationScreen::render_name_entry(SDL_Renderer* renderer, TTF_Font* font,
     int total_content_h = sprite_size + line_h * 5 + 60;
     int sprite_x = w / 2 - sprite_size / 2;
     int sprite_y = (h - total_content_h) / 2 - line_h; // centered
-    sprites.draw_sprite_sized(renderer, SHEET_ROGUES, cls.sprite_x, cls.sprite_y,
+    sprites.draw_sprite_sized(renderer, cls.sprite_sheet, cls.sprite_x, cls.sprite_y,
                                sprite_x, sprite_y, sprite_size);
 
     int y = sprite_y + sprite_size + 12;
@@ -844,7 +870,7 @@ void CreationScreen::render_character_preview(SDL_Renderer* renderer, TTF_Font* 
         sprite_tint.g = static_cast<Uint8>(255 - (255 - gg) / 4);
         sprite_tint.b = static_cast<Uint8>(255 - (255 - gb) / 4);
     }
-    sprites.draw_sprite_sized(renderer, SHEET_ROGUES, cls.sprite_x, cls.sprite_y,
+    sprites.draw_sprite_sized(renderer, cls.sprite_sheet, cls.sprite_x, cls.sprite_y,
                                sx, sy, SS, sprite_tint, false);
 
     y += SS + line_h;
