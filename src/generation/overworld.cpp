@@ -243,6 +243,156 @@ void populate(World& world, TileMap& map, RNG& rng,
         "The herbs won't help. The prayers won't help. The only cure for what's down there is not going down there.");
 
     // =============================================
+    // ADDITIONAL POINTS OF INTEREST (by province)
+    // =============================================
+
+    // --- Frozen Marches (Gathruun, y < 400) ---
+
+    // Frozen waterfall — ice and rock formation
+    paint_lake(1100, 200, 3);
+    for (int i = 0; i < 6; i++) {
+        int rx = 1100 + rng.range(-3, 3);
+        int ry = 195 + rng.range(-2, 0);
+        if (map.in_bounds(rx, ry)) map.at(rx, ry).type = TileType::ROCK;
+    }
+    place_lore(1102, 203, "frozen inscription",
+        "The waterfall stopped in midwinter. It never started again. The ice remembers the shape of falling.");
+
+    // Collapsed mine
+    paint_ruin(800, 250);
+    place_lore(800, 250, "mine foreman's log",
+        "Shaft 3 broke through into something. Not rock. Not cave. The miners refuse to go back.");
+    spawn_ow_npc(805, 252, "Old Miner", "We found mithril down there. And something that didn't want us finding it.", NPCRole::FARMER, 1, 5);
+
+    // Stone circle — ritual site
+    for (int a = 0; a < 6; a++) {
+        float angle = a * 1.047f; // 60 degrees
+        int sx = 1400 + static_cast<int>(4 * std::cos(angle));
+        int sy = 200 + static_cast<int>(4 * std::sin(angle));
+        if (map.in_bounds(sx, sy)) map.at(sx, sy).type = TileType::ROCK;
+    }
+    if (map.in_bounds(1400, 200)) map.at(1400, 200).type = TileType::FLOOR_STONE;
+    place_lore(1400, 202, "charred altar stone",
+        "The circle was here before Gathruun claimed the Marches. The ashes are not from any wood.");
+
+    // --- Heartlands (Morreth, center) ---
+
+    // War memorial — south of Thornwall
+    paint_ruin(1050, 850);
+    for (int i = 0; i < 5; i++) {
+        int mx = 1050 + rng.range(-3, 3);
+        int my = 850 + rng.range(-3, 3);
+        if (map.in_bounds(mx, my) && map.is_walkable(mx, my))
+            map.at(mx, my).type = TileType::FLOOR_STONE;
+    }
+    place_lore(1050, 850, "war memorial plaque",
+        "To the garrison of the Fourth Watch, who held this crossing for eleven days. None survived.");
+
+    // Crossroads shrine — between Thornwall and Millhaven
+    if (map.in_bounds(920, 850)) map.at(920, 850).type = TileType::FLOOR_STONE;
+    if (map.in_bounds(919, 850)) map.at(919, 850).type = TileType::ROCK;
+    place_lore(921, 851, "roadside prayer stone",
+        "Travelers leave coins here. The shrine takes them. No one knows where they go.");
+
+    // Abandoned farmstead
+    paint_ruin(1100, 800);
+    place_lore(1100, 802, "scorched diary",
+        "Day 40. The soldiers passed through again. They took the harvest. Day 41. There is nothing left to take.");
+
+    // --- Pale Reach (Soleth, y < 600, x > 900) ---
+
+    // Burned village
+    paint_ruin(1300, 500);
+    paint_ruin(1310, 505);
+    for (int i = 0; i < 8; i++) {
+        int bx = 1305 + rng.range(-8, 8);
+        int by = 502 + rng.range(-5, 5);
+        if (map.in_bounds(bx, by) && map.is_walkable(bx, by))
+            map.at(bx, by).type = TileType::FLOOR_BONE;
+    }
+    place_lore(1305, 503, "charred signpost",
+        "This was Ember's Rest. The name turned out to be prophetic.");
+    spawn_ow_npc(1308, 500, "Survivor", "Soleth's faithful burned it. Said the town was unclean. Maybe it was.", NPCRole::FARMER, 0, 5);
+
+    // Signal beacon (intact)
+    if (map.in_bounds(1150, 450)) map.at(1150, 450).type = TileType::ROCK;
+    if (map.in_bounds(1151, 450)) map.at(1151, 450).type = TileType::ROCK;
+    if (map.in_bounds(1150, 449)) map.at(1150, 449).type = TileType::ROCK;
+    spawn_ow_npc(1152, 451, "Beacon Keeper", "When I light this, help comes. I haven't lit it yet. I keep hoping I won't have to.", NPCRole::GUARD, 2, 5);
+
+    // --- Iron Coast (Ossren, x > 1100, center-south) ---
+
+    // Abandoned forge
+    paint_ruin(1500, 900);
+    place_lore(1500, 900, "smith's last work",
+        "The anvil cracked under the last blow. The metal was wrong. It came from too deep.");
+    spawn_ow_npc(1505, 902, "Retired Smithy", "I made weapons for thirty years. Then I made something I couldn't unmake.", NPCRole::FARMER, 4, 5);
+
+    // Quarry
+    for (int i = 0; i < 10; i++) {
+        int qx = 1600 + rng.range(-5, 5);
+        int qy = 800 + rng.range(-4, 4);
+        if (map.in_bounds(qx, qy)) map.at(qx, qy).type = TileType::ROCK;
+    }
+    for (int i = 0; i < 6; i++) {
+        int qx = 1600 + rng.range(-3, 3);
+        int qy = 800 + rng.range(-2, 2);
+        if (map.in_bounds(qx, qy)) map.at(qx, qy).type = TileType::FLOOR_STONE;
+    }
+    place_lore(1600, 800, "quarry overseer's note",
+        "Good stone here. Deep veins. But the workers hear tapping from below. Tapping that answers back.");
+
+    // Merchant caravan wreck
+    paint_ruin(1350, 1050);
+    place_lore(1350, 1050, "torn manifest",
+        "Shipment for Ironhearth. 40 ingots iron, 12 silver, 3 mithril. Ambushed at the crossing. All lost.");
+
+    // --- Dust Provinces (Sythara, y > 1000) ---
+
+    // Plague pit
+    for (int i = 0; i < 12; i++) {
+        int px = 1000 + rng.range(-6, 6);
+        int py = 1200 + rng.range(-4, 4);
+        if (map.in_bounds(px, py) && map.is_walkable(px, py))
+            map.at(px, py).type = TileType::FLOOR_BONE;
+    }
+    place_lore(1000, 1200, "plague warden's marker",
+        "CONDEMNED. Do not dig. Do not camp. Do not linger. The soil itself is sick.");
+
+    // Dried oasis
+    for (int i = 0; i < 4; i++) {
+        int ox = 1150 + rng.range(-3, 3);
+        int oy = 1250 + rng.range(-2, 2);
+        if (map.in_bounds(ox, oy)) map.at(ox, oy).type = TileType::FLOOR_SAND;
+    }
+    if (map.in_bounds(1150, 1250)) map.at(1150, 1250).type = TileType::FLOOR_DIRT;
+    place_lore(1150, 1252, "caravan marker",
+        "Water was here. Ask old Dustfall traders. They remember the springs. The springs don't remember them.");
+
+    // Bleached ruins
+    paint_ruin(900, 1100);
+    paint_ruin(908, 1103);
+    place_lore(904, 1102, "faded town charter",
+        "Township of Silt Crossing, established in the Year of the Third Reckoning. Population: 0.");
+    spawn_ow_npc(910, 1105, "Grave Tender", "Someone has to remember the names. The sand forgets everything else.", NPCRole::FARMER, 0, 5);
+
+    // --- Greenwood (Khael, x < 700) ---
+
+    // Druid grove
+    for (int i = 0; i < 4; i++) {
+        int gx = 450 + rng.range(-3, 3);
+        int gy = 900 + rng.range(-3, 3);
+        if (map.in_bounds(gx, gy)) map.at(gx, gy).type = TileType::TREE;
+    }
+    if (map.in_bounds(450, 900)) map.at(450, 900).type = TileType::FLOOR_GRASS;
+    place_lore(450, 902, "carved trunk",
+        "Khael's first grove. The oldest tree here has no rings. It stopped counting.");
+
+    // Overgrown road
+    place_lore(550, 750, "milestone",
+        "This road once led to a city. The forest ate it. The trees here grow too fast and too straight.");
+
+    // =============================================
     // WANDERING PRIESTS — one for each non-provincial god
     // Provincial gods (Morreth, Soleth, Gathruun, Khael, Ossren, Sythara) have town priests.
     // The remaining 7 gods get wandering missionaries on roads.

@@ -687,26 +687,68 @@ void Engine::generate_level() {
             "My grandfather said there were older things than gods buried in these hills.",
             "The scholar knows more than he lets on. Always reading those old texts.",
         };
+        static const char* FARMER_IDLE[] = {
+            "Harvest is thin this year.", "The well water tastes different lately.",
+            "My neighbor left for the city. Smart man.", "The children are afraid to play outside.",
+            "I've lived here all my life. Never seen times like these.",
+            "Prices at the shops keep climbing.", "We used to trade with the southern towns. Not anymore.",
+        };
         static const char* GUARD_DIALOGUE[] = {
             "Keep your blade sheathed in town.",
             "Something's been killing livestock east of here. Stay sharp.",
             "The barrow's been sealed for generations. Now it's open.",
+        };
+        static const char* GUARD_IDLE[] = {
+            "Move along.", "I've been on watch since dawn.",
+            "The garrison's stretched thin.", "We could use more swords.",
+            "Report anything suspicious.", "Stay out of trouble.",
+            "The roads aren't as safe as they used to be.",
         };
         static const char* SCHOLAR_DIALOGUE[] = {
             "The Reliquary predates the gods we know. What made it? I don't think we want to know.",
             "Each god claims the Reliquary is theirs by right. They're all wrong.",
             "The inscriptions in the deep places are in no language I recognize.",
         };
+        static const char* SCHOLAR_IDLE[] = {
+            "I've been cross-referencing the old texts. The dates don't add up.",
+            "There are gaps in the histories. Deliberate ones.",
+            "The gods arrived. That's what the oldest records say. Arrived, not arose.",
+            "Have you read the standing stone inscriptions? They predate everything.",
+            "Somewhere in those dungeons is the truth. I just can't go get it myself.",
+        };
         static const char* BLACKSMITH_DIALOGUE[] = {
             "Iron holds. Steel bites. That's all you need to know.",
             "I can repair anything made by human hands. What's down there... I'm not sure.",
             "The ore from the deep mines has a strange color. I don't like working with it.",
+        };
+        static const char* BLACKSMITH_IDLE[] = {
+            "The forge runs hot today.", "Silver's good against the dead. Remember that.",
+            "Mithril's rare. If you find any, bring it here.",
+            "A good blade is the difference between coming home and not.",
+            "I don't ask where the ore comes from anymore.",
+        };
+        static const char* SHOPKEEPER_IDLE[] = {
+            "Take your time. I'm not going anywhere.", "Good stock today. Fresh from the road.",
+            "You look like you could use supplies.", "Best prices this side of Thornwall.",
+            "Business has been slow. Too many dungeons, not enough customers.",
+            "I trade in what the road provides.",
+        };
+        static const char* HERBALIST_IDLE[] = {
+            "The forest provides, if you know where to look.",
+            "Antidotes don't grow on trees. Well, some do.",
+            "These poultices take days to prepare.", "Mind the red mushrooms. Those aren't for eating.",
         };
 
         // Helper: deterministic dialogue pick from position hash
         auto pick_dialogue = [](const char* pool[], int pool_size, int x, int y) -> const char* {
             unsigned h = static_cast<unsigned>(x * 31 + y * 17 + x * y * 7);
             return pool[h % pool_size];
+        };
+
+        // Helper: assign idle lines from a pool to an NPC
+        auto set_idle = [](NPC& npc, const char* pool[], int pool_size) {
+            for (int i = 0; i < pool_size; i++)
+                npc.idle_lines.push_back(pool[i]);
         };
 
         // Track which main quest slots have been assigned so each is assigned once
@@ -733,6 +775,7 @@ void Engine::generate_level() {
                     npc_comp.role = NPCRole::SHOPKEEPER;
                     npc_comp.name = "Shopkeeper";
                     npc_comp.dialogue = "Browse, if you like. I don't haggle.";
+                    set_idle(npc_comp, SHOPKEEPER_IDLE, 6);
                     sx = 2; sy = 6; // shopkeep sprite (row 7)
                     // Side quest: Ashford shopkeeper — rats in the cellar
                     if (town_idx == 1 && !sq_ratcellar_assigned) {
@@ -745,6 +788,7 @@ void Engine::generate_level() {
                     npc_comp.role = NPCRole::BLACKSMITH;
                     npc_comp.name = "Blacksmith";
                     npc_comp.dialogue = pick_dialogue(BLACKSMITH_DIALOGUE, 3, me.x, me.y);
+                    set_idle(npc_comp, BLACKSMITH_IDLE, 5);
                     sx = 4; sy = 5; // blacksmith sprite (row 6)
                     // Side quest: Thornwall blacksmith
                     if (town_idx == 0 && !sq_blacksmith_assigned) {
@@ -763,6 +807,7 @@ void Engine::generate_level() {
                     npc_comp.role = NPCRole::PRIEST;
                     npc_comp.name = "Scholar";
                     npc_comp.dialogue = pick_dialogue(SCHOLAR_DIALOGUE, 3, me.x, me.y);
+                    set_idle(npc_comp, SCHOLAR_IDLE, 5);
                     sx = 5; sy = 5; // scholar sprite (row 6)
                     // MQ_02: Thornwall scholar
                     if (town_idx == 0 && !mq_assigned[1]) {
@@ -811,6 +856,7 @@ void Engine::generate_level() {
                     npc_comp.role = NPCRole::FARMER;
                     npc_comp.name = "Farmer";
                     npc_comp.dialogue = pick_dialogue(FARMER_DIALOGUE, 3, me.x, me.y);
+                    set_idle(npc_comp, FARMER_IDLE, 7);
                     sx = 0; sy = 5; // farmer sprite (row 6)
                     // Side quest: Thornwall farmer
                     if (town_idx == 0 && !sq_farmer_assigned) {
@@ -835,6 +881,7 @@ void Engine::generate_level() {
                     npc_comp.role = NPCRole::GUARD;
                     npc_comp.name = "Guard";
                     npc_comp.dialogue = pick_dialogue(GUARD_DIALOGUE, 3, me.x, me.y);
+                    set_idle(npc_comp, GUARD_IDLE, 7);
                     { // vary guard sprites: knight, female knight, female knight helmetless
                         int guard_var = (me.x * 7 + me.y * 13) % 3;
                         if (guard_var == 0) { sx = 0; sy = 1; }      // knight
@@ -894,12 +941,14 @@ void Engine::generate_level() {
                     npc_comp.role = NPCRole::PRIEST; // herbalist uses priest role
                     npc_comp.name = "Herbalist";
                     npc_comp.dialogue = "The wilds hold remedies for every ill, if you know where to look.";
+                    set_idle(npc_comp, HERBALIST_IDLE, 4);
                     sx = 3; sy = 6;
                     break;
                 case 'M':
                     npc_comp.role = NPCRole::SHOPKEEPER;
                     npc_comp.name = "Merchant";
                     npc_comp.dialogue = "I trade in what the road provides. Take a look.";
+                    set_idle(npc_comp, SHOPKEEPER_IDLE, 6);
                     sx = 2; sy = 6;
                     break;
                 case 'E':
@@ -949,6 +998,11 @@ void Engine::generate_level() {
                 nc.home_x = tx;
                 nc.home_y = ty;
                 nc.god_affiliation = get_town_god(cx, cy);
+                // Add idle lines based on role
+                if (role == NPCRole::PRIEST)
+                    set_idle(nc, HERBALIST_IDLE, 4);
+                else if (role == NPCRole::SHOPKEEPER)
+                    set_idle(nc, SHOPKEEPER_IDLE, 6);
                 world_.add<NPC>(e, std::move(nc));
                 world_.add<Renderable>(e, {SHEET_ROGUES, spr_x, spr_y, {255, 255, 255, 255}, 5});
                 Stats ns;

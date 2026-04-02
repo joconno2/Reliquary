@@ -97,9 +97,10 @@ bool interact(Context& ctx, Entity target, int target_x, int target_y) {
         }
     }
 
-    // Show NPC dialogue
+    // Show NPC dialogue — cycle through lines on repeat visits
+    const std::string& line = npc.next_line();
     char buf[256];
-    snprintf(buf, sizeof(buf), "%s: \"%s\"", npc.name.c_str(), npc.dialogue.c_str());
+    snprintf(buf, sizeof(buf), "%s: \"%s\"", npc.name.c_str(), line.c_str());
     ctx.log.add(buf, {180, 180, 140, 255});
 
     // God-aware NPC reactions (priests/scholars react to player's god)
