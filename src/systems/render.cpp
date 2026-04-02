@@ -91,9 +91,10 @@ SpriteRef tile_sprite(TileType type, [[maybe_unused]] uint8_t variant) {
         case TileType::WATER:             return {SHEET_TILES, 0, 12};
         case TileType::TREE:              return {SHEET_TILES, 2, 25};
         case TileType::BRUSH:
-            if (variant == 1) return {SHEET_TILES, 1, 25};
-            if (variant == 2) return {SHEET_TILES, 3, 25};
-            return {SHEET_TILES, 0, 25};
+            if (variant == 1) return {SHEET_TILES, 1, 25}; // small tree
+            if (variant == 2) return {SHEET_TILES, 3, 25}; // flowers
+            // Variants 3-6: crops from row 20 (buckwheat, flax, papyrus, kenaf)
+            return {SHEET_TILES, static_cast<int>((variant - 3) % 4), 19};
         case TileType::SHRINE:            return {SHEET_TILES, 5, 16}; // altar sprite
 
         // Floors handled by floor_sprite(), but provide fallback

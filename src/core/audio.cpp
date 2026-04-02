@@ -96,7 +96,7 @@ bool Audio::init() {
         {SfxId::STEP_WOOD2,   "assets/sfx/step_wood2.ogg"},
         {SfxId::STEP_WOOD3,   "assets/sfx/step_wood3.ogg"},
         // UI
-        {SfxId::SELECT,       "assets/sfx/select.wav"},
+        {SfxId::SELECT,       "assets/sfx/select.ogg"},
     };
     for (auto& def : DEFS) {
         chunks_[static_cast<int>(def.id)] = load_chunk(def.file);
@@ -204,10 +204,11 @@ void Audio::play_music(MusicId id, int fade_ms) {
     int idx = static_cast<int>(id);
     if (idx < 0 || idx >= MUSIC_TRACK_COUNT || !music_tracks_[idx]) return;
 
+    // Halt any playing music immediately (avoid blocking fade-out)
     if (Mix_PlayingMusic()) {
-        Mix_FadeOutMusic(fade_ms);
-        // SDL_mixer will stop the old track before starting the new one
+        Mix_HaltMusic();
     }
+    // Fade in the new track (non-blocking)
     Mix_FadeInMusic(music_tracks_[idx], -1, fade_ms); // -1 = loop forever
     current_music_ = id;
 }

@@ -86,10 +86,12 @@ bool TraitSelectScreen::handle_input(SDL_Event& event) {
 
     switch (event.key.keysym.sym) {
         case SDLK_UP:
+        case SDLK_w:
         case SDLK_k:
             if (cursor_ > 0) cursor_--;
             return true;
         case SDLK_DOWN:
+        case SDLK_s:
         case SDLK_j:
             if (cursor_ < TRAIT_COUNT - 1) cursor_++;
             return true;

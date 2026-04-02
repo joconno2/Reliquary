@@ -186,10 +186,12 @@ LevelUpAction LevelUpScreen::handle_input(SDL_Event& event) {
     int count = static_cast<int>(choices_.size());
     switch (event.key.keysym.sym) {
         case SDLK_UP:
+        case SDLK_w:
         case SDLK_k:
             if (selected_ > 0) selected_--;
             return LevelUpAction::NONE;
         case SDLK_DOWN:
+        case SDLK_s:
         case SDLK_j:
             if (selected_ < count - 1) selected_++;
             return LevelUpAction::NONE;

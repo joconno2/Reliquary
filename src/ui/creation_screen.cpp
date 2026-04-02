@@ -184,20 +184,24 @@ bool CreationScreen::handle_input(SDL_Event& event) {
 
     switch (event.key.keysym.sym) {
         case SDLK_UP:
+        case SDLK_w:
         case SDLK_k:
             if (selected_ - grid_cols >= 0) selected_ -= grid_cols;
             else if (phase_ != CreationPhase::CLASS_SELECT && selected_ > 0) selected_--;
             return true;
         case SDLK_DOWN:
+        case SDLK_s:
         case SDLK_j:
             if (selected_ + grid_cols < max_sel) selected_ += grid_cols;
             else if (phase_ != CreationPhase::CLASS_SELECT && selected_ < max_sel - 1) selected_++;
             return true;
         case SDLK_LEFT:
+        case SDLK_a:
         case SDLK_h:
             if (selected_ > 0) selected_--;
             return true;
         case SDLK_RIGHT:
+        case SDLK_d:
         case SDLK_l:
             if (selected_ < max_sel - 1) selected_++;
             return true;

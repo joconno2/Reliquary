@@ -15,15 +15,18 @@ bool SettingsScreen::handle_input(SDL_Event& event, SDL_Window* window) {
 
     switch (event.key.keysym.sym) {
         case SDLK_UP:
+        case SDLK_w:
         case SDLK_k:
             if (selected_ > 0) selected_--;
             return true;
         case SDLK_DOWN:
+        case SDLK_s:
         case SDLK_j:
             if (selected_ < OPTION_COUNT - 1) selected_++;
             return true;
 
         case SDLK_LEFT:
+        case SDLK_a:
         case SDLK_h:
             if (selected_ == 0) {
                 resolution_index_ = (resolution_index_ - 1 + RES_COUNT) % RES_COUNT;
@@ -40,6 +43,7 @@ bool SettingsScreen::handle_input(SDL_Event& event, SDL_Window* window) {
             return true;
 
         case SDLK_RIGHT:
+        case SDLK_d:
         case SDLK_l:
             if (selected_ == 0) {
                 resolution_index_ = (resolution_index_ + 1) % RES_COUNT;

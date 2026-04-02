@@ -81,10 +81,10 @@ inline const ClassInfo& get_class_info(ClassId id) {
         {"Schema Monk", "Elemental strikes. Ki mastery. The perfected form.",
          0, 5, 2, 12, 18, 14, 12, 16, 16, 8, 30, 15, 6, "Reach level 12 as Monk."},
         {"Heretic",     "Godless. No divine aid. No tenets. No mercy.",
-         0, 0, 7, 10, 10, 10, 10, 10, 10, 10, 25, 10, 3, "Win with all 7 gods."},
+         0, 0, 6, 10, 10, 10, 10, 10, 10, 10, 25, 10, 3, "Win with all 7 gods."},
         // === MONSTER-THEMED CLASSES === (use SHEET_MONSTERS = 1)
         {"Wyrmkin",     "Dragon-touched. Fire runs in your veins.",
-         1, 2, 8, 16, 8, 18, 10, 12, 8, 6, 45, 5, 7, "Kill a dragon."},
+         1, 0, 8, 16, 8, 18, 10, 12, 8, 6, 45, 5, 7, "Kill a dragon."},
         {"Revenant",    "Death refused you. You came back wrong.",
          1, 3, 4, 10, 10, 14, 8, 16, 8, 4, 35, 10, 5, "Die 10 times."},
         {"Serpentine",  "Cold blood. Quick hands. Venom in every strike.",

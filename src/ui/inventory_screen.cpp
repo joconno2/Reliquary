@@ -98,10 +98,12 @@ InvAction InventoryScreen::handle_input(SDL_Event& event) {
         case SDLK_i:
             return InvAction::CLOSE;
         case SDLK_UP:
+        case SDLK_w:
         case SDLK_k:
             if (selected_ > 0) selected_--;
             return InvAction::NONE;
         case SDLK_DOWN:
+        case SDLK_s:
         case SDLK_j:
             selected_++;
             return InvAction::NONE;

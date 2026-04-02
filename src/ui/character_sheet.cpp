@@ -39,10 +39,12 @@ bool CharacterSheet::handle_input(SDL_Event& event) {
             close();
             return true;
         case SDLK_UP:
+        case SDLK_w:
         case SDLK_k:
             if (scroll_ > 0) scroll_--;
             return true;
         case SDLK_DOWN:
+        case SDLK_s:
         case SDLK_j:
             scroll_++;
             return true;

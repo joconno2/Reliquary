@@ -2210,8 +2210,8 @@ void Engine::process_turn() {
     // Process AI — each monster acts at most once per player turn
     ai::process(world_, map_, player_, rng_);
 
-    // NPC wandering (overworld only)
-    if (dungeon_level_ == 0) {
+    // NPC wandering (overworld only, every 3 turns to reduce CPU)
+    if (dungeon_level_ == 0 && game_turn_ % 3 == 0) {
         process_npc_wander();
         // Check for town proximity music change every 10 turns
         if (game_turn_ % 10 == 0) update_music_for_location();
@@ -5302,8 +5302,14 @@ void Engine::render_hud() {
     SDL_Surface* surf = TTF_RenderText_Blended(font_, info, white);
     if (surf) {
         SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer_, surf);
-        SDL_Rect dst = {width_ - surf->w - 8, bar_y - 1, surf->w, surf->h};
+        // Clip to right half of HUD to prevent overlap with left-side status
+        int max_w = width_ / 2;
+        int draw_x = width_ - std::min(surf->w, max_w) - 8;
+        SDL_Rect clip = {width_ / 2, 0, width_ / 2, HUD_HEIGHT};
+        SDL_RenderSetClipRect(renderer_, &clip);
+        SDL_Rect dst = {draw_x, bar_y - 1, surf->w, surf->h};
         SDL_RenderCopy(renderer_, tex, nullptr, &dst);
+        SDL_RenderSetClipRect(renderer_, nullptr);
         SDL_DestroyTexture(tex);
         SDL_FreeSurface(surf);
     }

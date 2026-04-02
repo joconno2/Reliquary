@@ -8,10 +8,12 @@ PauseChoice PauseMenu::handle_input(SDL_Event& event) {
 
     switch (event.key.keysym.sym) {
         case SDLK_UP:
+        case SDLK_w:
         case SDLK_k:
             if (selected_ > 0) selected_--;
             return PauseChoice::NONE;
         case SDLK_DOWN:
+        case SDLK_s:
         case SDLK_j:
             if (selected_ < OPTION_COUNT - 1) selected_++;
             return PauseChoice::NONE;

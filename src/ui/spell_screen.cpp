@@ -13,10 +13,12 @@ SpellAction SpellScreen::handle_input(SDL_Event& event) {
         case SDLK_z:
             return SpellAction::CLOSE;
         case SDLK_UP:
+        case SDLK_w:
         case SDLK_k:
             if (selected_ > 0) selected_--;
             return SpellAction::NONE;
         case SDLK_DOWN:
+        case SDLK_s:
         case SDLK_j:
             selected_++;
             return SpellAction::NONE;

@@ -234,17 +234,18 @@ ShopAction ShopScreen::handle_input(SDL_Event& event) {
 
     switch (event.key.keysym.sym) {
         case SDLK_ESCAPE:
-        case SDLK_s:
             return ShopAction::CLOSE;
         case SDLK_TAB:
             buy_tab_ = !buy_tab_;
             selected_ = 0;
             return ShopAction::NONE;
         case SDLK_UP:
+        case SDLK_w:
         case SDLK_k:
             if (selected_ > 0) selected_--;
             return ShopAction::NONE;
         case SDLK_DOWN:
+        case SDLK_s:
         case SDLK_j:
             selected_++;
             return ShopAction::NONE;

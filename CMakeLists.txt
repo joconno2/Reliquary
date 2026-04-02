@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Reliquary VERSION 0.2.15 LANGUAGES CXX)
+project(Reliquary VERSION 0.2.16 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -56,6 +56,17 @@ target_compile_options(reliquary PRIVATE
     ${SDL2_CFLAGS_OTHER}
     -Wall -Wextra -Wpedantic
 )
+
+# === Data integrity tests (no SDL dependency) ===
+enable_testing()
+
+# Test binary — header-only data validation, no SDL needed
+add_executable(test_data tests/test_data_integrity.cpp)
+target_include_directories(test_data PRIVATE src)
+target_link_libraries(test_data PRIVATE nlohmann_json::nlohmann_json)
+target_compile_options(test_data PRIVATE -Wall -Wextra -Wpedantic -Wno-unused-parameter)
+# Run from project root so data/dungeons.json is found
+add_test(NAME DataIntegrity COMMAND test_data WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
 # Copy assets to build directory
 add_custom_command(TARGET reliquary POST_BUILD

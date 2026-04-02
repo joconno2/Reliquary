@@ -14,10 +14,12 @@ bool QuestLog::handle_input(SDL_Event& event) {
             close();
             return true;
         case SDLK_UP:
+        case SDLK_w:
         case SDLK_k:
             if (selected_ > 0) selected_--;
             return true;
         case SDLK_DOWN:
+        case SDLK_s:
         case SDLK_j:
             selected_++;
             return true;

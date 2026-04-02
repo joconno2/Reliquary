@@ -5,6 +5,7 @@
 #include "components/ai.h"
 #include "components/energy.h"
 #include "components/npc.h"
+#include "components/player.h"
 #include "components/sign.h"
 #include "components/item.h"
 #include "core/spritesheet.h"
@@ -861,6 +862,19 @@ void populate(World& world, TileMap& map, RNG& rng,
 // =============================================
 
 void process_npc_wander(World& world, TileMap& map, RNG& rng) {
+    // Only wander NPCs near the player (within 30 tiles) to avoid O(n²) cost
+    int player_x = 0, player_y = 0;
+    {
+        auto& pp = world.pool<Player>();
+        if (pp.size() > 0) {
+            Entity pe = pp.entity_at(0);
+            if (world.has<Position>(pe)) {
+                auto& ppos = world.get<Position>(pe);
+                player_x = ppos.x; player_y = ppos.y;
+            }
+        }
+    }
+
     auto& npc_pool = world.pool<NPC>();
     for (size_t i = 0; i < npc_pool.size(); i++) {
         Entity e = npc_pool.entity_at(i);
@@ -870,6 +884,10 @@ void process_npc_wander(World& world, TileMap& map, RNG& rng) {
         if (npc.role == NPCRole::SHOPKEEPER) continue;
 
         if (!world.has<Position>(e) || !world.has<Energy>(e)) continue;
+
+        // Skip NPCs far from player — no point animating what you can't see
+        auto& pos_check = world.get<Position>(e);
+        if (std::abs(pos_check.x - player_x) > 30 || std::abs(pos_check.y - player_y) > 30) continue;
         auto& energy = world.get<Energy>(e);
         if (!energy.can_act()) continue;
         energy.spend();
@@ -891,19 +909,8 @@ void process_npc_wander(World& world, TileMap& map, RNG& rng) {
 
         if (!map.is_walkable(nx, ny)) continue;
 
-        // Don't walk into other entities
-        bool blocked = false;
-        auto& positions = world.pool<Position>();
-        for (size_t j = 0; j < positions.size(); j++) {
-            Entity other = positions.entity_at(j);
-            if (other == e) continue;
-            auto& op = positions.at_index(j);
-            if (op.x == nx && op.y == ny && world.has<Stats>(other)) {
-                blocked = true;
-                break;
-            }
-        }
-        if (blocked) continue;
+        // Don't walk into other entities (use fast check)
+        if (combat::entity_at(world, nx, ny, e) != NULL_ENTITY) continue;
 
         int old_x = pos.x;
         pos.x = nx;

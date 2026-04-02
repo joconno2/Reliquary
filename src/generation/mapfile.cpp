@@ -69,10 +69,11 @@ MapFileResult load(const std::string& path) {
             tile.type = char_to_tile(c);
             tile.variant = 0;
 
-            // Brush variants: t=0 (small bush), b=1 (tall grass), c=2 (flowers)
+            // Brush variants: t=3-6 (crops), b=1 (tall grass), c=2 (flowers)
             if (tile.type == TileType::BRUSH) {
                 if (c == 'b') tile.variant = 1;
                 else if (c == 'c') tile.variant = 2;
+                else tile.variant = 3 + ((x * 7 + y * 13) % 4); // random crop from row 20
             }
 
             // Add some floor variation

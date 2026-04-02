@@ -16,19 +16,6 @@
 
 namespace populate {
 
-struct MonsterDef {
-    const char* name;
-    int sheet;
-    int sprite_x, sprite_y;
-    int hp;
-    int str, dex, con;
-    int base_damage;
-    int natural_armor;
-    int speed;
-    int flee_threshold;
-    int xp_value;
-};
-
 // Monster table — row/col in monsters.png
 //                                          sheet            sx sy  hp  str dex con dmg arm spd flee xp
 static const MonsterDef MONSTER_TABLE[] = {
@@ -58,6 +45,9 @@ static const MonsterDef MONSTER_TABLE[] = {
 };
 
 static constexpr int MONSTER_COUNT = sizeof(MONSTER_TABLE) / sizeof(MONSTER_TABLE[0]);
+
+const MonsterDef* get_monster_table() { return MONSTER_TABLE; }
+int get_monster_count() { return MONSTER_COUNT; }
 
 void spawn_monsters(World& world, const TileMap& map,
                      const std::vector<Room>& rooms, RNG& rng,
