@@ -32,6 +32,9 @@ struct SaveData {
     // Dungeon persistence
     int current_dungeon_idx = -1;
 
+    // Background (for passive checks)
+    int background_id = 14; // default FARMER
+
     // Visited towns (for arrival text)
     std::set<int> visited_towns;
 

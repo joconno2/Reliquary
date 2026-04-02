@@ -30,6 +30,7 @@
 #include "ui/death_screen.h"
 #include "components/tenet.h"
 #include "components/traits.h"
+#include "components/background.h"
 #include "components/stats.h"
 #include "components/ai.h"
 #include "components/item.h"
@@ -168,6 +169,7 @@ private:
     int run_gold_earned_ = 0; // total gold picked up this run
     int run_deepest_ = 0; // deepest dungeon floor reached
     std::vector<TraitId> build_traits_; // player's chosen traits (for runtime checks)
+    BackgroundId background_ = BackgroundId::FARMER; // player's background (for passive checks)
     bool hardcore_ = false; // permadeath mode
     PlayerActions turn_actions_; // action flags for tenet checking
     bool rested_this_floor_ = false; // Lethis tenet tracking

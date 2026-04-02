@@ -133,6 +133,7 @@ bool save_game(const std::string& path, const SaveData& data,
     root["visited_towns"] = vtowns;
 
     // Run stats
+    root["background_id"] = data.background_id;
     root["run_kills"] = data.run_kills;
     root["run_gold_earned"] = data.run_gold_earned;
     root["run_deepest"] = data.run_deepest;
@@ -368,6 +369,7 @@ SaveData load_game(const std::string& path, World& world, TileMap& map) {
     }
 
     // Run stats
+    data.background_id = root.value("background_id", 14);
     data.run_kills = root.value("run_kills", 0);
     data.run_gold_earned = root.value("run_gold_earned", 0);
     data.run_deepest = root.value("run_deepest", 0);

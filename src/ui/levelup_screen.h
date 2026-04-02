@@ -3,6 +3,7 @@
 #include <SDL2/SDL_ttf.h>
 #include "core/ecs.h"
 #include "core/rng.h"
+#include "components/class_def.h"
 #include <string>
 #include <vector>
 
@@ -13,20 +14,23 @@ enum class LevelUpAction {
 
 struct LevelUpChoice {
     std::string label;
-    // Effects — only one will be nonzero
+    std::string description; // shown when highlighted
+    // Effects — multiple can be nonzero
     int attr_index = -1;  // Attr enum index, or -1
     int attr_bonus = 0;
     int hp_bonus = 0;
     int mp_bonus = 0;
     int speed_bonus = 0;
     int damage_bonus = 0;
+    int armor_bonus = 0;   // natural armor
+    ClassId class_req = ClassId::COUNT; // COUNT = any class
 };
 
 class LevelUpScreen {
 public:
     LevelUpScreen() = default;
 
-    void open(Entity player, RNG& rng);
+    void open(Entity player, RNG& rng, ClassId cls = ClassId::FIGHTER);
     void close() { open_ = false; }
     bool is_open() const { return open_; }
 

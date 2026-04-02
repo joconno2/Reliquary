@@ -227,6 +227,7 @@ void Engine::do_save() {
     data.traits = build_traits_;
     data.current_dungeon_idx = current_dungeon_idx_;
     data.visited_towns = visited_towns_;
+    data.background_id = static_cast<int>(background_);
     data.run_kills = run_kills_;
     data.run_gold_earned = run_gold_earned_;
     data.run_deepest = run_deepest_;
@@ -263,6 +264,7 @@ void Engine::do_load() {
     build_traits_ = data.traits;
     current_dungeon_idx_ = data.current_dungeon_idx;
     visited_towns_ = data.visited_towns;
+    background_ = static_cast<BackgroundId>(data.background_id);
     run_kills_ = data.run_kills;
     run_gold_earned_ = data.run_gold_earned;
     run_deepest_ = data.run_deepest;
@@ -1560,49 +1562,95 @@ void Engine::try_move_player(int dx, int dy) {
             if (weapon_mat == MaterialType::SILVER && is_undead(tgt_stats.name.c_str()))
                 bonus += std::max(1, atk_result.damage / 2);
 
+            // Favor milestones: 25/50/75 thresholds enhance god passives
+            int fav = ga.favor;
             switch (ga.god) {
-                case GodId::VETHRIK:
-                    // +15% vs undead, +2 with bone weapons
-                    if (is_undead(tgt_stats.name.c_str())) bonus = std::max(1, atk_result.damage * 15 / 100);
-                    if (weapon_tags & TAG_BONE_ITEM) bonus += 2;
-                    break;
-                case GodId::MORRETH:
-                    // +2 damage with blunt or axe weapons
-                    if (weapon_tags & (TAG_BLUNT | TAG_AXE)) bonus = 2;
-                    break;
-                case GodId::YASHKHET: {
-                    // +15% below 50% HP, +1 with daggers
-                    auto& ps = world_.get<Stats>(player_);
-                    if (ps.hp * 2 < ps.hp_max) bonus = std::max(1, atk_result.damage * 15 / 100);
-                    if (weapon_tags & TAG_DAGGER) bonus += 1;
+                case GodId::VETHRIK: {
+                    // Undead damage: 15% base, 25% at favor 25, 35% at favor 50
+                    int pct = (fav >= 50) ? 35 : (fav >= 25) ? 25 : 15;
+                    if (is_undead(tgt_stats.name.c_str())) bonus = std::max(1, atk_result.damage * pct / 100);
+                    int bone_dmg = (fav >= 75) ? 4 : 2;
+                    if (weapon_tags & TAG_BONE_ITEM) bonus += bone_dmg;
                     break;
                 }
-                case GodId::SOLETH:
-                    // +2 vs undead (holy smite)
-                    if (is_undead(tgt_stats.name.c_str())) bonus = 2;
+                case GodId::MORRETH: {
+                    // Blunt/axe: +2 base, +3 at favor 25, +4 at favor 50
+                    int wpn_bonus = (fav >= 50) ? 4 : (fav >= 25) ? 3 : 2;
+                    if (weapon_tags & (TAG_BLUNT | TAG_AXE)) bonus = wpn_bonus;
+                    // Favor 75: +1 natural armor (applied once, tracked elsewhere)
                     break;
-                case GodId::ZHAVEK:
-                    // 2x from stealth, break invisibility
+                }
+                case GodId::YASHKHET: {
+                    auto& ps = world_.get<Stats>(player_);
+                    // Low-HP bonus: 15% base, 25% at favor 25; threshold 50% base, 75% at favor 50
+                    int threshold_pct = (fav >= 50) ? 75 : 50;
+                    int dmg_pct = (fav >= 25) ? 25 : 15;
+                    if (ps.hp * 100 < ps.hp_max * threshold_pct)
+                        bonus = std::max(1, atk_result.damage * dmg_pct / 100);
+                    int dagger_bonus = (fav >= 75) ? 3 : 1;
+                    if (weapon_tags & TAG_DAGGER) bonus += dagger_bonus;
+                    break;
+                }
+                case GodId::SOLETH: {
+                    // Holy smite: +2 base, +4 at favor 25, +6 at favor 50
+                    int smite = (fav >= 50) ? 6 : (fav >= 25) ? 4 : 2;
+                    if (is_undead(tgt_stats.name.c_str())) bonus = smite;
+                    // Favor 75: all hits vs undead also burn
+                    if (fav >= 75 && is_undead(tgt_stats.name.c_str()) && !atk_result.killed) {
+                        if (!world_.has<StatusEffects>(target))
+                            world_.add<StatusEffects>(target, {});
+                        world_.get<StatusEffects>(target).add(StatusType::BURN, 2, 4);
+                    }
+                    break;
+                }
+                case GodId::ZHAVEK: {
+                    // Stealth multiplier: 2x base, 3x at favor 50
                     if (world_.get<Stats>(player_).invisible_turns > 0) {
-                        bonus = atk_result.damage; // 2x total
+                        int mult = (fav >= 50) ? 2 : 1; // 2x or 3x total
+                        bonus = atk_result.damage * mult;
                         world_.get<Stats>(player_).invisible_turns = 0;
                     }
                     break;
-                case GodId::OSSREN:
-                    // All equipped weapons deal +1 (craftsmanship)
-                    if (weapon_tags != 0) bonus = 1;
+                }
+                case GodId::OSSREN: {
+                    // Craftsmanship: +1 base, +2 at favor 25, +3 at favor 75
+                    int craft = (fav >= 75) ? 3 : (fav >= 25) ? 2 : 1;
+                    if (weapon_tags != 0) bonus = craft;
                     break;
-                case GodId::GATHRUUN:
-                    // +2 in dungeons (stone's strength)
-                    if (dungeon_level_ > 0) bonus = 2;
+                }
+                case GodId::GATHRUUN: {
+                    // Underground strength: +2 base, +3 at favor 25, +5 at favor 50
+                    int ground = (fav >= 50) ? 5 : (fav >= 25) ? 3 : 2;
+                    if (dungeon_level_ > 0) bonus = ground;
                     break;
-                case GodId::SYTHARA:
-                    // 15% chance to poison enemy on hit
-                    if (rng_.chance(15) && !atk_result.killed) {
+                }
+                case GodId::SYTHARA: {
+                    // Poison chance: 15% base, 25% at favor 25, 35% at favor 50
+                    int pois_chance = (fav >= 50) ? 35 : (fav >= 25) ? 25 : 15;
+                    int pois_sev = (fav >= 75) ? 3 : 2;
+                    if (rng_.chance(pois_chance) && !atk_result.killed) {
                         if (!world_.has<StatusEffects>(target))
                             world_.add<StatusEffects>(target, {});
-                        world_.get<StatusEffects>(target).add(StatusType::POISON, 2, 8);
+                        world_.get<StatusEffects>(target).add(StatusType::POISON, pois_sev, 8);
                         log_.add("Your touch carries Sythara's gift.", {120, 180, 60, 255});
+                    }
+                    break;
+                }
+                case GodId::KHAEL:
+                    // Favor 50: melee hits have 10% chance to entangle (slow)
+                    if (fav >= 50 && rng_.chance(10) && !atk_result.killed) {
+                        if (!world_.has<StatusEffects>(target))
+                            world_.add<StatusEffects>(target, {});
+                        world_.get<StatusEffects>(target).add(StatusType::FROZEN, 1, 3);
+                        log_.add("Roots grip your enemy.", {60, 160, 60, 255});
+                    }
+                    break;
+                case GodId::THALARA:
+                    // Favor 25: melee hits have 10% chance to bleed
+                    if (fav >= 25 && rng_.chance(10) && !atk_result.killed) {
+                        if (!world_.has<StatusEffects>(target))
+                            world_.add<StatusEffects>(target, {});
+                        world_.get<StatusEffects>(target).add(StatusType::BLEED, 1, 5);
                     }
                     break;
                 default: break;
@@ -1776,6 +1824,26 @@ void Engine::try_move_player(int dx, int dy) {
             }
         }
 
+        // Background passives on kill
+        if (atk_result.killed) {
+            if (background_ == BackgroundId::NOBLE_EXILE) {
+                // Silver Tongue: +2-5 bonus gold on kill
+                int bonus_gold = rng_.range(2, 5);
+                gold_ += bonus_gold; run_gold_earned_ += bonus_gold;
+            }
+            if (background_ == BackgroundId::EXECUTIONER && world_.has<Stats>(player_)) {
+                // Clean Strike: first kill per floor restores 5 HP
+                auto& ps = world_.get<Stats>(player_);
+                int heal = std::min(5, ps.hp_max - ps.hp);
+                if (heal > 0) {
+                    ps.hp += heal;
+                    char hbuf[64];
+                    snprintf(hbuf, sizeof(hbuf), "Clean strike. (+%d HP)", heal);
+                    log_.add(hbuf, {200, 180, 140, 255});
+                }
+            }
+        }
+
         // Crow scavenges gold from kills
         if (atk_result.killed && world_.has<Inventory>(player_)) {
             Entity pet_item = world_.get<Inventory>(player_).get_equipped(EquipSlot::PET);
@@ -1792,7 +1860,7 @@ void Engine::try_move_player(int dx, int dy) {
         // Check for level-up
         if (world_.has<Stats>(player_) && world_.get<Stats>(player_).level > level_before) {
             pending_levelup_ = true;
-            levelup_screen_.open(player_, rng_);
+            levelup_screen_.open(player_, rng_, creation_screen_.get_build().class_id);
             audio_.play(SfxId::LEVELUP);
         }
         return;
@@ -2133,7 +2201,43 @@ void Engine::process_turn() {
             auto mresult = combat::melee_attack(world_, e, player_, rng_, log_);
             if (mresult.hit) {
                 auto& pp = world_.get<Position>(player_);
-                if (mresult.critical) { particles_.crit_flash(pp.x, pp.y); trigger_screen_shake(5.0f); }
+                // Background damage reduction
+                if (mresult.hit && mresult.damage > 0) {
+                    auto& mname2 = world_.get<Stats>(e).name;
+                    // Ratcatcher: vermin deal 50% damage
+                    if (background_ == BackgroundId::RATCATCHER &&
+                        (mname2 == "giant rat" || mname2 == "bat" || mname2 == "giant spider" || mname2 == "kobold")) {
+                        int reduce = mresult.damage / 2;
+                        if (reduce > 0 && world_.has<Stats>(player_)) {
+                            world_.get<Stats>(player_).hp += reduce; // refund half
+                        }
+                    }
+                    // Shipwreck Survivor: +2 effective armor when below 25% HP
+                    if (background_ == BackgroundId::SHIPWRECK_SURVIVOR && world_.has<Stats>(player_)) {
+                        auto& ps = world_.get<Stats>(player_);
+                        if (ps.hp * 4 < ps.hp_max) {
+                            int reduce = std::min(2, mresult.damage);
+                            ps.hp += reduce;
+                        }
+                    }
+                    // Pit Fighter: -1 damage from natural/unarmed attacks
+                    if (background_ == BackgroundId::PIT_FIGHTER && world_.has<Stats>(player_)) {
+                        world_.get<Stats>(player_).hp += 1; // refund 1 damage
+                    }
+                }
+                if (mresult.critical) {
+                    particles_.crit_flash(pp.x, pp.y); trigger_screen_shake(5.0f);
+                    // Cowardly trait: crits cause fear
+                    if (world_.has<StatusEffects>(player_)) {
+                        for (auto tid : build_traits_) {
+                            if (tid == TraitId::COWARDLY) {
+                                world_.get<StatusEffects>(player_).add(StatusType::FEARED, 0, 2);
+                                log_.add("Fear grips you!", {255, 200, 200, 255});
+                                break;
+                            }
+                        }
+                    }
+                }
                 else particles_.blood(pp.x, pp.y);
                 // Track what hit us for death screen
                 if (world_.has<Stats>(e))
@@ -2221,7 +2325,10 @@ void Engine::process_turn() {
                     candidate = DiseaseId::BLACKBLOOD;
 
                 if (candidate != DiseaseId::DISEASE_COUNT && !diseases.has(candidate)) {
-                    if (!con_resist()) {
+                    // Plague Doctor: immune to all diseases
+                    if (background_ == BackgroundId::PLAGUE_DOCTOR) {
+                        log_.add("Your medical training protects you from infection.", {140, 200, 160, 255});
+                    } else if (!con_resist()) {
                         if (diseases.contract(candidate)) {
                             auto& info = get_disease_info(candidate);
                             log_.add(info.contraction_msg, {200, 160, 200, 255});
@@ -2326,16 +2433,23 @@ void Engine::process_turn() {
                 }
                 log_.add("The death knight's presence freezes your courage.", {160, 100, 160, 255});
             } else if (mstats.name == "naga" && dist <= 4 && rng_.chance(30)) {
-                // Naga gaze — applies STUNNED
-                if (world_.has<StatusEffects>(player_))
-                    world_.get<StatusEffects>(player_).add(StatusType::STUNNED, 0, 2);
+                // Naga gaze — applies STUNNED (Glass Jaw extends by 2)
+                if (world_.has<StatusEffects>(player_)) {
+                    int dur = 2;
+                    for (auto tid : build_traits_) if (tid == TraitId::MARKED) dur += 2; // Glass Jaw
+                    world_.get<StatusEffects>(player_).add(StatusType::STUNNED, 0, dur);
+                }
                 log_.add("The naga's gaze locks your muscles.", {255, 255, 100, 255});
             } else if (mstats.name == "wraith" && dist <= 3 && rng_.chance(30)) {
                 // Wraith wail — applies CONFUSED (blocked by Iron Willed)
                 if (world_.has<StatusEffects>(player_)) {
                     bool immune = false;
                     for (auto tid : build_traits_) if (get_trait_info(tid).immune_confuse) immune = true;
-                    if (!immune) world_.get<StatusEffects>(player_).add(StatusType::CONFUSED, 0, 4);
+                    if (!immune) {
+                        int dur = 4;
+                        for (auto tid : build_traits_) if (tid == TraitId::SLOW_WITTED) dur += 2;
+                        world_.get<StatusEffects>(player_).add(StatusType::CONFUSED, 0, dur);
+                    }
                     else log_.add("Your mind holds firm against the wail.", {200, 200, 140, 255});
                 }
                 log_.add("The wraith screams. Your thoughts scatter.", {200, 140, 255, 255});
@@ -2423,6 +2537,11 @@ void Engine::try_spawn_overworld_enemy() {
 }
 
 void Engine::adjust_favor(int amount) {
+    // Heretic Priest: favor changes are 50% stronger (both gains and losses)
+    if (background_ == BackgroundId::HERETIC_PRIEST) {
+        amount = amount + (amount > 0 ? amount / 2 : amount / 2);
+        if (amount == 0 && background_ == BackgroundId::HERETIC_PRIEST) amount = 1; // minimum ±1
+    }
     god_system::adjust_favor(world_, player_, log_, amount);
 }
 
@@ -2540,7 +2659,7 @@ void Engine::fire_ranged() {
     // Level-up check
     if (world_.has<Stats>(player_) && world_.get<Stats>(player_).level > level_before) {
         pending_levelup_ = true;
-        levelup_screen_.open(player_, rng_);
+        levelup_screen_.open(player_, rng_, creation_screen_.get_build().class_id);
         audio_.play(SfxId::LEVELUP);
     }
 }
@@ -3172,6 +3291,12 @@ void Engine::try_pickup() {
             item.identified = true;
         }
 
+        // Background: Alchemist — auto-identify all potions on pickup
+        if (background_ == BackgroundId::ALCHEMISTS_APPRENTICE && item.type == ItemType::POTION && !item.identified) {
+            item.identified = true;
+            log_.add("Tincture Lore: you recognize this potion.", {140, 200, 160, 255});
+        }
+
         // Pet pickup — prompt for naming
         if (item.type == ItemType::PET && item.pet_id >= 0) {
             auto& pinfo = get_pet_info(static_cast<PetId>(item.pet_id));
@@ -3276,12 +3401,14 @@ void Engine::try_rest() {
     rested_this_floor_ = true;
     if (dungeon_level_ <= 0) turn_actions_.rested_on_surface = true;
 
-    // Rest succeeds — restore 15% of max HP and MP (Lethis: 30%)
+    // Rest succeeds — restore 15% of max HP and MP (Lethis: 30%, Farmer: 25%)
     int rest_pct = 7; // default: ~15% (divide by 7)
     if (world_.has<GodAlignment>(player_)) {
         auto& ga = world_.get<GodAlignment>(player_);
         if (ga.god == GodId::LETHIS) rest_pct = 3; // ~33%
     }
+    if (background_ == BackgroundId::FARMER && rest_pct > 4)
+        rest_pct = 4; // ~25% (Hardy Stock)
     int hp_restore = std::max(1, stats.hp_max / rest_pct);
     int mp_restore = std::max(1, stats.mp_max / rest_pct);
 
@@ -3775,6 +3902,7 @@ void Engine::handle_input() {
 
                 state_ = GameState::PLAYING;
                 hardcore_ = creation_screen_.get_build().hardcore;
+                background_ = creation_screen_.get_build().background;
                 // Pre-populate bestiary from meta-progression
                 for (auto& [name, me] : meta_.bestiary) {
                     auto& entry = bestiary_[name];

@@ -57,16 +57,24 @@ bool interact(Context& ctx, Entity target, int target_x, int target_y) {
         return get_town_god(sp.x, sp.y);
     };
 
-    // Shop pricing: excommunication, god faction loyalty/rivalry
+    // Shop pricing: excommunication, god faction, charisma
     auto calc_shop_price_mult = [&]() -> int {
-        if (!ctx.world.has<GodAlignment>(ctx.player)) return 100;
-        auto& a = ctx.world.get<GodAlignment>(ctx.player);
-        if (a.god != GodId::NONE && a.favor <= -100) return 200;
-        if (npc.god_affiliation != GodId::NONE && a.god != GodId::NONE) {
-            if (a.god == npc.god_affiliation) return 85;
-            return 125;
+        int mult = 100;
+        if (ctx.world.has<GodAlignment>(ctx.player)) {
+            auto& a = ctx.world.get<GodAlignment>(ctx.player);
+            if (a.god != GodId::NONE && a.favor <= -100) return 200;
+            if (npc.god_affiliation != GodId::NONE && a.god != GodId::NONE) {
+                if (a.god == npc.god_affiliation) mult = 85;
+                else mult = 125;
+            }
         }
-        return 100;
+        // CHA affects prices: Charming trait gives CHA bonus → cheaper; Ill-Favored → expensive
+        if (ctx.world.has<Stats>(ctx.player)) {
+            int cha = ctx.world.get<Stats>(ctx.player).attr(Attr::CHA);
+            if (cha >= 2) mult = mult * 90 / 100;       // high CHA: 10% discount
+            else if (cha <= -2) mult = mult * 110 / 100; // low CHA: 10% markup
+        }
+        return mult;
     };
 
     // Shopkeeper — open shop screen (unless they have a dynamic quest to offer)

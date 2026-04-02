@@ -60,7 +60,7 @@ inline const BackgroundInfo& get_background_info(BackgroundId id) {
         {"Noble Exile",
          "Your family name is ash. Your debts remain.",
          "Silver Tongue",
-         "Charisma checks occasionally yield extra gold from enemies.",
+         "Enemies drop 2-5 extra gold on kill.",
          0, 0, 0, 0, 0, 0, 2,
          0, 0},
         // PIT FIGHTER
@@ -80,8 +80,8 @@ inline const BackgroundInfo& get_background_info(BackgroundId id) {
         // TOMB ROBBER
         {"Tomb Robber",
          "Ancient curses are an occupational hazard you've mostly survived.",
-         "Trap Intuition",
-         "You receive a warning when moving adjacent to a known trap type.",
+         "Dungeon Sense",
+         "Containers in dungeons have better loot.",
          0, 2, 0, 0, 0, 1, 0,
          0, 0},
         // HERETIC PRIEST
@@ -95,14 +95,14 @@ inline const BackgroundInfo& get_background_info(BackgroundId id) {
         {"Shipwreck Survivor",
          "You held on while everyone else let go.",
          "Survivor's Grit",
-         "When reduced below 25% HP, gain a small bonus to all saves.",
+         "When below 25% HP, take 2 less damage from all attacks.",
          0, 0, 2, 0, 1, 0, 0,
          2, 0},
         // RATCATCHER
         {"Ratcatcher",
          "Sewers, cellars, and dark places. You know the smell of danger.",
          "Vermin Sense",
-         "You are never surprised by rats, insects, or small creatures.",
+         "Vermin deal half damage to you (rats, bats, spiders, kobolds).",
          0, 1, 0, 0, 0, 2, 0,
          0, 0},
         // BLACKSMITH'S CHILD
@@ -116,7 +116,7 @@ inline const BackgroundInfo& get_background_info(BackgroundId id) {
         {"Disgraced Scholar",
          "You know things you weren't supposed to publish.",
          "Forbidden Index",
-         "Scrolls are identified at half the normal cost.",
+         "Spellbook tomes never fail to teach you.",
          0, 0, 0, 2, 0, 1, 0,
          0, 0},
         // PLAGUE DOCTOR
