@@ -51,19 +51,19 @@ bool Audio::init() {
         {SfxId::ARROW_FIRE2,  "assets/sfx/bow_fire2.ogg"},
         {SfxId::ARROW_HIT,    "assets/sfx/bow_hit1.ogg"},
         {SfxId::ARROW_HIT2,   "assets/sfx/bow_hit2.ogg"},
-        // Death (keep sox-generated — no pack equivalent)
-        {SfxId::DEATH,        "assets/sfx/death.wav"},
+        // Death — Pixel Combat (Dramatic Finish)
+        {SfxId::DEATH,        "assets/sfx/death.ogg"},
         // Items
-        {SfxId::PICKUP,       "assets/sfx/pickup.wav"},
+        {SfxId::PICKUP,       "assets/sfx/pickup.ogg"},
         {SfxId::EQUIP,        "assets/sfx/equip.ogg"},
-        {SfxId::POTION,       "assets/sfx/potion.wav"},
-        {SfxId::GOLD,         "assets/sfx/gold.wav"},
+        {SfxId::POTION,       "assets/sfx/potion.ogg"},
+        {SfxId::GOLD,         "assets/sfx/gold.ogg"},
         {SfxId::CHEST_OPEN,   "assets/sfx/chest_open.ogg"},
         {SfxId::CHEST_OPEN2,  "assets/sfx/chest_open2.ogg"},
-        // Magic — per-school Fantasy SFX Pack + sox fallbacks
-        {SfxId::SPELL,        "assets/sfx/spell.wav"},
-        {SfxId::HEAL,         "assets/sfx/heal.wav"},
-        {SfxId::PRAYER,       "assets/sfx/prayer.wav"},
+        // Magic — per-school Fantasy SFX Pack + Pixel Combat
+        {SfxId::SPELL,        "assets/sfx/spell.ogg"},
+        {SfxId::HEAL,         "assets/sfx/heal.ogg"},
+        {SfxId::PRAYER,       "assets/sfx/prayer.ogg"},
         {SfxId::SPELL_FIRE,   "assets/sfx/spell_fire.ogg"},
         {SfxId::SPELL_ICE,    "assets/sfx/spell_ice.ogg"},
         {SfxId::SPELL_EARTH,  "assets/sfx/spell_earth.ogg"},
@@ -71,17 +71,17 @@ bool Audio::init() {
         {SfxId::SPELL_IMPACT, "assets/sfx/spell_impact.ogg"},
         {SfxId::SPELL_BUFF,   "assets/sfx/spell_buff.ogg"},
         {SfxId::SPELL_FREEZE, "assets/sfx/spell_freeze.ogg"},
-        // Progression
-        {SfxId::LEVELUP,      "assets/sfx/levelup.wav"},
-        {SfxId::QUEST,        "assets/sfx/quest.wav"},
-        // World interaction — Fantasy SFX Pack door
+        // Progression — Pixel Combat (Stats Up, Effect Success)
+        {SfxId::LEVELUP,      "assets/sfx/levelup.ogg"},
+        {SfxId::QUEST,        "assets/sfx/quest.ogg"},
+        // World interaction
         {SfxId::DOOR,         "assets/sfx/door_open.ogg"},
-        {SfxId::REST,         "assets/sfx/rest.wav"},
+        {SfxId::REST,         "assets/sfx/rest.ogg"},
         {SfxId::STAIRS,       "assets/sfx/stairs.ogg"},
-        // Status effects
-        {SfxId::POISON,       "assets/sfx/poison.wav"},
-        {SfxId::BURN,         "assets/sfx/burn.wav"},
-        {SfxId::CURSE,        "assets/sfx/curse.wav"},
+        // Status effects — Pixel Combat + Fantasy SFX
+        {SfxId::POISON,       "assets/sfx/poison.ogg"},
+        {SfxId::BURN,         "assets/sfx/burn.ogg"},
+        {SfxId::CURSE,        "assets/sfx/curse.ogg"},
         // Terrain footsteps — Fantasy SFX Pack
         {SfxId::STEP_STONE1,  "assets/sfx/step_stone1.ogg"},
         {SfxId::STEP_STONE2,  "assets/sfx/step_stone2.ogg"},
