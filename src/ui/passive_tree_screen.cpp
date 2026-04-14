@@ -372,7 +372,7 @@ void PassiveTreeScreen::draw_nodes(SDL_Renderer* renderer, TTF_Font* font,
             (nodes[i].type != NodeType::SMALL)) {
             SDL_Color label_col;
             if (allocated) label_col = {col.r, col.g, col.b, 220};
-            else if (available) label_col = {col.r * 7 / 10, col.g * 7 / 10, col.b * 7 / 10, 180};
+            else if (available) label_col = {static_cast<Uint8>(col.r * 7 / 10), static_cast<Uint8>(col.g * 7 / 10), static_cast<Uint8>(col.b * 7 / 10), 180};
             else label_col = {70, 65, 60, 140};
 
             ui::draw_text_centered(renderer, font, nodes[i].name, label_col,
