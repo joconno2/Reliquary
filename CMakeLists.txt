@@ -44,6 +44,20 @@ target_include_directories(reliquary PRIVATE
     ${SDL2_TTF_INCLUDE_DIRS}
 )
 
+# On macOS with Homebrew, pkg-config LDFLAGS may not include -L paths
+if(SDL2_LIBRARY_DIRS)
+    target_link_directories(reliquary PRIVATE ${SDL2_LIBRARY_DIRS})
+endif()
+if(SDL2_IMAGE_LIBRARY_DIRS)
+    target_link_directories(reliquary PRIVATE ${SDL2_IMAGE_LIBRARY_DIRS})
+endif()
+if(SDL2_MIXER_LIBRARY_DIRS)
+    target_link_directories(reliquary PRIVATE ${SDL2_MIXER_LIBRARY_DIRS})
+endif()
+if(SDL2_TTF_LIBRARY_DIRS)
+    target_link_directories(reliquary PRIVATE ${SDL2_TTF_LIBRARY_DIRS})
+endif()
+
 target_link_libraries(reliquary PRIVATE
     ${SDL2_LIBRARIES}
     ${SDL2_IMAGE_LIBRARIES}
