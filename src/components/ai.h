@@ -7,8 +7,23 @@ enum class AIState : int {
     FLEEING,    // running away (low HP)
 };
 
+enum class BehaviorType : int {
+    BASIC = 0,      // walk toward, melee, flee (default)
+    ARCHER,         // stay at range, shoot
+    LICH,           // teleport when low, drain at range, summon
+    TROLL,          // regenerate HP each turn
+    THIEF,          // hit and run, flees after attacking
+    NECROMANCER,    // raise corpses, stay at range, cast drain
+    SHAMAN,         // buff nearby allies, heal allies
+    CHARGER,        // charge in a line when at range 2-4
+    DRAGON,         // breath AoE cone, flee when low
+    WRAITH,         // phase through walls, only hit by silver/magic
+    PACK,           // coordinate with same-type, prefer flanking
+};
+
 struct AI {
     AIState state = AIState::IDLE;
+    BehaviorType behavior = BehaviorType::BASIC;
     int last_seen_x = -1;  // last known player position
     int last_seen_y = -1;
     int alert_turns = 0;   // turns since last seeing player (hunting memory)
@@ -16,6 +31,8 @@ struct AI {
     int ranged_range = 0;  // >0 = can shoot at this range
     int ranged_damage = 0; // base ranged damage
     bool forget_player = false; // Lethis: permanently ignores player
-    // Entity target field for prayer targeting
-    Entity target = 0;  // NULL_ENTITY equivalent (0)
+    int ability_cooldown = 0; // cooldown for special abilities
+    int regen_per_turn = 0;   // HP regen (troll)
+    bool friendly = false;    // summoned by player, attacks enemies instead
+    Entity target = 0;
 };

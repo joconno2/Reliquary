@@ -26,7 +26,7 @@ Entity spawn_boss(World& world, const TileMap& map,
                    int dmg, int armor, int speed, int xp_value);
 
 // Spawn dungeon doodads (chests, jars, mushrooms, coffins, blood splatters, god shrines)
-void spawn_doodads(World& world, const TileMap& map,
+void spawn_doodads(World& world, TileMap& map,
                     const std::vector<Room>& rooms, RNG& rng,
                     int dungeon_level, const std::string& zone = "",
                     int patron_god_idx = -1);
@@ -48,6 +48,11 @@ Entity spawn_relic(World& world, const std::vector<Room>& rooms, RNG& rng,
 Entity spawn_legendary(World& world, const std::vector<Room>& rooms, RNG& rng,
                         const std::string& dungeon_name);
 
+// Spawn traps in dungeon rooms
+void spawn_traps(World& world, const TileMap& map,
+                  const std::vector<Room>& rooms, RNG& rng,
+                  int dungeon_level = 1);
+
 // Monster definition for testing/validation
 struct MonsterDef {
     const char* name;
@@ -63,7 +68,7 @@ int get_monster_count();
 namespace populate_data {
     inline const MonsterDef MONSTERS[] = {
         {"giant rat",       1, 11, 6,  6,   6, 14,  6,  2, 0, 130, 40,  10},
-        {"bat",             1, 11, 7,  4,   4, 16,  4,  1, 0, 150, 70,   5},
+        {"bat",             1,  6, 6,  4,   4, 16,  4,  1, 0, 150, 70,   5},
         {"kobold",          1,  0, 9,  6,   6, 12,  6,  1, 0, 120, 35,  10},
         {"slime",           1,  9, 6, 16,   6,  4, 14,  2, 0,  60,  0,  15},
         {"goblin",          1,  2, 0,  8,   8, 12,  8,  2, 0, 110, 30,  15},

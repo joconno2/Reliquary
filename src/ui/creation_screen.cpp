@@ -34,6 +34,40 @@ void CreationScreen::reset() {
         class_unlocked_[i] = (i < BASE_CLASS_COUNT);
 }
 
+void CreationScreen::randomize(RNG& rng) {
+    reset();
+    // Random class (from unlocked only)
+    std::vector<int> available;
+    for (int i = 0; i < CLASS_COUNT; i++) {
+        if (class_unlocked_[i]) available.push_back(i);
+    }
+    if (!available.empty())
+        build_.class_id = static_cast<ClassId>(available[rng.range(0, static_cast<int>(available.size()) - 1)]);
+    // Random name
+    randomize_name();
+    // Random god (including NONE for 10% chance)
+    if (rng.chance(10))
+        build_.god = GodId::NONE;
+    else
+        build_.god = static_cast<GodId>(rng.range(0, GOD_COUNT - 1));
+    // Random background
+    build_.background = static_cast<BackgroundId>(rng.range(0, BACKGROUND_COUNT - 1));
+    // Random 1-3 traits (mix of positive and negative)
+    build_.traits.clear();
+    int num_traits = rng.range(1, 3);
+    for (int t = 0; t < num_traits; t++) {
+        TraitId tid = static_cast<TraitId>(rng.range(0, TRAIT_COUNT - 1));
+        // Check for duplicates
+        bool dup = false;
+        for (auto existing : build_.traits) { if (existing == tid) { dup = true; break; } }
+        if (!dup) build_.traits.push_back(tid);
+    }
+    // Random hardcore (10% chance)
+    build_.hardcore = rng.chance(10);
+    // Skip to done
+    phase_ = CreationPhase::DONE;
+}
+
 void CreationScreen::set_unlocked(const bool* unlocks, int count) {
     for (int i = 0; i < CLASS_COUNT && i < count; i++)
         class_unlocked_[i] = unlocks[i];
@@ -218,6 +252,13 @@ bool CreationScreen::handle_input(SDL_Event& event) {
                 phase_ = CreationPhase::BACKGROUND_SELECT;
             }
             return true;
+        case SDLK_r:
+            if (phase_ == CreationPhase::CLASS_SELECT) {
+                RNG temp_rng(static_cast<uint64_t>(SDL_GetTicks()));
+                randomize(temp_rng);
+                return true;
+            }
+            return false;
         case SDLK_ESCAPE:
         case SDLK_BACKSPACE:
             if (phase_ == CreationPhase::CLASS_SELECT) {
@@ -404,7 +445,7 @@ void CreationScreen::render_class_select(SDL_Renderer* renderer, TTF_Font* font,
         }
     }
 
-    ui::draw_text_centered(renderer, font, "[Arrows] browse   [Enter] select",
+    ui::draw_text_centered(renderer, font, "[Arrows] browse   [Enter] select   [R] random character",
                             dim_col, w / 2, h - line_h - 4);
 }
 

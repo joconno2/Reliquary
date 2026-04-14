@@ -10,6 +10,7 @@
 #include "components/traits.h"
 #include "ui/background_select.h"
 #include "ui/trait_select.h"
+#include "core/rng.h"
 
 enum class CreationPhase {
     CLASS_SELECT,
@@ -40,6 +41,7 @@ public:
     CharacterBuild get_build() const { return build_; }
     void set_unlocked(const bool* unlocks, int count); // called before rendering
     void set_unlock_progress(int class_idx, const char* progress); // "32/50 kills"
+    void randomize(RNG& rng); // fill all fields randomly, skip to DONE
 
     bool handle_input(SDL_Event& event);
 

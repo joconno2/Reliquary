@@ -33,6 +33,9 @@
 #include "generation/quest_gen.h"
 #include "components/background.h"
 #include "components/traits.h"
+#include "components/passive_tree.h"
+#include "components/trap.h"
+#include "components/skills.h"
 #include "systems/fov.h"
 #include "systems/combat.h"
 #include "systems/ai.h"
@@ -325,6 +328,8 @@ void Engine::cache_current_floor() {
     for (size_t i = 0; i < positions.size(); i++) {
         Entity e = positions.entity_at(i);
         if (e == player_ || e == pet_entity_) continue;
+        // Skip friendly summons (they travel with the player)
+        if (world_.has<AI>(e) && world_.get<AI>(e).friendly) continue;
         if (!world_.has<Renderable>(e)) continue;
 
         CachedEntity ce;
@@ -363,6 +368,28 @@ void Engine::cache_current_floor() {
             ce.has_container = true;
             ce.container = world_.get<Container>(e);
         }
+        if (world_.has<Trap>(e)) {
+            ce.has_trap = true;
+            ce.trap = world_.get<Trap>(e);
+        }
+        fs.entities.push_back(std::move(ce));
+    }
+
+    // Also cache trap entities that don't have Renderable (unrevealed traps)
+    auto& trap_pool = world_.pool<Trap>();
+    for (size_t ti = 0; ti < trap_pool.size(); ti++) {
+        Entity te = trap_pool.entity_at(ti);
+        if (!world_.has<Position>(te)) continue;
+        if (world_.has<Renderable>(te)) continue; // already cached above
+        auto& tpos = world_.get<Position>(te);
+        CachedEntity ce;
+        ce.x = tpos.x; ce.y = tpos.y;
+        ce.sheet = 0; ce.sprite_x = 0; ce.sprite_y = 0;
+        ce.tint_r = 0; ce.tint_g = 0; ce.tint_b = 0; ce.tint_a = 0;
+        ce.z_order = -10;
+        ce.flip_h = false;
+        ce.has_trap = true;
+        ce.trap = trap_pool.at_index(ti);
         fs.entities.push_back(std::move(ce));
     }
 }
@@ -390,6 +417,13 @@ bool Engine::restore_floor(int level, bool ascending) {
         if (ce.has_god) world_.add<GodAlignment>(e, ce.god_align);
         if (ce.has_item) world_.add<Item>(e, ce.item);
         if (ce.has_container) world_.add<Container>(e, ce.container);
+        if (ce.has_trap) {
+            world_.add<Trap>(e, ce.trap);
+            // Unrevealed traps shouldn't have a Renderable; remove the dummy one
+            if (!ce.trap.revealed && world_.has<Renderable>(e)) {
+                world_.remove<Renderable>(e);
+            }
+        }
     }
 
     // Place player at appropriate stairs
@@ -628,6 +662,7 @@ void Engine::generate_level() {
             log_.add("Lethis frowns. You did not rest.", {160, 120, 200, 255});
         }
         rested_this_floor_ = false;
+        rest_count_this_floor_ = 0;
 
         // Thessarka: auto-identify one unidentified item per floor
         if (align.god == GodId::THESSARKA && world_.has<Inventory>(player_)) {
@@ -1307,6 +1342,7 @@ void Engine::generate_level() {
 
         populate::spawn_monsters(world_, map_, rooms_, rng_, effective_level);
         populate::spawn_items(world_, map_, rooms_, rng_, effective_level);
+        populate::spawn_traps(world_, map_, rooms_, rng_, effective_level);
 
         // Dungeon doodads (chests, jars, mushrooms, coffins, god shrines, etc.)
         {
@@ -1451,6 +1487,75 @@ void Engine::generate_level() {
 
     // Update music/ambient for new location
     update_music_for_location();
+
+    // Reposition friendly summons near player after floor change
+    if (world_.has<Position>(player_)) {
+        auto& pp = world_.get<Position>(player_);
+        auto& all_ai = world_.pool<AI>();
+        for (size_t si = 0; si < all_ai.size(); si++) {
+            Entity se = all_ai.entity_at(si);
+            if (!all_ai.at_index(si).friendly) continue;
+            if (!world_.has<Position>(se)) continue;
+            for (int a = 0; a < 30; a++) {
+                int sx = pp.x + rng_.range(-2, 2);
+                int sy = pp.y + rng_.range(-2, 2);
+                if (sx == pp.x && sy == pp.y) continue;
+                if (map_.in_bounds(sx, sy) && map_.is_walkable(sx, sy) &&
+                    combat::entity_at(world_, sx, sy, player_) == NULL_ENTITY) {
+                    world_.get<Position>(se).x = sx;
+                    world_.get<Position>(se).y = sy;
+                    break;
+                }
+            }
+        }
+    }
+}
+
+void Engine::grant_skill_xp(SkillId skill, int amount) {
+    if (!world_.has<Skills>(player_)) return;
+    auto& skills = world_.get<Skills>(player_);
+    int old_lv = skills.get_level(skill);
+    bool leveled = skills.grant_xp(skill, amount);
+    if (leveled) {
+        int new_lv = skills.get_level(skill);
+        char buf[96];
+        snprintf(buf, sizeof(buf), "%s increased to %d.", skill_name(skill), new_lv);
+        log_.add(buf, {140, 200, 160, 255});
+        // Milestone notifications
+        if (new_lv == 25 || new_lv == 50 || new_lv == 75) {
+            const char* unlock = nullptr;
+            switch (skill) {
+                case SkillId::STEALTH:
+                    if (new_lv == 25) unlock = "Stealth 25: sleeping monsters won't wake near you.";
+                    if (new_lv == 50) unlock = "Stealth 50: detection range reduced to 1 tile.";
+                    break;
+                case SkillId::BLADES:
+                    if (new_lv == 25) unlock = "Blades 25: +3% crit chance.";
+                    if (new_lv == 50) unlock = "Blades 50: +5% crit, can intimidate humanoids.";
+                    break;
+                case SkillId::DIVINATION:
+                    if (new_lv == 25) unlock = "Divination 25: auto-identify potions on pickup.";
+                    break;
+                case SkillId::NATURE_MAGIC:
+                    if (new_lv == 25) unlock = "Nature 25: forage herbs in overworld grass.";
+                    break;
+                case SkillId::DARK_ARTS:
+                    if (new_lv == 25) unlock = "Dark Arts 25: examine corpses for hints.";
+                    break;
+                case SkillId::PRAYER:
+                    if (new_lv == 50) unlock = "Prayer 50: your god hints at quest direction.";
+                    break;
+                case SkillId::HEAVY_ARMOR:
+                    if (new_lv == 50) unlock = "Heavy Armor 50: reduced spell failure penalty.";
+                    break;
+                default: break;
+            }
+            if (unlock) {
+                log_.add(unlock, {220, 220, 100, 255});
+                audio_.play(SfxId::LEVELUP);
+            }
+        }
+    }
 }
 
 void Engine::try_move_player(int dx, int dy) {
@@ -1511,8 +1616,62 @@ void Engine::try_move_player(int dx, int dy) {
     // Check for entity at target tile
     Entity target = combat::entity_at(world_, nx, ny, player_);
     if (target != NULL_ENTITY) {
-        // NPC — talk instead of fight
+        // NPC — talk or pickpocket
         if (world_.has<NPC>(target)) {
+            // Pickpocket while sneaking
+            if (sneaking_) {
+                int stealth_lv = 0;
+                if (world_.has<Skills>(player_))
+                    stealth_lv = world_.get<Skills>(player_).get_level(SkillId::STEALTH);
+                // Success chance: 20% base + 1% per stealth level
+                int pickpocket_chance = 20 + stealth_lv;
+                if (pickpocket_chance > 85) pickpocket_chance = 85;
+
+                auto& npc = world_.get<NPC>(target);
+                if (rng_.chance(pickpocket_chance)) {
+                    // Success: steal gold
+                    int stolen = rng_.range(5, 15 + dungeon_level_ * 5);
+                    gold_ += stolen;
+                    char sbuf[64];
+                    snprintf(sbuf, sizeof(sbuf), "You lift %d gold from %s.", stolen, npc.name.c_str());
+                    log_.add(sbuf, {200, 200, 100, 255});
+                    if (world_.has<Skills>(player_))
+                        grant_skill_xp(SkillId::STEALTH, 8);
+                } else {
+                    // Failure: NPC becomes hostile or calls guards
+                    char fbuf[96];
+                    snprintf(fbuf, sizeof(fbuf), "%s catches you stealing! \"Thief!\"", npc.name.c_str());
+                    log_.add(fbuf, {255, 100, 80, 255});
+                    // Spawn a guard that attacks the player
+                    for (int gi = 0; gi < 20; gi++) {
+                        int gx = nx + rng_.range(-2, 2);
+                        int gy = ny + rng_.range(-2, 2);
+                        if (gx == pos.x && gy == pos.y) continue;
+                        if (!map_.in_bounds(gx, gy) || !map_.is_walkable(gx, gy)) continue;
+                        if (combat::entity_at(world_, gx, gy, player_) != NULL_ENTITY) continue;
+                        Entity guard = world_.create();
+                        world_.add<Position>(guard, {gx, gy});
+                        world_.add<Renderable>(guard, {SHEET_ROGUES, 0, 1, {255, 255, 255, 255}, 5}); // knight sprite
+                        Stats gs; gs.name = "town guard";
+                        gs.hp = 80 + dungeon_level_ * 15; gs.hp_max = gs.hp;
+                        gs.base_damage = 12 + dungeon_level_ * 3;
+                        gs.natural_armor = 6; gs.base_speed = 110; gs.xp_value = 0;
+                        for (int a = 0; a < ATTR_COUNT; a++) gs.attributes[a] = 16;
+                        world_.add<Stats>(guard, std::move(gs));
+                        AI gai; gai.state = AIState::HUNTING;
+                        gai.last_seen_x = pos.x; gai.last_seen_y = pos.y;
+                        gai.flee_threshold = 0;
+                        world_.add<AI>(guard, gai);
+                        world_.add<Energy>(guard, {100, 110}); // starts with energy to act immediately
+                        world_.add<StatusEffects>(guard);
+                        break;
+                    }
+                }
+                sneaking_ = false;
+                player_acted_ = true;
+                return;
+            }
+            // Normal talk
             npc_interaction::Context npc_ctx {
                 world_, player_, log_, audio_, rng_, particles_,
                 shop_screen_, quest_offer_, levelup_screen_,
@@ -1522,6 +1681,28 @@ void Engine::try_move_player(int dx, int dy) {
             if (npc_interaction::interact(npc_ctx, target, nx, ny))
                 return;
         }
+        // Intimidate: Blades/Blunt 50+ can scare humanoids into fleeing (20% chance)
+        if (!sneaking_ && world_.has<Skills>(player_) && world_.has<AI>(target) && world_.has<Stats>(target)) {
+            auto& skills = world_.get<Skills>(player_);
+            auto& tai = world_.get<AI>(target);
+            auto& tname = world_.get<Stats>(target).name;
+            bool is_humanoid = (tname == "goblin" || tname == "orc" || tname == "kobold" ||
+                                tname == "goblin archer" || tname == "goblin shaman" ||
+                                tname == "orc warchief" || tname == "bandit" ||
+                                tname == "skeleton" || tname == "zombie");
+            int best_weapon_skill = std::max(skills.get_level(SkillId::BLADES),
+                                   std::max(skills.get_level(SkillId::BLUNT),
+                                            skills.get_level(SkillId::AXES)));
+            if (is_humanoid && best_weapon_skill >= 50 && tai.state == AIState::HUNTING && rng_.chance(20)) {
+                tai.state = AIState::FLEEING;
+                char ibuf[64];
+                snprintf(ibuf, sizeof(ibuf), "The %s cowers before you!", tname.c_str());
+                log_.add(ibuf, {220, 200, 100, 255});
+                player_acted_ = true;
+                return;
+            }
+        }
+
         // Hostile — attack
         int level_before = world_.has<Stats>(player_) ? world_.get<Stats>(player_).level : 0;
         // Capture defender stats before kill removes them
@@ -1540,6 +1721,48 @@ void Engine::try_move_player(int dx, int dy) {
             victim_god = world_.get<GodAlignment>(target).god;
         auto atk_result = combat::melee_attack(world_, player_, target, rng_, log_);
         player_acted_ = true;
+
+        // Backstab: bonus damage from sneak attack
+        if (sneaking_ && atk_result.hit && !atk_result.killed && world_.has<Stats>(target)) {
+            int stealth_lv = 0;
+            if (world_.has<Skills>(player_))
+                stealth_lv = world_.get<Skills>(player_).get_level(SkillId::STEALTH);
+            int backstab_mult = skill_bonus::stealth_backstab(stealth_lv); // 2x/3x/4x
+            int bonus_dmg = atk_result.damage * (backstab_mult - 1);
+            world_.get<Stats>(target).hp -= bonus_dmg;
+            char bbuf[64];
+            snprintf(bbuf, sizeof(bbuf), "Backstab! (%d bonus damage)", bonus_dmg);
+            log_.add(bbuf, {200, 180, 255, 255});
+            // Stealth skill XP from backstab
+            if (world_.has<Skills>(player_))
+                grant_skill_xp(SkillId::STEALTH, 5);
+            // Check if killed
+            if (world_.has<Stats>(target) && world_.get<Stats>(target).hp <= 0)
+                atk_result.killed = true;
+            // Attacking breaks sneak
+            sneaking_ = false;
+            turn_actions_.used_stealth_attack = true;
+        } else if (sneaking_) {
+            // Attacking breaks sneak even on miss
+            sneaking_ = false;
+        }
+
+        // Skill XP from melee hit
+        if (atk_result.hit && world_.has<Skills>(player_)) {
+            auto& skills = world_.get<Skills>(player_);
+            // Determine weapon skill from equipped weapon tags
+            uint32_t wtags = 0;
+            if (world_.has<Inventory>(player_)) {
+                Entity wpn = world_.get<Inventory>(player_).get_equipped(EquipSlot::MAIN_HAND);
+                if (wpn != NULL_ENTITY && world_.has<Item>(wpn))
+                    wtags = world_.get<Item>(wpn).tags;
+            }
+            if (wtags == 0) grant_skill_xp(SkillId::UNARMED, 2);
+            else if (wtags & TAG_AXE) grant_skill_xp(SkillId::AXES, 2);
+            else if (wtags & TAG_BLUNT) grant_skill_xp(SkillId::BLUNT, 2);
+            else if (wtags & TAG_DAGGER) grant_skill_xp(SkillId::BLADES, 2);
+            else grant_skill_xp(SkillId::BLADES, 2);
+        }
 
         // Clumsy: 10% chance to fumble (turn hit into miss)
         if (atk_result.hit) {
@@ -1902,8 +2125,11 @@ void Engine::try_move_player(int dx, int dy) {
 
         // Check for level-up
         if (world_.has<Stats>(player_) && world_.get<Stats>(player_).level > level_before) {
-            pending_levelup_ = true;
-            levelup_screen_.open(player_, rng_, creation_screen_.get_build().class_id);
+            pending_levelup_ = false;
+            // Grant a passive tree point on level-up (player opens tree with T)
+            if (world_.has<PassiveTreeState>(player_)) {
+                world_.get<PassiveTreeState>(player_).grant_point();
+            }
             audio_.play(SfxId::LEVELUP);
         }
         return;
@@ -1951,6 +2177,121 @@ void Engine::try_move_player(int dx, int dy) {
     pos.x = nx;
     pos.y = ny;
     player_acted_ = true;
+
+    // Sneaking: costs extra turn time, grants stealth XP
+    if (sneaking_) {
+        game_turn_ += 1; // extra turn cost (effectively half speed)
+        if (world_.has<Skills>(player_))
+            grant_skill_xp(SkillId::STEALTH, 1);
+    }
+
+    // Check for traps at new position
+    if (dungeon_level_ > 0 && world_.has<Stats>(player_)) {
+        auto& trap_pool = world_.pool<Trap>();
+        for (size_t ti = 0; ti < trap_pool.size(); ti++) {
+            Entity te = trap_pool.entity_at(ti);
+            if (!world_.has<Position>(te)) continue;
+            auto& tpos = world_.get<Position>(te);
+            if (tpos.x != nx || tpos.y != ny) continue;
+            auto& trap = trap_pool.at_index(ti);
+            if (trap.triggered) continue;
+
+            // PER check to detect before triggering
+            auto& pstats = world_.get<Stats>(player_);
+            int per_roll = rng_.range(1, 20) + pstats.attr(Attr::PER) / 2;
+            // Tree trap detection bonus
+            if (world_.has<PassiveTreeState>(player_)) {
+                auto tb = passive_tree::compute_bonuses(world_.get<PassiveTreeState>(player_));
+                per_roll += tb.trap_detection;
+            }
+
+            if (!trap.revealed && per_roll >= trap.difficulty) {
+                trap.revealed = true;
+                // Add visible sprite for detected trap
+                if (!world_.has<Renderable>(te)) {
+                    world_.add<Renderable>(te, {SHEET_TILES, trap.sprite_x, trap.sprite_y,
+                                                 {255, 200, 100, 200}, -2});
+                }
+                log_.add("You spot a trap!", {255, 220, 100, 255});
+                // Don't trigger, player can step around it now
+                break;
+            }
+
+            // Trigger the trap
+            trap.triggered = true;
+            trap.revealed = true;
+            trap_sprite(trap.type, true, trap.sprite_x, trap.sprite_y);
+            // Show triggered sprite
+            if (!world_.has<Renderable>(te)) {
+                world_.add<Renderable>(te, {SHEET_TILES, trap.sprite_x, trap.sprite_y,
+                                             {200, 160, 140, 200}, -2});
+            } else {
+                auto& tr = world_.get<Renderable>(te);
+                tr.sprite_x = trap.sprite_x;
+                tr.sprite_y = trap.sprite_y;
+                tr.tint = {200, 160, 140, 200};
+            }
+
+            switch (trap.type) {
+                case TrapType::SPIKE:
+                    pstats.hp -= trap.damage;
+                    log_.add("Spikes pierce your feet!", {255, 100, 80, 255});
+                    audio_.play(SfxId::CRIT);
+                    break;
+                case TrapType::PIT:
+                    pstats.hp -= trap.damage;
+                    log_.add("You fall into a pit!", {255, 100, 80, 255});
+                    break;
+                case TrapType::DART:
+                    pstats.hp -= trap.damage;
+                    log_.add("A dart shoots from the wall!", {255, 120, 80, 255});
+                    audio_.play(SfxId::HIT1);
+                    break;
+                case TrapType::ALARM: {
+                    log_.add("An alarm sounds! Monsters stir.", {255, 180, 80, 255});
+                    // Summon 2-3 monsters at nearby empty tiles
+                    for (int si = 0; si < rng_.range(2, 3); si++) {
+                        for (int tries = 0; tries < 10; tries++) {
+                            int sx = nx + rng_.range(-3, 3);
+                            int sy = ny + rng_.range(-3, 3);
+                            if (map_.is_walkable(sx, sy) &&
+                                combat::entity_at(world_, sx, sy, player_) == NULL_ENTITY) {
+                                Entity mob = world_.create();
+                                world_.add<Position>(mob, {sx, sy});
+                                world_.add<Renderable>(mob, {1, 0, 4, {255, 255, 255, 255}, 5});
+                                Stats ms; ms.name = "skeleton"; ms.hp = 12; ms.hp_max = 12;
+                                ms.base_damage = 3; ms.xp_value = 15;
+                                world_.add<Stats>(mob, std::move(ms));
+                                AI mob_ai; mob_ai.state = AIState::HUNTING;
+                                mob_ai.last_seen_x = nx; mob_ai.last_seen_y = ny;
+                                world_.add<AI>(mob, mob_ai);
+                                world_.add<Energy>(mob, {0, 100});
+                                world_.add<StatusEffects>(mob);
+                                break;
+                            }
+                        }
+                    }
+                    break;
+                }
+                case TrapType::BEAR_TRAP:
+                    if (world_.has<StatusEffects>(player_))
+                        world_.get<StatusEffects>(player_).add(StatusType::STUNNED, 0, 3);
+                    log_.add("A bear trap snaps shut on your leg!", {255, 120, 80, 255});
+                    break;
+                case TrapType::POISON_GAS:
+                    if (world_.has<StatusEffects>(player_))
+                        world_.get<StatusEffects>(player_).add(StatusType::POISON, 3, 5);
+                    log_.add("Poison gas erupts from the floor!", {120, 200, 80, 255});
+                    break;
+            }
+
+            // Death check
+            if (pstats.hp <= 0) {
+                log_.add("You die.", {255, 50, 50, 255});
+            }
+            break;
+        }
+    }
 
     // Update cached location for HUD (avoids per-frame near_town calls)
     if (dungeon_level_ == 0) {
@@ -2101,6 +2442,50 @@ void Engine::try_move_player(int dx, int dy) {
                 }
             }
             audio_.play(SfxId::PRAYER);
+            // Respec: refund last 3 passive tree points (costs 10 favor)
+            if (world_.has<PassiveTreeState>(player_) && ga.favor >= 10) {
+                auto& tree = world_.get<PassiveTreeState>(player_);
+                if (tree.points_spent > 1) { // keep at least start node
+                    int refund = std::min(3, tree.points_spent - 1);
+                    // Find and deallocate the last N allocated nodes
+                    // Walk nodes in reverse ID order, deallocate if allocated and not start
+                    const auto* nodes = passive_tree::nodes();
+                    int count = passive_tree::node_count();
+                    int refunded = 0;
+                    for (int ni = count - 1; ni >= 0 && refunded < refund; ni--) {
+                        uint16_t nid = nodes[ni].id;
+                        if (nid == tree.start_node) continue;
+                        if (tree.is_allocated(nid)) {
+                            // Reverse stat effects
+                            auto& rs = world_.get<Stats>(player_);
+                            for (int ei = 0; ei < 4; ei++) {
+                                auto& eff = nodes[ni].effects[ei];
+                                switch (eff.type) {
+                                    case EffectType::BONUS_STR: rs.set_attr(Attr::STR, rs.attr(Attr::STR) - eff.value); break;
+                                    case EffectType::BONUS_DEX: rs.set_attr(Attr::DEX, rs.attr(Attr::DEX) - eff.value); break;
+                                    case EffectType::BONUS_CON: rs.set_attr(Attr::CON, rs.attr(Attr::CON) - eff.value); break;
+                                    case EffectType::BONUS_INT: rs.set_attr(Attr::INT, rs.attr(Attr::INT) - eff.value); break;
+                                    case EffectType::BONUS_WIL: rs.set_attr(Attr::WIL, rs.attr(Attr::WIL) - eff.value); break;
+                                    case EffectType::BONUS_PER: rs.set_attr(Attr::PER, rs.attr(Attr::PER) - eff.value); break;
+                                    case EffectType::BONUS_HP: rs.hp_max -= eff.value; rs.hp = std::min(rs.hp, rs.hp_max); break;
+                                    case EffectType::BONUS_MP: rs.mp_max -= eff.value; rs.mp = std::min(rs.mp, rs.mp_max); break;
+                                    case EffectType::BONUS_SPEED: rs.base_speed -= eff.value; break;
+                                    case EffectType::BONUS_ARMOR: rs.natural_armor -= eff.value; break;
+                                    default: break;
+                                }
+                            }
+                            tree.deallocate(nid);
+                            refunded++;
+                        }
+                    }
+                    if (refunded > 0) {
+                        ga.favor -= 10;
+                        char rbuf[64];
+                        snprintf(rbuf, sizeof(rbuf), "The shrine purges %d passive nodes. (-10 favor)", refunded);
+                        log_.add(rbuf, {sginfo.color.r, sginfo.color.g, sginfo.color.b, 255});
+                    }
+                }
+            }
         } else if (ga.god == GodId::NONE) {
             // Godless — shrines are just stone to you
             char sbuf[128];
@@ -2149,6 +2534,30 @@ void Engine::process_turn() {
     // Check tenet violations for this turn's actions
     check_tenets();
     turn_actions_.clear();
+
+    // Tick capstone cooldowns and handle duration-based effects
+    if (world_.has<PassiveTreeState>(player_) && world_.has<Stats>(player_)) {
+        auto& tree = world_.get<PassiveTreeState>(player_);
+        auto& pstats = world_.get<Stats>(player_);
+        for (int i = 0; i < PassiveTreeState::MAX_CAPSTONES; i++) {
+            if (tree.capstone_cooldowns[i] > 0)
+                tree.capstone_cooldowns[i]--;
+            // Aspect of Beast (index 5): negative value = active duration
+            if (i == 5 && tree.capstone_cooldowns[i] < 0) {
+                tree.capstone_cooldowns[i]++;
+                if (tree.capstone_cooldowns[i] == 0) {
+                    // Duration expired: remove the stat bonuses
+                    for (int a = 0; a < ATTR_COUNT; a++)
+                        pstats.attributes[a] -= 5;
+                    pstats.base_damage -= 3;
+                    pstats.hp_max -= 15;
+                    if (pstats.hp > pstats.hp_max) pstats.hp = pstats.hp_max;
+                    tree.capstone_cooldowns[i] = 50; // start real cooldown
+                    log_.add("The beast within subsides.", {80, 160, 80, 255});
+                }
+            }
+        }
+    }
 
     // Excommunication punishments — periodic divine wrath when favor <= -100
     if (world_.has<GodAlignment>(player_) && world_.has<Stats>(player_)) {
@@ -2208,7 +2617,7 @@ void Engine::process_turn() {
     }
 
     // Process AI — each monster acts at most once per player turn
-    ai::process(world_, map_, player_, rng_);
+    ai::process(world_, map_, player_, rng_, sneaking_);
 
     // NPC wandering (overworld only, every 3 turns to reduce CPU)
     if (dungeon_level_ == 0 && game_turn_ % 3 == 0) {
@@ -2222,6 +2631,89 @@ void Engine::process_turn() {
         try_spawn_overworld_enemy();
     }
 
+    // Overworld random encounters (every ~40 turns, 30% chance)
+    if (dungeon_level_ == 0 && game_turn_ % 40 == 0 && rng_.chance(30)
+        && world_.has<Position>(player_) && world_.has<Stats>(player_)) {
+        auto& pp = world_.get<Position>(player_);
+        auto& ps = world_.get<Stats>(player_);
+        int roll = rng_.range(1, 100);
+
+        if (roll <= 25) {
+            // Merchant caravan: sell a rare item
+            static const char* WARES[] = {
+                "a silver dagger", "a mithril ring", "a Tome of Phase",
+                "a strong healing potion", "a blessed amulet", "an antidote bundle"
+            };
+            int ware = rng_.range(0, 5);
+            char ebuf[128];
+            snprintf(ebuf, sizeof(ebuf), "A merchant caravan passes. They offer %s for %d gold.",
+                     WARES[ware], 30 + ps.level * 10);
+            log_.add(ebuf, {200, 190, 140, 255});
+            log_.add("(They vanish before you can respond.)", {140, 135, 120, 255});
+            // TODO: actual trade interaction
+        } else if (roll <= 45) {
+            // Wounded traveler
+            bool can_heal = false;
+            if (world_.has<Skills>(player_)) {
+                int heal_lv = world_.get<Skills>(player_).get_level(SkillId::HEALING);
+                int nat_lv = world_.get<Skills>(player_).get_level(SkillId::NATURE_MAGIC);
+                if (heal_lv >= 10 || nat_lv >= 10) can_heal = true;
+            }
+            if (can_heal) {
+                int reward = rng_.range(15, 40);
+                gold_ += reward;
+                log_.add("A wounded traveler lies by the road. You tend their injuries.", {140, 200, 140, 255});
+                char rbuf[64];
+                snprintf(rbuf, sizeof(rbuf), "\"Thank you, friend.\" (+%d gold)", reward);
+                log_.add(rbuf, {200, 200, 100, 255});
+                if (world_.has<Skills>(player_))
+                    grant_skill_xp(SkillId::HEALING, 5);
+            } else {
+                log_.add("A wounded traveler lies by the road. You lack the skill to help.", {160, 140, 120, 255});
+            }
+        } else if (roll <= 60) {
+            // Hermit offers to teach a spell (requires INT 12+)
+            if (ps.attr(Attr::INT) >= 12 && world_.has<Spellbook>(player_)) {
+                static const SpellId TEACH[] = {
+                    SpellId::MINOR_HEAL, SpellId::SPARK, SpellId::DETECT_MONSTERS,
+                    SpellId::IDENTIFY, SpellId::HARDEN_SKIN, SpellId::CURE_POISON,
+                };
+                auto spell = TEACH[rng_.range(0, 5)];
+                auto& sinfo = get_spell_info(spell);
+                auto& book = world_.get<Spellbook>(player_);
+                if (!book.knows(spell)) {
+                    book.learn(spell);
+                    char tbuf[128];
+                    snprintf(tbuf, sizeof(tbuf), "A wandering hermit teaches you %s.", sinfo.name);
+                    log_.add(tbuf, {160, 180, 200, 255});
+                } else {
+                    log_.add("A hermit offers wisdom, but you already know what they teach.", {140, 140, 130, 255});
+                }
+            } else {
+                log_.add("A hermit mutters strange words and wanders off.", {140, 130, 120, 255});
+            }
+        } else if (roll <= 75) {
+            // Roadside shrine: temporary buff
+            if (world_.has<GodAlignment>(player_)) {
+                auto& ga = world_.get<GodAlignment>(player_);
+                if (ga.god != GodId::NONE) {
+                    auto& ginfo = get_god_info(ga.god);
+                    god_system::adjust_favor(world_, player_, log_, 3);
+                    ps.hp = std::min(ps.hp + 10, ps.hp_max);
+                    char sbuf[96];
+                    snprintf(sbuf, sizeof(sbuf), "You find a roadside shrine to %s. (+3 favor, +10 HP)", ginfo.name);
+                    log_.add(sbuf, {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255});
+                } else {
+                    log_.add("You pass an old shrine. It means nothing to you.", {130, 130, 120, 255});
+                }
+            }
+        } else {
+            // Ambush: tough wandering monster
+            log_.add("Something stirs in the brush nearby.", {200, 160, 100, 255});
+            // The existing overworld spawner handles this
+        }
+    }
+
     // Monsters attack player — melee if adjacent, ranged if in range
     auto& ai_pool = world_.pool<AI>();
     for (size_t i = 0; i < ai_pool.size(); i++) {
@@ -2231,6 +2723,7 @@ void Engine::process_turn() {
 
         auto& ai_comp = ai_pool.at_index(i);
         if (ai_comp.state != AIState::HUNTING) continue;
+        if (ai_comp.friendly) continue; // summons don't attack player
 
         auto& mpos = world_.get<Position>(e);
         auto& ppos = world_.get<Position>(player_);
@@ -2319,7 +2812,20 @@ void Engine::process_turn() {
                 // Track what hit us for death screen
                 if (world_.has<Stats>(e))
                     death_cause_ = world_.get<Stats>(e).name;
+            } else {
+                // Monster missed: grant dodge skill XP
+                if (world_.has<Skills>(player_))
+                    grant_skill_xp(SkillId::DODGE, 2);
             }
+
+            // Heavy armor XP: gain when hit while wearing heavy armor
+            if (mresult.hit && world_.has<Skills>(player_) && world_.has<Inventory>(player_)) {
+                auto& inv = world_.get<Inventory>(player_);
+                Entity chest = inv.get_equipped(EquipSlot::CHEST);
+                if (chest != NULL_ENTITY && world_.has<Item>(chest) && world_.get<Item>(chest).armor_bonus >= 4)
+                    grant_skill_xp(SkillId::HEAVY_ARMOR, 2);
+            }
+
             // Status effects from monster hits
             if (mresult.hit && world_.has<Stats>(e) && world_.has<StatusEffects>(player_)) {
                 auto& mname = world_.get<Stats>(e).name;
@@ -2409,8 +2915,16 @@ void Engine::process_turn() {
                     candidate = DiseaseId::BLACKBLOOD;
 
                 if (candidate != DiseaseId::DISEASE_COUNT && !diseases.has(candidate)) {
+                    // Chaos Inoculation keystone: immune to disease
+                    bool chaos_immune = false;
+                    if (world_.has<PassiveTreeState>(player_)) {
+                        auto cb = passive_tree::compute_bonuses(world_.get<PassiveTreeState>(player_));
+                        chaos_immune = cb.chaos_inoculation;
+                    }
                     // Plague Doctor: immune to all diseases
-                    if (background_ == BackgroundId::PLAGUE_DOCTOR) {
+                    if (chaos_immune) {
+                        log_.add("Your inoculated body rejects the infection.", {120, 200, 60, 255});
+                    } else if (background_ == BackgroundId::PLAGUE_DOCTOR) {
                         log_.add("Your medical training protects you from infection.", {140, 200, 160, 255});
                     } else if (!con_resist()) {
                         if (diseases.contract(candidate)) {
@@ -2683,7 +3197,12 @@ void Engine::fire_ranged() {
     player_acted_ = true;
     audio_.play_bow_fire();
     particles_.arrow_trail(shooter.x, shooter.y, tgt_x, tgt_y);
-    if (result.hit) { audio_.play_bow_hit(); particles_.hit_spark(tgt_x, tgt_y); }
+    if (result.hit) {
+        audio_.play_bow_hit(); particles_.hit_spark(tgt_x, tgt_y);
+        // Archery skill XP
+        if (world_.has<Skills>(player_))
+            grant_skill_xp(SkillId::ARCHERY, 2);
+    }
     if (result.critical) { trigger_screen_shake(4.0f); }
     if (result.killed) { audio_.play(SfxId::DEATH); particles_.death_burst(tgt_x, tgt_y); trigger_screen_shake(3.0f); }
 
@@ -2742,8 +3261,9 @@ void Engine::fire_ranged() {
 
     // Level-up check
     if (world_.has<Stats>(player_) && world_.get<Stats>(player_).level > level_before) {
-        pending_levelup_ = true;
-        levelup_screen_.open(player_, rng_, creation_screen_.get_build().class_id);
+        pending_levelup_ = false;
+        if (world_.has<PassiveTreeState>(player_))
+            world_.get<PassiveTreeState>(player_).grant_point();
         audio_.play(SfxId::LEVELUP);
     }
 }
@@ -2893,6 +3413,25 @@ void Engine::describe_tile(int x, int y) {
             char buf[128];
             snprintf(buf, sizeof(buf), "Remains of %s.", c.name.c_str());
             log_.add(buf, {140, 130, 120, 255});
+            // Dark Arts 25: speak with dead
+            if (world_.has<Skills>(player_)) {
+                int da_lv = world_.get<Skills>(player_).get_level(SkillId::DARK_ARTS);
+                if (da_lv >= 25) {
+                    static const char* WHISPERS[] = {
+                        "The dead whispers: \"Deeper... the treasure lies deeper.\"",
+                        "A fading voice: \"Beware the one that hides in the walls.\"",
+                        "The spirit murmurs: \"I died facing east. The stairs are that way.\"",
+                        "A ghostly voice: \"The strong ones gather near the bottom.\"",
+                        "The corpse sighs: \"I should have brought more potions.\"",
+                        "A whisper: \"The shrines will guide you, if you have faith.\"",
+                        "The dead speaks: \"Something powerful guards the lowest floor.\"",
+                        "A hollow voice: \"Silver. You need silver for the wraiths.\"",
+                    };
+                    int widx = rng_.range(0, 7);
+                    log_.add(WHISPERS[widx], {160, 120, 200, 255});
+                    grant_skill_xp(SkillId::DARK_ARTS, 3);
+                }
+            }
             found_entity = true;
         }
     }
@@ -3385,16 +3924,26 @@ void Engine::try_pickup() {
         world_.remove<Position>(e);
         inv.add(e);
 
-        // Auto-identify potions known from previous runs
-        if (item.type == ItemType::POTION && !item.identified
-            && meta_.identified_potions.count(item.name)) {
-            item.identified = true;
-        }
+        // Potions must be identified each run (no meta-save carry-over)
+        // Alchemist background still auto-IDs below
 
-        // Background: Alchemist — auto-identify all potions on pickup
-        if (background_ == BackgroundId::ALCHEMISTS_APPRENTICE && item.type == ItemType::POTION && !item.identified) {
-            item.identified = true;
-            log_.add("Tincture Lore: you recognize this potion.", {140, 200, 160, 255});
+        // Auto-identify potions: Alchemist background OR Divination 25+
+        if (item.type == ItemType::POTION && !item.identified) {
+            bool can_id = (background_ == BackgroundId::ALCHEMISTS_APPRENTICE);
+            if (!can_id && world_.has<Skills>(player_)) {
+                int div_lv = world_.get<Skills>(player_).get_level(SkillId::DIVINATION);
+                if (div_lv >= 25) can_id = true;
+            }
+            // Tree identify-on-pickup bonus
+            if (!can_id && world_.has<PassiveTreeState>(player_)) {
+                auto tb = passive_tree::compute_bonuses(world_.get<PassiveTreeState>(player_));
+                if (tb.identify_on_pickup > 0 && rng_.chance(tb.identify_on_pickup))
+                    can_id = true;
+            }
+            if (can_id) {
+                item.identified = true;
+                log_.add("You recognize this potion.", {140, 200, 160, 255});
+            }
         }
 
         // Pet pickup — prompt for naming
@@ -3433,6 +3982,39 @@ void Engine::try_pickup() {
 
         player_acted_ = true;
         return;
+    }
+
+    // Nature 25: forage herbs in overworld wilderness
+    if (dungeon_level_ == 0 && world_.has<Skills>(player_) && world_.has<Position>(player_)) {
+        int nat_lv = world_.get<Skills>(player_).get_level(SkillId::NATURE_MAGIC);
+        auto& pp = world_.get<Position>(player_);
+        if (nat_lv >= 25 && map_.in_bounds(pp.x, pp.y)) {
+            auto tt = map_.at(pp.x, pp.y).type;
+            if (tt == TileType::FLOOR_GRASS || tt == TileType::BRUSH) {
+                if (rng_.chance(40)) { // 40% success
+                    // Create a healing herb (acts like a weak potion)
+                    Entity herb = world_.create();
+                    world_.add<Position>(herb, {pp.x, pp.y});
+                    world_.add<Renderable>(herb, {SHEET_ITEMS, 4, 19, {120, 200, 80, 255}, 1});
+                    Item hi;
+                    hi.name = "foraged herb";
+                    hi.description = "A medicinal plant. Restores 8 HP.";
+                    hi.type = ItemType::POTION;
+                    hi.heal_amount = 8;
+                    hi.gold_value = 5;
+                    hi.identified = true;
+                    world_.add<Item>(herb, std::move(hi));
+                    log_.add("You find a useful herb.", {80, 180, 80, 255});
+                    grant_skill_xp(SkillId::NATURE_MAGIC, 3);
+                    player_acted_ = true;
+                    return;
+                } else {
+                    log_.add("You search but find nothing useful.", {120, 140, 100, 255});
+                    player_acted_ = true;
+                    return;
+                }
+            }
+        }
     }
 
     log_.add("There is nothing here to pick up.", {120, 110, 100, 255});
@@ -3479,20 +4061,41 @@ void Engine::try_rest() {
             Entity mob = world_.create();
             world_.add<Position>(mob, {mx, my});
 
-            // Depth-scaled ambush monster
+            // Spawn a real monster from the depth-appropriate pool
+            const auto* mtable = populate::get_monster_table();
+            int mcount = populate::get_monster_count();
+            int max_idx = std::min(mcount - 1, 6 + dungeon_level_ * 2);
+            int midx = rng_.range(0, max_idx);
+            auto& mdef = mtable[midx];
+
             Stats ms;
-            ms.name = "something";
-            ms.hp = 12 + dungeon_level_ * 4; ms.hp_max = ms.hp;
-            ms.base_damage = 3 + dungeon_level_;
-            ms.xp_value = 15 + dungeon_level_ * 5;
+            ms.name = mdef.name;
+            float scale = 1.0f + dungeon_level_ * 0.15f;
+            ms.hp = static_cast<int>(mdef.hp * scale); ms.hp_max = ms.hp;
+            ms.base_damage = static_cast<int>(mdef.base_damage * scale);
+            ms.natural_armor = mdef.natural_armor;
+            ms.base_speed = mdef.speed;
+            ms.xp_value = mdef.xp_value;
+            for (int a = 0; a < ATTR_COUNT; a++) ms.attributes[a] = 10;
+            ms.set_attr(Attr::STR, mdef.str);
+            ms.set_attr(Attr::DEX, mdef.dex);
+            ms.set_attr(Attr::CON, mdef.con);
 
-            // Use a generic hostile sprite
-            world_.add<Renderable>(mob, {SHEET_MONSTERS, 11, 6, {255, 255, 255, 255}, 5});
-            world_.add<AI>(mob, {AIState::HUNTING, ppos.x, ppos.y, 0, 20});
+            world_.add<Renderable>(mob, {SHEET_MONSTERS, mdef.sprite_x, mdef.sprite_y, {255, 255, 255, 255}, 5});
+            { AI rest_ai; rest_ai.state = AIState::HUNTING; rest_ai.last_seen_x = ppos.x; rest_ai.last_seen_y = ppos.y; rest_ai.flee_threshold = 20; world_.add<AI>(mob, rest_ai); }
             world_.add<Energy>(mob, {0, 100});
+            std::string mob_name = ms.name;
             world_.add<Stats>(mob, std::move(ms));
+            world_.add<StatusEffects>(mob);
 
-            log_.add("Your rest is interrupted!", {255, 120, 80, 255});
+            char ambush_buf[128];
+            snprintf(ambush_buf, sizeof(ambush_buf), "A %s attacks while you sleep!", mob_name.c_str());
+            log_.add(ambush_buf, {255, 120, 80, 255});
+
+            // The ambush monster gets a free attack (you were asleep)
+            if (world_.has<Stats>(mob) && world_.has<Stats>(player_)) {
+                combat::melee_attack(world_, mob, player_, rng_, log_);
+            }
             player_acted_ = true;
             return;
         }
@@ -3503,18 +4106,40 @@ void Engine::try_rest() {
     rested_this_floor_ = true;
     if (dungeon_level_ <= 0) turn_actions_.rested_on_surface = true;
 
-    // Rest succeeds — restore 15% of max HP and MP (Lethis: 33%, Farmer: 25%, Monk of Order: 40%)
-    int rest_pct = 7; // default: ~15% (divide by 7)
+    // Rest succeeds — restore HP and MP with diminishing returns per floor
+    // Exhaustion: each rest on this floor reduces effectiveness
+    rest_count_this_floor_++;
+    float exhaustion_mult = 1.0f;
+    if (rest_count_this_floor_ == 2) exhaustion_mult = 0.5f;
+    else if (rest_count_this_floor_ == 3) exhaustion_mult = 0.25f;
+    else if (rest_count_this_floor_ >= 4) {
+        log_.add("You are too exhausted to rest effectively.", {180, 140, 100, 255});
+        game_turn_ += 10; // still costs time
+        player_acted_ = true;
+        return;
+    }
+
+    // Base: ~10% HP, ~15% MP (MP recovers faster than HP)
+    int hp_pct = 10; // default divide by 10
+    int mp_pct = 7;  // divide by 7
     if (world_.has<GodAlignment>(player_)) {
         auto& ga = world_.get<GodAlignment>(player_);
-        if (ga.god == GodId::LETHIS) rest_pct = 3; // ~33%
+        if (ga.god == GodId::LETHIS) { hp_pct = 5; mp_pct = 3; } // Lethis: better rest
     }
-    if (background_ == BackgroundId::MONK_OF_ORDER && rest_pct > 3)
-        rest_pct = 3; // ~33% (Meditation — stacks with Lethis for ~50%)
-    else if (background_ == BackgroundId::FARMER && rest_pct > 4)
-        rest_pct = 4; // ~25% (Hardy Stock)
-    int hp_restore = std::max(1, stats.hp_max / rest_pct);
-    int mp_restore = std::max(1, stats.mp_max / rest_pct);
+    if (background_ == BackgroundId::MONK_OF_ORDER) { hp_pct = 5; mp_pct = 3; }
+    else if (background_ == BackgroundId::FARMER && hp_pct > 7) hp_pct = 7;
+
+    // Tree rest efficiency bonus
+    if (world_.has<PassiveTreeState>(player_)) {
+        auto tb = passive_tree::compute_bonuses(world_.get<PassiveTreeState>(player_));
+        if (tb.rest_efficiency > 0) {
+            hp_pct = std::max(3, hp_pct - tb.rest_efficiency / 5);
+            mp_pct = std::max(2, mp_pct - tb.rest_efficiency / 5);
+        }
+    }
+
+    int hp_restore = std::max(1, static_cast<int>(stats.hp_max / hp_pct * exhaustion_mult));
+    int mp_restore = std::max(1, static_cast<int>(stats.mp_max / mp_pct * exhaustion_mult));
 
     // Vampirism: no natural HP regen
     bool is_vampire = world_.has<Diseases>(player_) &&
@@ -3543,6 +4168,20 @@ void Engine::try_rest() {
         snprintf(buf, sizeof(buf), "You rest for a while. (+%d HP, +%d MP)", hp_actual, mp_actual);
     log_.add(buf, {100, 200, 100, 255});
     audio_.play(SfxId::REST);
+
+    // Dismiss all summons on rest
+    {
+        auto& ai_pool = world_.pool<AI>();
+        std::vector<Entity> to_dismiss;
+        for (size_t si = 0; si < ai_pool.size(); si++) {
+            Entity se = ai_pool.entity_at(si);
+            if (ai_pool.at_index(si).friendly && world_.has<Stats>(se))
+                to_dismiss.push_back(se);
+        }
+        for (Entity se : to_dismiss) world_.destroy(se);
+        if (!to_dismiss.empty())
+            log_.add("Your summons dissipate.", {140, 140, 120, 255});
+    }
 
     // Yashkhet disapproves of rest
     if (world_.has<GodAlignment>(player_)) {
@@ -4030,6 +4669,58 @@ void Engine::handle_input() {
             return;
         }
 
+        // Passive tree screen — handles all event types (mouse, keyboard, scroll)
+        if (passive_tree_screen_.is_open()) {
+            // Snapshot allocated bitfield before input
+            PassiveTreeState snap{};
+            if (world_.has<PassiveTreeState>(player_))
+                snap = world_.get<PassiveTreeState>(player_);
+
+            passive_tree_screen_.handle_input(event);
+
+            // If a node was allocated, apply its stat effects to player
+            if (world_.has<PassiveTreeState>(player_) && world_.has<Stats>(player_)) {
+                auto& tree = world_.get<PassiveTreeState>(player_);
+                if (tree.points_spent > snap.points_spent) {
+                    auto& stats = world_.get<Stats>(player_);
+                    const auto* nodes = passive_tree::nodes();
+                    int count = passive_tree::node_count();
+                    for (int i = 0; i < count; i++) {
+                        uint16_t nid = nodes[i].id;
+                        if (tree.is_allocated(nid) && !snap.is_allocated(nid)) {
+                            for (int e = 0; e < 4; e++) {
+                                auto& eff = nodes[i].effects[e];
+                                switch (eff.type) {
+                                    case EffectType::BONUS_STR: stats.set_attr(Attr::STR, stats.attr(Attr::STR) + eff.value); break;
+                                    case EffectType::BONUS_DEX: stats.set_attr(Attr::DEX, stats.attr(Attr::DEX) + eff.value); break;
+                                    case EffectType::BONUS_CON: stats.set_attr(Attr::CON, stats.attr(Attr::CON) + eff.value); break;
+                                    case EffectType::BONUS_INT: stats.set_attr(Attr::INT, stats.attr(Attr::INT) + eff.value); break;
+                                    case EffectType::BONUS_WIL: stats.set_attr(Attr::WIL, stats.attr(Attr::WIL) + eff.value); break;
+                                    case EffectType::BONUS_PER: stats.set_attr(Attr::PER, stats.attr(Attr::PER) + eff.value); break;
+                                    case EffectType::BONUS_CHA: stats.set_attr(Attr::CHA, stats.attr(Attr::CHA) + eff.value); break;
+                                    case EffectType::BONUS_HP: stats.hp_max += eff.value; stats.hp += eff.value; break;
+                                    case EffectType::BONUS_MP: stats.mp_max += eff.value; stats.mp += eff.value; break;
+                                    case EffectType::BONUS_SPEED: stats.base_speed += eff.value; break;
+                                    case EffectType::BONUS_ARMOR: stats.natural_armor += eff.value; break;
+                                    case EffectType::XP_GAIN_BONUS: stats.xp_bonus_pct += eff.value; break;
+                                    case EffectType::KS_CHAOS_INOCULATION: {
+                                        stats.hp_max = stats.hp_max / 2;
+                                        if (stats.hp > stats.hp_max) stats.hp = stats.hp_max;
+                                        stats.poison_resist = 100;
+                                        log_.add("Chaos Inoculation. Your body hardens against corruption.", {120, 200, 60, 255});
+                                        break;
+                                    }
+                                    default: break;
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+            continue;
+        }
+
         if (event.type == SDL_KEYDOWN) {
             // Pause menu intercepts all input when open
             if (pause_menu_.is_open()) {
@@ -4074,14 +4765,14 @@ void Engine::handle_input() {
                     int dx = 0, dy = 0;
                     auto sym = event.key.keysym.sym;
                     switch (sym) {
-                        case SDLK_LEFT:  case SDLK_h: case SDLK_KP_4: case SDLK_a: dx = -1; break;
-                        case SDLK_RIGHT: case SDLK_l: case SDLK_KP_6: case SDLK_d: dx =  1; break;
-                        case SDLK_UP:    case SDLK_k: case SDLK_KP_8: case SDLK_w: dy = -1; break;
-                        case SDLK_DOWN:  case SDLK_j: case SDLK_KP_2: case SDLK_s: dy =  1; break;
-                        case SDLK_y: case SDLK_KP_7: dx = -1; dy = -1; break;
-                        case SDLK_u: case SDLK_KP_9: dx =  1; dy = -1; break;
-                        case SDLK_b: case SDLK_KP_1: dx = -1; dy =  1; break;
-                        case SDLK_n: case SDLK_KP_3: dx =  1; dy =  1; break;
+                        case SDLK_LEFT:  case SDLK_KP_4: case SDLK_a: dx = -1; break;
+                        case SDLK_RIGHT: case SDLK_KP_6: case SDLK_d: dx =  1; break;
+                        case SDLK_UP:    case SDLK_KP_8: case SDLK_w: dy = -1; break;
+                        case SDLK_DOWN:  case SDLK_KP_2: case SDLK_s: dy =  1; break;
+                        case SDLK_KP_7: dx = -1; dy = -1; break;
+                        case SDLK_KP_9: dx =  1; dy = -1; break;
+                        case SDLK_KP_1: dx = -1; dy =  1; break;
+                        case SDLK_KP_3: dx =  1; dy =  1; break;
                         case SDLK_ESCAPE: case SDLK_x:
                             look_mode_ = false;
                             log_.add("Look mode off.", {140, 140, 140, 255});
@@ -4107,6 +4798,155 @@ void Engine::handle_input() {
                     auto sym = event.key.keysym.sym;
                     if (sym == SDLK_1) { execute_prayer(0); prayer_mode_ = false; }
                     else if (sym == SDLK_2) { execute_prayer(1); prayer_mode_ = false; }
+                    else if (sym == SDLK_3) {
+                        // God mastery ability (favor 75+)
+                        prayer_mode_ = false;
+                        if (!world_.has<GodAlignment>(player_) || !world_.has<Stats>(player_)) break;
+                        auto& ga = world_.get<GodAlignment>(player_);
+                        auto& ps = world_.get<Stats>(player_);
+                        if (ga.favor < 75) {
+                            log_.add("Not enough favor.", {180, 120, 120, 255});
+                            break;
+                        }
+                        if (ga.favor < 15) {
+                            log_.add("Not enough favor.", {180, 120, 120, 255});
+                            break;
+                        }
+                        ga.favor -= 15;
+                        auto& pp = world_.get<Position>(player_);
+                        bool acted = true;
+
+                        switch (ga.god) {
+                            case GodId::YASHKHET: {
+                                // Sacrifice nearest corpse for +1 max HP
+                                auto& corpse_pool = world_.pool<Corpse>();
+                                bool found = false;
+                                for (size_t ci = 0; ci < corpse_pool.size(); ci++) {
+                                    Entity ce = corpse_pool.entity_at(ci);
+                                    if (!world_.has<Position>(ce)) continue;
+                                    auto& cp = world_.get<Position>(ce);
+                                    int cd = std::max(std::abs(cp.x - pp.x), std::abs(cp.y - pp.y));
+                                    if (cd <= 2) {
+                                        world_.destroy(ce);
+                                        ps.hp_max += 1;
+                                        ps.hp += 1;
+                                        log_.add("You consume the corpse. Your body strengthens.", {200, 60, 60, 255});
+                                        found = true;
+                                        break;
+                                    }
+                                }
+                                if (!found) {
+                                    log_.add("No corpse nearby.", {150, 130, 130, 255});
+                                    ga.favor += 15; // refund
+                                    acted = false;
+                                }
+                                break;
+                            }
+                            case GodId::ZHAVEK: {
+                                // Shadow Step: teleport behind nearest enemy + free attack
+                                Entity nearest = magic::nearest_enemy(world_, player_, map_, 6);
+                                if (nearest != NULL_ENTITY && world_.has<Position>(nearest)) {
+                                    auto& np = world_.get<Position>(nearest);
+                                    // Find tile behind enemy relative to player
+                                    int dx = np.x - pp.x, dy = np.y - pp.y;
+                                    int bx = np.x + (dx > 0 ? 1 : dx < 0 ? -1 : 0);
+                                    int by = np.y + (dy > 0 ? 1 : dy < 0 ? -1 : 0);
+                                    if (map_.is_walkable(bx, by) &&
+                                        combat::entity_at(world_, bx, by, player_) == NULL_ENTITY) {
+                                        pp.x = bx; pp.y = by;
+                                        combat::melee_attack(world_, player_, nearest, rng_, log_);
+                                        log_.add("You step through shadow.", {100, 80, 160, 255});
+                                    } else {
+                                        // Can't get behind, just teleport adjacent
+                                        pp.x = np.x + (dx > 0 ? -1 : 1);
+                                        pp.y = np.y;
+                                        log_.add("Shadow carries you forward.", {100, 80, 160, 255});
+                                    }
+                                } else {
+                                    log_.add("No target nearby.", {150, 130, 130, 255});
+                                    ga.favor += 15; acted = false;
+                                }
+                                break;
+                            }
+                            case GodId::KHAEL: {
+                                // Tame nearest animal
+                                Entity nearest = magic::nearest_enemy(world_, player_, map_, 5);
+                                if (nearest != NULL_ENTITY && world_.has<Stats>(nearest) && world_.has<AI>(nearest)) {
+                                    auto& ns = world_.get<Stats>(nearest);
+                                    if (is_animal(ns.name.c_str())) {
+                                        world_.get<AI>(nearest).forget_player = true;
+                                        world_.get<AI>(nearest).state = AIState::IDLE;
+                                        char buf[64];
+                                        snprintf(buf, sizeof(buf), "The %s becomes calm.", ns.name.c_str());
+                                        log_.add(buf, {80, 180, 80, 255});
+                                    } else {
+                                        log_.add("Only beasts can be tamed.", {150, 130, 130, 255});
+                                        ga.favor += 15; acted = false;
+                                    }
+                                } else {
+                                    log_.add("No beast nearby.", {150, 130, 130, 255});
+                                    ga.favor += 15; acted = false;
+                                }
+                                break;
+                            }
+                            case GodId::MORRETH: {
+                                // War Cry: stun adjacent + buff damage
+                                static const int DX[] = {-1, 0, 1, -1, 1, -1, 0, 1};
+                                static const int DY[] = {-1, -1, -1, 0, 0, 1, 1, 1};
+                                for (int d = 0; d < 8; d++) {
+                                    Entity adj = combat::entity_at(world_, pp.x + DX[d], pp.y + DY[d], player_);
+                                    if (adj != NULL_ENTITY && world_.has<StatusEffects>(adj))
+                                        world_.get<StatusEffects>(adj).add(StatusType::STUNNED, 0, 2);
+                                }
+                                ps.base_damage += 3;
+                                log_.add("WAR CRY! Enemies stagger. You feel battle fury.", {220, 80, 60, 255});
+                                break;
+                            }
+                            case GodId::SOLETH: {
+                                // Consecrate: damage undead in 5x5 area
+                                int kills = 0;
+                                auto& ai_pool = world_.pool<AI>();
+                                for (size_t ai = 0; ai < ai_pool.size(); ai++) {
+                                    Entity ae = ai_pool.entity_at(ai);
+                                    if (!world_.has<Position>(ae) || !world_.has<Stats>(ae)) continue;
+                                    auto& apos = world_.get<Position>(ae);
+                                    auto& as = world_.get<Stats>(ae);
+                                    if (std::abs(apos.x - pp.x) <= 2 && std::abs(apos.y - pp.y) <= 2
+                                        && is_undead(as.name.c_str())) {
+                                        as.hp -= 5;
+                                        if (as.hp <= 0) kills++;
+                                    }
+                                }
+                                log_.add("Holy light sears the undead!", {255, 240, 160, 255});
+                                break;
+                            }
+                            case GodId::GATHRUUN: {
+                                // Stone Wall: create 3 wall tiles in front of player
+                                // Direction: based on last movement or facing
+                                int dx = 1, dy = 0; // default east
+                                for (int step = 1; step <= 3; step++) {
+                                    int wx = pp.x + dx * step, wy = pp.y;
+                                    if (map_.in_bounds(wx, wy) && map_.is_walkable(wx, wy)
+                                        && combat::entity_at(world_, wx, wy, player_) == NULL_ENTITY) {
+                                        map_.at(wx, wy).type = TileType::WALL_STONE_ROUGH;
+                                    }
+                                }
+                                log_.add("Stone erupts from the ground!", {180, 140, 100, 255});
+                                break;
+                            }
+                            default: {
+                                // Generic: +10 favor, full MP
+                                ga.favor += 10;
+                                ps.mp = ps.mp_max;
+                                log_.add("Divine energy fills you.", {200, 200, 140, 255});
+                                break;
+                            }
+                        }
+                        if (acted) {
+                            audio_.play(SfxId::PRAYER);
+                            player_acted_ = true;
+                        }
+                    }
                     else if (sym == SDLK_ESCAPE) { prayer_mode_ = false; }
                 }
                 return;
@@ -4547,14 +5387,11 @@ void Engine::handle_input() {
                 case SDLK_DOWN:  case SDLK_KP_2: case SDLK_s: try_move_player(0, 1);  break;
                 case SDLK_LEFT:  case SDLK_KP_4: case SDLK_a: try_move_player(-1, 0); break;
                 case SDLK_RIGHT: case SDLK_KP_6: case SDLK_d: try_move_player(1, 0);  break;
-                case SDLK_k: try_move_player(0, -1); break;
-                case SDLK_j: try_move_player(0, 1);  break;
-                case SDLK_h: try_move_player(-1, 0); break;
-                case SDLK_l: try_move_player(1, 0);  break;
-                case SDLK_y: case SDLK_KP_7: try_move_player(-1, -1); break;
-                case SDLK_u: case SDLK_KP_9: try_move_player(1, -1);  break;
-                case SDLK_b: case SDLK_KP_1: try_move_player(-1, 1);  break;
-                case SDLK_n: case SDLK_KP_3: try_move_player(1, 1);   break;
+                // hjkl unbound — freed for future use
+                case SDLK_KP_7: try_move_player(-1, -1); break;
+                case SDLK_KP_9: try_move_player(1, -1);  break;
+                case SDLK_KP_1: try_move_player(-1, 1);  break;
+                case SDLK_KP_3: try_move_player(1, 1);   break;
 
                 case SDLK_PERIOD: case SDLK_KP_5:
                     player_acted_ = true;
@@ -4580,6 +5417,194 @@ void Engine::handle_input() {
                 case SDLK_c:
                     char_sheet_.open(player_);
                     break;
+
+                // Passive tree
+                case SDLK_t:
+                    passive_tree_screen_.open(player_, &world_, width_, height_);
+                    break;
+
+                // Sneak toggle
+                case SDLK_o:
+                    sneaking_ = !sneaking_;
+                    if (sneaking_) {
+                        log_.add("You crouch and move carefully.", {140, 140, 200, 255});
+                        // Dim player sprite
+                        if (world_.has<Renderable>(player_)) {
+                            auto& r = world_.get<Renderable>(player_);
+                            r.tint.a = 140; // semi-transparent
+                        }
+                    } else {
+                        log_.add("You stand up.", {160, 160, 140, 255});
+                        if (world_.has<Renderable>(player_)) {
+                            auto& r = world_.get<Renderable>(player_);
+                            r.tint.a = 255;
+                        }
+                    }
+                    break;
+
+                // Active abilities (1-4 keys)
+                case SDLK_1: case SDLK_2: case SDLK_3: case SDLK_4: {
+                    if (!world_.has<PassiveTreeState>(player_)) break;
+                    auto& tree = world_.get<PassiveTreeState>(player_);
+                    auto bonuses = passive_tree::compute_bonuses(tree);
+                    auto& pos = world_.get<Position>(player_);
+                    int slot = event.key.keysym.sym - SDLK_1;
+
+                    // Map slot to capstone ability
+                    struct AbilityInfo { EffectType type; int cd; const char* name; };
+                    AbilityInfo abilities[] = {
+                        {EffectType::CAP_WHIRLWIND, bonuses.cap_whirlwind_cd, "Whirlwind"},
+                        {EffectType::CAP_TIME_SLIP, bonuses.cap_time_slip_cd, "Time Slip"},
+                        {EffectType::CAP_ARCANE_OVERLOAD, bonuses.cap_arcane_overload_cd, "Arcane Overload"},
+                        {EffectType::CAP_DIVINE_INTERVENTION, bonuses.cap_divine_intervention_cd, "Divine Intervention"},
+                        {EffectType::CAP_UNBREAKABLE, bonuses.cap_unbreakable_cd, "Unbreakable"},
+                        {EffectType::CAP_ASPECT_OF_BEAST, bonuses.cap_aspect_of_beast_cd, "Aspect of the Beast"},
+                        {EffectType::CAP_DEATH_MARK, bonuses.cap_death_mark_cd, "Death Mark"},
+                        {EffectType::CAP_PANDEMIC, bonuses.cap_pandemic_cd, "Pandemic"},
+                    };
+
+                    // Slot assignment: first owned capstone = slot 1, etc.
+                    int owned = 0;
+                    EffectType active_type = EffectType::NONE;
+                    int active_cd = 0;
+                    const char* active_name = nullptr;
+                    for (auto& ab : abilities) {
+                        if (ab.cd > 0) {
+                            if (owned == slot) {
+                                active_type = ab.type;
+                                active_cd = ab.cd;
+                                active_name = ab.name;
+                                break;
+                            }
+                            owned++;
+                        }
+                    }
+
+                    if (active_type == EffectType::NONE) {
+                        log_.add("No ability in that slot.", {140, 130, 120, 255});
+                        break;
+                    }
+
+                    // Check cooldown
+                    int cd_idx = static_cast<int>(active_type) - static_cast<int>(EffectType::CAP_WHIRLWIND);
+                    if (cd_idx < 0 || cd_idx >= PassiveTreeState::MAX_CAPSTONES) break;
+                    if (tree.capstone_cooldowns[cd_idx] > 0) {
+                        char cdbuf[64];
+                        snprintf(cdbuf, sizeof(cdbuf), "%s: %d turns remaining.",
+                                 active_name, tree.capstone_cooldowns[cd_idx]);
+                        log_.add(cdbuf, {180, 130, 130, 255});
+                        break;
+                    }
+
+                    // ── Execute capstone abilities ──
+                    bool used = false;
+
+                    if (active_type == EffectType::CAP_WHIRLWIND) {
+                        static const int DX[] = {-1, 0, 1, -1, 1, -1, 0, 1};
+                        static const int DY[] = {-1, -1, -1, 0, 0, 1, 1, 1};
+                        for (int d = 0; d < 8; d++) {
+                            Entity adj = combat::entity_at(world_, pos.x + DX[d], pos.y + DY[d], player_);
+                            if (adj != NULL_ENTITY && world_.has<AI>(adj))
+                                combat::melee_attack(world_, player_, adj, rng_, log_);
+                        }
+                        log_.add("Whirlwind!", {255, 200, 100, 255});
+                        used = true;
+                    }
+                    else if (active_type == EffectType::CAP_TIME_SLIP) {
+                        // Grant 2 extra actions (3 total this turn)
+                        // Implemented as 2 bonus energy grants so player acts 3x
+                        if (world_.has<Energy>(player_)) {
+                            auto& en = world_.get<Energy>(player_);
+                            en.current += en.speed * 2;
+                        }
+                        log_.add("Time slips. You move in a blur.", {100, 200, 255, 255});
+                        used = true;
+                    }
+                    else if (active_type == EffectType::CAP_ARCANE_OVERLOAD) {
+                        // Set a flag: next spell costs 0 MP and deals 2x damage
+                        // Use capstone_cooldowns[2] as -1 to signal "overload active"
+                        // (cooldown gets set to real value after use in magic.cpp)
+                        tree.capstone_cooldowns[cd_idx] = -1; // flag: overload ready
+                        log_.add("Arcane energy surges. Next spell amplified.", {100, 140, 255, 255});
+                        // Don't set used=true, don't cost a turn
+                        break;
+                    }
+                    else if (active_type == EffectType::CAP_DIVINE_INTERVENTION) {
+                        auto& stats = world_.get<Stats>(player_);
+                        stats.hp = stats.hp_max;
+                        stats.mp = stats.mp_max;
+                        // Cleanse all status effects
+                        if (world_.has<StatusEffects>(player_))
+                            world_.get<StatusEffects>(player_).effects.clear();
+                        log_.add("Divine light fills you. Fully restored.", {255, 240, 160, 255});
+                        audio_.play(SfxId::HEAL);
+                        used = true;
+                    }
+                    else if (active_type == EffectType::CAP_UNBREAKABLE) {
+                        // Add a buff for 8 turns that halves damage
+                        if (world_.has<Buffs>(player_)) {
+                            world_.get<Buffs>(player_).add(BuffType::SANCTUARY, 8, 10);
+                            // Borrowing SANCTUARY buff type for armor; +10 armor for 8 turns
+                            auto& stats = world_.get<Stats>(player_);
+                            stats.natural_armor += 10;
+                        }
+                        log_.add("You become unbreakable. Damage halved.", {180, 140, 100, 255});
+                        used = true;
+                    }
+                    else if (active_type == EffectType::CAP_ASPECT_OF_BEAST) {
+                        auto& stats = world_.get<Stats>(player_);
+                        // +5 all stats for 15 turns
+                        for (int a = 0; a < ATTR_COUNT; a++)
+                            stats.attributes[a] += 5;
+                        stats.base_damage += 3;
+                        stats.hp_max += 15; stats.hp += 15;
+                        // These will need to be removed after 15 turns
+                        // Use capstone_cooldowns[5] as remaining duration (negative = active)
+                        tree.capstone_cooldowns[cd_idx] = -15; // negative = duration remaining
+                        log_.add("The beast within awakens.", {80, 200, 80, 255});
+                        used = true;
+                    }
+                    else if (active_type == EffectType::CAP_DEATH_MARK) {
+                        // Mark: next melee hit is auto-crit with 3x damage
+                        // Use capstone_cooldowns[6] as -1 to signal "mark active"
+                        tree.capstone_cooldowns[cd_idx] = -1;
+                        log_.add("You mark your target for death.", {160, 100, 200, 255});
+                        // No turn cost
+                        break;
+                    }
+                    else if (active_type == EffectType::CAP_PANDEMIC) {
+                        // Spread all player-applied DoTs to enemies within 3 tiles
+                        auto& ai_pool = world_.pool<AI>();
+                        int spread = 0;
+                        for (size_t i = 0; i < ai_pool.size(); i++) {
+                            Entity e = ai_pool.entity_at(i);
+                            if (!world_.has<Position>(e) || !world_.has<StatusEffects>(e)) continue;
+                            auto& epos = world_.get<Position>(e);
+                            int dx = epos.x - pos.x, dy = epos.y - pos.y;
+                            if (dx * dx + dy * dy > 9) continue; // range 3
+                            auto& se = world_.get<StatusEffects>(e);
+                            // Apply poison and bleed if they don't have them
+                            bool has_poison = false, has_bleed = false;
+                            for (auto& fx : se.effects) {
+                                if (fx.type == StatusType::POISON) has_poison = true;
+                                if (fx.type == StatusType::BLEED) has_bleed = true;
+                            }
+                            if (!has_poison) { se.add(StatusType::POISON, 2, 5); spread++; }
+                            if (!has_bleed) { se.add(StatusType::BLEED, 1, 5); spread++; }
+                        }
+                        char pbuf[64];
+                        snprintf(pbuf, sizeof(pbuf), "Pandemic! Afflictions spread to %d targets.", spread);
+                        log_.add(pbuf, {120, 200, 60, 255});
+                        used = true;
+                    }
+
+                    if (used) {
+                        if (tree.capstone_cooldowns[cd_idx] >= 0) // don't overwrite negative flags
+                            tree.capstone_cooldowns[cd_idx] = active_cd;
+                        process_turn();
+                    }
+                    break;
+                }
 
                 // Bestiary (B key is shared with diagonal — use K for "Kills")
                 case SDLK_TAB:
@@ -4628,6 +5653,23 @@ void Engine::handle_input() {
                     snprintf(pbuf, sizeof(pbuf), "  2. %s (%d favor) - %s",
                              prayers[1].name, prayers[1].favor_cost, prayers[1].description);
                     log_.add(pbuf, {180, 175, 150, 255});
+                    // God mastery ability at favor 75+
+                    if (align.favor >= 75) {
+                        const char* mastery_name = "Divine Mastery";
+                        const char* mastery_desc = "Unknown power";
+                        switch (align.god) {
+                            case GodId::YASHKHET: mastery_name = "Sacrifice Corpse"; mastery_desc = "consume nearest corpse for +1 max HP"; break;
+                            case GodId::ZHAVEK:   mastery_name = "Shadow Step"; mastery_desc = "teleport behind nearest enemy, free attack"; break;
+                            case GodId::KHAEL:    mastery_name = "Tame Beast"; mastery_desc = "pacify nearest animal permanently"; break;
+                            case GodId::MORRETH:  mastery_name = "War Cry"; mastery_desc = "stun adjacent, +3 damage 10 turns"; break;
+                            case GodId::SOLETH:   mastery_name = "Consecrate"; mastery_desc = "undead in 5x5 take 5 damage"; break;
+                            case GodId::GATHRUUN: mastery_name = "Stone Wall"; mastery_desc = "create 3 wall tiles in a line"; break;
+                            default: mastery_name = "Ascendant Prayer"; mastery_desc = "+10 favor, full MP restore"; break;
+                        }
+                        snprintf(pbuf, sizeof(pbuf), "  3. %s (15 favor) - %s",
+                                 mastery_name, mastery_desc);
+                        log_.add(pbuf, {220, 200, 100, 255});
+                    }
                     prayer_mode_ = true;
                     break;
                 }
@@ -4748,7 +5790,7 @@ void Engine::handle_input() {
                         }
                         cache_current_floor(); // persist current floor before leaving
                         ascending_ = false; // going down
-                        generate_level(); // increments dungeon_level_
+                        generate_level(); // increments dungeon_level_ + repositions summons
                         audio_.play(SfxId::STAIRS);
 
                         // Dungeon entrance text (first floor only)
@@ -5210,6 +6252,44 @@ void Engine::render_hud() {
         }
     }
 
+    // Summon count indicator
+    {
+        int summon_count = 0;
+        auto& ai_pool = world_.pool<AI>();
+        for (size_t si = 0; si < ai_pool.size(); si++) {
+            if (ai_pool.at_index(si).friendly && world_.has<Stats>(ai_pool.entity_at(si)))
+                summon_count++;
+        }
+        if (summon_count > 0) {
+            char sumbuf[16];
+            snprintf(sumbuf, sizeof(sumbuf), "SUM:%d/%d", summon_count, 3);
+            SDL_Color sum_col = {120, 180, 140, 255};
+            SDL_Surface* ss = TTF_RenderText_Blended(font_, sumbuf, sum_col);
+            if (ss) {
+                SDL_Texture* st = SDL_CreateTextureFromSurface(renderer_, ss);
+                SDL_Rect sd = {cursor, bar_y, ss->w, ss->h};
+                SDL_RenderCopy(renderer_, st, nullptr, &sd);
+                cursor += ss->w + 6;
+                SDL_DestroyTexture(st);
+                SDL_FreeSurface(ss);
+            }
+        }
+    }
+
+    // Sneak indicator
+    if (sneaking_) {
+        SDL_Color snk_col = {140, 140, 200, 255};
+        SDL_Surface* snk_surf = TTF_RenderText_Blended(font_, "SNK", snk_col);
+        if (snk_surf) {
+            SDL_Texture* snk_tex = SDL_CreateTextureFromSurface(renderer_, snk_surf);
+            SDL_Rect snk_dst = {cursor, bar_y, snk_surf->w, snk_surf->h};
+            SDL_RenderCopy(renderer_, snk_tex, nullptr, &snk_dst);
+            cursor += snk_surf->w + 6;
+            SDL_DestroyTexture(snk_tex);
+            SDL_FreeSurface(snk_surf);
+        }
+    }
+
     // Hardcore indicator
     if (hardcore_) {
         SDL_Color hc_col = {200, 80, 80, 255};
@@ -5239,6 +6319,71 @@ void Engine::render_hud() {
                 SDL_DestroyTexture(dtex);
                 SDL_FreeSurface(dsurf);
             }
+        }
+    }
+
+    // Unspent passive points indicator (flashing)
+    if (world_.has<PassiveTreeState>(player_)) {
+        auto& tree_check = world_.get<PassiveTreeState>(player_);
+        if (tree_check.points_available > 0) {
+            // Flash: alternate visibility every ~30 frames
+            bool flash_on = (SDL_GetTicks() / 400) % 2 == 0;
+            if (flash_on) {
+                char ptbuf[32];
+                snprintf(ptbuf, sizeof(ptbuf), "+%d [T]", tree_check.points_available);
+                SDL_Color pt_col = {255, 220, 60, 255};
+                SDL_Surface* pts = TTF_RenderText_Blended(font_, ptbuf, pt_col);
+                if (pts) {
+                    SDL_Texture* ptt = SDL_CreateTextureFromSurface(renderer_, pts);
+                    SDL_Rect ptd = {cursor, bar_y, pts->w, pts->h};
+                    SDL_RenderCopy(renderer_, ptt, nullptr, &ptd);
+                    cursor += pts->w + 8;
+                    SDL_DestroyTexture(ptt);
+                    SDL_FreeSurface(pts);
+                }
+            } else {
+                cursor += 40; // reserve space so nothing shifts
+            }
+        }
+    }
+
+    // Active abilities from passive tree
+    if (world_.has<PassiveTreeState>(player_)) {
+        auto& tree = world_.get<PassiveTreeState>(player_);
+        auto bonuses = passive_tree::compute_bonuses(tree);
+
+        struct CapInfo { int cd_val; const char* name; int cd_idx; };
+        CapInfo caps[] = {
+            {bonuses.cap_whirlwind_cd, "WHL", 0},
+            {bonuses.cap_time_slip_cd, "TSL", 1},
+            {bonuses.cap_arcane_overload_cd, "AOL", 2},
+            {bonuses.cap_divine_intervention_cd, "DIV", 3},
+            {bonuses.cap_unbreakable_cd, "UNB", 4},
+            {bonuses.cap_aspect_of_beast_cd, "BST", 5},
+            {bonuses.cap_death_mark_cd, "DMK", 6},
+            {bonuses.cap_pandemic_cd, "PND", 7},
+        };
+        int slot = 1;
+        for (auto& cap : caps) {
+            if (cap.cd_val == 0) continue; // player doesn't have this capstone
+            int cd_remaining = tree.capstone_cooldowns[cap.cd_idx];
+            bool ready = (cd_remaining <= 0);
+            char abuf[16];
+            if (ready)
+                snprintf(abuf, sizeof(abuf), "[%d]%s", slot, cap.name);
+            else
+                snprintf(abuf, sizeof(abuf), "[%d]%d", slot, cd_remaining);
+            SDL_Color acol = ready ? SDL_Color{200, 220, 140, 255} : SDL_Color{100, 90, 80, 255};
+            SDL_Surface* as = TTF_RenderText_Blended(font_, abuf, acol);
+            if (as) {
+                SDL_Texture* at = SDL_CreateTextureFromSurface(renderer_, as);
+                SDL_Rect ad = {cursor, bar_y, as->w, as->h};
+                SDL_RenderCopy(renderer_, at, nullptr, &ad);
+                cursor += as->w + 6;
+                SDL_DestroyTexture(at);
+                SDL_FreeSurface(as);
+            }
+            slot++;
         }
     }
 
@@ -5391,6 +6536,55 @@ void Engine::render() {
     // Dungeon zone color tint
     render_zone_tint();
 
+    // Sneak visual: keep player alpha synced + draw detection ranges
+    if (world_.has<Renderable>(player_)) {
+        auto& pr = world_.get<Renderable>(player_);
+        pr.tint.a = sneaking_ ? 140 : 255;
+    }
+    if (sneaking_) {
+        // Draw detection range indicators around visible enemies
+        int TS = camera_.tile_size;
+        auto& ai_pool = world_.pool<AI>();
+        SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+        for (size_t i = 0; i < ai_pool.size(); i++) {
+            Entity ae = ai_pool.entity_at(i);
+            if (ai_pool.at_index(i).friendly) continue;
+            if (!world_.has<Position>(ae)) continue;
+            auto& apos = world_.get<Position>(ae);
+            if (!map_.in_bounds(apos.x, apos.y) || !map_.at(apos.x, apos.y).visible) continue;
+
+            int detect_range = 3;
+            if (world_.has<Skills>(player_)) {
+                int slv = world_.get<Skills>(player_).get_level(SkillId::STEALTH);
+                if (slv >= 50) detect_range = 1;
+                else if (slv >= 25) detect_range = 2;
+            }
+
+            // Screen coords of monster center
+            int sx = (apos.x - camera_.x) * TS + TS / 2;
+            int sy = (apos.y - camera_.y) * TS + TS / 2 + HUD_HEIGHT;
+            int radius = detect_range * TS;
+
+            // Filled red zone (more visible)
+            SDL_SetRenderDrawColor(renderer_, 220, 40, 40, 25);
+            for (int fy = -radius; fy <= radius; fy++) {
+                int fx = static_cast<int>(std::sqrt(static_cast<float>(radius * radius - fy * fy)));
+                SDL_RenderDrawLine(renderer_, sx - fx, sy + fy, sx + fx, sy + fy);
+            }
+            // Thick red outline (3 concentric circles)
+            for (int ro = -1; ro <= 1; ro++) {
+                int r2 = radius + ro;
+                SDL_SetRenderDrawColor(renderer_, 255, 50, 50, 120);
+                for (int angle = 0; angle < 360; angle++) {
+                    float rad = angle * 3.14159f / 180.0f;
+                    int px = sx + static_cast<int>(r2 * cosf(rad));
+                    int py = sy + static_cast<int>(r2 * sinf(rad));
+                    SDL_RenderDrawPoint(renderer_, px, py);
+                }
+            }
+        }
+    }
+
     // HUD
     render_hud();
 
@@ -5404,6 +6598,7 @@ void Engine::render() {
     quest_log_.render(renderer_, font_, font_title_, journal_, width_, height_, &world_);
     quest_offer_.render(renderer_, font_, font_title_, width_, height_);
     help_screen_.render(renderer_, font_, font_title_, width_, height_);
+    passive_tree_screen_.render(renderer_, font_, font_title_, width_, height_);
     levelup_screen_.render(renderer_, font_, width_, height_);
     shop_screen_.render(renderer_, font_, sprites_, world_, width_, height_);
 
@@ -5477,6 +6672,6 @@ void Engine::run() {
         update_death_anims();
         update_screen_shake();
         render();
-        SDL_Delay(16); // ~60fps cap
+        // vsync handles frame pacing; no SDL_Delay needed
     }
 }

@@ -9,6 +9,7 @@
 #include "components/pet.h"
 #include "components/god.h"
 #include "components/tenet.h"
+#include "components/trap.h"
 #include "components/container.h"
 #include "core/spritesheet.h"
 #include <algorithm>
@@ -21,7 +22,7 @@ namespace populate {
 static const MonsterDef MONSTER_TABLE[] = {
     // Early game
     {"giant rat",       SHEET_MONSTERS, 11, 6,  6,   6, 14,  6,  2, 0, 130, 40,  10},
-    {"bat",             SHEET_MONSTERS, 11, 7,  4,   4, 16,  4,  1, 0, 150, 70,   5},
+    {"bat",             SHEET_MONSTERS,  6, 6,  4,   4, 16,  4,  1, 0, 150, 70,   5},
     {"kobold",          SHEET_MONSTERS,  0, 9,  6,   6, 12,  6,  1, 0, 120, 35,  10},
     {"slime",           SHEET_MONSTERS,  9, 6, 16,   6,  4, 14,  2, 0,  60,  0,  15},
     {"goblin",          SHEET_MONSTERS,  2, 0,  8,   8, 12,  8,  2, 0, 110, 30,  15},
@@ -34,6 +35,10 @@ static const MonsterDef MONSTER_TABLE[] = {
     {"warg",            SHEET_MONSTERS, 10, 6, 16,  14, 14, 12,  5, 1, 130, 20,  35},
     {"orc warchief",    SHEET_MONSTERS,  4, 0, 30,  16, 10, 14,  6, 2,  85, 10,  50},
     {"troll",           SHEET_MONSTERS,  2, 1, 35,  18,  8, 18,  7, 2,  80, 10,  60},
+    // Mid-late game
+    {"goblin shaman",   SHEET_MONSTERS,  6, 0, 14,   8, 10, 10,  3, 0, 100, 30,  35},
+    {"wraith",          SHEET_MONSTERS,  2, 5, 25,  10, 14,  8,  6, 0, 110,  0,  50},
+    {"bandit",          SHEET_MONSTERS,  3, 0, 16,  12, 16, 10,  4, 1, 120, 25,  30},
     // Late game
     {"ghoul",           SHEET_MONSTERS,  5, 4, 22,  14, 12, 14,  5, 1, 110,  0,  40},
     {"lich",            SHEET_MONSTERS,  2, 4, 50,  10, 10, 12, 12, 0, 100,  0,  80},
@@ -97,12 +102,39 @@ void spawn_monsters(World& world, const TileMap& map,
             stats.xp_value = def.xp_value;
             world.add<Stats>(e, std::move(stats));
 
-            AI ai_comp = {AIState::IDLE, -1, -1, 0, def.flee_threshold};
-            // Ranged monsters
-            if (std::string(def.name) == "goblin archer") {
-                ai_comp.ranged_range = 5; // reduced from 6
-                ai_comp.ranged_damage = static_cast<int>(2 * dmg_scale); // reduced from 3
+            AI ai_comp;
+            ai_comp.flee_threshold = def.flee_threshold;
+
+            // Assign behaviors by monster name
+            std::string mname(def.name);
+            if (mname == "goblin archer") {
+                ai_comp.behavior = BehaviorType::ARCHER;
+                ai_comp.ranged_range = 5;
+                ai_comp.ranged_damage = static_cast<int>(2 * dmg_scale);
+            } else if (mname == "lich") {
+                ai_comp.behavior = BehaviorType::LICH;
+                ai_comp.ranged_range = 6;
+                ai_comp.ranged_damage = static_cast<int>(8 * dmg_scale);
+            } else if (mname == "troll") {
+                ai_comp.behavior = BehaviorType::TROLL;
+                ai_comp.regen_per_turn = 2;
+            } else if (mname == "minotaur") {
+                ai_comp.behavior = BehaviorType::CHARGER;
+            } else if (mname == "dragon") {
+                ai_comp.behavior = BehaviorType::DRAGON;
+                ai_comp.flee_threshold = 0; // dragons don't flee
+            } else if (mname == "wolf" || mname == "dire wolf" || mname == "warg") {
+                ai_comp.behavior = BehaviorType::PACK;
+            } else if (mname == "wraith") {
+                ai_comp.behavior = BehaviorType::WRAITH;
+            } else if (mname == "death knight") {
+                ai_comp.behavior = BehaviorType::NECROMANCER;
+            } else if (mname == "goblin shaman") {
+                ai_comp.behavior = BehaviorType::SHAMAN;
+            } else if (mname == "bandit") {
+                ai_comp.behavior = BehaviorType::THIEF;
             }
+
             world.add<AI>(e, ai_comp);
             world.add<Energy>(e, {0, def.speed});
         }
@@ -554,8 +586,8 @@ void spawn_items(World& world, const TileMap& map,
             apply_tags(item);
             apply_quality(item, dungeon_level, rng);
             apply_curse_bless(item, dungeon_level, rng);
-        } else if (roll <= 52) {
-            // Spellbook — teaches a random spell
+        } else if (roll <= 56) {
+            // Spellbook — teaches a random spell (increased: tomes are primary spell source)
             // Ordered by power — weak first, powerful last. 50 spells.
             static const SpellId LEARNABLE[] = {
                 // Tier 1 (early)
@@ -599,17 +631,17 @@ void spawn_items(World& world, const TileMap& map,
             book.teaches_spell = static_cast<int>(spell);
             book.tags |= TAG_BOOK;
             world.add<Item>(e, std::move(book));
-        } else if (roll <= 56 && dungeon_level >= 2) {
+        } else if (roll <= 60 && dungeon_level >= 2) {
             // Amulet — depth 2+
             int idx = weighted_item_pick(rng, dungeon_level, AMULET_COUNT, 3);
             Entity e = create_item_from_def(world, AMULET_TABLE[idx], x, y);
             apply_curse_bless(world.get<Item>(e), dungeon_level, rng);
-        } else if (roll <= 60 && dungeon_level >= 2) {
+        } else if (roll <= 64 && dungeon_level >= 2) {
             // Ring — depth 2+
             int idx = weighted_item_pick(rng, dungeon_level, RING_COUNT, 3);
             Entity e = create_item_from_def(world, RING_TABLE[idx], x, y);
             apply_curse_bless(world.get<Item>(e), dungeon_level, rng);
-        } else if (roll <= 63) {
+        } else if (roll <= 67) {
             // Lore item — readable journal/inscription
             struct LoreEntry { const char* name; const char* text; };
             static const LoreEntry LORE[] = {
@@ -646,8 +678,8 @@ void spawn_items(World& world, const TileMap& map,
             item.gold_value = 5;
             item.identified = true;
             world.add<Item>(e, std::move(item));
-        } else if (roll <= 85) {
-            // Consumable
+        } else if (roll <= 75) {
+            // Consumable (reduced from 85 to make potions scarcer)
             int idx = rng.range(0, CONSUMABLE_COUNT - 1);
             Entity ce = create_item_from_def(world, CONSUMABLE_TABLE[idx], x, y);
             apply_tags(world.get<Item>(ce));
@@ -815,7 +847,7 @@ Entity spawn_legendary(World& world, const std::vector<Room>& rooms, [[maybe_unu
     return e;
 }
 
-void spawn_doodads(World& world, const TileMap& map,
+void spawn_doodads(World& world, TileMap& map,
                     const std::vector<Room>& rooms, RNG& rng,
                     int dungeon_level, const std::string& zone,
                     int patron_god_idx) {
@@ -832,6 +864,25 @@ void spawn_doodads(World& world, const TileMap& map,
     bool is_warrens = (zone == "warrens");
     bool is_deep_halls = (zone == "deep_halls");
     bool is_sepulchre = (zone == "sepulchre");
+
+    // Hazard terrain: lava in molten zones, deep water in sunken zones
+    if (is_molten || is_sunken) {
+        TileType hazard = is_molten ? TileType::LAVA : TileType::DEEP_WATER;
+        // Place small pools (2-4 tiles) in some rooms
+        for (size_t r = 2; r < rooms.size(); r++) {
+            if (!rng.chance(40)) continue; // 40% of rooms get a hazard pool
+            auto& hr = rooms[r];
+            int cx = rng.range(hr.x + 2, hr.x + hr.w - 3);
+            int cy = rng.range(hr.y + 2, hr.y + hr.h - 3);
+            // Small pool: 2-4 tiles
+            for (int ti = 0; ti < rng.range(2, 4); ti++) {
+                int hx = cx + rng.range(-1, 1);
+                int hy = cy + rng.range(-1, 1);
+                if (map.in_bounds(hx, hy) && map.is_walkable(hx, hy))
+                    map.at(hx, hy).type = hazard;
+            }
+        }
+    }
 
     for (size_t r = 1; r < rooms.size(); r++) { // skip first room (player start)
         auto& room = rooms[r];
@@ -940,6 +991,43 @@ void spawn_doodads(World& world, const TileMap& map,
         // Catacombs: extra bone piles
         if (is_catacombs && rng.chance(20)) place_decor(rng.range(0, 1), 21); // corpse bones
 
+        // Zone-exclusive rare spell tomes (~8% per room in matching zone)
+        {
+            SpellId zone_spell = SpellId::COUNT;
+            if (is_molten && rng.chance(8))
+                zone_spell = rng.chance(50) ? SpellId::METEOR : SpellId::FIREBALL;
+            else if (is_catacombs && rng.chance(8))
+                zone_spell = rng.chance(50) ? SpellId::RAISE_DEAD : SpellId::DOOM;
+            else if (is_sunken && rng.chance(8))
+                zone_spell = rng.chance(50) ? SpellId::FROST_NOVA : SpellId::ICE_SHARD;
+            else if (is_deep_halls && rng.chance(8))
+                zone_spell = rng.chance(50) ? SpellId::EARTHQUAKE : SpellId::IRON_BODY;
+            else if (is_sepulchre && rng.chance(8))
+                zone_spell = rng.chance(50) ? SpellId::DISINTEGRATE : SpellId::SOUL_REND;
+            else if (is_warrens && rng.chance(8))
+                zone_spell = rng.chance(50) ? SpellId::POISON_CLOUD : SpellId::ACID_SPLASH;
+
+            if (zone_spell != SpellId::COUNT) {
+                int x = rng.range(room.x + 1, room.x + room.w - 2);
+                int y = rng.range(room.y + 1, room.y + room.h - 2);
+                if (map.is_walkable(x, y)) {
+                    auto& sinfo = get_spell_info(zone_spell);
+                    Entity e = world.create();
+                    world.add<Position>(e, {x, y});
+                    world.add<Renderable>(e, {SHEET_ITEMS, 2, 21, {255, 240, 200, 255}, 1});
+                    Item book;
+                    book.name = std::string("Tome of ") + sinfo.name;
+                    book.description = sinfo.description;
+                    book.type = ItemType::SCROLL;
+                    book.gold_value = 50 + sinfo.mp_cost * 5;
+                    book.identified = true;
+                    book.teaches_spell = static_cast<int>(zone_spell);
+                    book.tags |= TAG_BOOK;
+                    world.add<Item>(e, std::move(book));
+                }
+            }
+        }
+
         // Barrels — placed against walls
         if (rng.chance(12)) {
             // Try to find a spot adjacent to a wall
@@ -1036,7 +1124,7 @@ Entity spawn_boss(World& world, [[maybe_unused]] const TileMap& map,
     stats.xp_value = xp_value;
     world.add<Stats>(e, std::move(stats));
 
-    world.add<AI>(e, {AIState::IDLE, -1, -1, 0, 0}); // bosses don't flee
+    { AI boss_ai; boss_ai.flee_threshold = 0; world.add<AI>(e, boss_ai); } // bosses don't flee
     world.add<Energy>(e, {0, speed});
     return e;
 }
@@ -1156,11 +1244,70 @@ Entity spawn_paragon(World& world, [[maybe_unused]] const TileMap& map,
     stats.xp_value = 150 + dungeon_level * 25;
     world.add<Stats>(e, std::move(stats));
 
-    world.add<AI>(e, {AIState::IDLE, -1, -1, 0, 10}); // low flee threshold
+    { AI para_ai; para_ai.flee_threshold = 10; world.add<AI>(e, para_ai); } // paragons flee early
     world.add<Energy>(e, {0, def.speed});
     world.add<GodAlignment>(e, {def.god, 50}); // high favor — devout champion
 
     return e;
+}
+
+void spawn_traps(World& world, const TileMap& map,
+                  const std::vector<Room>& rooms, RNG& rng,
+                  int dungeon_level) {
+    // 1-3 traps per floor, scaling with depth
+    int trap_count = rng.range(1, 2 + dungeon_level / 2);
+    if (trap_count > 6) trap_count = 6;
+
+    // Trap type weights scale with depth
+    for (int i = 0; i < trap_count; i++) {
+        // Pick a random room (skip room 0 = starting room)
+        if (rooms.size() <= 1) break;
+        size_t ri = rng.range(1, static_cast<int>(rooms.size()) - 1);
+        auto& room = rooms[ri];
+
+        // Place in corridor-adjacent tile or room interior
+        int x = rng.range(room.x + 1, room.x + room.w - 2);
+        int y = rng.range(room.y + 1, room.y + room.h - 2);
+        if (!map.is_walkable(x, y)) continue;
+
+        // Pick trap type
+        TrapType type;
+        int roll = rng.range(0, 99);
+        if (dungeon_level <= 2) {
+            // Early: mostly spikes and pits
+            if (roll < 40) type = TrapType::SPIKE;
+            else if (roll < 70) type = TrapType::PIT;
+            else if (roll < 85) type = TrapType::DART;
+            else type = TrapType::BEAR_TRAP;
+        } else if (dungeon_level <= 4) {
+            if (roll < 25) type = TrapType::SPIKE;
+            else if (roll < 45) type = TrapType::PIT;
+            else if (roll < 60) type = TrapType::DART;
+            else if (roll < 75) type = TrapType::ALARM;
+            else if (roll < 90) type = TrapType::BEAR_TRAP;
+            else type = TrapType::POISON_GAS;
+        } else {
+            if (roll < 15) type = TrapType::SPIKE;
+            else if (roll < 30) type = TrapType::PIT;
+            else if (roll < 45) type = TrapType::DART;
+            else if (roll < 60) type = TrapType::ALARM;
+            else if (roll < 75) type = TrapType::BEAR_TRAP;
+            else type = TrapType::POISON_GAS;
+        }
+
+        int dmg = 3 + dungeon_level * 2;
+        int difficulty = 10 + dungeon_level;
+
+        Entity trap = world.create();
+        world.add<Position>(trap, {x, y});
+
+        Trap t;
+        t.type = type;
+        t.damage = dmg;
+        t.difficulty = difficulty;
+        trap_sprite(type, false, t.sprite_x, t.sprite_y);
+        world.add<Trap>(trap, t);
+    }
 }
 
 } // namespace populate

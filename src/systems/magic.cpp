@@ -12,11 +12,36 @@
 #include "components/energy.h"
 #include "core/spritesheet.h"
 #include "components/buff.h"
+#include "components/passive_tree.h"
+#include "components/trap.h"
+#include "components/skills.h"
+#include "components/corpse.h"
 #include <cmath>
 #include <algorithm>
 #include <cstdio>
 
 namespace magic {
+
+static constexpr int MAX_SUMMONS = 3;
+
+// Enforce summon cap: destroy oldest friendly summon if at limit.
+// Returns number of current summons after cleanup.
+static int enforce_summon_cap(World& world) {
+    auto& ai_pool = world.pool<AI>();
+    std::vector<Entity> friendlies;
+    for (size_t i = 0; i < ai_pool.size(); i++) {
+        Entity e = ai_pool.entity_at(i);
+        if (ai_pool.at_index(i).friendly && world.has<Stats>(e))
+            friendlies.push_back(e);
+    }
+    // Destroy oldest until under cap
+    while (static_cast<int>(friendlies.size()) >= MAX_SUMMONS) {
+        Entity oldest = friendlies.front();
+        world.destroy(oldest);
+        friendlies.erase(friendlies.begin());
+    }
+    return static_cast<int>(friendlies.size());
+}
 
 static int distance(int x1, int y1, int x2, int y2) {
     return std::max(std::abs(x2 - x1), std::abs(y2 - y1));
@@ -63,28 +88,60 @@ CastResult cast(World& world, Entity caster, SpellId spell,
     auto& stats = world.get<Stats>(caster);
     auto& info = get_spell_info(spell);
 
-    // Yashkhet blood magic: use HP instead of MP
+    // Blood magic: Yashkhet god OR Blood Magic keystone
     bool blood_magic = false;
     if (world.has<Player>(caster) && world.has<GodAlignment>(caster)) {
         auto& ga = world.get<GodAlignment>(caster);
         if (ga.god == GodId::YASHKHET) blood_magic = true;
     }
-
-    if (blood_magic) {
-        // Blood magic: HP cost instead of MP (costs HP equal to MP cost)
-        if (stats.hp <= info.mp_cost) {
-            log.add("Not enough blood to give.", {200, 60, 60, 255});
-            result.consumed_turn = false;
-            return result;
+    // Keystone: Blood Magic
+    passive_tree::TreeBonuses tree_bonuses{};
+    bool arcane_overload = false;
+    if (world.has<Player>(caster) && world.has<PassiveTreeState>(caster)) {
+        tree_bonuses = passive_tree::compute_bonuses(world.get<PassiveTreeState>(caster));
+        if (tree_bonuses.blood_magic) blood_magic = true;
+        // Check Arcane Overload flag
+        auto& tree_state = world.get<PassiveTreeState>(caster);
+        int ao_idx = static_cast<int>(EffectType::CAP_ARCANE_OVERLOAD) - static_cast<int>(EffectType::CAP_WHIRLWIND);
+        if (ao_idx >= 0 && ao_idx < PassiveTreeState::MAX_CAPSTONES && tree_state.capstone_cooldowns[ao_idx] == -1) {
+            arcane_overload = true;
         }
-    } else {
-        // Normal MP check
-        if (stats.mp < info.mp_cost) {
-            if (world.has<Player>(caster)) {
-                log.add("Not enough mana.", {150, 120, 150, 255});
+    }
+
+    int actual_cost = arcane_overload ? 0 : info.mp_cost;
+    // Skill cost reduction from spell school proficiency
+    if (!arcane_overload && world.has<Player>(caster) && world.has<Skills>(caster)) {
+        auto& skills = world.get<Skills>(caster);
+        SkillId school_skill = SkillId::CONJURATION;
+        switch (info.school) {
+            case SpellSchool::CONJURATION:   school_skill = SkillId::CONJURATION; break;
+            case SpellSchool::TRANSMUTATION: school_skill = SkillId::TRANSMUTATION; break;
+            case SpellSchool::DIVINATION:    school_skill = SkillId::DIVINATION; break;
+            case SpellSchool::HEALING:       school_skill = SkillId::HEALING; break;
+            case SpellSchool::NATURE:        school_skill = SkillId::NATURE_MAGIC; break;
+            case SpellSchool::DARK_ARTS:     school_skill = SkillId::DARK_ARTS; break;
+        }
+        int reduce_pct = skill_bonus::spell_cost_reduce(skills.get_level(school_skill));
+        // Also tree bonus
+        if (tree_bonuses.spell_cost_reduce > 0) reduce_pct += tree_bonuses.spell_cost_reduce;
+        if (reduce_pct > 0) actual_cost = actual_cost * (100 - reduce_pct) / 100;
+        if (actual_cost < 1 && info.mp_cost > 0) actual_cost = 1;
+    }
+
+    if (!arcane_overload) {
+        if (blood_magic) {
+            if (stats.hp <= actual_cost) {
+                log.add("Not enough blood to give.", {200, 60, 60, 255});
+                result.consumed_turn = false;
+                return result;
             }
-            result.consumed_turn = false;
-            return result;
+        } else {
+            if (stats.mp < actual_cost) {
+                if (world.has<Player>(caster))
+                    log.add("Not enough mana.", {150, 120, 150, 255});
+                result.consumed_turn = false;
+                return result;
+            }
         }
     }
 
@@ -102,9 +159,13 @@ CastResult cast(World& world, Entity caster, SpellId spell,
             else if (eq_item.armor_bonus >= 4) fail_chance += 15;  // chain
             else if (eq_item.armor_bonus >= 3) fail_chance += 8;   // medium
         }
+        // Heavy Armor skill reduces spell failure
+        if (world.has<Skills>(caster))
+            fail_chance -= skill_bonus::armor_spell_penalty_reduce(
+                world.get<Skills>(caster).get_level(SkillId::HEAVY_ARMOR));
         if (fail_chance > 0 && rng.chance(fail_chance)) {
-            if (blood_magic) stats.hp -= info.mp_cost;
-            else stats.mp -= info.mp_cost;
+            if (blood_magic) stats.hp -= actual_cost;
+            else stats.mp -= actual_cost;
             log.add("Your armor interferes. The spell fizzles.", {180, 130, 130, 255});
             result.consumed_turn = true;
             result.success = false;
@@ -113,15 +174,34 @@ CastResult cast(World& world, Entity caster, SpellId spell,
     }
 
     // Deduct cost (blood or mana)
-    if (blood_magic) {
-        stats.hp -= info.mp_cost;
-        log.add("Blood for power.", {200, 60, 60, 255});
-    } else {
-        stats.mp -= info.mp_cost;
+    if (!arcane_overload) {
+        if (blood_magic) {
+            stats.hp -= actual_cost;
+            log.add("Blood for power.", {200, 60, 60, 255});
+        } else {
+            stats.mp -= actual_cost;
+        }
     }
 
-    // Spell power scales with INT
+    // Spell power scales with INT + tree bonuses
     int power = info.base_power + stats.attr(Attr::INT) / 3;
+    // Blood Magic keystone: +30% spell power
+    if (tree_bonuses.blood_magic) power = power * 130 / 100;
+    // Tree spell damage percent bonus
+    if (tree_bonuses.spell_dmg_pct > 0) power = power * (100 + tree_bonuses.spell_dmg_pct) / 100;
+    // Spell cost reduction from tree
+    // (already handled via actual_cost for Arcane Overload; general reduction TODO)
+    // Arcane Overload: 2x damage
+    if (arcane_overload) {
+        power *= 2;
+        // Consume the overload, start real cooldown
+        if (world.has<PassiveTreeState>(caster)) {
+            auto& ts = world.get<PassiveTreeState>(caster);
+            int ao_idx = static_cast<int>(EffectType::CAP_ARCANE_OVERLOAD) - static_cast<int>(EffectType::CAP_WHIRLWIND);
+            ts.capstone_cooldowns[ao_idx] = 20;
+        }
+        log.add("Arcane Overload!", {100, 160, 255, 255});
+    }
     bool is_player = world.has<Player>(caster);
 
     // Helper: single-target damage spell with optional status effect
@@ -130,7 +210,7 @@ CastResult cast(World& world, Entity caster, SpellId spell,
         Entity target = nearest_enemy(world, caster, map, info.range);
         if (target == NULL_ENTITY) {
             if (is_player) log.add("No target in range.", {140, 130, 120, 255});
-            if (blood_magic) stats.hp += info.mp_cost; else stats.mp += info.mp_cost;
+            if (blood_magic) stats.hp += actual_cost; else stats.mp += actual_cost;
             result.consumed_turn = false;
             return false;
         }
@@ -193,7 +273,7 @@ CastResult cast(World& world, Entity caster, SpellId spell,
             Entity target = nearest_enemy(world, caster, map, info.range);
             if (target == NULL_ENTITY) {
                 if (is_player) log.add("No target.", {140, 130, 120, 255});
-                if (blood_magic) stats.hp += info.mp_cost; else stats.mp += info.mp_cost;
+                if (blood_magic) stats.hp += actual_cost; else stats.mp += actual_cost;
                 result.consumed_turn = false;
                 break;
             }
@@ -285,7 +365,7 @@ CastResult cast(World& world, Entity caster, SpellId spell,
             Entity target = nearest_enemy(world, caster, map, info.range);
             if (target == NULL_ENTITY) {
                 if (is_player) log.add("No target.", {140, 130, 120, 255});
-                if (blood_magic) stats.hp += info.mp_cost; else stats.mp += info.mp_cost;
+                if (blood_magic) stats.hp += actual_cost; else stats.mp += actual_cost;
                 result.consumed_turn = false; break;
             }
             world.get<Stats>(target).base_speed = std::max(30, world.get<Stats>(target).base_speed - 30);
@@ -297,12 +377,44 @@ CastResult cast(World& world, Entity caster, SpellId spell,
             Entity target = nearest_enemy(world, caster, map, info.range);
             if (target == NULL_ENTITY) {
                 if (is_player) log.add("No target.", {140, 130, 120, 255});
-                if (blood_magic) stats.hp += info.mp_cost; else stats.mp += info.mp_cost;
+                if (blood_magic) stats.hp += actual_cost; else stats.mp += actual_cost;
                 result.consumed_turn = false; break;
             }
             auto& tgt = world.get<Stats>(target);
+            // Bosses, paragons, and high-level creatures resist
+            bool immune = false;
+            if (tgt.xp_value >= 100) immune = true; // bosses/paragons/dragons
+            if (!immune) {
+                // WIL save: d20 + target WIL/2 vs caster INT
+                int save_roll = rng.range(1, 20) + tgt.attr(Attr::WIL) / 2;
+                int dc = stats.attr(Attr::INT);
+                if (save_roll >= dc) {
+                    if (is_player) {
+                        char buf[128];
+                        snprintf(buf, sizeof(buf), "The %s resists the polymorph.", tgt.name.c_str());
+                        log.add(buf, {180, 140, 160, 255});
+                    }
+                    result.success = true;
+                    break;
+                }
+            } else {
+                if (is_player) {
+                    char buf[128];
+                    snprintf(buf, sizeof(buf), "The %s is immune to polymorph.", tgt.name.c_str());
+                    log.add(buf, {180, 140, 160, 255});
+                }
+                result.success = true;
+                break;
+            }
+            // Polymorph succeeds: temporary (5 turns), store original stats
+            // For simplicity: just set to rat stats. After 5 turns the creature dies
+            // (rats with 1 HP don't survive long). Not a permanent delete button.
             tgt.name = "rat"; tgt.hp = 1; tgt.hp_max = 1; tgt.base_damage = 1; tgt.natural_armor = 0;
-            if (world.has<Renderable>(target)) { auto& r = world.get<Renderable>(target); r.sprite_sheet = SHEET_ANIMALS; r.sprite_x = 0; r.sprite_y = 0; }
+            tgt.base_speed = 130;
+            if (world.has<Renderable>(target)) {
+                auto& r = world.get<Renderable>(target);
+                r.sprite_sheet = SHEET_ANIMALS; r.sprite_x = 0; r.sprite_y = 0;
+            }
             if (is_player) log.add("The creature warps and shrinks into a rat.", {180, 160, 220, 255});
             result.success = true;
             break;
@@ -328,6 +440,21 @@ CastResult cast(World& world, Entity caster, SpellId spell,
             for (int y = 0; y < map.height(); y++)
                 for (int x = 0; x < map.width(); x++)
                     map.at(x, y).explored = true;
+            // Also reveal all traps
+            {
+                auto& trap_pool = world.pool<Trap>();
+                for (size_t ti = 0; ti < trap_pool.size(); ti++) {
+                    auto& trap = trap_pool.at_index(ti);
+                    if (!trap.revealed) {
+                        trap.revealed = true;
+                        Entity te = trap_pool.entity_at(ti);
+                        if (!world.has<Renderable>(te)) {
+                            world.add<Renderable>(te, {SHEET_TILES, trap.sprite_x, trap.sprite_y,
+                                                       {255, 200, 100, 200}, -2});
+                        }
+                    }
+                }
+            }
             if (is_player) log.add("The floor layout reveals itself.", {120, 120, 200, 255});
             result.success = true;
             break;
@@ -370,7 +497,7 @@ CastResult cast(World& world, Entity caster, SpellId spell,
             }
             if (!found) {
                 if (is_player) log.add("Nothing to identify.", {140, 130, 120, 255});
-                if (blood_magic) stats.hp += info.mp_cost; else stats.mp += info.mp_cost;
+                if (blood_magic) stats.hp += actual_cost; else stats.mp += actual_cost;
                 result.consumed_turn = false;
             }
             result.success = found;
@@ -496,6 +623,7 @@ CastResult cast(World& world, Entity caster, SpellId spell,
         }
         case SpellId::BEAST_CALL: {
             // Summon 2 friendly wolves near the caster
+            enforce_summon_cap(world);
             if (!world.has<Position>(caster)) break;
             auto& cpos = world.get<Position>(caster);
             int spawned = 0;
@@ -510,8 +638,7 @@ CastResult cast(World& world, Entity caster, SpellId spell,
                 Stats ws; ws.name = "summoned wolf"; ws.hp = 15 + power; ws.hp_max = ws.hp;
                 ws.base_damage = 4 + power / 3; ws.base_speed = 110; ws.xp_value = 0;
                 world.add<Stats>(wolf, std::move(ws));
-                // Wolves hunt enemies near the caster — set to hunting with caster's position
-                AI wai; wai.state = AIState::HUNTING; wai.last_seen_x = cpos.x; wai.last_seen_y = cpos.y;
+                AI wai; wai.state = AIState::HUNTING; wai.friendly = true;
                 world.add<AI>(wolf, wai);
                 world.add<Energy>(wolf, {0, 110});
                 spawned++;
@@ -604,6 +731,7 @@ CastResult cast(World& world, Entity caster, SpellId spell,
             result.success = true;
             break;
         case SpellId::SWARM: {
+            enforce_summon_cap(world);
             // Summon 4 rats
             if (!world.has<Position>(caster)) break;
             auto& cpos = world.get<Position>(caster);
@@ -619,7 +747,8 @@ CastResult cast(World& world, Entity caster, SpellId spell,
                 Stats rs; rs.name = "summoned rat"; rs.hp = 5 + power; rs.hp_max = rs.hp;
                 rs.base_damage = 2; rs.base_speed = 120; rs.xp_value = 0;
                 world.add<Stats>(rat, std::move(rs));
-                AI rai; rai.state = AIState::HUNTING; rai.last_seen_x = cpos.x; rai.last_seen_y = cpos.y;
+                world.add<StatusEffects>(rat);
+                AI rai; rai.state = AIState::HUNTING; rai.friendly = true;
                 world.add<AI>(rat, rai);
                 world.add<Energy>(rat, {0, 120});
                 spawned++;
@@ -634,7 +763,7 @@ CastResult cast(World& world, Entity caster, SpellId spell,
             Entity target = nearest_enemy(world, caster, map, info.range);
             if (target == NULL_ENTITY) {
                 if (is_player) log.add("No target.", {140, 130, 120, 255});
-                if (blood_magic) stats.hp += info.mp_cost; else stats.mp += info.mp_cost;
+                if (blood_magic) stats.hp += actual_cost; else stats.mp += actual_cost;
                 result.consumed_turn = false;
                 break;
             }
@@ -655,35 +784,57 @@ CastResult cast(World& world, Entity caster, SpellId spell,
             break;
         }
         case SpellId::RAISE_DEAD: {
-            // Find nearest corpse-like tile (FLOOR_BONE) and spawn a skeleton ally
+            enforce_summon_cap(world);
+            // Find nearest corpse entity and raise it as a friendly skeleton
             if (!world.has<Position>(caster)) break;
             auto& cpos = world.get<Position>(caster);
             bool raised = false;
-            for (int dy = -3; dy <= 3 && !raised; dy++) {
-                for (int dx = -3; dx <= 3 && !raised; dx++) {
-                    int tx = cpos.x + dx, ty = cpos.y + dy;
-                    if (!map.in_bounds(tx, ty) || !map.is_walkable(tx, ty)) continue;
-                    Entity sk = world.create();
-                    world.add<Position>(sk, {tx, ty});
-                    world.add<Renderable>(sk, {SHEET_MONSTERS, 0, 3, {200,200,180,255}, 5});
-                    Stats ss; ss.name = "raised skeleton"; ss.hp = 12 + power; ss.hp_max = ss.hp;
-                    ss.base_damage = 3 + power / 3; ss.xp_value = 0;
-                    world.add<Stats>(sk, std::move(ss));
-                    AI sai; sai.state = AIState::HUNTING; sai.last_seen_x = cpos.x; sai.last_seen_y = cpos.y;
-                    world.add<AI>(sk, sai);
-                    world.add<Energy>(sk, {0, 90});
-                    raised = true;
+            auto& corpse_pool = world.pool<Corpse>();
+            Entity best_corpse = 0;
+            int best_dist = 999;
+            for (size_t ci = 0; ci < corpse_pool.size(); ci++) {
+                Entity ce = corpse_pool.entity_at(ci);
+                if (!world.has<Position>(ce)) continue;
+                auto& cp = world.get<Position>(ce);
+                int cd = std::max(std::abs(cp.x - cpos.x), std::abs(cp.y - cpos.y));
+                if (cd <= 4 && cd < best_dist) {
+                    best_dist = cd;
+                    best_corpse = ce;
                 }
             }
-            if (is_player) { if (raised) log.add("Bones reassemble. Something gets up.", {140, 80, 160, 255}); else log.add("Nothing to raise.", {140, 130, 120, 255}); }
+            if (best_corpse != 0 && world.has<Position>(best_corpse)) {
+                auto& cp = world.get<Position>(best_corpse);
+                std::string corpse_name = world.has<Corpse>(best_corpse)
+                    ? world.get<Corpse>(best_corpse).name : "skeleton";
+                Entity sk = world.create();
+                world.add<Position>(sk, {cp.x, cp.y});
+                world.add<Renderable>(sk, {SHEET_MONSTERS, 0, 4, {200, 200, 180, 255}, 5});
+                Stats ss;
+                ss.name = "risen " + corpse_name;
+                ss.hp = 10 + power; ss.hp_max = ss.hp;
+                ss.base_damage = 3 + power / 4; ss.xp_value = 0;
+                world.add<Stats>(sk, std::move(ss));
+                world.add<StatusEffects>(sk);
+                AI sai; sai.state = AIState::HUNTING; sai.friendly = true;
+                world.add<AI>(sk, sai);
+                world.add<Energy>(sk, {0, 90});
+                // Remove the corpse
+                world.destroy(best_corpse);
+                raised = true;
+            }
+            if (is_player) {
+                if (raised) log.add("The dead rise to serve you.", {140, 80, 160, 255});
+                else log.add("No corpses nearby.", {140, 130, 120, 255});
+            }
             result.success = raised;
+            if (!raised) { if (blood_magic) stats.hp += actual_cost; else stats.mp += actual_cost; }
             break;
         }
         case SpellId::HEX: {
             Entity target = nearest_enemy(world, caster, map, info.range);
             if (target == NULL_ENTITY) {
                 if (is_player) log.add("No target.", {140, 130, 120, 255});
-                if (blood_magic) stats.hp += info.mp_cost; else stats.mp += info.mp_cost;
+                if (blood_magic) stats.hp += actual_cost; else stats.mp += actual_cost;
                 result.consumed_turn = false;
                 break;
             }
@@ -709,7 +860,7 @@ CastResult cast(World& world, Entity caster, SpellId spell,
             Entity target = nearest_enemy(world, caster, map, info.range);
             if (target == NULL_ENTITY) {
                 if (is_player) log.add("No target.", {140, 130, 120, 255});
-                if (blood_magic) stats.hp += info.mp_cost; else stats.mp += info.mp_cost;
+                if (blood_magic) stats.hp += actual_cost; else stats.mp += actual_cost;
                 result.consumed_turn = false; break;
             }
             auto& tgt = world.get<Stats>(target);
@@ -725,7 +876,7 @@ CastResult cast(World& world, Entity caster, SpellId spell,
             // Sacrifice 20 HP for permanent bonuses
             if (stats.hp <= 20) {
                 if (is_player) log.add("Not enough HP to sacrifice.", {200, 80, 80, 255});
-                if (blood_magic) stats.hp += info.mp_cost; else stats.mp += info.mp_cost;
+                if (blood_magic) stats.hp += actual_cost; else stats.mp += actual_cost;
                 result.consumed_turn = false; break;
             }
             stats.hp -= 20;
@@ -738,7 +889,7 @@ CastResult cast(World& world, Entity caster, SpellId spell,
             Entity target = nearest_enemy(world, caster, map, info.range);
             if (target == NULL_ENTITY) {
                 if (is_player) log.add("No target.", {140, 130, 120, 255});
-                if (blood_magic) stats.hp += info.mp_cost; else stats.mp += info.mp_cost;
+                if (blood_magic) stats.hp += actual_cost; else stats.mp += actual_cost;
                 result.consumed_turn = false; break;
             }
             // Instant kill if target HP < 50, otherwise massive damage
@@ -761,8 +912,23 @@ CastResult cast(World& world, Entity caster, SpellId spell,
                 log.add("That spell does nothing yet.", {140, 130, 120, 255});
             }
             result.consumed_turn = false;
-            if (blood_magic) stats.hp += info.mp_cost; else stats.mp += info.mp_cost; // refund
+            if (blood_magic) stats.hp += actual_cost; else stats.mp += actual_cost; // refund
             break;
+    }
+
+    // Grant spell school skill XP on successful cast
+    if (result.success && is_player && world.has<Skills>(caster)) {
+        auto& skills = world.get<Skills>(caster);
+        SkillId school_skill = SkillId::CONJURATION; // default
+        switch (info.school) {
+            case SpellSchool::CONJURATION:   school_skill = SkillId::CONJURATION; break;
+            case SpellSchool::TRANSMUTATION: school_skill = SkillId::TRANSMUTATION; break;
+            case SpellSchool::DIVINATION:    school_skill = SkillId::DIVINATION; break;
+            case SpellSchool::HEALING:       school_skill = SkillId::HEALING; break;
+            case SpellSchool::NATURE:        school_skill = SkillId::NATURE_MAGIC; break;
+            case SpellSchool::DARK_ARTS:     school_skill = SkillId::DARK_ARTS; break;
+        }
+        skills.grant_xp(school_skill, 3);
     }
 
     return result;

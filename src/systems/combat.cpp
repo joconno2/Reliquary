@@ -10,8 +10,21 @@
 #include "components/inventory.h"
 #include "components/item.h"
 #include "components/quest_target.h"
+#include "components/status_effect.h"
+#include "components/passive_tree.h"
+#include "components/skills.h"
+#include "components/tenet.h"
 #include "core/spritesheet.h"
 #include <cstdio>
+#include <algorithm>
+
+// Get passive tree bonuses for an entity (zeroed if no tree)
+static passive_tree::TreeBonuses get_tree_bonuses(World& world, Entity e) {
+    if (world.has<PassiveTreeState>(e)) {
+        return passive_tree::compute_bonuses(world.get<PassiveTreeState>(e));
+    }
+    return {};
+}
 
 // Calculate total equipment bonuses for an entity
 static void get_equip_bonuses(World& world, Entity e,
@@ -76,29 +89,174 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
     get_equip_bonuses(world, attacker, atk_eq_dmg, atk_eq_arm, atk_eq_atk, atk_eq_dodge);
     get_equip_bonuses(world, defender, def_eq_dmg, def_eq_arm, def_eq_atk, def_eq_dodge);
 
-    // Attack roll: d20 + melee_attack + equip bonus vs 10 + dodge + equip bonus
+    // Passive tree bonuses
+    auto atk_tree = get_tree_bonuses(world, attacker);
+    auto def_tree = get_tree_bonuses(world, defender);
+
+    // Ghost Blade: melee scales with INT instead of STR
+    int atk_melee = atk_tree.ghost_blade
+        ? (atk.attr(Attr::INT) + atk.level)
+        : (atk.melee_attack());
+    int atk_melee_dmg = atk_tree.ghost_blade
+        ? (atk.base_damage + atk.attr(Attr::INT) / 3)
+        : (atk.melee_damage());
+
+    // Iron Reflexes: defender converts dodge to armor
+    int def_dodge = def.dodge_value() + def_eq_dodge;
+    // Dodge skill bonus
+    if (world.has<Player>(defender) && world.has<Skills>(defender))
+        def_dodge += skill_bonus::dodge_bonus(world.get<Skills>(defender).get_level(SkillId::DODGE));
+    int def_armor_bonus = 0;
+    if (def_tree.iron_reflexes) {
+        def_armor_bonus = def_dodge + def_tree.dodge_chance;
+        def_dodge = 0; // no dodging
+    }
+
+    // Attack roll
     int raw_roll = rng.range(1, 20);
-    int attack_roll = raw_roll + atk.melee_attack() + atk_eq_atk;
-    int defense_roll = 10 + def.dodge_value() + def_eq_dodge;
+    int attack_roll = raw_roll + atk_melee + atk_eq_atk;
+    int defense_roll = 10 + def_dodge;
+
+    // Tree dodge chance (disabled by Iron Reflexes)
+    bool tree_dodged = false;
+    if (!def_tree.iron_reflexes && def_tree.dodge_chance > 0 &&
+        rng.range(1, 100) <= def_tree.dodge_chance) {
+        tree_dodged = true;
+    }
+
+    // Death Mark: auto-hit, auto-crit, 3x damage
+    bool death_marked = false;
+    if (world.has<Player>(attacker) && world.has<PassiveTreeState>(attacker)) {
+        auto& atk_state = world.get<PassiveTreeState>(attacker);
+        int dm_idx = static_cast<int>(EffectType::CAP_DEATH_MARK) - static_cast<int>(EffectType::CAP_WHIRLWIND);
+        if (dm_idx >= 0 && dm_idx < PassiveTreeState::MAX_CAPSTONES && atk_state.capstone_cooldowns[dm_idx] == -1) {
+            death_marked = true;
+            atk_state.capstone_cooldowns[dm_idx] = 20; // start real cooldown
+        }
+    }
 
     bool natural_20 = (raw_roll == 20);
 
-    if (attack_roll >= defense_roll || natural_20) {
+    if (death_marked || (!tree_dodged && (attack_roll >= defense_roll || natural_20))) {
         result.hit = true;
 
-        // Damage: base + equip - defender protection - equip armor, minimum 1
-        int dmg = atk.melee_damage() + atk_eq_dmg;
+        // Wraith: immune to non-silver/non-magical weapons
+        if (world.has<AI>(defender) && world.get<AI>(defender).behavior == BehaviorType::WRAITH) {
+            bool can_harm = false;
+            // Check weapon material
+            if (world.has<Inventory>(attacker)) {
+                Entity wpn = world.get<Inventory>(attacker).get_equipped(EquipSlot::MAIN_HAND);
+                if (wpn != NULL_ENTITY && world.has<Item>(wpn)) {
+                    auto mat = world.get<Item>(wpn).material;
+                    if (mat == MaterialType::SILVER || mat == MaterialType::MITHRIL
+                        || mat == MaterialType::ADAMANTINE) {
+                        can_harm = true;
+                    }
+                }
+            }
+            // Ghost Blade keystone: attacks are magical
+            if (atk_tree.ghost_blade) can_harm = true;
+            // Unarmed with high WIL (monk-like) can hurt wraiths
+            if (!can_harm) {
+                result.hit = false;
+                result.damage = 0;
+                if (world.has<Player>(attacker)) {
+                    log.add("Your weapon passes through the wraith.", {140, 120, 160, 255});
+                }
+                return result;
+            }
+        }
 
-        if (natural_20 || rng.range(1, 100) <= atk.attr(Attr::PER)) {
-            dmg *= 2;
+        // Damage
+        int dmg = atk_melee_dmg + atk_eq_dmg + atk_tree.damage;
+
+        // Crit: natural 20, PER, tree crit, skill crit, or Death Mark
+        int effective_crit = atk.attr(Attr::PER) + atk_tree.crit_chance;
+        // Blades/Archery skill crit bonus
+        if (world.has<Player>(attacker) && world.has<Skills>(attacker)) {
+            auto& skills = world.get<Skills>(attacker);
+            effective_crit += skill_bonus::blades_crit(skills.get_level(SkillId::BLADES));
+        }
+        if (death_marked || natural_20 || rng.range(1, 100) <= effective_crit) {
+            dmg *= death_marked ? 3 : 2;
+            dmg += atk_tree.on_crit_bonus_dmg;
             result.critical = true;
         }
 
-        dmg -= (def.protection() + def_eq_arm);
+        // Percent melee damage bonus from tree
+        if (atk_tree.melee_dmg_pct > 0) {
+            dmg = dmg * (100 + atk_tree.melee_dmg_pct) / 100;
+        }
+
+        // Skill bonuses (attacker only)
+        if (world.has<Player>(attacker) && world.has<Skills>(attacker)) {
+            auto& skills = world.get<Skills>(attacker);
+            // Determine weapon type from equipped weapon
+            uint32_t wtags = 0;
+            if (world.has<Inventory>(attacker)) {
+                Entity wpn = world.get<Inventory>(attacker).get_equipped(EquipSlot::MAIN_HAND);
+                if (wpn != NULL_ENTITY && world.has<Item>(wpn))
+                    wtags = world.get<Item>(wpn).tags;
+            }
+            if (wtags & TAG_AXE)
+                dmg += skill_bonus::axes_damage(skills.get_level(SkillId::AXES));
+            if (wtags & TAG_BLUNT) {
+                int stun_chance = skill_bonus::blunt_stun(skills.get_level(SkillId::BLUNT));
+                if (stun_chance > 0 && rng.range(1, 100) <= stun_chance
+                    && world.has<StatusEffects>(defender)) {
+                    world.get<StatusEffects>(defender).add(StatusType::STUNNED, 0, 1);
+                }
+            }
+            if (wtags == 0)
+                dmg += skill_bonus::unarmed_damage(skills.get_level(SkillId::UNARMED));
+        }
+
+        // Bonus damage vs low HP targets
+        if (atk_tree.dmg_vs_low_hp > 0 && def.hp <= def.hp_max * 30 / 100) {
+            dmg = dmg * (100 + atk_tree.dmg_vs_low_hp) / 100;
+        }
+
+        // Low HP attacker bonus
+        if (atk_tree.low_hp_dmg_bonus > 0 && atk.hp <= atk.hp_max * 30 / 100) {
+            dmg = dmg * (100 + atk_tree.low_hp_dmg_bonus) / 100;
+        }
+
+        dmg -= (def.protection() + def_eq_arm + def_tree.armor + def_armor_bonus);
         if (dmg < 1) dmg = 1;
 
         result.damage = dmg;
         def.hp -= dmg;
+
+        // Last Stand: survive lethal hit at 1 HP (defender, once per floor)
+        if (def.hp <= 0 && world.has<Player>(defender) && def_tree.last_stand) {
+            auto& tree_state = world.get<PassiveTreeState>(defender);
+            // Use capstone_cooldowns[0] as last_stand_used flag (0 = available)
+            if (tree_state.capstone_cooldowns[0] == 0) {
+                def.hp = 1;
+                tree_state.capstone_cooldowns[0] = 1; // mark used this floor
+                log.add("Last Stand! You refuse to fall.", {255, 220, 100, 255});
+            }
+        }
+
+        // Tree on-hit effects (player melee attacks only)
+        if (world.has<Player>(attacker)) {
+            if (atk_tree.on_hit_bleed_chance > 0 &&
+                rng.range(1, 100) <= atk_tree.on_hit_bleed_chance &&
+                world.has<StatusEffects>(defender)) {
+                world.get<StatusEffects>(defender).add(StatusType::BLEED, 1, 5);
+            }
+            if (atk_tree.on_hit_poison_chance > 0 &&
+                rng.range(1, 100) <= atk_tree.on_hit_poison_chance &&
+                world.has<StatusEffects>(defender)) {
+                world.get<StatusEffects>(defender).add(StatusType::POISON, 2, 4);
+            }
+            // Vampiric Pact: heal from damage dealt
+            if (atk_tree.vampiric_pact && world.has<Stats>(attacker)) {
+                auto& atk_s = world.get<Stats>(attacker);
+                int heal = dmg / 3; // heal 33% of damage dealt
+                if (heal > 0) atk_s.hp = std::min(atk_s.hp + heal, atk_s.hp_max);
+            }
+        }
 
         // Atmospheric combat message
         bool attacker_is_player = world.has<Player>(attacker);
@@ -205,6 +363,24 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
                         log.add(lvl_buf, {255, 220, 100, 255});
                     }
                 }
+                // Tree: on-kill heal
+                if (attacker_is_player && atk_tree.on_kill_heal_pct > 0 &&
+                    world.has<Stats>(attacker)) {
+                    auto& atk_s = world.get<Stats>(attacker);
+                    int heal = atk_s.hp_max * atk_tree.on_kill_heal_pct / 100;
+                    if (heal > 0) {
+                        atk_s.hp = std::min(atk_s.hp + heal, atk_s.hp_max);
+                    }
+                }
+                // Tree: Mana Siphon (restore MP on kill)
+                if (attacker_is_player && atk_tree.mana_siphon_pct > 0 &&
+                    world.has<Stats>(attacker)) {
+                    auto& atk_s = world.get<Stats>(attacker);
+                    int mp_restore = atk_s.mp_max * atk_tree.mana_siphon_pct / 100;
+                    if (mp_restore > 0) {
+                        atk_s.mp = std::min(atk_s.mp + mp_restore, atk_s.mp_max);
+                    }
+                }
             }
         }
     } else {
@@ -235,7 +411,7 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
             log.add(buf, {140, 130, 120, 255});
         } else if (world.has<Player>(defender)) {
             const char* msgs[] = {
-                "The %s lunges at you — you twist away.",
+                "The %s lunges at you, you twist away.",
                 "The %s's attack goes wide.",
                 "You dodge the %s's strike.",
                 "The %s swings wildly and misses.",
@@ -243,6 +419,21 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
             };
             snprintf(buf, sizeof(buf), msgs[rng.range(0, 4)], atk.name.c_str());
             log.add(buf, {160, 150, 140, 255});
+
+            // Riposte: counter-attack on dodge
+            if (def_tree.riposte && world.has<Stats>(attacker)) {
+                int riposte_dmg = def.melee_damage() + def_eq_dmg + def_tree.damage;
+                riposte_dmg -= (atk.protection() + atk_eq_arm);
+                if (riposte_dmg < 1) riposte_dmg = 1;
+                atk.hp -= riposte_dmg;
+                char rbuf[128];
+                snprintf(rbuf, sizeof(rbuf), "You riposte the %s! (%d)", atk.name.c_str(), riposte_dmg);
+                log.add(rbuf, {200, 220, 140, 255});
+                if (atk.hp <= 0) {
+                    result.killed = false; // attacker died, not defender
+                    // Let the caller handle the kill on next check
+                }
+            }
         }
     }
 
@@ -271,9 +462,34 @@ AttackResult ranged_attack(World& world, Entity attacker, Entity defender,
     if (attack_roll >= defense_roll || natural_20) {
         result.hit = true;
 
+        // Wraith: immune to non-silver ranged attacks
+        if (world.has<AI>(defender) && world.get<AI>(defender).behavior == BehaviorType::WRAITH) {
+            // Ranged attacks can't hit wraiths (only magic/silver melee)
+            result.hit = false;
+            result.damage = 0;
+            if (world.has<Player>(attacker))
+                log.add("Your arrow passes through the wraith.", {140, 120, 160, 255});
+            return result;
+        }
+
         int dmg = weapon_damage + atk.attr(Attr::DEX) / 3;
 
-        if (natural_20 || rng.range(1, 100) <= atk.attr(Attr::PER)) {
+        // Point Blank keystone: +50% at range 1, -50% at range 5+
+        if (world.has<Player>(attacker) && world.has<PassiveTreeState>(attacker)) {
+            auto tb = passive_tree::compute_bonuses(world.get<PassiveTreeState>(attacker));
+            if (tb.point_blank && world.has<Position>(attacker) && world.has<Position>(defender)) {
+                auto& ap = world.get<Position>(attacker);
+                auto& dp = world.get<Position>(defender);
+                int dist = std::max(std::abs(dp.x - ap.x), std::abs(dp.y - ap.y));
+                if (dist <= 1) dmg = dmg * 150 / 100;
+                else if (dist >= 5) dmg = dmg * 50 / 100;
+            }
+        }
+
+        int ranged_crit = atk.attr(Attr::PER);
+        if (world.has<Player>(attacker) && world.has<Skills>(attacker))
+            ranged_crit += skill_bonus::archery_crit(world.get<Skills>(attacker).get_level(SkillId::ARCHERY));
+        if (natural_20 || rng.range(1, 100) <= ranged_crit) {
             dmg *= 2;
             result.critical = true;
         }

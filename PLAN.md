@@ -286,8 +286,97 @@ F11 fullscreen | F12 screenshot
 - [x] Monster abilities: troll regen, spider poison, wraith confuse, death knight fear, basilisk blind, orc warchief buff
 - [x] Each status has visual indicator on HUD
 
-### Tier 6 — Ship (deferred)
-Steamworks integration, Windows builds, store page, balance pass, playtesting — not in scope yet.
+### Tier 6 — Progression & Depth Overhaul (active design phase)
+
+Full design doc: [[Games/Development/Reliquary - Progression Overhaul]]
+
+**6A. PoE-Style Shared Passive Tree** — one tree, 8 sectors in a ring + center hub, ~85 nodes, class = starting position
+- [x] PassiveTree component (adjacency graph, allocated node bitfield)
+- [x] All 8 sectors designed: Might, Finesse, Arcane, Faith, Fortitude, Nature, Shadow, Venom
+- [x] Center hub: 13 utility nodes (XP gain, trap detection, rest efficiency, potion effectiveness, FOV)
+- [x] 21 class starting positions on the ring
+- [x] 6 keystone nodes: Blood Magic, Ghost Blade, Iron Reflexes, Chaos Inoculation, Vampiric Pact, Point Blank
+- [x] 8 capstone active abilities: Whirlwind, Time Slip, Arcane Overload, Divine Intervention, Unbreakable, Aspect of Beast, Death Mark, Pandemic
+- [x] Passive tree UI screen (T key), pannable, hover tooltips, click-to-allocate
+- [x] Level-up opens passive tree + grants point (replaces old 3-choice stat screen)
+- [x] Active ability system (1-4 keys, cooldown-based)
+- [x] Save/load allocated nodes (per-character, no meta-save)
+- [x] Notable mechanics wired: Riposte (counter on dodge), Last Stand (survive lethal), Mana Siphon (MP on kill), on-hit bleed/poison, Executioner, Berserker
+- [x] Keystone mechanics wired: Blood Magic (HP for MP + 30% spell power), Ghost Blade (INT melee), Iron Reflexes (dodge->armor), Chaos Inoculation (immune disease, halve HP), Vampiric Pact (lifesteal), Death Mark (3x crit)
+- [x] Capstone mechanics wired: all 8 functional with cooldown ticking
+- [x] Arcane Overload integrates with magic system (0 cost, 2x power)
+- [x] XP bonus from tree applied globally
+- [x] Respec at same-god shrines (refund last 3 nodes, costs 10 favor)
+- [x] Ability bar HUD showing owned capstones + cooldown timers
+- [ ] More nodes per sector (expand to ~150-200 total)
+- [ ] Visual polish (circle/diamond/hexagon shapes instead of rects)
+
+**6B. Use-Based Skills** — 15 skills that level through use
+- [x] Skills component: 15 skills (Blades, Axes, Blunt, Unarmed, Archery, 6 spell schools, Stealth, Heavy Armor, Dodge, Prayer)
+- [x] XP-on-use: melee hits grant weapon skill XP
+- [x] Threshold bonuses at 25/50/75: Blades crit, Axes damage, Blunt stun, Unarmed damage
+- [x] Skill bonuses wired into combat (crit, damage, stun chance)
+- [x] Save/load skill state
+- [x] Player creation adds Skills component
+- [ ] Spell school XP on cast
+- [ ] Stealth/Dodge/Prayer/Heavy Armor XP on use
+- [ ] Character sheet skill display
+- [ ] Skill requirements on some passive tree nodes
+
+**6C. Monster Behavior Overhaul** — unique AI per creature type
+- [x] Lich: teleport when low HP, Drain Life at range (heals self), summon skeletons (25% chance, 10 turn CD)
+- [x] Troll: regenerate 2 HP/turn, blocked by fire/burn status
+- [x] Minotaur: charge in straight line at range 2-4, stuns on contact (6 turn CD)
+- [x] Dragon: breath fire AoE at range 2-4 + burn, never flees
+- [x] Pack wolves/wargs: flanking AI, prefer tile opposite another wolf
+- [x] Wraith (NEW monster): phase through walls, ignores terrain
+- [x] Death Knight -> NECROMANCER behavior: raise nearby corpses as "risen dead", drain at range, stay at range 3-5
+- [x] Goblin Shaman (NEW monster): heal wounded allies within 3 tiles, stay behind frontline
+- [x] Bandit (NEW monster): THIEF behavior, flees after hitting
+- ~~Thief steal-item-on-hit~~ REMOVED (bandit is hit-and-run only)
+- [x] Wraith: immune to non-silver melee AND all ranged attacks
+- [x] Point Blank keystone enforced in ranged combat (+50% at range 1, -50% at range 5+)
+- [x] Shaman: heals wounded allies AND buffs damage (+2) on healthy allies
+
+**6D. Traps & Environmental Hazards**
+- [x] 6 trap types: pit, spike, dart, alarm, bear trap, poison gas
+- [x] Trap spawning in dungeon rooms (1-6 per floor, scaling with depth)
+- [x] PER check detection (reveals trap, player can walk around it)
+- [x] Trap triggering: damage, stun, poison, monster summoning
+- [x] Trap rendering: revealed traps show tile sprites (row 17)
+- [x] Reveal Map spell reveals all traps
+- [x] Tree trap_detection bonus applied to PER check
+- [x] Hazard terrain: LAVA (damage + burn per turn), DEEP_WATER (slow, heavy armor = drowning)
+- [x] Lava pools spawn in molten zones, deep water in sunken zones (40% of rooms)
+- [x] Hazard tile rendering (red stone for lava, blue stone for water)
+- [x] Trap save/load with floor cache (revealed + unrevealed traps persist between floors)
+- ~~Crumbling floor, spreading fire~~ REMOVED (unnecessary complexity)
+
+**6E. Balance Fixes**
+- [x] Polymorph: bosses/paragons/dragons immune (xp_value >= 100), WIL save for regulars
+- [x] Potion drop rate reduced (consumable range 22% -> 12%)
+- [x] Meta-save potion ID carry-over disabled (each run starts fresh)
+- [x] Active curse effects: cursed weapons self-harm, cursed helms confuse, cursed rings drain HP, cursed boots stun
+- [x] God mastery abilities at favor 75: third prayer option per god
+  - Yashkhet: Sacrifice Corpse (+1 max HP)
+  - Zhavek: Shadow Step (teleport behind + free attack)
+  - Khael: Tame Beast (pacify animal)
+  - Morreth: War Cry (stun adjacent + +3 damage)
+  - Soleth: Consecrate (5 damage to undead in 5x5)
+  - Gathruun: Stone Wall (3 wall tiles)
+  - Others: generic +10 favor, full MP restore
+- [ ] Rest interruption rate tuning
+
+**6F. Spell Acquisition Rework**
+- [x] Starting spells stripped: Wizard gets 2, casters get 1, non-casters get 0
+- [x] Tome drop rate increased (8% -> 12%)
+- [x] Zone-exclusive rare tomes: Meteor in molten, Raise Dead in catacombs, Frost Nova in sunken, Earthquake in deep halls, Disintegrate in sepulchre, Poison Cloud in warrens
+- [x] Mage-town shops: Thessarka/Soleth province shops sell 1-2 spell tomes, 20% chance elsewhere, mage-town tome shops
+
+### Tier 7 — Ship
+- [ ] Steam upload (steamcmd, raw build for testers)
+- [ ] Steamworks SDK integration (achievements, cloud save, controller)
+- [ ] Store page, balance pass, playtesting
 
 ---
 

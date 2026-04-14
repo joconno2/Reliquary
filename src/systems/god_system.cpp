@@ -13,6 +13,7 @@
 #include "components/prayer.h"
 #include "components/tenet.h"
 #include "components/stats.h"
+#include "components/skills.h"
 #include "components/position.h"
 #include "components/ai.h"
 #include "components/inventory.h"
@@ -673,6 +674,18 @@ bool execute_prayer(World& world, Entity player, TileMap& map, RNG& rng,
             break;
 
         default: break;
+    }
+
+    // Prayer skill XP
+    if (acted && world.has<Skills>(player)) {
+        world.get<Skills>(player).grant_xp(SkillId::PRAYER, 3);
+        // Prayer 50+: god hints at quest direction
+        if (world.get<Skills>(player).get_level(SkillId::PRAYER) >= 50) {
+            auto& ginfo = get_god_info(align.god);
+            char hint[128];
+            snprintf(hint, sizeof(hint), "%s whispers: \"Seek the depths. Your path lies below.\"", ginfo.name);
+            log.add(hint, {ginfo.color.r, ginfo.color.g, ginfo.color.b, 200});
+        }
     }
 
     return acted;

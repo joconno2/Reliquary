@@ -22,7 +22,6 @@ jobs:
             cmake ninja-build zip \
             libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev libsdl2-mixer-dev \
             g++-mingw-w64-x86-64-posix mingw-w64
-          # Use posix threading model (win32 model breaks C++20 std::memory)
           sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
           sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
 
@@ -46,42 +45,23 @@ jobs:
           TAG="${GITHUB_REF_NAME}"
           DIR="dist/reliquary-linux-x64-${TAG}"
           mkdir -p "$DIR/save"
-
           EXE=$(find build-linux -name "reliquary" -type f -executable | head -1)
-          if [ -z "$EXE" ]; then
-            echo "ERROR: reliquary binary not found"
-            find build-linux -type f -executable || true
-            exit 1
-          fi
-          echo "Found binary: $EXE"
+          [ -z "$EXE" ] && { echo "ERROR: binary not found"; exit 1; }
           cp "$EXE" "$DIR/"
-
-          if [ -d build-linux/assets ]; then
-            cp -r build-linux/assets "$DIR/"
-          else
-            cp -r assets "$DIR/"
-          fi
+          if [ -d build-linux/assets ]; then cp -r build-linux/assets "$DIR/"; else cp -r assets "$DIR/"; fi
           cp -r data "$DIR/"
           printf '#!/bin/bash\ncd "$(dirname "$0")"\n./reliquary\n' > "$DIR/run.sh"
           chmod +x "$DIR/run.sh"
-
-          echo "Package contents:"
-          ls -la "$DIR/"
-
           cd dist && tar czf "reliquary-linux-x64-${TAG}.tar.gz" "reliquary-linux-x64-${TAG}/"
 
       - name: Build Windows
         run: |
-          # Set up SDL2 paths for MinGW — use include/ not include/SDL2/ (code does #include <SDL2/SDL.h>)
           SDL2_DIR="$(pwd)/deps/windows"
           SDL2_PREFIX="${SDL2_DIR}/SDL2-2.32.4/x86_64-w64-mingw32"
           SDL2_IMAGE_PREFIX="${SDL2_DIR}/SDL2_image-2.8.8/x86_64-w64-mingw32"
           SDL2_TTF_PREFIX="${SDL2_DIR}/SDL2_ttf-2.24.0/x86_64-w64-mingw32"
           SDL2_MIXER_PREFIX="${SDL2_DIR}/SDL2_mixer-2.8.1/x86_64-w64-mingw32"
-
-          # Need both include/ (for our #include <SDL2/SDL.h>) and include/SDL2/ (for SDL's internal #include "SDL.h")
           ALL_INCLUDES="${SDL2_PREFIX}/include;${SDL2_PREFIX}/include/SDL2;${SDL2_IMAGE_PREFIX}/include;${SDL2_IMAGE_PREFIX}/include/SDL2;${SDL2_TTF_PREFIX}/include;${SDL2_TTF_PREFIX}/include/SDL2;${SDL2_MIXER_PREFIX}/include;${SDL2_MIXER_PREFIX}/include/SDL2"
-
           cmake -S . -B build-windows -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE=tools/mingw-toolchain.cmake \
             -DCMAKE_BUILD_TYPE=Release \
@@ -101,83 +81,126 @@ jobs:
           TAG="${GITHUB_REF_NAME}"
           DIR="dist/reliquary-windows-x64-${TAG}"
           mkdir -p "$DIR/save"
-
-          # Find the exe — might be in build-windows/ or a subdirectory
           EXE=$(find build-windows -name "reliquary.exe" -type f | head -1)
-          if [ -z "$EXE" ]; then
-            echo "ERROR: reliquary.exe not found in build-windows/"
-            find build-windows -type f -name "*.exe" || true
-            ls -la build-windows/ || true
-            exit 1
-          fi
-          echo "Found exe: $EXE"
+          [ -z "$EXE" ] && { echo "ERROR: exe not found"; exit 1; }
           cp "$EXE" "$DIR/"
-
-          # Assets — might be in build dir or need copying from source
-          if [ -d build-windows/assets ]; then
-            cp -r build-windows/assets "$DIR/"
-          else
-            cp -r assets "$DIR/"
-          fi
+          if [ -d build-windows/assets ]; then cp -r build-windows/assets "$DIR/"; else cp -r assets "$DIR/"; fi
           cp -r data "$DIR/"
-
-          # Bundle all required DLLs
           SDL2_DIR="$(pwd)/deps/windows"
           for prefix in SDL2-2.32.4 SDL2_image-2.8.8 SDL2_ttf-2.24.0 SDL2_mixer-2.8.1; do
             find "${SDL2_DIR}/${prefix}/x86_64-w64-mingw32/bin" -name "*.dll" -exec cp {} "$DIR/" \; 2>/dev/null || true
           done
-
-          # Bundle MinGW runtime DLLs (posix variant)
           for dll in libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll; do
             found=$(find /usr -name "$dll" 2>/dev/null | head -1)
             [ -n "$found" ] && cp "$found" "$DIR/"
           done
-
-          # Verify contents
-          echo "Package contents:"
-          ls -la "$DIR/"
-          echo "DLL count: $(ls "$DIR/"*.dll 2>/dev/null | wc -l)"
-
           cd dist && zip -rq "reliquary-windows-x64-${TAG}.zip" "reliquary-windows-x64-${TAG}/"
 
-      - name: Upload artifacts
+      - name: Upload Linux+Windows artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: release-artifacts
+          name: build-linux-windows
           path: |
             dist/*.tar.gz
             dist/*.zip
 
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          brew install cmake ninja sdl2 sdl2_image sdl2_ttf sdl2_mixer
+
+      - name: Build macOS (arm64)
+        run: |
+          cmake -S . -B build-macos -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-macos --parallel $(sysctl -n hw.logicalcpu)
+
+      - name: Package macOS
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          DIR="dist/reliquary-macos-${TAG}"
+          mkdir -p "$DIR/save"
+          cp build-macos/reliquary "$DIR/"
+          if [ -d build-macos/assets ]; then cp -r build-macos/assets "$DIR/"; else cp -r assets "$DIR/"; fi
+          cp -r data "$DIR/"
+          printf '#!/bin/bash\ncd "$(dirname "$0")"\n./reliquary\n' > "$DIR/run.sh"
+          chmod +x "$DIR/run.sh"
+          cd dist && tar czf "reliquary-macos-${TAG}.tar.gz" "reliquary-macos-${TAG}/"
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-macos
+          path: dist/*.tar.gz
+
   release:
-    needs: [build-linux-windows]
+    needs: [build-linux-windows, build-macos]
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download artifacts
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: release-files
           merge-multiple: true
 
-      - name: Create Release
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: "Reliquary ${{ github.ref_name }}"
           body: |
             ## Reliquary ${{ github.ref_name }}
 
-            Traditional turn-based roguelike. 13 gods, 50 spells, 80+ items, 17 classes, 12 legendaries.
+            Turn-based roguelike. PoE-style passive tree, 15 use-based skills, 13 gods, 50 spells, 21 classes, stealth system, traps, monster behaviors.
 
             | Platform | File | Notes |
             |---|---|---|
-            | Windows (x64) | `reliquary-windows-x64-${{ github.ref_name }}.zip` | Extract and run `reliquary.exe` — all DLLs included |
-            | Linux (x64) | `reliquary-linux-x64-${{ github.ref_name }}.tar.gz` | Requires SDL2: `apt install libsdl2-2.0-0 libsdl2-image-2.0-0 libsdl2-mixer-2.0-0 libsdl2-ttf-2.0-0` |
-
-            See RELEASE_NOTES.md for full feature list, controls, and known issues.
+            | Windows (x64) | `reliquary-windows-x64-${{ github.ref_name }}.zip` | Extract and run `reliquary.exe` |
+            | Linux (x64) | `reliquary-linux-x64-${{ github.ref_name }}.tar.gz` | Needs SDL2: `apt install libsdl2-2.0-0 libsdl2-image-2.0-0 libsdl2-mixer-2.0-0 libsdl2-ttf-2.0-0` |
+            | macOS (arm64) | `reliquary-macos-${{ github.ref_name }}.tar.gz` | Apple Silicon. May need `xattr -cr reliquary` to bypass Gatekeeper. Intel Macs: use Rosetta 2. |
           files: |
             release-files/*.tar.gz
             release-files/*.zip
           draft: false
           prerelease: true
+
+  steam-upload:
+    needs: [build-linux-windows, build-macos]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: steam-files
+          merge-multiple: true
+
+      - name: Extract builds
+        run: |
+          mkdir -p steam/linux steam/windows steam/macos
+          cd steam-files
+          tar xzf reliquary-linux-*.tar.gz -C ../steam/linux --strip-components=1
+          # Windows zip has a nested folder
+          unzip -q reliquary-windows-*.zip
+          cp -r reliquary-windows-*/* ../steam/windows/ || true
+          tar xzf reliquary-macos-*.tar.gz -C ../steam/macos --strip-components=1
+
+      - name: Upload to Steam
+        uses: game-ci/steam-deploy@v3
+        with:
+          username: ${{ secrets.STEAM_USERNAME }}
+          configVdf: ${{ secrets.STEAM_CONFIG_VDF }}
+          appId: 1159080
+          buildDescription: "Reliquary ${{ github.ref_name }}"
+          rootPath: steam
+          depot1Path: linux
+          depot2Path: windows
+          depot3Path: macos
+          releaseBranch: beta

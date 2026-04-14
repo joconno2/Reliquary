@@ -16,6 +16,9 @@
 #include "ui/message_log.h"
 #include "systems/particles.h"
 #include "systems/combat.h"
+#include "components/inventory.h"
+#include "components/item.h"
+#include "components/skills.h"
 #include <cstdio>
 #include <cmath>
 #include <algorithm>
@@ -145,7 +148,12 @@ EffectResult process(World& world, Entity player, TileMap& map, RNG& rng,
     }
 
     // Tick god-specific status effects on player
-    if (stats.invisible_turns > 0) stats.invisible_turns--;
+    if (stats.invisible_turns > 0) {
+        stats.invisible_turns--;
+        // Stealth skill XP while invisible
+        if (world.has<Skills>(player))
+            world.get<Skills>(player).grant_xp(SkillId::STEALTH, 1);
+    }
     if (stats.unyielding_turns > 0) stats.unyielding_turns--;
     if (stats.stone_skin_turns > 0) stats.stone_skin_turns--;
 
@@ -253,7 +261,7 @@ EffectResult process(World& world, Entity player, TileMap& map, RNG& rng,
                     ds.hp_max = ds.hp; ds.base_damage = 6 + stats.level; ds.base_speed = 110;
                     ds.xp_value = 25 + stats.level * 5;
                     world.add<Stats>(de, std::move(ds));
-                    world.add<AI>(de, {AIState::HUNTING, pp.x, pp.y, 0, 0}); // never flees
+                    { AI summon_ai; summon_ai.state = AIState::HUNTING; summon_ai.last_seen_x = pp.x; summon_ai.last_seen_y = pp.y; world.add<AI>(de, summon_ai); } // never flees
                     world.add<Energy>(de, {0, 110});
                     if (game_turn % 120 == 0) {
                         char buf[128];
@@ -262,6 +270,76 @@ EffectResult process(World& world, Entity player, TileMap& map, RNG& rng,
                     }
                     break;
                 }
+            }
+        }
+    }
+
+    // Hazard terrain damage
+    if (world.has<Position>(player)) {
+        auto& pp = world.get<Position>(player);
+        if (map.in_bounds(pp.x, pp.y)) {
+            auto tile_type = map.at(pp.x, pp.y).type;
+            if (tile_type == TileType::LAVA) {
+                int lava_dmg = 5 + dungeon_level;
+                stats.hp -= lava_dmg;
+                if (game_turn % 3 == 0)
+                    log.add("The lava sears your flesh!", {255, 100, 40, 255});
+                // Also apply burn
+                if (world.has<StatusEffects>(player))
+                    world.get<StatusEffects>(player).add(StatusType::BURN, 3, 3);
+            }
+            if (tile_type == TileType::DEEP_WATER) {
+                // Check heavy armor: armor_bonus >= 4 = drowning
+                bool heavy = false;
+                if (world.has<Inventory>(player)) {
+                    Entity chest = world.get<Inventory>(player).get_equipped(EquipSlot::CHEST);
+                    if (chest != NULL_ENTITY && world.has<Item>(chest) && world.get<Item>(chest).armor_bonus >= 4)
+                        heavy = true;
+                }
+                if (heavy) {
+                    stats.hp -= 3;
+                    if (game_turn % 3 == 0)
+                        log.add("Your heavy armor drags you under!", {80, 140, 220, 255});
+                }
+                // Slow regardless
+                if (world.has<Energy>(player))
+                    world.get<Energy>(player).current -= 30; // lose speed this turn
+            }
+        }
+    }
+
+    // Active curse effects from equipped cursed items
+    if (world.has<Inventory>(player) && game_turn % 5 == 0) {
+        auto& inv = world.get<Inventory>(player);
+        for (int s = 0; s < EQUIP_SLOT_COUNT; s++) {
+            Entity eq = inv.equipped[s];
+            if (eq == NULL_ENTITY || !world.has<Item>(eq)) continue;
+            auto& item = world.get<Item>(eq);
+            if (item.curse_state != 1) continue;
+
+            // Different curse effects based on slot
+            EquipSlot slot = static_cast<EquipSlot>(s);
+            if (slot == EquipSlot::MAIN_HAND && rng.chance(10)) {
+                // Cursed weapon: occasional self-harm
+                int self_dmg = 1 + stats.level / 5;
+                stats.hp -= self_dmg;
+                if (game_turn % 20 == 0)
+                    log.add("Your cursed weapon bites into your hand.", {180, 100, 100, 255});
+            } else if (slot == EquipSlot::HEAD && rng.chance(8)) {
+                // Cursed helm: periodic confusion
+                if (world.has<StatusEffects>(player))
+                    world.get<StatusEffects>(player).add(StatusType::CONFUSED, 0, 2);
+                if (game_turn % 25 == 0)
+                    log.add("Your cursed helm clouds your mind.", {160, 100, 160, 255});
+            } else if (slot == EquipSlot::RING_1 || slot == EquipSlot::RING_2) {
+                // Cursed ring: slow HP drain
+                stats.hp -= 1;
+            } else if (slot == EquipSlot::FEET && rng.chance(8)) {
+                // Cursed boots: slow you down
+                if (world.has<StatusEffects>(player))
+                    world.get<StatusEffects>(player).add(StatusType::STUNNED, 0, 1);
+                if (game_turn % 25 == 0)
+                    log.add("Your cursed boots drag at your feet.", {160, 120, 100, 255});
             }
         }
     }

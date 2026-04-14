@@ -13,6 +13,7 @@
 #include "components/stats.h"
 #include "components/position.h"
 #include "components/dynamic_quest.h"
+#include "components/passive_tree.h"
 #include "data/world_data.h"
 #include "components/quest.h"
 #include "save/meta.h"
@@ -207,23 +208,60 @@ bool interact(Context& ctx, Entity target, int target_x, int target_y) {
             ctx.quest_offer.show(qid, npc.name);
             ctx.pending_quest_npc = target;
         } else if (ctx.journal.get_state(qid) == QuestState::COMPLETE) {
+            // Turn in: COMPLETE -> FINISHED
             ctx.journal.set_state(qid, QuestState::FINISHED);
             auto& qinfo = get_quest_info(qid);
             char qbuf[128];
             snprintf(qbuf, sizeof(qbuf), "Quest complete: %s (+%dxp, +%dgold)",
                      qinfo.name, qinfo.xp_reward, qinfo.gold_reward);
             ctx.log.add(qbuf, {120, 220, 120, 255});
+            // Show completion text
+            if (qinfo.complete_text)
+                ctx.log.add(qinfo.complete_text, {180, 200, 160, 255});
             ctx.audio.play(SfxId::QUEST);
             ctx.gold += qinfo.gold_reward;
             god_system::adjust_favor(ctx.world, ctx.player, ctx.log, 5);
             if (ctx.world.has<Stats>(ctx.player) && qinfo.xp_reward > 0) {
                 if (ctx.world.get<Stats>(ctx.player).grant_xp(qinfo.xp_reward)) {
-                    ctx.pending_levelup = true;
-                    ctx.levelup_screen.open(ctx.player, ctx.rng);
+                    if (ctx.world.has<PassiveTreeState>(ctx.player))
+                        ctx.world.get<PassiveTreeState>(ctx.player).grant_point();
                     ctx.audio.play(SfxId::LEVELUP);
                     { auto& lp = ctx.world.get<Position>(ctx.player); ctx.particles.levelup_effect(lp.x, lp.y); }
                 }
             }
+            // Clear quest marker (set quest_id to -1 so NPC stops offering)
+            npc.quest_id = -1;
+        } else if (ctx.journal.has_quest(qid) &&
+                   ctx.journal.get_state(qid) == QuestState::ACTIVE &&
+                   is_auto_complete_quest(qid)) {
+            // "Talk to NPC" quests auto-complete on interaction
+            auto& qinfo = get_quest_info(qid);
+            ctx.journal.set_state(qid, QuestState::FINISHED);
+            char qbuf[128];
+            snprintf(qbuf, sizeof(qbuf), "Quest complete: %s (+%dxp, +%dgold)",
+                     qinfo.name, qinfo.xp_reward, qinfo.gold_reward);
+            ctx.log.add(qbuf, {120, 220, 120, 255});
+            if (qinfo.complete_text)
+                ctx.log.add(qinfo.complete_text, {180, 200, 160, 255});
+            ctx.audio.play(SfxId::QUEST);
+            ctx.gold += qinfo.gold_reward;
+            god_system::adjust_favor(ctx.world, ctx.player, ctx.log, 5);
+            if (ctx.world.has<Stats>(ctx.player) && qinfo.xp_reward > 0)
+                ctx.world.get<Stats>(ctx.player).grant_xp(qinfo.xp_reward);
+            npc.quest_id = -1;
+        } else if (ctx.journal.has_quest(qid) &&
+                   ctx.journal.get_state(qid) == QuestState::ACTIVE) {
+            // Active non-auto quest: NPC reminds you of the objective
+            auto& qinfo = get_quest_info(qid);
+            ctx.log.add(qinfo.objective, {180, 175, 150, 255});
+        } else if (ctx.journal.has_quest(qid) &&
+                   ctx.journal.get_state(qid) == QuestState::FINISHED) {
+            // Already finished this quest, give post-completion line
+            auto& qinfo = get_quest_info(qid);
+            if (qinfo.complete_text)
+                ctx.log.add(qinfo.complete_text, {160, 160, 140, 255});
+            else
+                ctx.log.add("You've done well. The road ahead is long.", {160, 160, 140, 255});
         }
     }
 

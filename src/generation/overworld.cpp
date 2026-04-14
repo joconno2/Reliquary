@@ -1020,7 +1020,7 @@ void try_spawn_overworld_enemy(World& world, TileMap& map, RNG& rng,
         stats.base_speed = def.speed;
         stats.xp_value = def.xp;
         world.add<Stats>(e, std::move(stats));
-        world.add<AI>(e, {AIState::IDLE, -1, -1, 0, def.flee});
+        { AI ow_ai; ow_ai.flee_threshold = def.flee; world.add<AI>(e, ow_ai); }
         world.add<Energy>(e, {0, def.speed});
         return; // one at a time
     }

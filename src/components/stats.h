@@ -60,8 +60,12 @@ struct Stats {
     int protection() const { return natural_armor; }
     int fov_radius() const { return 8 + attr(Attr::PER) / 3; }
 
+    // Passive tree XP bonus (percent, e.g. 10 = +10%)
+    int xp_bonus_pct = 0;
+
     // Grant XP — returns true if leveled up
     bool grant_xp(int amount) {
+        if (xp_bonus_pct > 0) amount = amount * (100 + xp_bonus_pct) / 100;
         xp += amount;
         if (xp >= xp_next) {
             level++;

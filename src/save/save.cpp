@@ -14,6 +14,8 @@
 #include "components/ai.h"
 #include "components/container.h"
 #include "components/corpse.h"
+#include "components/passive_tree.h"
+#include "components/skills.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <cstdio>
@@ -192,6 +194,42 @@ bool save_game(const std::string& path, const SaveData& data,
         for (auto s : world.get<Spellbook>(player).known_spells)
             spells.push_back(static_cast<int>(s));
         root["spells"] = spells;
+    }
+
+    // Passive tree
+    if (world.has<PassiveTreeState>(player)) {
+        auto& tree = world.get<PassiveTreeState>(player);
+        json tj;
+        tj["points_spent"] = tree.points_spent;
+        tj["points_available"] = tree.points_available;
+        tj["start_node"] = tree.start_node;
+        // Save allocated as array of allocated node IDs (compact)
+        json allocated_ids = json::array();
+        for (int i = 0; i < PassiveTreeState::MAX_NODES; i++) {
+            if (tree.is_allocated(static_cast<uint16_t>(i)))
+                allocated_ids.push_back(i);
+        }
+        tj["allocated"] = allocated_ids;
+        // Capstone cooldowns
+        json cds = json::array();
+        for (int i = 0; i < PassiveTreeState::MAX_CAPSTONES; i++)
+            cds.push_back(tree.capstone_cooldowns[i]);
+        tj["capstone_cooldowns"] = cds;
+        root["passive_tree"] = tj;
+    }
+
+    // Skills
+    if (world.has<Skills>(player)) {
+        auto& sk = world.get<Skills>(player);
+        json sj;
+        json levels = json::array(), xps = json::array();
+        for (int i = 0; i < SKILL_COUNT; i++) {
+            levels.push_back(sk.level[i]);
+            xps.push_back(sk.xp[i]);
+        }
+        sj["levels"] = levels;
+        sj["xp"] = xps;
+        root["skills"] = sj;
     }
 
     // Diseases
@@ -450,6 +488,45 @@ SaveData load_game(const std::string& path, World& world, TileMap& map) {
         for (auto& s : root["spells"])
             book.learn(static_cast<SpellId>(s.get<int>()));
         world.add<Spellbook>(player, std::move(book));
+    }
+
+    // Passive tree
+    if (root.contains("passive_tree")) {
+        auto& tj = root["passive_tree"];
+        PassiveTreeState tree;
+        tree.points_spent = tj.value("points_spent", 0);
+        tree.points_available = tj.value("points_available", 0);
+        tree.start_node = static_cast<uint16_t>(tj.value("start_node", 0));
+        if (tj.contains("allocated")) {
+            for (auto& id : tj["allocated"])
+                tree.allocate(static_cast<uint16_t>(id.get<int>()));
+            // Restore correct counts (allocate() modifies them)
+            tree.points_spent = tj.value("points_spent", 0);
+            tree.points_available = tj.value("points_available", 0);
+        }
+        if (tj.contains("capstone_cooldowns")) {
+            auto& cds = tj["capstone_cooldowns"];
+            for (int i = 0; i < PassiveTreeState::MAX_CAPSTONES && i < static_cast<int>(cds.size()); i++)
+                tree.capstone_cooldowns[i] = cds[i].get<int>();
+        }
+        world.add<PassiveTreeState>(player, tree);
+    }
+
+    // Skills
+    if (root.contains("skills")) {
+        Skills sk;
+        auto& sj = root["skills"];
+        if (sj.contains("levels")) {
+            auto& lv = sj["levels"];
+            for (int i = 0; i < SKILL_COUNT && i < static_cast<int>(lv.size()); i++)
+                sk.level[i] = lv[i].get<int>();
+        }
+        if (sj.contains("xp")) {
+            auto& xp = sj["xp"];
+            for (int i = 0; i < SKILL_COUNT && i < static_cast<int>(xp.size()); i++)
+                sk.xp[i] = xp[i].get<int>();
+        }
+        world.add<Skills>(player, sk);
     }
 
     // Diseases

@@ -28,6 +28,9 @@
 #include "ui/world_map.h"
 #include "systems/particles.h"
 #include "ui/death_screen.h"
+#include "ui/passive_tree_screen.h"
+#include "components/trap.h"
+#include "components/skills.h"
 #include "components/tenet.h"
 #include "components/traits.h"
 #include "components/background.h"
@@ -145,6 +148,8 @@ private:
         Item item;
         bool has_container = false;
         Container container;
+        bool has_trap = false;
+        Trap trap;
     };
     struct FloorState {
         TileMap map;
@@ -173,6 +178,10 @@ private:
     bool hardcore_ = false; // permadeath mode
     PlayerActions turn_actions_; // action flags for tenet checking
     bool rested_this_floor_ = false; // Lethis tenet tracking
+    int rest_count_this_floor_ = 0;  // exhaustion: diminishing rest returns per floor
+    bool sneaking_ = false;           // player is in sneak mode
+    static constexpr int MAX_SUMMONS = 3;
+    std::vector<Entity> summons_;     // active friendly summons
     bool ascending_ = false; // set before generate_level to indicate stair direction
     Uint32 end_screen_time_ = 0; // SDL_GetTicks when death/victory screen appeared
     std::string death_cause_; // what killed the player
@@ -206,6 +215,7 @@ private:
     ShopScreen shop_screen_;
     HelpScreen help_screen_;
     WorldMap world_map_;
+    PassiveTreeScreen passive_tree_screen_;
 
     // Track where Settings should return to
     GameState return_from_settings_ = GameState::MAIN_MENU;
@@ -221,6 +231,7 @@ private:
     // Methods
     void handle_input();
     void reload_fonts();
+    void grant_skill_xp(SkillId skill, int amount); // wrapper that logs milestones
     void try_move_player(int dx, int dy);
     void open_door(int x, int y);
     void process_turn();

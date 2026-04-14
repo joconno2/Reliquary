@@ -14,6 +14,8 @@
 #include "components/background.h"
 #include "components/traits.h"
 #include "components/item.h"
+#include "components/passive_tree.h"
+#include "components/skills.h"
 #include "core/spritesheet.h"
 
 namespace player_setup {
@@ -105,36 +107,25 @@ PlayerResult create_player(World& world, const CharacterBuild& build,
 
     world.add<Stats>(player, std::move(player_stats));
 
-    // --- Starting spells based on class ---
+    // --- Starting spells: minimal, tomes are the main source ---
     Spellbook book;
     switch (build.class_id) {
         case ClassId::WIZARD:
             book.learn(SpellId::SPARK);
-            book.learn(SpellId::FORCE_BOLT);
             book.learn(SpellId::IDENTIFY);
             break;
-        case ClassId::RANGER:
-            book.learn(SpellId::DETECT_MONSTERS);
-            break;
         case ClassId::DRUID:
-            book.learn(SpellId::ENTANGLE);
             book.learn(SpellId::MINOR_HEAL);
             break;
         case ClassId::WAR_CLERIC:
             book.learn(SpellId::MINOR_HEAL);
-            book.learn(SpellId::MAJOR_HEAL);
             break;
         case ClassId::WARLOCK:
             book.learn(SpellId::DRAIN_LIFE);
-            book.learn(SpellId::FEAR);
             break;
         case ClassId::NECROMANCER:
             book.learn(SpellId::DRAIN_LIFE);
-            book.learn(SpellId::FEAR);
             book.learn(SpellId::RAISE_DEAD);
-            break;
-        case ClassId::SCHEMA_MONK:
-            book.learn(SpellId::HARDEN_SKIN);
             break;
         case ClassId::TEMPLAR:
             book.learn(SpellId::MINOR_HEAL);
@@ -144,17 +135,9 @@ PlayerResult create_player(World& world, const CharacterBuild& build,
             break;
         case ClassId::REVENANT:
             book.learn(SpellId::DRAIN_LIFE);
-            book.learn(SpellId::MINOR_HEAL);
-            break;
-        case ClassId::SERPENTINE:
-            book.learn(SpellId::POISON_CLOUD);
-            book.learn(SpellId::HASTEN);
-            break;
-        case ClassId::TROLLBLOOD:
-            book.learn(SpellId::HARDEN_SKIN);
             break;
         default:
-            book.learn(SpellId::MINOR_HEAL); // everyone gets minor heal
+            // Non-casters start with nothing. Find tomes.
             break;
     }
     world.add<Spellbook>(player, std::move(book));
@@ -255,6 +238,17 @@ PlayerResult create_player(World& world, const CharacterBuild& build,
             break;
         default: break;
     }
+
+    // --- Skills ---
+    world.add<Skills>(player);
+
+    // --- Passive Tree ---
+    PassiveTreeState tree;
+    tree.start_node = passive_tree::start_node_for_class(build.class_id);
+    // Allocate the start node for free (no point cost)
+    tree.allocate(tree.start_node);
+    tree.points_available++;  // undo the cost since start node is free
+    world.add<PassiveTreeState>(player, tree);
 
     return {player, build.traits};
 }

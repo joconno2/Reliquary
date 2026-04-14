@@ -18,7 +18,8 @@ static bool is_floor_type(TileType type) {
            type == TileType::FLOOR_GRASS || type == TileType::FLOOR_BONE ||
            type == TileType::FLOOR_RED_STONE || type == TileType::FLOOR_SAND ||
            type == TileType::FLOOR_ICE || type == TileType::FLOOR_SNOW ||
-           type == TileType::FLOOR_COBBLE;
+           type == TileType::FLOOR_COBBLE || type == TileType::LAVA ||
+           type == TileType::DEEP_WATER;
 }
 
 // Floor tile row in spritesheet (tiles.txt group - 1)
@@ -89,6 +90,8 @@ SpriteRef tile_sprite(TileType type, [[maybe_unused]] uint8_t variant) {
         case TileType::STAIRS_DOWN:       return {SHEET_TILES, 7, 16};
         case TileType::STAIRS_UP:         return {SHEET_TILES, 8, 16};
         case TileType::WATER:             return {SHEET_TILES, 0, 12};
+        case TileType::LAVA:              return {SHEET_TILES, 0, 11}; // red stone floor
+        case TileType::DEEP_WATER:        return {SHEET_TILES, 0, 12}; // blue stone floor
         case TileType::TREE:              return {SHEET_TILES, 2, 25};
         case TileType::BRUSH:
             if (variant == 1) return {SHEET_TILES, 1, 25}; // small tree

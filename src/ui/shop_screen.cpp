@@ -3,6 +3,8 @@
 #include "components/inventory.h"
 #include "components/renderable.h"
 #include "core/spritesheet.h"
+#include "components/spellbook.h"
+#include "components/tenet.h"
 #include <cstdio>
 #include <algorithm>
 
@@ -162,6 +164,33 @@ void ShopScreen::generate_stock(RNG& rng, int difficulty, GodId province_god) {
         si.item.unid_name = "green potion";
         si.sprite_x = 1; si.sprite_y = 19;
         stock_.push_back(std::move(si));
+    }
+
+    // Spell tomes in knowledge/magic-aligned towns (50% chance, 1-2 tomes)
+    if (province_god == GodId::THESSARKA || province_god == GodId::SOLETH || rng.chance(20)) {
+        int n_tomes = rng.range(1, 2);
+        static const SpellId SHOP_SPELLS[] = {
+            SpellId::SPARK, SpellId::MINOR_HEAL, SpellId::FORCE_BOLT,
+            SpellId::IDENTIFY, SpellId::DETECT_MONSTERS, SpellId::HARDEN_SKIN,
+            SpellId::CURE_POISON, SpellId::ENTANGLE, SpellId::SLOW,
+            SpellId::FIREBALL, SpellId::ICE_SHARD, SpellId::DRAIN_LIFE,
+            SpellId::MAJOR_HEAL, SpellId::REVEAL_MAP,
+        };
+        static constexpr int SHOP_SPELL_COUNT = sizeof(SHOP_SPELLS) / sizeof(SHOP_SPELLS[0]);
+        for (int i = 0; i < n_tomes; i++) {
+            auto spell = SHOP_SPELLS[rng.range(0, SHOP_SPELL_COUNT - 1)];
+            auto& sinfo = get_spell_info(spell);
+            ShopItem si;
+            si.item.name = std::string("Tome of ") + sinfo.name;
+            si.item.description = sinfo.description;
+            si.item.type = ItemType::SCROLL;
+            si.item.gold_value = 40 + sinfo.mp_cost * 8;
+            si.item.identified = true;
+            si.item.teaches_spell = static_cast<int>(spell);
+            si.item.tags |= TAG_BOOK;
+            si.sprite_x = 1; si.sprite_y = 21; // book sprite
+            stock_.push_back(std::move(si));
+        }
     }
 
     // Chance of interesting accessories — amulets, rings, staves
