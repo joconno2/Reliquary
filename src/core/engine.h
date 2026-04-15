@@ -31,6 +31,8 @@
 #include "ui/passive_tree_screen.h"
 #include "components/trap.h"
 #include "components/skills.h"
+#include "components/church.h"
+#include "ui/church_screen.h"
 #include "components/tenet.h"
 #include "components/traits.h"
 #include "components/background.h"
@@ -235,6 +237,7 @@ private:
     HelpScreen help_screen_;
     WorldMap world_map_;
     PassiveTreeScreen passive_tree_screen_;
+    ChurchScreen church_screen_;
 
     // Track where Settings should return to
     GameState return_from_settings_ = GameState::MAIN_MENU;

@@ -103,6 +103,24 @@ inline const char* get_province_name(int x, int y) {
     return "Heartlands";
 }
 
+// Province capital towns — one per province, these get churches.
+// Each maps to a town index in ALL_TOWNS.
+struct ChurchLocation {
+    int town_idx;  // index into ALL_TOWNS
+    GodId god;
+};
+
+// 6 churches, one per province god
+static constexpr ChurchLocation CHURCH_LOCATIONS[] = {
+    { 0, GodId::MORRETH},   // Thornwall (Heartlands)
+    {12, GodId::SOLETH},     // Candlemere (Pale Reach)
+    { 5, GodId::GATHRUUN},   // Frostmere (Frozen Marches)
+    { 6, GodId::KHAEL},      // Bramblewood (Greenwood)
+    { 7, GodId::OSSREN},     // Ironhearth (Iron Coast)
+    { 8, GodId::SYTHARA},    // Dustfall (Dust Provinces)
+};
+static constexpr int CHURCH_COUNT = sizeof(CHURCH_LOCATIONS) / sizeof(CHURCH_LOCATIONS[0]);
+
 inline float world_dist(int x1, int y1, int x2, int y2) {
     float dx = static_cast<float>(x1 - x2);
     float dy = static_cast<float>(y1 - y2);

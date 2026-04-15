@@ -268,6 +268,93 @@ static DynamicQuest make_merchant_quest(RNG& rng, const std::string& town) {
     return q;
 }
 
+static DynamicQuest make_bounty_quest(RNG& rng, const std::string& town) {
+    static const struct { const char* name; const char* title; const char* desc; } BOUNTIES[] = {
+        {"Grishnakh the Scarred", "an orc warchief", "terrorizing travelers near"},
+        {"The Pale Widow", "a giant spider", "nesting in the caves near"},
+        {"Ironjaw", "a troll", "blocking the road outside"},
+        {"Ashclaw", "a manticore", "hunting livestock around"},
+        {"The Barrow King", "a death knight", "risen from the crypts near"},
+        {"Bloodmaw", "a dire wolf", "leading a pack near"},
+    };
+    int bi = rng.range(0, 5);
+    DynamicQuest q;
+    char buf[256];
+
+    snprintf(buf, sizeof(buf), "Bounty: %s", BOUNTIES[bi].name);
+    q.name = buf;
+    snprintf(buf, sizeof(buf),
+        "%s, %s, has been %s %s. The town is offering a reward for its head.",
+        BOUNTIES[bi].name, BOUNTIES[bi].title, BOUNTIES[bi].desc, town.c_str());
+    q.description = buf;
+    snprintf(buf, sizeof(buf), "Kill %s in the dungeon near %s.", BOUNTIES[bi].name, town.c_str());
+    q.objective = buf;
+    snprintf(buf, sizeof(buf), "%s is dead. The bounty is yours.", BOUNTIES[bi].name);
+    q.complete_text = buf;
+    q.xp_reward = 50 + rng.range(0, 25);
+    q.gold_reward = 40 + rng.range(0, 20);
+    q.requires_dungeon = true;
+    return q;
+}
+
+static DynamicQuest make_rumor_quest(RNG& rng, const std::string& town) {
+    static const struct { const char* hook; const char* objective; const char* complete; } RUMORS[] = {
+        {"People have been disappearing on the road at night.",
+         "Investigate the road near %s after dark.",
+         "You find tracks leading into the wilderness. Something hunts here."},
+        {"Strange lights were seen in the dungeon entrance last night.",
+         "Explore the dungeon near %s and report what you find.",
+         "The source of the lights: phosphorescent mushrooms. Nothing sinister. But the dungeon holds other dangers."},
+        {"A trader claims he saw a ghost in the ruins near town.",
+         "Search the ruins near %s for signs of the undead.",
+         "No ghost. But you found old bones and a silver ring worth keeping."},
+        {"The well water has turned bitter. Someone suspects poison.",
+         "Check the water source near %s.",
+         "Dead rats in the cistern. Natural causes. The water should clear up."},
+        {"Livestock have been found drained of blood near the farms.",
+         "Patrol the outskirts of %s at night.",
+         "Giant bats from a nearby cave. The colony is too large to clear alone, but the farmers can seal the entrance."},
+    };
+    int ri = rng.range(0, 4);
+    DynamicQuest q;
+    char buf[256];
+
+    snprintf(buf, sizeof(buf), "Rumor in %s", town.c_str());
+    q.name = buf;
+    q.description = RUMORS[ri].hook;
+    snprintf(buf, sizeof(buf), RUMORS[ri].objective, town.c_str());
+    q.objective = buf;
+    q.complete_text = RUMORS[ri].complete;
+    q.xp_reward = 20 + rng.range(0, 15);
+    q.gold_reward = 10 + rng.range(0, 15);
+    q.min_turns = 40 + rng.range(0, 30); // takes time to investigate
+    return q;
+}
+
+static DynamicQuest make_rescue_quest(RNG& rng, const std::string& town) {
+    static const char* NAMES[] = {"Elara", "Gareth", "Petra", "Orin", "Talia", "Mace"};
+    int ni = rng.range(0, 5);
+    DynamicQuest q;
+    char buf[256];
+
+    snprintf(buf, sizeof(buf), "Rescue %s", NAMES[ni]);
+    q.name = buf;
+    snprintf(buf, sizeof(buf),
+        "%s went into the dungeon near %s three days ago and hasn't returned. "
+        "Their family fears the worst.",
+        NAMES[ni], town.c_str());
+    q.description = buf;
+    snprintf(buf, sizeof(buf), "Find %s in the dungeon near %s. They may be on a deeper floor.",
+             NAMES[ni], town.c_str());
+    q.objective = buf;
+    snprintf(buf, sizeof(buf), "You found %s, alive but shaken. They won't be going back.", NAMES[ni]);
+    q.complete_text = buf;
+    q.xp_reward = 35 + rng.range(0, 15);
+    q.gold_reward = 20 + rng.range(0, 15);
+    q.requires_dungeon = true;
+    return q;
+}
+
 void generate_town_quests(World& world, [[maybe_unused]] const TileMap& map, RNG& rng,
                            int town_cx, int town_cy, const std::string& town_name) {
     // Find all NPCs within 30 tiles of town center
@@ -298,31 +385,46 @@ void generate_town_quests(World& world, [[maybe_unused]] const TileMap& map, RNG
         DynamicQuest dq;
         switch (npc.role) {
             case NPCRole::FARMER:
-                dq = make_farmer_quest(rng, town_name);
+                // Farmers: regular farmer quest or rescue quest
+                dq = rng.chance(30) ? make_rescue_quest(rng, town_name)
+                                     : make_farmer_quest(rng, town_name);
                 break;
             case NPCRole::GUARD:
-                dq = make_guard_quest(rng, town_name);
+                // Guards: regular guard quest, bounty, or rescue
+                {
+                    int groll = rng.range(1, 100);
+                    if (groll <= 35) dq = make_bounty_quest(rng, town_name);
+                    else if (groll <= 55) dq = make_rescue_quest(rng, town_name);
+                    else dq = make_guard_quest(rng, town_name);
+                }
                 break;
             case NPCRole::BLACKSMITH:
                 dq = make_blacksmith_quest(rng, town_name);
                 break;
             case NPCRole::PRIEST:
-                // Scholar or priest — different quest if herbalist
                 if (npc.name == "Herbalist") {
                     dq = make_herbalist_quest(rng, town_name);
                 } else {
-                    dq = make_scholar_quest(rng, town_name);
+                    // Scholars: regular or rumor investigation
+                    dq = rng.chance(40) ? make_rumor_quest(rng, town_name)
+                                         : make_scholar_quest(rng, town_name);
                 }
                 break;
             case NPCRole::SHOPKEEPER:
                 if (npc.name == "Merchant") {
                     dq = make_merchant_quest(rng, town_name);
                 } else {
-                    continue; // regular shopkeepers open the shop, not quest givers
+                    continue;
                 }
                 break;
             case NPCRole::ELDER:
-                continue; // Elder has main quest
+                // Elders without main quests can give rumors
+                if (npc.quest_id < 0) {
+                    dq = make_rumor_quest(rng, town_name);
+                } else {
+                    continue;
+                }
+                break;
         }
 
         world.add<DynamicQuest>(e, std::move(dq));

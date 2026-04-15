@@ -123,9 +123,25 @@ void render_death_screen(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_
         }
     }
 
-    // Run summary — fades in after 2 seconds
+    // Brand fading line — fades in after 2 seconds
+    int brand_alpha = std::max(0, std::min(255, static_cast<int>((elapsed_ms - 2000) * 255 / 1500)));
     if (elapsed_ms >= 2000) {
-        render_run_summary(renderer, font, screen_w, screen_h / 3 + 100, summary);
+        const char* brand_line = "The brand fades from your face. The Reliquary will find another.";
+        SDL_Color brand_col = {180, 160, 100, static_cast<Uint8>(brand_alpha)};
+        SDL_Surface* bsurf = TTF_RenderText_Blended(font, brand_line, brand_col);
+        if (bsurf) {
+            SDL_Texture* btex = SDL_CreateTextureFromSurface(renderer, bsurf);
+            SDL_SetTextureAlphaMod(btex, static_cast<Uint8>(brand_alpha));
+            SDL_Rect bdst = {screen_w / 2 - bsurf->w / 2, screen_h / 3 + 90, bsurf->w, bsurf->h};
+            SDL_RenderCopy(renderer, btex, nullptr, &bdst);
+            SDL_DestroyTexture(btex);
+            SDL_FreeSurface(bsurf);
+        }
+    }
+
+    // Run summary — fades in after 2.5 seconds
+    if (elapsed_ms >= 2500) {
+        render_run_summary(renderer, font, screen_w, screen_h / 3 + 130, summary);
     }
 
     // Newly unlocked classes
@@ -238,6 +254,9 @@ void render_victory_screen(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* fon
             break;
     }
 
+    // Brand conclusion
+    const char* brand_conclusion = "The brand burns white. Then it goes out forever.";
+
     // Render title
     SDL_Color gold = {255, 220, 100, 255};
     SDL_Surface* title_surf = TTF_RenderText_Blended(font_title, title, gold);
@@ -249,9 +268,20 @@ void render_victory_screen(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* fon
         SDL_FreeSurface(title_surf);
     }
 
+    // Brand conclusion line
+    SDL_Color brand_col = {200, 180, 120, 255};
+    SDL_Surface* bsurf = TTF_RenderText_Blended(font, brand_conclusion, brand_col);
+    if (bsurf) {
+        SDL_Texture* btex = SDL_CreateTextureFromSurface(renderer, bsurf);
+        SDL_Rect bdst = {screen_w / 2 - bsurf->w / 2, screen_h / 4 + 45, bsurf->w, bsurf->h};
+        SDL_RenderCopy(renderer, btex, nullptr, &bdst);
+        SDL_DestroyTexture(btex);
+        SDL_FreeSurface(bsurf);
+    }
+
     // Render ending text line by line
     SDL_Color text_col = {200, 190, 170, 255};
-    int y_pos = screen_h / 4 + 60;
+    int y_pos = screen_h / 4 + 75;
     const char* p = ending;
     while (p && *p) {
         // Extract one line (up to \n)

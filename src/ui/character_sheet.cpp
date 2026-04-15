@@ -129,8 +129,12 @@ void CharacterSheet::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* fo
         auto& ga = world.get<GodAlignment>(player_);
         auto& god = get_god_info(ga.god);
         char god_buf[64];
-        snprintf(god_buf, sizeof(god_buf), "Servant of %s", god.name);
-        ui::draw_text(renderer, font, god_buf, dim_col, info_x, ly + title_h + line_h + 6);
+        if (ga.god != GodId::NONE)
+            snprintf(god_buf, sizeof(god_buf), "Branded by %s", god.name);
+        else
+            snprintf(god_buf, sizeof(god_buf), "Branded (godless)");
+        SDL_Color brand_display_col = {god.color.r, god.color.g, god.color.b, 255};
+        ui::draw_text(renderer, font, god_buf, brand_display_col, info_x, ly + title_h + line_h + 6);
 
         char favor_buf[32];
         snprintf(favor_buf, sizeof(favor_buf), "Favor: %d", ga.favor);

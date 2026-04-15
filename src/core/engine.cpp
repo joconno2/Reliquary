@@ -864,7 +864,8 @@ void Engine::generate_level() {
                     if (town_idx == 0 && !mq_assigned[1]) {
                         npc_comp.quest_id = static_cast<int>(QuestId::MQ_02_SCHOLAR_CLUE);
                         npc_comp.name = "Scholar Aldric";
-                        npc_comp.dialogue = "The old texts speak of things that should stay buried.";
+                        npc_comp.dialogue = "That brand... I've seen drawings of it. "
+                                            "You're not the first. The others didn't survive.";
                         mq_assigned[1] = true;
                     }
                     // MQ_05: Greywatch scholar
@@ -1005,8 +1006,9 @@ void Engine::generate_level() {
                 case 'E':
                     npc_comp.role = NPCRole::ELDER;
                     npc_comp.name = "Elder Maren";
-                    npc_comp.dialogue = "A wight has risen in the barrow just east of town. "
-                                        "Follow the road east. You will see the entrance.";
+                    npc_comp.dialogue = "That mark on your face. I've read about it. "
+                                        "The Barrow woke the same night you appeared. "
+                                        "Whatever you are, you're connected to what's down there.";
                     npc_comp.quest_id = static_cast<int>(QuestId::MQ_01_BARROW_WIGHT);
                     mq_assigned[0] = true;
                     sx = 4; sy = 6; // elderly man sprite (row 7)
@@ -1089,6 +1091,47 @@ void Engine::generate_level() {
         for (int i = 0; i < TOWN_COUNT; i++) {
             quest_gen::generate_town_quests(world_, map_, rng_,
                 ALL_TOWNS[i].x, ALL_TOWNS[i].y, ALL_TOWNS[i].name);
+        }
+
+        // Spawn church high priests at province capitals
+        for (int ci = 0; ci < CHURCH_COUNT; ci++) {
+            auto& cl = CHURCH_LOCATIONS[ci];
+            auto& town = ALL_TOWNS[cl.town_idx];
+            auto& ginfo = get_god_info(cl.god);
+
+            // Place church priest near the town center
+            int cx = town.x + rng_.range(-5, 5);
+            int cy = town.y + rng_.range(-5, 5);
+            // Find walkable spot
+            for (int a = 0; a < 30; a++) {
+                int tx = town.x + rng_.range(-8, 8);
+                int ty = town.y + rng_.range(-8, 8);
+                if (map_.is_walkable(tx, ty)) {
+                    cx = tx; cy = ty; break;
+                }
+            }
+
+            Entity priest = world_.create();
+            world_.add<Position>(priest, {cx, cy});
+            // Use priest sprite with god-colored tint
+            world_.add<Renderable>(priest, {SHEET_ROGUES, 1, 4,
+                {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255}, 8});
+
+            NPC npc_comp;
+            npc_comp.role = NPCRole::PRIEST;
+            char name_buf[64];
+            snprintf(name_buf, sizeof(name_buf), "High Priest of %s", ginfo.name);
+            npc_comp.name = name_buf;
+            char dial_buf[128];
+            snprintf(dial_buf, sizeof(dial_buf),
+                "Welcome to the Church of %s. %s", ginfo.name, ginfo.description);
+            npc_comp.dialogue = dial_buf;
+            npc_comp.god_affiliation = cl.god;
+            npc_comp.quest_id = -1;
+            world_.add<NPC>(priest, npc_comp);
+
+            // Add Church component so the engine knows this NPC opens the church screen
+            world_.add<Church>(priest, {cl.god, false});
         }
     } else {
         // Dungeon zone themes — keyed by name for registry lookup
@@ -1699,6 +1742,22 @@ void Engine::try_move_player(int dx, int dy) {
             if (!tips_shown_.first_npc) {
                 tips_shown_.first_npc = true;
                 log_.add("Tip: NPCs offer quests, shops, and healing. Sneak + bump to pickpocket.", {100, 180, 140, 255});
+            }
+            // Church high priest: open church screen
+            if (world_.has<Church>(target) && world_.has<GodAlignment>(player_)) {
+                auto& church = world_.get<Church>(target);
+                auto& ga = world_.get<GodAlignment>(player_);
+                if (ga.god == church.god || ga.god == GodId::NONE) {
+                    church_screen_.open(player_, &world_, church.god,
+                                         ga.god == church.god ? ga.favor : 0);
+                    return;
+                } else {
+                    auto& ginfo = get_god_info(church.god);
+                    char buf[128];
+                    snprintf(buf, sizeof(buf), "This is the Church of %s. You serve another god.", ginfo.name);
+                    log_.add(buf, {180, 140, 120, 255});
+                    return;
+                }
             }
             if (npc_interaction::interact(npc_ctx, target, nx, ny))
                 return;
@@ -2664,6 +2723,46 @@ void Engine::process_turn() {
         process_npc_wander();
         // Check for town proximity music change every 10 turns
         if (game_turn_ % 10 == 0) update_music_for_location();
+    }
+
+    // Ambient NPC reactions to the brand
+    if (game_turn_ % 15 == 0 && world_.has<Position>(player_) && world_.has<GodAlignment>(player_)) {
+        auto& ga = world_.get<GodAlignment>(player_);
+        if (ga.god != GodId::NONE) {
+            auto& pp = world_.get<Position>(player_);
+            auto& npc_pool = world_.pool<NPC>();
+            for (size_t i = 0; i < npc_pool.size(); i++) {
+                Entity ne = npc_pool.entity_at(i);
+                if (!world_.has<Position>(ne)) continue;
+                auto& npos = world_.get<Position>(ne);
+                int nd = std::max(std::abs(npos.x - pp.x), std::abs(npos.y - pp.y));
+                if (nd > 3 || nd == 0) continue;
+                if (!map_.in_bounds(npos.x, npos.y) || !map_.at(npos.x, npos.y).visible) continue;
+                // Skip quest NPCs and church priests
+                auto& npc = npc_pool.at_index(i);
+                if (npc.quest_id >= 0 || world_.has<Church>(ne)) continue;
+                // Only trigger occasionally per NPC
+                if (!rng_.chance(8)) continue;
+
+                static const char* REACTIONS[] = {
+                    "\"That mark...\"",
+                    "\"Stay away from me, branded one.\"",
+                    "\"The priests say you're a sign of what's coming.\"",
+                    "\"I've heard about people like you. None of them lasted long.\"",
+                    "\"Your face. It's glowing.\"",
+                    "\"My grandmother told stories about the branded. I thought they were myths.\"",
+                    "\"Don't bring that curse near my family.\"",
+                    "\"The ground shook the night you came. Everyone knows.\"",
+                    "\"You're the one from the road, aren't you? The one they found.\"",
+                    "\"That light on your face. It's getting brighter.\"",
+                    "\"Some say the branded are chosen. Others say they're bait.\"",
+                    "\"I saw another like you once, years ago. She walked into the hills and never came back.\"",
+                };
+                int ri = rng_.range(0, 11);
+                log_.add(REACTIONS[ri], {160, 150, 130, 255});
+                break; // only one reaction per turn
+            }
+        }
     }
 
     // Overworld enemy spawning
@@ -4701,14 +4800,175 @@ void Engine::handle_input() {
                 }
                 generate_level();
 
-                // Opening messages
-                log_.add("You arrive at the outskirts of Thornwall.", {180, 170, 150, 255});
-                log_.add("Rumors of ancient evil stir beneath the land.", {150, 140, 130, 255});
-                log_.add("Tip: ? for help  |  q quests  |  t passive tree  |  c character  |  o sneak", {100, 180, 140, 255});
-                log_.add("Tip: bump NPCs to talk. Bump enemies to fight. g to pick up items.", {100, 180, 140, 255});
+                // Opening narrative
+                {
+                    auto build = creation_screen_.get_build();
+                    auto& ginfo = get_god_info(build.god);
+                    const char* god_name = (build.god != GodId::NONE) ? ginfo.name : "no god";
+                    SDL_Color nar_col = {180, 170, 150, 255};
+                    SDL_Color god_col = (build.god != GodId::NONE)
+                        ? SDL_Color{ginfo.color.r, ginfo.color.g, ginfo.color.b, 255}
+                        : SDL_Color{160, 160, 160, 255};
+                    SDL_Color dark_col = {140, 130, 110, 255};
+                    SDL_Color brand_col = {200, 180, 120, 255};
+
+                    log_.add("You wake face-down in the dirt outside Thornwall.", nar_col);
+                    log_.add("You don't remember how you got here.", nar_col);
+                    log_.add("", nar_col);
+
+                    if (build.god != GodId::NONE) {
+                        char buf[128];
+                        snprintf(buf, sizeof(buf),
+                            "There is a brand on your face. It glows %s, the color of %s.",
+                            ginfo.color.r > 200 ? "warm" : ginfo.color.b > 150 ? "cold" : "faintly",
+                            god_name);
+                        log_.add(buf, god_col);
+                    } else {
+                        log_.add("There is a brand on your face. It glows pale, bound to nothing.", dark_col);
+                    }
+
+                    log_.add("It was not there before. You are sure of that much.", dark_col);
+                    log_.add("", nar_col);
+                    log_.add("The ground trembled last night. Everyone felt it.", nar_col);
+                    log_.add("Something pulsed from deep underground, east of town.", nar_col);
+                    log_.add("The Barrow has been restless since. The dead are walking.", {200, 140, 100, 255});
+                    log_.add("", nar_col);
+                    log_.add("An elder watches you from the road. He sees the brand.", brand_col);
+                    log_.add("He knows what it means, or thinks he does.", dark_col);
+                    log_.add("", nar_col);
+
+                    // Auto-give MQ_01
+                    journal_.add_quest(QuestId::MQ_01_BARROW_WIGHT);
+                    log_.add("The Barrow Wight must be put down. You feel it pulling at your mark.", {220, 200, 100, 255});
+                    log_.add("", nar_col);
+                    log_.add("? for help  |  q quests  |  t passive tree  |  c character  |  o sneak", {100, 180, 140, 255});
+                }
                 tips_shown_ = {}; // reset tips for new run
             }
             return;
+        }
+
+        // Church screen
+        if (church_screen_.is_open()) {
+            ChurchAction cact = church_screen_.handle_input(event);
+            if (cact == ChurchAction::CLOSE) {
+                church_screen_.close();
+            } else if (cact == ChurchAction::REST) {
+                // Full heal, no exhaustion
+                if (world_.has<Stats>(player_)) {
+                    auto& ps = world_.get<Stats>(player_);
+                    ps.hp = ps.hp_max;
+                    ps.mp = ps.mp_max;
+                    log_.add("You rest in the church. Fully restored.", {100, 200, 140, 255});
+                    audio_.play(SfxId::HEAL);
+                }
+                church_screen_.close();
+            } else if (cact == ChurchAction::IDENTIFY) {
+                // Identify all items
+                if (world_.has<Inventory>(player_)) {
+                    auto& inv = world_.get<Inventory>(player_);
+                    int id_count = 0;
+                    for (Entity ie : inv.items) {
+                        if (world_.has<Item>(ie) && !world_.get<Item>(ie).identified) {
+                            world_.get<Item>(ie).identified = true;
+                            id_count++;
+                        }
+                    }
+                    for (int s = 0; s < EQUIP_SLOT_COUNT; s++) {
+                        Entity eq = inv.equipped[s];
+                        if (eq != NULL_ENTITY && world_.has<Item>(eq) && !world_.get<Item>(eq).identified) {
+                            world_.get<Item>(eq).identified = true;
+                            id_count++;
+                        }
+                    }
+                    char buf[64];
+                    snprintf(buf, sizeof(buf), "%d items identified.", id_count);
+                    log_.add(buf, {140, 200, 200, 255});
+                }
+                church_screen_.close();
+            } else if (cact == ChurchAction::ENCHANT) {
+                // Enchant main-hand weapon
+                auto& rewards = get_church_rewards(church_screen_.get_god());
+                if (world_.has<Inventory>(player_)) {
+                    Entity wpn = world_.get<Inventory>(player_).get_equipped(EquipSlot::MAIN_HAND);
+                    if (wpn != NULL_ENTITY && world_.has<Item>(wpn)) {
+                        auto& item = world_.get<Item>(wpn);
+                        item.damage_bonus += rewards.enchant_bonus;
+                        char buf[96];
+                        snprintf(buf, sizeof(buf), "%s enchanted with %s (+%d damage, 50 turns).",
+                                 item.name.c_str(), rewards.enchant_name, rewards.enchant_bonus);
+                        log_.add(buf, {200, 200, 140, 255});
+                        audio_.play(SfxId::SPELL_BUFF);
+                    } else {
+                        log_.add("You have no weapon equipped.", {180, 140, 120, 255});
+                    }
+                }
+                church_screen_.close();
+            } else if (cact == ChurchAction::LEARN_SPELL) {
+                auto& rewards = get_church_rewards(church_screen_.get_god());
+                if (world_.has<Spellbook>(player_)) {
+                    auto& book = world_.get<Spellbook>(player_);
+                    if (book.knows(rewards.exclusive_spell)) {
+                        log_.add("You already know this spell.", {140, 130, 120, 255});
+                    } else {
+                        book.learn(rewards.exclusive_spell);
+                        auto& sinfo = get_spell_info(rewards.exclusive_spell);
+                        char buf[64];
+                        snprintf(buf, sizeof(buf), "Learned %s.", sinfo.name);
+                        log_.add(buf, {160, 200, 220, 255});
+                        audio_.play(SfxId::SPELL);
+                    }
+                }
+                church_screen_.close();
+            } else if (cact == ChurchAction::CLAIM_ITEM) {
+                auto& rewards = get_church_rewards(church_screen_.get_god());
+                // Create and give the exclusive item
+                Entity item_e = world_.create();
+                Item ci;
+                ci.name = rewards.exclusive_item_name;
+                ci.description = rewards.exclusive_item_desc;
+                ci.damage_bonus = rewards.exclusive_item_damage;
+                ci.armor_bonus = rewards.exclusive_item_armor;
+                ci.identified = true;
+                ci.gold_value = 200;
+                if (ci.damage_bonus > 0) {
+                    ci.type = ItemType::WEAPON;
+                    ci.slot = EquipSlot::MAIN_HAND;
+                } else {
+                    ci.type = ItemType::ARMOR_CHEST;
+                    ci.slot = EquipSlot::CHEST;
+                }
+                world_.add<Item>(item_e, std::move(ci));
+                if (world_.has<Inventory>(player_))
+                    world_.get<Inventory>(player_).add(item_e);
+                char buf[96];
+                snprintf(buf, sizeof(buf), "Received: %s.", rewards.exclusive_item_name);
+                log_.add(buf, {220, 200, 100, 255});
+                audio_.play(SfxId::PICKUP);
+                church_screen_.close();
+            } else if (cact == ChurchAction::CLAIM_BLESSING) {
+                auto& rewards = get_church_rewards(church_screen_.get_god());
+                if (world_.has<Stats>(player_)) {
+                    auto& ps = world_.get<Stats>(player_);
+                    ps.set_attr(Attr::STR, ps.attr(Attr::STR) + rewards.blessing_str);
+                    ps.set_attr(Attr::DEX, ps.attr(Attr::DEX) + rewards.blessing_dex);
+                    ps.set_attr(Attr::CON, ps.attr(Attr::CON) + rewards.blessing_con);
+                    ps.set_attr(Attr::INT, ps.attr(Attr::INT) + rewards.blessing_int);
+                    ps.set_attr(Attr::WIL, ps.attr(Attr::WIL) + rewards.blessing_wil);
+                    ps.set_attr(Attr::PER, ps.attr(Attr::PER) + rewards.blessing_per);
+                    ps.hp_max += rewards.blessing_hp; ps.hp += rewards.blessing_hp;
+                    ps.mp_max += rewards.blessing_mp; ps.mp += rewards.blessing_mp;
+                    char buf[128];
+                    snprintf(buf, sizeof(buf), "You receive %s: %s",
+                             rewards.blessing_name, rewards.blessing_desc);
+                    log_.add(buf, {255, 220, 100, 255});
+                    audio_.play(SfxId::LEVELUP);
+                    auto& gi = get_god_info(church_screen_.get_god());
+                    screen_flash(gi.color.r, gi.color.g, gi.color.b, 80);
+                }
+                church_screen_.close();
+            }
+            continue;
         }
 
         // Passive tree screen — handles all event types (mouse, keyboard, scroll)
@@ -5877,6 +6137,29 @@ void Engine::handle_input() {
                                 log_.add("The ceiling vanishes above you. Something vast was built here.", {130, 125, 140, 255});
                             else if (de.zone == "sepulchre")
                                 log_.add("The air turns cold. You feel something notice you.", {130, 100, 130, 255});
+
+                            // Main quest dungeon: brand reactions
+                            SDL_Color brand_nar = {200, 180, 120, 255};
+                            std::string dname = de.name;
+                            if (dname == "The Barrow") {
+                                log_.add("Your brand pulses. The dead down here know you're coming.", brand_nar);
+                            } else if (dname == "Ashford Ruins") {
+                                log_.add("The brand itches. Something written here is meant for you.", brand_nar);
+                            } else if (dname == "Stonekeep") {
+                                log_.add("Your brand burns bright enough to see by. The walls are warm.", brand_nar);
+                            } else if (dname == "Frostmere Depths") {
+                                log_.add("The cold should numb your brand. Instead it burns hotter.", brand_nar);
+                            } else if (dname == "The Catacombs") {
+                                log_.add("The dead here are older than the gods. Your brand illuminates their faces.", brand_nar);
+                            } else if (dname == "The Molten Depths") {
+                                log_.add("The heat is immense. Your brand matches it. You feel a fragment calling.", brand_nar);
+                            } else if (dname == "The Sunken Halls") {
+                                log_.add("Water everywhere. Your brand reflects off the surface like a lantern.", brand_nar);
+                            } else if (dname == "The Hollowgate") {
+                                log_.add("The seal recognizes your brand. The fragments resonate. The way opens.", brand_nar);
+                            } else if (dname == "The Sepulchre") {
+                                log_.add("This is where it began. Your brand is screaming. You go down anyway.", {220, 180, 100, 255});
+                            }
                         } else if (dungeon_level_ >= 2) {
                             // Deeper floor descent text
                             static const char* DEEPER[] = {
@@ -6564,11 +6847,74 @@ void Engine::render() {
     // Draw entities
     render::draw_entities(renderer_, sprites_, world_, map_, render_cam, y_off);
 
-    // Quest NPC indicators — gold "!" rendered as text above their heads
+    // God brand glow on player's face
+    if (world_.has<GodAlignment>(player_) && world_.has<Position>(player_)) {
+        auto& ga = world_.get<GodAlignment>(player_);
+        if (ga.god != GodId::NONE) {
+            auto& pp = world_.get<Position>(player_);
+            if (map_.in_bounds(pp.x, pp.y) && map_.at(pp.x, pp.y).visible) {
+                auto& ginfo = get_god_info(ga.god);
+                int TS = render_cam.tile_size;
+                int px = (pp.x - render_cam.x) * TS;
+                int py = (pp.y - render_cam.y) * TS + y_off;
+
+                // Brand position: upper portion of sprite (face area)
+                // For a 32px sprite scaled to TS, the face is roughly
+                // at 30-45% from top, centered horizontally
+                int brand_cx = px + TS / 2;
+                int brand_cy = py + TS * 30 / 100; // 30% from top
+                int brand_r = TS / 6; // small glow
+
+                // Pulsing glow intensity
+                float pulse = 0.7f + 0.3f * sinf(SDL_GetTicks() * 0.003f);
+                uint8_t br = ginfo.color.r, bg = ginfo.color.g, bb = ginfo.color.b;
+                int base_alpha = static_cast<int>(40 * pulse);
+
+                SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+
+                // Soft radial glow (3 layers)
+                for (int layer = 3; layer >= 1; layer--) {
+                    int lr = brand_r * layer;
+                    int la = base_alpha / layer;
+                    SDL_SetRenderDrawColor(renderer_, br, bg, bb, static_cast<uint8_t>(la));
+                    for (int dy = -lr; dy <= lr; dy++) {
+                        int dx = static_cast<int>(sqrtf(static_cast<float>(lr * lr - dy * dy)));
+                        SDL_RenderDrawLine(renderer_, brand_cx - dx, brand_cy + dy,
+                                                      brand_cx + dx, brand_cy + dy);
+                    }
+                }
+
+                // Bright core
+                int core_alpha = static_cast<int>(70 * pulse);
+                SDL_SetRenderDrawColor(renderer_, br, bg, bb, static_cast<uint8_t>(core_alpha));
+                for (int dy = -brand_r / 2; dy <= brand_r / 2; dy++) {
+                    int dx = brand_r / 2 - std::abs(dy);
+                    SDL_RenderDrawLine(renderer_, brand_cx - dx, brand_cy + dy,
+                                                  brand_cx + dx, brand_cy + dy);
+                }
+
+                // Tiny bright pixel at center (the mark itself)
+                SDL_SetRenderDrawColor(renderer_, std::min(255, br + 80),
+                                                  std::min(255, bg + 80),
+                                                  std::min(255, bb + 80),
+                                                  static_cast<uint8_t>(120 * pulse));
+                SDL_RenderDrawPoint(renderer_, brand_cx, brand_cy);
+                SDL_RenderDrawPoint(renderer_, brand_cx + 1, brand_cy);
+                SDL_RenderDrawPoint(renderer_, brand_cx, brand_cy + 1);
+                SDL_RenderDrawPoint(renderer_, brand_cx - 1, brand_cy);
+                SDL_RenderDrawPoint(renderer_, brand_cx, brand_cy - 1);
+            }
+        }
+    }
+
+    // Quest NPC indicators (WoW-style)
+    //   Gold !  = quest available to accept
+    //   Silver ? = quest in progress (accepted, not complete)
+    //   Gold ?  = quest ready to turn in
     if (font_) {
         int TS = render_cam.tile_size;
         auto& npc_pool = world_.pool<NPC>();
-        Uint32 blink = (SDL_GetTicks() / 600) % 2;
+        Uint32 blink = (SDL_GetTicks() / 500) % 2;
         for (size_t i = 0; i < npc_pool.size(); i++) {
             Entity e = npc_pool.entity_at(i);
             auto& npc = npc_pool.at_index(i);
@@ -6576,11 +6922,86 @@ void Engine::render() {
             if (!world_.has<Position>(e)) continue;
             auto& np = world_.get<Position>(e);
             if (!map_.in_bounds(np.x, np.y) || !map_.at(np.x, np.y).visible) continue;
-            if (!blink) continue;
+
+            auto qid = static_cast<QuestId>(npc.quest_id);
+            const char* symbol = "!";
+            SDL_Color marker_col = {255, 220, 80, 255}; // gold
+
+            if (journal_.has_quest(qid)) {
+                auto state = journal_.get_state(qid);
+                if (state == QuestState::COMPLETE) {
+                    symbol = "?";
+                    marker_col = {255, 220, 80, 255}; // gold ?
+                } else if (state == QuestState::ACTIVE) {
+                    symbol = "?";
+                    marker_col = {180, 180, 190, 255}; // silver ?
+                    if (!blink) continue; // silver blinks slower
+                } else if (state == QuestState::FINISHED) {
+                    continue; // no marker for finished quests
+                }
+            } else {
+                // Quest not in journal: check prerequisites
+                // If prereq not met, don't show marker
+                auto quest_prereq = [](QuestId id) -> QuestId {
+                    int idx = static_cast<int>(id);
+                    if (idx <= 0 || idx > static_cast<int>(QuestId::MQ_17_CLAIM_RELIQUARY))
+                        return QuestId::COUNT;
+                    return static_cast<QuestId>(idx - 1);
+                };
+                auto prereq = quest_prereq(qid);
+                if (prereq != QuestId::COUNT &&
+                    (!journal_.has_quest(prereq) || journal_.get_state(prereq) != QuestState::FINISHED)) {
+                    continue; // prereq not met, hide marker
+                }
+                // Gold ! for available quest
+                symbol = "!";
+                marker_col = {255, 220, 80, 255};
+            }
+
+            // Bob the marker up and down
+            float bob = sinf(SDL_GetTicks() * 0.004f + i * 0.5f) * 3.0f;
             int sx = (np.x - render_cam.x) * TS + TS / 2;
-            int sy = (np.y - render_cam.y) * TS + y_off - 4;
-            SDL_Color gold = {255, 220, 80, 255};
-            SDL_Surface* surf = TTF_RenderText_Blended(font_, "!", gold);
+            int sy = (np.y - render_cam.y) * TS + y_off - 8 + static_cast<int>(bob);
+
+            SDL_Surface* surf = TTF_RenderText_Blended(font_, symbol, marker_col);
+            if (surf) {
+                SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer_, surf);
+                SDL_Rect dst = {sx - surf->w / 2, sy - surf->h, surf->w, surf->h};
+                SDL_RenderCopy(renderer_, tex, nullptr, &dst);
+                SDL_DestroyTexture(tex);
+                SDL_FreeSurface(surf);
+            }
+        }
+
+        // Also show markers for dynamic quests
+        auto& dq_pool = world_.pool<DynamicQuest>();
+        for (size_t i = 0; i < dq_pool.size(); i++) {
+            Entity e = dq_pool.entity_at(i);
+            auto& dq = dq_pool.at_index(i);
+            if (!world_.has<Position>(e)) continue;
+            auto& dp = world_.get<Position>(e);
+            if (!map_.in_bounds(dp.x, dp.y) || !map_.at(dp.x, dp.y).visible) continue;
+
+            const char* sym = "!";
+            SDL_Color col = {255, 220, 80, 255};
+
+            if (dq.accepted && dq.completed) {
+                sym = "?";
+                col = {255, 220, 80, 255}; // gold ? for turn-in
+            } else if (dq.accepted) {
+                sym = "?";
+                col = {180, 180, 190, 255}; // silver ?
+                if (!blink) continue;
+            } else {
+                sym = "!";
+                col = {220, 200, 100, 255}; // slightly dimmer gold for side quests
+            }
+
+            float bob = sinf(SDL_GetTicks() * 0.004f + i * 0.7f) * 3.0f;
+            int sx = (dp.x - render_cam.x) * TS + TS / 2;
+            int sy = (dp.y - render_cam.y) * TS + y_off - 8 + static_cast<int>(bob);
+
+            SDL_Surface* surf = TTF_RenderText_Blended(font_, sym, col);
             if (surf) {
                 SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer_, surf);
                 SDL_Rect dst = {sx - surf->w / 2, sy - surf->h, surf->w, surf->h};
@@ -6678,6 +7099,7 @@ void Engine::render() {
     quest_offer_.render(renderer_, font_, font_title_, width_, height_);
     help_screen_.render(renderer_, font_, font_title_, width_, height_);
     passive_tree_screen_.render(renderer_, font_, font_title_, width_, height_);
+    church_screen_.render(renderer_, font_, font_title_, width_, height_);
     // Old levelup_screen_ removed; passive tree replaces it
     shop_screen_.render(renderer_, font_, sprites_, world_, width_, height_);
 
