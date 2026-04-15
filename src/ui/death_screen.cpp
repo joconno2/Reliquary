@@ -35,12 +35,18 @@ static void render_run_summary(SDL_Renderer* renderer, TTF_Font* font,
         y += line_h + 2;
     };
 
-    if (!s.class_name.empty()) draw_stat("Class:", s.class_name.c_str());
+    if (!s.class_name.empty()) {
+        snprintf(buf, sizeof(buf), "%s (Lv %d)", s.class_name.c_str(), s.level);
+        draw_stat("Class:", buf);
+    }
+    if (!s.god_name.empty()) draw_stat("God:", s.god_name.c_str());
+    if (!s.death_location.empty()) draw_stat("Fell in:", s.death_location.c_str());
     snprintf(buf, sizeof(buf), "%d", s.turns); draw_stat("Turns:", buf);
     snprintf(buf, sizeof(buf), "%d", s.kills); draw_stat("Kills:", buf);
     snprintf(buf, sizeof(buf), "%d", s.deepest_floor); draw_stat("Deepest floor:", buf);
     snprintf(buf, sizeof(buf), "%d", s.gold_earned); draw_stat("Gold earned:", buf);
-    snprintf(buf, sizeof(buf), "%d", s.quests_completed); draw_stat("Quests completed:", buf);
+    snprintf(buf, sizeof(buf), "%d", s.quests_completed); draw_stat("Quests:", buf);
+    snprintf(buf, sizeof(buf), "%d", s.items_carried); draw_stat("Items carried:", buf);
 }
 
 void render_death_screen(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_title,

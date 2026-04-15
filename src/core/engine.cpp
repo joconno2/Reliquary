@@ -723,10 +723,23 @@ void Engine::generate_level() {
     if (dungeon_level_ == 0) {
         // Overworld — load from file once, then reuse cached copy
         if (!overworld_loaded_) {
+            // Try relative path first, then from executable directory
             overworld_cache_ = mapfile::load("data/maps/overworld.map");
+            if (overworld_cache_.map.width() == 0) {
+                // Try path relative to executable (for running from build/ dir)
+                overworld_cache_ = mapfile::load("../data/maps/overworld.map");
+            }
+            if (overworld_cache_.map.width() == 0) {
+                fprintf(stderr, "FATAL: Could not load overworld.map from data/maps/ or ../data/maps/\n");
+            }
             overworld_loaded_ = true;
         }
         auto& mresult = overworld_cache_;
+        if (mresult.map.width() == 0 || mresult.map.height() == 0) {
+            fprintf(stderr, "FATAL: Overworld map is empty. Cannot proceed.\n");
+            state_ = GameState::MAIN_MENU;
+            return;
+        }
         map_ = mresult.map; // copy (preserves cache, gets fresh explored state)
         start_x = mresult.start_x;
         start_y = mresult.start_y;
@@ -2329,6 +2342,7 @@ void Engine::try_move_player(int dx, int dy) {
                 world_.get<PassiveTreeState>(player_).grant_point();
             }
             audio_.play(SfxId::LEVELUP);
+            start_transition(TransitionType::FLASH, 250, {255, 255, 200, 255});
             if (!tips_shown_.first_levelup) {
                 tips_shown_.first_levelup = true;
                 log_.add("Tip: you earned a passive tree point! Press t to open the tree and spend it.", {100, 180, 140, 255});
@@ -4127,6 +4141,20 @@ RunSummary Engine::build_run_summary() const {
     s.quests_completed = journal_.count_completed();
     auto build = creation_screen_.get_build();
     s.class_name = get_class_info(build.class_id).name;
+    if (world_.has<Stats>(player_))
+        s.level = world_.get<Stats>(player_).level;
+    if (world_.has<GodAlignment>(player_)) {
+        auto god = world_.get<GodAlignment>(player_).god;
+        if (god != GodId::NONE) s.god_name = get_god_info(god).name;
+        else s.god_name = "Godless";
+    }
+    if (world_.has<Inventory>(player_))
+        s.items_carried = static_cast<int>(world_.get<Inventory>(player_).items.size());
+    if (dungeon_level_ > 0 && current_dungeon_idx_ >= 0 &&
+        current_dungeon_idx_ < static_cast<int>(dungeon_registry_.size()))
+        s.death_location = dungeon_registry_[current_dungeon_idx_].name + " depth " + std::to_string(dungeon_level_);
+    else if (dungeon_level_ == 0)
+        s.death_location = "the overworld";
     return s;
 }
 
@@ -4867,6 +4895,16 @@ void Engine::handle_input() {
             camera_.viewport_w = width_;
             camera_.viewport_h = height_ - LOG_HEIGHT - HUD_HEIGHT;
             reload_fonts();
+            continue;
+        }
+
+        // Mouse wheel: scroll message log (when no screen is open)
+        if (event.type == SDL_MOUSEWHEEL && state_ == GameState::PLAYING &&
+            !inventory_screen_.is_open() && !char_sheet_.is_open() &&
+            !spell_screen_.is_open() && !quest_log_.is_open() &&
+            !passive_tree_screen_.is_open() && !help_screen_.is_open()) {
+            if (event.wheel.y > 0) log_.scroll_up(3);
+            else if (event.wheel.y < 0) log_.scroll_down(3);
             continue;
         }
 
@@ -6350,6 +6388,7 @@ void Engine::handle_input() {
                         ascending_ = false; // going down
                         generate_level(); // increments dungeon_level_ + repositions summons
                         audio_.play(SfxId::STAIRS);
+                        start_transition(TransitionType::FADE_IN, 400);
 
                         // Dungeon entrance text (first floor only)
                         if (dungeon_level_ == 1 && current_dungeon_idx_ >= 0 &&
@@ -6437,6 +6476,7 @@ void Engine::handle_input() {
                             generate_level();
                             ascending_ = false;
                             audio_.play(SfxId::STAIRS);
+                            start_transition(TransitionType::FADE_IN, 400);
                         } else if (dungeon_level_ == 1) {
                             // Return to overworld from depth 1 — keep cache for re-entry
                             cache_current_floor();
@@ -6444,6 +6484,7 @@ void Engine::handle_input() {
                             dungeon_level_ = -1; // will increment to 0
                             generate_level();
                             audio_.play(SfxId::STAIRS);
+                            start_transition(TransitionType::FADE_IN, 500);
                             // Place player at the dungeon entrance they used
                             if (overworld_return_x_ != 0 || overworld_return_y_ != 0) {
                                 world_.get<Position>(player_) = {overworld_return_x_, overworld_return_y_};
@@ -7422,7 +7463,41 @@ void Engine::render() {
         }
     }
 
+    render_transition();
     SDL_RenderPresent(renderer_);
+}
+
+void Engine::render_transition() {
+    if (transition_ == TransitionType::NONE) return;
+
+    Uint32 elapsed = SDL_GetTicks() - transition_start_;
+    if (elapsed >= transition_duration_) {
+        transition_ = TransitionType::NONE;
+        return;
+    }
+
+    float t = static_cast<float>(elapsed) / static_cast<float>(transition_duration_);
+    Uint8 alpha = 0;
+
+    switch (transition_) {
+        case TransitionType::FADE_OUT:
+            alpha = static_cast<Uint8>(t * 255);
+            break;
+        case TransitionType::FADE_IN:
+            alpha = static_cast<Uint8>((1.0f - t) * 255);
+            break;
+        case TransitionType::FLASH:
+            // Quick flash: bright then fade
+            alpha = static_cast<Uint8>((t < 0.3f) ? 200 : 200 * (1.0f - (t - 0.3f) / 0.7f));
+            break;
+        default: return;
+    }
+
+    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+    SDL_Rect overlay = {0, 0, width_, height_};
+    SDL_SetRenderDrawColor(renderer_, transition_color_.r, transition_color_.g,
+                            transition_color_.b, alpha);
+    SDL_RenderFillRect(renderer_, &overlay);
 }
 
 void Engine::run() {

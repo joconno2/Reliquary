@@ -11,7 +11,11 @@ struct RunSummary {
     int deepest_floor = 0;
     int gold_earned = 0;
     int quests_completed = 0;
+    int level = 1;
+    int items_carried = 0;
     std::string class_name;
+    std::string god_name;
+    std::string death_location;  // dungeon name or "the overworld"
 };
 
 // Render the death overlay (fade-in text with god-flavored flavor line).

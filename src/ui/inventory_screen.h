@@ -13,6 +13,14 @@ enum class InvAction {
     DROP,
 };
 
+enum class InvSortMode {
+    DEFAULT,    // insertion order
+    BY_TYPE,    // weapons, armor, accessories, consumables, other
+    BY_RARITY,  // relic > legendary > rare > magic > common
+    BY_VALUE,   // gold value descending
+    COUNT
+};
+
 class InventoryScreen {
 public:
     InventoryScreen() = default;
@@ -32,6 +40,10 @@ private:
     bool open_ = false;
     int selected_ = 0;
     Entity player_ = 0;
+    mutable InvSortMode sort_mode_ = InvSortMode::DEFAULT;
+
+    // Get sorted item indices for display
+    std::vector<int> get_sorted_indices(World& world) const;
 
     // Cached layout rects for mouse interaction (mutable for const render)
     struct SlotRect { SDL_Rect rect; int slot_index; }; // equipment slot

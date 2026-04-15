@@ -7,16 +7,20 @@ void MessageLog::add(const std::string& text, SDL_Color color) {
     scroll_to_bottom();
 }
 
-void MessageLog::scroll_up() {
-    if (scroll_offset_ > 0) scroll_offset_--;
+void MessageLog::scroll_up(int lines) {
+    scroll_offset_ = std::max(0, scroll_offset_ - lines);
 }
 
-void MessageLog::scroll_down() {
-    scroll_offset_++;
+void MessageLog::scroll_down(int lines) {
+    scroll_offset_ = std::min(static_cast<int>(messages_.size()), scroll_offset_ + lines);
 }
 
 void MessageLog::scroll_to_bottom() {
     scroll_offset_ = static_cast<int>(messages_.size());
+}
+
+bool MessageLog::is_scrolled_back() const {
+    return scroll_offset_ < static_cast<int>(messages_.size());
 }
 
 void MessageLog::render(SDL_Renderer* renderer, TTF_Font* font,
@@ -59,5 +63,20 @@ void MessageLog::render(SDL_Renderer* renderer, TTF_Font* font,
         draw_y += surface->h;
         SDL_DestroyTexture(texture);
         SDL_FreeSurface(surface);
+    }
+
+    // Scroll indicator when scrolled back
+    if (is_scrolled_back()) {
+        int unseen = total - end;
+        char ind[32];
+        snprintf(ind, sizeof(ind), "(%d newer)", unseen);
+        SDL_Color ind_col = {160, 160, 100, 180};
+        ui::draw_text(renderer, font, ind, ind_col, x + w - 100, y + h - line_height - 2);
+    }
+
+    // Scroll-up indicator when there are older messages above
+    if (start > 0) {
+        SDL_Color up_col = {120, 120, 100, 160};
+        ui::draw_text(renderer, font, "...", up_col, x + w - 30, y + h - line_height - 2);
     }
 }

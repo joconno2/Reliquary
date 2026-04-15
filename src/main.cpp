@@ -19,8 +19,9 @@ static void fix_working_directory([[maybe_unused]] const char* argv0) {
     char* last_slash = strrchr(path, '\\');
     if (last_slash) { *last_slash = '\0'; SetCurrentDirectoryA(path); }
 #else
-    // On Linux/macOS, try to cd to the exe's directory
-    if (argv0) {
+    // On Linux/macOS, only chdir if argv0 is an absolute path (e.g. Steam launcher).
+    // Relative paths like ./build/reliquary mean the user is already in the repo root.
+    if (argv0 && argv0[0] == '/') {
         char buf[4096];
         strncpy(buf, argv0, sizeof(buf) - 1);
         buf[sizeof(buf) - 1] = '\0';

@@ -16,9 +16,10 @@ public:
 
     void add(const std::string& text, SDL_Color color = {200, 200, 200, 255});
     void set_turn(int turn) { current_turn_ = turn; }
-    void scroll_up();
-    void scroll_down();
+    void scroll_up(int lines = 3);
+    void scroll_down(int lines = 3);
     void scroll_to_bottom();
+    bool is_scrolled_back() const;
 
     // Render the log at the given screen rect using the provided font
     void render(SDL_Renderer* renderer, TTF_Font* font,

@@ -398,15 +398,16 @@ Full design doc: [[Games/Development/Reliquary - Progression Overhaul]]
 ### Tier 7 — Visual & UX Polish
 
 - [ ] Dungeon room variety visual pass (themed furniture, wall decorations per zone)
-- [ ] Inventory UX: sort by type/rarity, filter, search
+- [x] Inventory UX: sort by type/rarity/value (Tab key cycles modes)
 - [ ] World map improvements (terrain legend, player trail, fog of war)
-- [ ] Death screen: show run stats (kills, floors, time, items found)
+- [x] Death screen: run stats (class/level, god, location, turns, kills, floor, gold, quests, items)
 - [ ] Main menu visual polish (animated background, version display)
-- [ ] Message log scroll-back and history
+- [x] Message log scroll-back (mouse wheel + PgUp/PgDn, 3-line scroll, "N newer" indicator)
 - [ ] Minimap or compass HUD element
 - [ ] Visual feedback on equip/unequip (flash, stat change preview)
-- [ ] Screen transitions (fade on stairs, flash on level up)
+- [x] Screen transitions (fade-in on stairs 400ms, flash on level up 250ms)
 - [ ] Particle polish pass (more varied death particles, spell impact variety)
+- [x] UI layout pass: text clipping, wrapping, clip guards across 11 screens
 
 ### Tier 8 — Content Depth
 

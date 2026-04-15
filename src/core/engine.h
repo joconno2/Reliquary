@@ -250,6 +250,22 @@ private:
     int LOG_HEIGHT = 180;
     int HUD_HEIGHT = 32;
 
+    // Screen transition overlay
+    enum class TransitionType { NONE, FADE_OUT, FADE_IN, FLASH };
+    TransitionType transition_ = TransitionType::NONE;
+    Uint32 transition_start_ = 0;
+    Uint32 transition_duration_ = 300; // ms
+    SDL_Color transition_color_ = {0, 0, 0, 255}; // black for fades, white for flash
+
+    void start_transition(TransitionType type, Uint32 duration_ms = 300,
+                           SDL_Color color = {0, 0, 0, 255}) {
+        transition_ = type;
+        transition_start_ = SDL_GetTicks();
+        transition_duration_ = duration_ms;
+        transition_color_ = color;
+    }
+    void render_transition();
+
     // Methods
     void handle_input();
     void reload_fonts();

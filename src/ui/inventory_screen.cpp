@@ -8,6 +8,76 @@
 #include <algorithm>
 #include <vector>
 
+static int item_type_sort_key(ItemType t) {
+    switch (t) {
+        case ItemType::WEAPON: return 0;
+        case ItemType::ARMOR_HEAD: case ItemType::ARMOR_CHEST:
+        case ItemType::ARMOR_HANDS: case ItemType::ARMOR_FEET: return 1;
+        case ItemType::SHIELD: return 2;
+        case ItemType::AMULET: case ItemType::RING: return 3;
+        case ItemType::POTION: return 4;
+        case ItemType::FOOD: return 5;
+        case ItemType::SCROLL: return 6;
+        case ItemType::PET: return 7;
+        default: return 8;
+    }
+}
+
+static int rarity_sort_key(Rarity r) {
+    switch (r) {
+        case Rarity::RELIC:     return 0;
+        case Rarity::LEGENDARY: return 1;
+        case Rarity::RARE:      return 2;
+        case Rarity::MAGIC:     return 3;
+        case Rarity::COMMON:    return 4;
+        default: return 5;
+    }
+}
+
+std::vector<int> InventoryScreen::get_sorted_indices(World& world) const {
+    if (!world.has<Inventory>(player_)) return {};
+    auto& inv = world.get<Inventory>(player_);
+    int count = static_cast<int>(inv.items.size());
+    std::vector<int> indices(count);
+    for (int i = 0; i < count; i++) indices[i] = i;
+
+    if (sort_mode_ == InvSortMode::DEFAULT) return indices;
+
+    std::sort(indices.begin(), indices.end(), [&](int a, int b) {
+        Entity ea = inv.items[a], eb = inv.items[b];
+        if (!world.has<Item>(ea) || !world.has<Item>(eb)) return a < b;
+        auto& ia = world.get<Item>(ea);
+        auto& ib = world.get<Item>(eb);
+
+        switch (sort_mode_) {
+            case InvSortMode::BY_TYPE: {
+                int ta = item_type_sort_key(ia.type), tb = item_type_sort_key(ib.type);
+                if (ta != tb) return ta < tb;
+                return ia.gold_value > ib.gold_value;
+            }
+            case InvSortMode::BY_RARITY: {
+                int ra = rarity_sort_key(ia.rarity), rb = rarity_sort_key(ib.rarity);
+                if (ra != rb) return ra < rb;
+                return ia.gold_value > ib.gold_value;
+            }
+            case InvSortMode::BY_VALUE:
+                return ia.gold_value > ib.gold_value;
+            default: return a < b;
+        }
+    });
+    return indices;
+}
+
+static const char* sort_mode_name(InvSortMode m) {
+    switch (m) {
+        case InvSortMode::DEFAULT:  return "Default";
+        case InvSortMode::BY_TYPE:  return "By Type";
+        case InvSortMode::BY_RARITY: return "By Rarity";
+        case InvSortMode::BY_VALUE: return "By Value";
+        default: return "";
+    }
+}
+
 static const char* slot_label(int slot) {
     static const char* names[] = {
         "Weapon", "Off Hand", "Head", "Chest", "Hands",
@@ -114,6 +184,11 @@ InvAction InventoryScreen::handle_input(SDL_Event& event) {
             return InvAction::USE;
         case SDLK_d:
             return InvAction::DROP;
+        case SDLK_TAB:
+            // Cycle sort mode
+            sort_mode_ = static_cast<InvSortMode>(
+                (static_cast<int>(sort_mode_) + 1) % static_cast<int>(InvSortMode::COUNT));
+            return InvAction::NONE;
         default:
             if (event.key.keysym.sym >= SDLK_a && event.key.keysym.sym <= SDLK_z) {
                 selected_ = event.key.keysym.sym - SDLK_a;
@@ -125,9 +200,13 @@ InvAction InventoryScreen::handle_input(SDL_Event& event) {
 Entity InventoryScreen::get_selected_item(World& world) const {
     if (!world.has<Inventory>(player_)) return NULL_ENTITY;
     auto& inv = world.get<Inventory>(player_);
-    if (selected_ < 0 || selected_ >= static_cast<int>(inv.items.size()))
+    auto sorted = get_sorted_indices(world);
+    if (selected_ < 0 || selected_ >= static_cast<int>(sorted.size()))
         return NULL_ENTITY;
-    return inv.items[selected_];
+    int orig_idx = sorted[selected_];
+    if (orig_idx < 0 || orig_idx >= static_cast<int>(inv.items.size()))
+        return NULL_ENTITY;
+    return inv.items[orig_idx];
 }
 
 void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
@@ -239,24 +318,33 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     item_rects_.clear();
 
     int sel = selected_;
-    int count = static_cast<int>(inv.items.size());
+    auto sorted = get_sorted_indices(world);
+    int count = static_cast<int>(sorted.size());
     if (sel >= count && count > 0) sel = count - 1;
 
-    if (inv.items.empty()) {
+    // Sort mode indicator
+    {
+        char sort_buf[32];
+        snprintf(sort_buf, sizeof(sort_buf), "[Tab] %s", sort_mode_name(sort_mode_));
+        ui::draw_text(renderer, font, sort_buf, hint_col, list_x + list_w - 140, base_y + 2);
+    }
+
+    if (sorted.empty()) {
         ui::draw_text(renderer, font, "(empty)", hint_col, list_x + 10, y);
     }
 
-    for (int i = 0; i < count; i++) {
+    for (int di = 0; di < count; di++) {
+        int i = sorted[di]; // original index
         Entity item_e = inv.items[i];
         if (!world.has<Item>(item_e)) continue;
         auto& item = world.get<Item>(item_e);
 
         bool is_equipped = inv.is_equipped(item_e);
-        bool is_sel = (i == sel);
+        bool is_sel = (di == sel);
 
         int row_h = std::max(line_h + 8, 36);
         SDL_Rect row_rect = {list_x + 6, y, list_w - 12, row_h};
-        item_rects_.push_back({row_rect, i});
+        item_rects_.push_back({row_rect, i}); // store original index for selection
 
         if (is_sel) {
             SDL_SetRenderDrawColor(renderer, 35, 30, 48, 255);
@@ -313,7 +401,8 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
 
     // Item description and stats (clip to available area between item list and buttons)
     if (sel >= 0 && sel < count) {
-        Entity item_e = inv.items[sel];
+        int orig_sel = sorted[sel];
+        Entity item_e = inv.items[orig_sel];
         if (world.has<Item>(item_e)) {
             auto& item = world.get<Item>(item_e);
             SDL_Color stat_col = {140, 160, 180, 255};
@@ -503,6 +592,6 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     }
 
     // Close hint
-    ui::draw_text(renderer, font, "[i/Esc] close   Right-click to equip",
+    ui::draw_text(renderer, font, "[i/Esc] close   [Tab] sort   Right-click to equip",
                   hint_col, doll_x + 10, base_y + total_h - line_h - 8);
 }
