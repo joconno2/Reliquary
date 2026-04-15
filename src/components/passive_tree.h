@@ -5,6 +5,7 @@
 #include <cstring>
 #include "components/class_def.h"
 #include "components/stats.h"
+#include "components/skills.h"
 
 // ── Sectors ──────────────────────────────────────────────────────────
 enum class Sector : int {
@@ -133,6 +134,10 @@ struct PassiveNode {
 
     // Connections to other nodes (by id). 0xFFFF = unused.
     uint16_t connections[6];
+
+    // Optional skill requirement (SKILL_COUNT = no requirement)
+    int required_skill = SKILL_COUNT;  // SkillId as int, SKILL_COUNT = none
+    int required_skill_level = 0;      // minimum level needed
 };
 
 constexpr uint16_t NO_CONN = 0xFFFF;
@@ -191,8 +196,11 @@ int node_count();
 // Find node by id (returns nullptr if invalid)
 const PassiveNode* find_node(uint16_t id);
 
-// Can a node be allocated right now?
+// Can a node be allocated right now? (checks points, connectivity, not already allocated)
 bool can_allocate(const PassiveTreeState& state, uint16_t node_id);
+
+// Check if a node's skill requirement is met. Returns true if no requirement or met.
+bool skill_requirement_met(uint16_t node_id, const Skills& skills);
 
 // Is a node reachable (connected to an allocated node or is start)?
 bool is_connected(const PassiveTreeState& state, uint16_t node_id);

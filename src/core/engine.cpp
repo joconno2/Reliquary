@@ -1314,6 +1314,108 @@ void Engine::generate_level() {
             }
         }
 
+        // ─── Room shape modifications (zone-specific) ───
+        if (zone_key == "warrens") {
+            // Nibble corners: remove 1-2 tiles from room corners to make irregular shapes
+            for (size_t ri = 1; ri < rooms_.size(); ri++) {
+                if (!rng_.chance(60)) continue;
+                auto& rm = rooms_[ri];
+                // Each corner: randomly fill 1-3 tiles back to wall
+                for (int corner = 0; corner < 4; corner++) {
+                    int nibble = rng_.range(1, 3);
+                    for (int n = 0; n < nibble; n++) {
+                        int nx, ny;
+                        switch (corner) {
+                            case 0: nx = rm.x + n;          ny = rm.y;             break;
+                            case 1: nx = rm.x + rm.w-1 - n; ny = rm.y;             break;
+                            case 2: nx = rm.x;               ny = rm.y + rm.h-1 - n; break;
+                            default: nx = rm.x + rm.w-1;     ny = rm.y + rm.h-1 - n; break;
+                        }
+                        if (map_.in_bounds(nx, ny) && map_.at(nx, ny).type == params.floor_type)
+                            map_.at(nx, ny).type = params.wall_type;
+                    }
+                }
+            }
+        } else if (zone_key == "sunken") {
+            // Round rooms: carve off corners to make oval-ish shapes
+            for (size_t ri = 0; ri < rooms_.size(); ri++) {
+                if (!rng_.chance(50)) continue;
+                auto& rm = rooms_[ri];
+                int hw = rm.w / 2, hh = rm.h / 2;
+                int ccx = rm.x + hw, ccy = rm.y + hh;
+                float rx = static_cast<float>(hw), ry = static_cast<float>(hh);
+                for (int dy = -hh; dy <= hh; dy++) {
+                    for (int dx = -hw; dx <= hw; dx++) {
+                        float d = (dx*dx)/(rx*rx) + (dy*dy)/(ry*ry);
+                        if (d > 1.0f) {
+                            int tx = ccx + dx, ty = ccy + dy;
+                            if (map_.in_bounds(tx, ty) && map_.at(tx, ty).type == params.floor_type)
+                                map_.at(tx, ty).type = params.wall_type;
+                        }
+                    }
+                }
+            }
+        } else if (zone_key == "catacombs") {
+            // Alcoves: small 2x1 extensions from corridors into walls
+            for (int y = 2; y < params.height - 2; y++) {
+                for (int x = 2; x < params.width - 2; x++) {
+                    if (map_.at(x, y).type != params.floor_type) continue;
+                    if (!rng_.chance(3)) continue; // sparse
+                    // Check if this is a corridor tile (exactly 2 floor neighbors on one axis)
+                    bool wall_n = map_.is_opaque(x, y-1);
+                    bool wall_s = map_.is_opaque(x, y+1);
+                    bool wall_e = map_.is_opaque(x+1, y);
+                    bool wall_w = map_.is_opaque(x-1, y);
+                    // Horizontal corridor: walls north and south
+                    if (wall_n && wall_s && !wall_e && !wall_w) {
+                        // Carve alcove north or south
+                        int ay = wall_n ? y-1 : y+1;
+                        if (map_.in_bounds(x, ay) && map_.is_opaque(x, ay))
+                            map_.at(x, ay).type = params.floor_type;
+                    }
+                    // Vertical corridor: walls east and west
+                    if (wall_e && wall_w && !wall_n && !wall_s) {
+                        int ax = wall_e ? x+1 : x-1;
+                        if (map_.in_bounds(ax, y) && map_.is_opaque(ax, y))
+                            map_.at(ax, y).type = params.floor_type;
+                    }
+                }
+            }
+        } else if (zone_key == "molten") {
+            // Jagged walls: randomly carve 1-tile protrusions into rooms
+            for (size_t ri = 1; ri < rooms_.size(); ri++) {
+                auto& rm = rooms_[ri];
+                for (int side = 0; side < 4; side++) {
+                    int len = (side < 2) ? rm.w : rm.h;
+                    for (int i = 0; i < len; i++) {
+                        if (!rng_.chance(25)) continue;
+                        int jx, jy;
+                        switch (side) {
+                            case 0: jx = rm.x + i; jy = rm.y - 1; break;
+                            case 1: jx = rm.x + i; jy = rm.y + rm.h; break;
+                            case 2: jx = rm.x - 1; jy = rm.y + i; break;
+                            default: jx = rm.x + rm.w; jy = rm.y + i; break;
+                        }
+                        if (map_.in_bounds(jx, jy) && map_.is_opaque(jx, jy))
+                            map_.at(jx, jy).type = params.floor_type;
+                    }
+                }
+            }
+        } else if (zone_key == "deep_halls") {
+            // Pillar grids in the largest rooms
+            for (size_t ri = 1; ri < rooms_.size(); ri++) {
+                auto& rm = rooms_[ri];
+                if (rm.w < 12 || rm.h < 12) continue;
+                // Regular 3x3 pillar grid
+                for (int py = rm.y + 3; py < rm.y + rm.h - 2; py += 3) {
+                    for (int px = rm.x + 3; px < rm.x + rm.w - 2; px += 3) {
+                        if (map_.in_bounds(px, py) && map_.at(px, py).type == params.floor_type)
+                            map_.at(px, py).type = TileType::ROCK;
+                    }
+                }
+            }
+        }
+
         // Special rooms — pick one mid-room (not first/last) for a special purpose
         if (rooms_.size() >= 5 && dungeon_level_ >= 2) {
             int special_idx = rng_.range(2, static_cast<int>(rooms_.size()) - 2);
@@ -4301,9 +4403,9 @@ void Engine::try_rest() {
         }
     }
 
-    // In dungeon: 40% chance of interruption (+ 3% per floor, Heavy Sleeper: +20%)
-    int rest_interrupt = 40 + dungeon_level_ * 3;
-    for (auto tid : build_traits_) if (tid == TraitId::HEAVY_SLEEPER) rest_interrupt += 20;
+    // In dungeon: 30% base interruption (+ 2% per floor, +5% per rest this floor, Heavy Sleeper: +15%)
+    int rest_interrupt = 30 + dungeon_level_ * 2 + rest_count_this_floor_ * 5;
+    for (auto tid : build_traits_) if (tid == TraitId::HEAVY_SLEEPER) rest_interrupt += 15;
     if (dungeon_level_ > 0 && rng_.chance(rest_interrupt)) {
         // Spawn a wandering monster nearby
         auto& ppos = world_.get<Position>(player_);
@@ -4369,10 +4471,14 @@ void Engine::try_rest() {
     // Exhaustion: each rest on this floor reduces effectiveness
     rest_count_this_floor_++;
     float exhaustion_mult = 1.0f;
-    if (rest_count_this_floor_ == 2) exhaustion_mult = 0.5f;
-    else if (rest_count_this_floor_ == 3) exhaustion_mult = 0.25f;
-    else if (rest_count_this_floor_ >= 4) {
-        log_.add("You are too exhausted to rest effectively.", {180, 140, 100, 255});
+    if (rest_count_this_floor_ == 2) {
+        exhaustion_mult = 0.5f;
+        log_.add("You're getting tired. Rest is less effective.", {200, 180, 120, 255});
+    } else if (rest_count_this_floor_ == 3) {
+        exhaustion_mult = 0.25f;
+        log_.add("Exhaustion sets in. This rest barely helps.", {200, 160, 100, 255});
+    } else if (rest_count_this_floor_ >= 4) {
+        log_.add("Too exhausted. Your body refuses to sleep.", {180, 120, 100, 255});
         game_turn_ += 10; // still costs time
         player_acted_ = true;
         return;
@@ -4425,7 +4531,22 @@ void Engine::try_rest() {
         snprintf(buf, sizeof(buf), "You rest, but nothing heals. The hunger gnaws.");
     else
         snprintf(buf, sizeof(buf), "You rest for a while. (+%d HP, +%d MP)", hp_actual, mp_actual);
-    log_.add(buf, {100, 200, 100, 255});
+    SDL_Color rest_col = (exhaustion_mult < 1.0f) ? SDL_Color{200, 200, 120, 255}
+                                                    : SDL_Color{100, 200, 100, 255};
+    log_.add(buf, rest_col);
+
+    // Show remaining rests
+    if (dungeon_level_ > 0) {
+        int rests_left = 3 - rest_count_this_floor_;
+        if (rests_left > 0) {
+            char rbuf[64];
+            snprintf(rbuf, sizeof(rbuf), "(%d rest%s remaining this floor)",
+                     rests_left, rests_left == 1 ? "" : "s");
+            log_.add(rbuf, {140, 140, 120, 255});
+        } else {
+            log_.add("(No rests remaining this floor)", {160, 120, 100, 255});
+        }
+    }
     audio_.play(SfxId::REST);
 
     // Dismiss all summons on rest
@@ -6757,6 +6878,25 @@ void Engine::render_hud() {
             cursor += snk_surf->w + 6;
             SDL_DestroyTexture(snk_tex);
             SDL_FreeSurface(snk_surf);
+        }
+    }
+
+    // Rest indicator (in dungeons, show remaining rests)
+    if (dungeon_level_ > 0) {
+        int rests_left = std::max(0, 3 - rest_count_this_floor_);
+        char rstbuf[12];
+        snprintf(rstbuf, sizeof(rstbuf), "R:%d", rests_left);
+        SDL_Color rst_col = rests_left == 0 ? SDL_Color{160, 100, 80, 255} :
+                            rests_left == 1 ? SDL_Color{200, 180, 80, 255} :
+                                              SDL_Color{120, 160, 120, 255};
+        SDL_Surface* rst_surf = TTF_RenderText_Blended(font_, rstbuf, rst_col);
+        if (rst_surf) {
+            SDL_Texture* rst_tex = SDL_CreateTextureFromSurface(renderer_, rst_surf);
+            SDL_Rect rst_dst = {cursor, bar_y, rst_surf->w, rst_surf->h};
+            SDL_RenderCopy(renderer_, rst_tex, nullptr, &rst_dst);
+            cursor += rst_surf->w + 6;
+            SDL_DestroyTexture(rst_tex);
+            SDL_FreeSurface(rst_surf);
         }
     }
 

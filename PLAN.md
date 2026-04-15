@@ -330,8 +330,8 @@ Full design doc: [[Games/Development/Reliquary - Progression Overhaul]]
 - [x] XP bonus from tree applied globally
 - [x] Respec at same-god shrines (refund last 3 nodes, costs 10 favor)
 - [x] Ability bar HUD showing owned capstones + cooldown timers
-- [ ] More nodes per sector (expand to ~150-200 total)
-- [ ] Visual polish (circle/diamond/hexagon shapes instead of rects)
+- ~~More nodes per sector~~ REMOVED (138 nodes is enough, small tree is fine)
+- [x] Visual polish: circles (small), diamonds (notable), hexagons (keystone), triple-ring circles (capstone)
 
 **6B. Use-Based Skills** — 15 skills that level through use
 - [x] Skills component: 15 skills (Blades, Axes, Blunt, Unarmed, Archery, 6 spell schools, Stealth, Heavy Armor, Dodge, Prayer)
@@ -340,10 +340,10 @@ Full design doc: [[Games/Development/Reliquary - Progression Overhaul]]
 - [x] Skill bonuses wired into combat (crit, damage, stun chance)
 - [x] Save/load skill state
 - [x] Player creation adds Skills component
-- [ ] Spell school XP on cast
-- [ ] Stealth/Dodge/Prayer/Heavy Armor XP on use
-- [ ] Character sheet skill display
-- [ ] Skill requirements on some passive tree nodes
+- [x] Spell school XP on cast (3 XP per successful cast, all 6 schools)
+- [x] Stealth XP (sneak attacks, pickpocket, sneaking), Dodge XP (on enemy miss), Prayer XP (on pray), Heavy Armor XP (on hit while wearing heavy)
+- [x] Character sheet skill display (all 15 skills, XP bars, threshold unlock descriptions)
+- [x] Skill requirements on 6 notable nodes (Executioner=Blades 25, Riposte=Dodge 25, Spell Pierce=Conjuration 25, Last Stand=Heavy Armor 25, Patient Hunter=Stealth 25, Devotion=Prayer 25)
 
 **6C. Monster Behavior Overhaul** — unique AI per creature type
 - [x] Lich: teleport when low HP, Drain Life at range (heals self), summon skeletons (25% chance, 10 turn CD)
@@ -387,7 +387,7 @@ Full design doc: [[Games/Development/Reliquary - Progression Overhaul]]
   - Soleth: Consecrate (5 damage to undead in 5x5)
   - Gathruun: Stone Wall (3 wall tiles)
   - Others: generic +10 favor, full MP restore
-- [ ] Rest interruption rate tuning
+- [x] Rest visual/UX polish: HUD rest counter (R:N), exhaustion messages, interrupt rate rebalanced (30% base + 2%/floor + 5%/rest), remaining rest count shown after each rest
 
 **6F. Spell Acquisition Rework**
 - [x] Starting spells stripped: Wizard gets 2, casters get 1, non-casters get 0

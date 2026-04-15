@@ -137,7 +137,8 @@ static const PassiveNode TREE[] = {
 
 {29, NT, Sector::MIGHT, "Executioner", "+25% damage vs enemies below 30% HP",
  -0.8f, 5.5f, {EFF(DAMAGE_VS_LOW_HP, 25), NOEFF, NOEFF, NOEFF},
- {24, 33, NC, NC, NC, NC}},
+ {24, 33, NC, NC, NC, NC},
+ static_cast<int>(SkillId::BLADES), 25},
 
 {30, NT, Sector::MIGHT, "Iron Skin", "+2 armor, +1 CON",
  0.8f, 5.5f, {EFF(BONUS_ARMOR, 2), EFF(BONUS_CON, 1), NOEFF, NOEFF},
@@ -203,7 +204,8 @@ static const PassiveNode TREE[] = {
 
 {59, NT, Sector::FINESSE, "Riposte", "Counter-attack on successful dodge (once per turn)",
  -5.5f, -0.8f, {EFF(RIPOSTE, 1), EFF(BONUS_DODGE_CHANCE, 3), NOEFF, NOEFF},
- {54, 62, NC, NC, NC, NC}},
+ {54, 62, NC, NC, NC, NC},
+ static_cast<int>(SkillId::DODGE), 25},
 
 {60, NT, Sector::FINESSE, "Evasion", "+5% dodge, +2 PER",
  -5.5f, 0.8f, {EFF(BONUS_DODGE_CHANCE, 5), EFF(BONUS_PER, 2), NOEFF, NOEFF},
@@ -249,7 +251,8 @@ static const PassiveNode TREE[] = {
 
 {85, NT, Sector::ARCANE, "Spell Pierce", "Spells ignore 2 armor",
  0.4f, -4.5f, {EFF(SPELL_PIERCE, 2), EFF(BONUS_SPELL_DAMAGE_PCT, 5), NOEFF, NOEFF},
- {82, 88, NC, NC, NC, NC}},
+ {82, 88, NC, NC, NC, NC},
+ static_cast<int>(SkillId::CONJURATION), 25},
 
 {86, N, Sector::ARCANE, nullptr, "+3 MP",
  1.2f, -4.2f, {EFF(BONUS_MP, 3), NOEFF, NOEFF, NOEFF},
@@ -312,7 +315,8 @@ static const PassiveNode TREE[] = {
 
 {114, NT, Sector::FAITH, "Devotion", "-10% prayer favor cost, +1 WIL",
  3.0f, -3.5f, {EFF(PRAYER_COST_REDUCE_PCT, 10), EFF(BONUS_WIL, 1), NOEFF, NOEFF},
- {111, 118, NC, NC, NC, NC}},
+ {111, 118, NC, NC, NC, NC},
+ static_cast<int>(SkillId::PRAYER), 25},
 
 {115, NT, Sector::FAITH, "Righteous Fury", "+10% melee damage, +2 HP",
  3.8f, -2.5f, {EFF(BONUS_MELEE_DAMAGE_PCT, 10), EFF(BONUS_HP, 2), NOEFF, NOEFF},
@@ -401,7 +405,8 @@ static const PassiveNode TREE[] = {
 
 {149, NT, Sector::FORTITUDE, "Last Stand", "Survive lethal hit at 1 HP (once per floor)",
  6.0f, 0.0f, {EFF(LAST_STAND, 1), EFF(BONUS_HP, 5), NOEFF, NOEFF},
- {148, 150, NC, NC, NC, NC}},
+ {148, 150, NC, NC, NC, NC},
+ static_cast<int>(SkillId::HEAVY_ARMOR), 25},
 
 {150, CAP, Sector::FORTITUDE, "Unbreakable",
  "Active: Halve all incoming damage for 8 turns. 40 turn cooldown.",
@@ -500,7 +505,8 @@ static const PassiveNode TREE[] = {
 
 {203, NT, Sector::SHADOW, "Patient Hunter", "+50% damage to unaware enemies",
  -3.0f, -3.5f, {EFF(PATIENT_HUNTER, 50), NOEFF, NOEFF, NOEFF},
- {201, 206, NC, NC, NC, NC}},
+ {201, 206, NC, NC, NC, NC},
+ static_cast<int>(SkillId::STEALTH), 25},
 
 {204, NT, Sector::SHADOW, "Shadowstep", "+15 speed, +3% dodge",
  -2.5f, -3.5f, {EFF(BONUS_SPEED, 15), EFF(BONUS_DODGE_CHANCE, 3), NOEFF, NOEFF},
@@ -747,6 +753,13 @@ bool can_allocate(const PassiveTreeState& state, uint16_t node_id) {
     if (state.is_allocated(node_id)) return false;
     if (find_node(node_id) == nullptr) return false;
     return is_connected(state, node_id);
+}
+
+bool skill_requirement_met(uint16_t node_id, const Skills& skills) {
+    auto* node = find_node(node_id);
+    if (!node) return true;
+    if (node->required_skill >= SKILL_COUNT) return true; // no requirement
+    return skills.get_level(static_cast<SkillId>(node->required_skill)) >= node->required_skill_level;
 }
 
 uint16_t start_node_for_class(ClassId cls) {

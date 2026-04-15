@@ -139,8 +139,15 @@ bool PassiveTreeScreen::handle_input(SDL_Event& event) {
             const auto* nodes = passive_tree::nodes();
             uint16_t id = nodes[hovered_node_].id;
             if (passive_tree::can_allocate(state, id)) {
-                state.allocate(id);
-                return true;
+                // Check skill requirement
+                if (world_->has<Skills>(player_) &&
+                    !passive_tree::skill_requirement_met(id, world_->get<Skills>(player_))) {
+                    // Can't allocate: skill too low
+                    // (tooltip will show the requirement)
+                } else {
+                    state.allocate(id);
+                    return true;
+                }
             }
         }
     }
@@ -265,6 +272,30 @@ static void draw_diamond(SDL_Renderer* r, int cx, int cy, int rad) {
     SDL_RenderDrawLine(r, cx - rad, cy, cx, cy - rad);
 }
 
+// Helper: fill a hexagon
+static void fill_hexagon(SDL_Renderer* r, int cx, int cy, int rad) {
+    // Flat-top hexagon: 6 vertices
+    for (int dy = -rad; dy <= rad; dy++) {
+        float t = static_cast<float>(std::abs(dy)) / rad;
+        int dx;
+        if (t <= 0.5f) dx = rad;          // top/bottom half: full width
+        else dx = static_cast<int>(rad * (1.0f - (t - 0.5f) * 2.0f)); // taper
+        SDL_RenderDrawLine(r, cx - dx, cy + dy, cx + dx, cy + dy);
+    }
+}
+
+// Helper: draw a hexagon outline
+static void draw_hexagon(SDL_Renderer* r, int cx, int cy, int rad) {
+    int hr = rad / 2; // half-height of flat section
+    // 6 vertices (flat-top hex)
+    SDL_RenderDrawLine(r, cx - rad, cy - hr, cx, cy - rad);      // top-left
+    SDL_RenderDrawLine(r, cx, cy - rad, cx + rad, cy - hr);      // top-right
+    SDL_RenderDrawLine(r, cx + rad, cy - hr, cx + rad, cy + hr);  // right
+    SDL_RenderDrawLine(r, cx + rad, cy + hr, cx, cy + rad);      // bottom-right
+    SDL_RenderDrawLine(r, cx, cy + rad, cx - rad, cy + hr);      // bottom-left
+    SDL_RenderDrawLine(r, cx - rad, cy + hr, cx - rad, cy - hr);  // left
+}
+
 void PassiveTreeScreen::draw_nodes(SDL_Renderer* renderer, TTF_Font* font,
                                     const PassiveTreeState& state,
                                     int sw, int sh) const {
@@ -317,11 +348,11 @@ void PassiveTreeScreen::draw_nodes(SDL_Renderer* renderer, TTF_Font* font,
 
             case NodeType::KEYSTONE:
                 SDL_SetRenderDrawColor(renderer, cr, cg, cb, ca);
-                fill_diamond(renderer, cx, cy, r);
+                fill_hexagon(renderer, cx, cy, r);
                 // Double border in gold
                 SDL_SetRenderDrawColor(renderer, 255, 200, 60, 255);
-                draw_diamond(renderer, cx, cy, r);
-                draw_diamond(renderer, cx, cy, r + 3);
+                draw_hexagon(renderer, cx, cy, r);
+                draw_hexagon(renderer, cx, cy, r + 3);
                 break;
 
             case NodeType::CAPSTONE:
@@ -471,8 +502,24 @@ void PassiveTreeScreen::draw_tooltip(SDL_Renderer* renderer, TTF_Font* font,
             status_text = "Allocated";
             status_col = {100, 200, 100, 255};
         } else if (passive_tree::can_allocate(state, node.id)) {
-            status_text = state.points_available > 0 ? "Click to allocate" : "No points available";
-            status_col = state.points_available > 0 ? SDL_Color{220, 200, 80, 255} : SDL_Color{140, 100, 80, 255};
+            // Check skill requirement
+            bool skill_ok = true;
+            if (world_->has<Skills>(player_))
+                skill_ok = passive_tree::skill_requirement_met(node.id, world_->get<Skills>(player_));
+            if (!skill_ok) {
+                static char req_buf[64];
+                snprintf(req_buf, sizeof(req_buf), "Requires %s %d",
+                         skill_name(static_cast<SkillId>(node.required_skill)),
+                         node.required_skill_level);
+                status_text = req_buf;
+                status_col = {200, 100, 80, 255};
+            } else if (state.points_available > 0) {
+                status_text = "Click to allocate";
+                status_col = {220, 200, 80, 255};
+            } else {
+                status_text = "No points available";
+                status_col = {140, 100, 80, 255};
+            }
         } else {
             status_text = "Not connected";
             status_col = {100, 80, 70, 200};
