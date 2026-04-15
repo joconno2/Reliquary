@@ -113,6 +113,27 @@ void ParticleSystem::hit_spark(float wx, float wy) {
     burst(wx, wy, 8, 220, 200, 160, 0.09f, 0.4f, 5);
 }
 
+void ParticleSystem::hit_spark_weapon(float wx, float wy, uint32_t tags) {
+    if (tags & 0x8) { // TAG_SWORD/TAG_DAGGER (blade weapons)
+        // Sharp spark line
+        directional(wx, wy, randf_signed() * 0.5f, -0.3f, 6, 255, 240, 200, 0.12f, 0.3f, 3);
+        burst(wx, wy, 4, 255, 220, 180, 0.06f, 0.2f, 2);
+    } else if (tags & 0x4) { // TAG_BLUNT (mace/hammer)
+        // Dust cloud
+        burst(wx, wy, 10, 160, 150, 130, 0.06f, 0.5f, 5);
+        fall(wx, wy, 4, 140, 130, 110, 0.4f, 3);
+    } else if (tags & 0x2) { // TAG_AXE
+        // Red arc spray
+        directional(wx, wy, randf_signed(), -0.2f, 8, 200, 60, 40, 0.1f, 0.4f, 4);
+        burst(wx, wy, 4, 180, 40, 40, 0.05f, 0.3f, 3);
+    } else if (tags == 0) { // Unarmed
+        burst(wx, wy, 5, 200, 190, 170, 0.04f, 0.3f, 3);
+    } else {
+        // Default
+        burst(wx, wy, 8, 220, 200, 160, 0.09f, 0.4f, 5);
+    }
+}
+
 void ParticleSystem::crit_flash(float wx, float wy) {
     burst(wx, wy, 20, 255, 255, 200, 0.14f, 0.5f, 8);
     burst(wx, wy, 12, 255, 200, 100, 0.16f, 0.6f, 6);
@@ -121,6 +142,25 @@ void ParticleSystem::crit_flash(float wx, float wy) {
 void ParticleSystem::death_burst(float wx, float wy) {
     burst(wx, wy, 25, 160, 40, 40, 0.1f, 0.8f, 7);
     burst(wx, wy, 10, 100, 80, 60, 0.07f, 1.0f, 5);
+}
+
+void ParticleSystem::death_burst_typed(float wx, float wy, bool undead, bool beast) {
+    if (undead) {
+        // Bone shards: pale fragments flying outward
+        burst(wx, wy, 15, 200, 195, 170, 0.12f, 0.7f, 5);
+        fall(wx, wy, 8, 180, 175, 150, 0.8f, 4);
+        drift(wx, wy, 6, 120, 100, 140, 0.6f, 3); // faint purple mist
+    } else if (beast) {
+        // Fur tufts: brown puffs drifting
+        burst(wx, wy, 12, 160, 130, 90, 0.08f, 0.8f, 6);
+        drift(wx, wy, 8, 140, 120, 80, 0.9f, 4);
+        fall(wx, wy, 5, 120, 100, 70, 0.6f, 3);
+    } else {
+        // Humanoid: standard blood burst
+        burst(wx, wy, 20, 170, 40, 40, 0.1f, 0.8f, 7);
+        burst(wx, wy, 8, 120, 30, 30, 0.06f, 0.6f, 5);
+        fall(wx, wy, 6, 150, 35, 35, 0.5f, 4);
+    }
 }
 
 void ParticleSystem::heal_effect(float wx, float wy) {
@@ -146,6 +186,35 @@ void ParticleSystem::spell_effect(float wx, float wy, uint8_t r, uint8_t g, uint
     burst(wx, wy, 18, r, g, b, 0.1f, 0.7f, 6);
 }
 
+void ParticleSystem::spell_fire(float wx, float wy) {
+    burst(wx, wy, 15, 255, 140, 30, 0.12f, 0.6f, 7);
+    rise(wx, wy, 10, 255, 80, 20, 0.5f, 5);
+    rise(wx, wy, 6, 255, 200, 60, 0.4f, 3);
+}
+
+void ParticleSystem::spell_ice(float wx, float wy) {
+    burst(wx, wy, 18, 140, 200, 255, 0.1f, 0.7f, 6);
+    burst(wx, wy, 8, 200, 230, 255, 0.14f, 0.5f, 4);
+    fall(wx, wy, 6, 180, 220, 255, 0.6f, 3);
+}
+
+void ParticleSystem::spell_nature(float wx, float wy) {
+    rise(wx, wy, 12, 80, 180, 60, 0.8f, 5);
+    drift(wx, wy, 8, 100, 200, 80, 0.7f, 4);
+    burst(wx, wy, 5, 60, 140, 40, 0.05f, 0.9f, 3);
+}
+
+void ParticleSystem::spell_dark(float wx, float wy) {
+    burst(wx, wy, 14, 120, 40, 160, 0.08f, 0.8f, 6);
+    drift(wx, wy, 10, 80, 20, 120, 0.9f, 5);
+    rise(wx, wy, 5, 60, 10, 80, 0.6f, 3);
+}
+
+void ParticleSystem::spell_holy(float wx, float wy) {
+    rise(wx, wy, 18, 255, 240, 180, 0.9f, 6);
+    burst(wx, wy, 10, 255, 255, 200, 0.1f, 0.6f, 5);
+}
+
 void ParticleSystem::levelup_effect(float wx, float wy) {
     rise(wx, wy, 25, 255, 220, 100, 1.2f, 7);
     rise(wx, wy, 15, 255, 255, 200, 1.0f, 5);
@@ -153,6 +222,11 @@ void ParticleSystem::levelup_effect(float wx, float wy) {
 
 void ParticleSystem::gold_sparkle(float wx, float wy) {
     burst(wx, wy, 10, 255, 220, 50, 0.06f, 0.5f, 4);
+}
+
+void ParticleSystem::equip_flash(float wx, float wy) {
+    burst(wx, wy, 8, 200, 210, 220, 0.05f, 0.4f, 3);
+    rise(wx, wy, 4, 180, 190, 200, 0.5f, 3);
 }
 
 void ParticleSystem::prayer_effect(float wx, float wy, uint8_t r, uint8_t g, uint8_t b) {

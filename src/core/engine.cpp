@@ -1484,6 +1484,124 @@ void Engine::generate_level() {
                         }
                     }
                 }
+            } else if (roll <= 70 && dungeon_level_ >= 3) {
+                // Library — bookshelves (rock pillars in grid) + tome drops
+                // Place "shelves" as rock pillars along walls
+                for (int sy = sr.y + 1; sy < sr.y + sr.h - 1; sy += 2) {
+                    for (int sx = sr.x + 1; sx < sr.x + sr.w - 1; sx++) {
+                        if ((sy == sr.y + 1 || sy >= sr.y + sr.h - 2) &&
+                            map_.in_bounds(sx, sy) && map_.at(sx, sy).type == params.floor_type) {
+                            if (rng_.chance(60))
+                                map_.at(sx, sy).type = TileType::ROCK;
+                        }
+                    }
+                }
+                // Drop 1-3 spellbooks in the room
+                static const SpellId LIBRARY_SPELLS[] = {
+                    SpellId::IDENTIFY, SpellId::DETECT_MONSTERS, SpellId::REVEAL_MAP,
+                    SpellId::FORESIGHT, SpellId::SCRY, SpellId::TRUESIGHT, SpellId::CLAIRVOYANCE
+                };
+                int tomes = rng_.range(1, 3);
+                for (int ti = 0; ti < tomes; ti++) {
+                    int tx = rng_.range(sr.x + 1, sr.x + sr.w - 2);
+                    int ty = rng_.range(sr.y + 1, sr.y + sr.h - 2);
+                    if (!map_.in_bounds(tx, ty) || !map_.is_walkable(tx, ty)) continue;
+                    auto spell = LIBRARY_SPELLS[rng_.range(0, 6)];
+                    auto& sinfo = get_spell_info(spell);
+                    Entity tome = world_.create();
+                    world_.add<Position>(tome, {tx, ty});
+                    world_.add<Renderable>(tome, {SHEET_ITEMS, 1, 21, {255,255,255,255}, 1});
+                    Item book; book.name = std::string("Tome of ") + sinfo.name;
+                    book.description = sinfo.description; book.type = ItemType::SCROLL;
+                    book.gold_value = 30 + sinfo.mp_cost * 5;
+                    book.identified = true; book.teaches_spell = static_cast<int>(spell);
+                    book.tags |= TAG_BOOK;
+                    world_.add<Item>(tome, std::move(book));
+                }
+                // Lore item
+                int lx = sr.cx(), ly = sr.cy();
+                if (map_.in_bounds(lx, ly) && map_.is_walkable(lx, ly)) {
+                    Entity lore = world_.create();
+                    world_.add<Position>(lore, {lx, ly});
+                    world_.add<Renderable>(lore, {SHEET_ITEMS, 0, 21, {255,255,255,255}, 1});
+                    Item note; note.name = "scholar's journal";
+                    note.description = "The shelves held thousands of volumes once. Most are dust now. What remains speaks of things the gods would rather forget.";
+                    note.type = ItemType::SCROLL; note.gold_value = 5; note.identified = true;
+                    world_.add<Item>(lore, std::move(note));
+                }
+            } else if (roll <= 82 && sr.w >= 7 && sr.h >= 7) {
+                // Arena — open room with pillar ring and tough enemies
+                // Place pillars in a ring pattern
+                int midx = sr.cx(), midy = sr.cy();
+                int ring_r = std::min(sr.w, sr.h) / 2 - 1;
+                for (int angle = 0; angle < 8; angle++) {
+                    float a = angle * 3.14159f / 4.0f;
+                    int px = midx + static_cast<int>(ring_r * std::cos(a));
+                    int py = midy + static_cast<int>(ring_r * std::sin(a));
+                    if (map_.in_bounds(px, py) && map_.at(px, py).type == params.floor_type)
+                        map_.at(px, py).type = TileType::ROCK;
+                }
+                // Spawn 2-3 tough monsters in the center
+                const auto* mtable = populate::get_monster_table();
+                int mcount = populate::get_monster_count();
+                int max_idx = std::min(mcount - 1, 8 + dungeon_level_ * 2);
+                for (int mi = 0; mi < rng_.range(2, 3); mi++) {
+                    int mx = midx + rng_.range(-2, 2);
+                    int my = midy + rng_.range(-2, 2);
+                    if (!map_.in_bounds(mx, my) || !map_.is_walkable(mx, my)) continue;
+                    if (combat::entity_at(world_, mx, my, player_) != NULL_ENTITY) continue;
+                    int idx = rng_.range(max_idx / 2, max_idx); // tougher half of pool
+                    auto& mdef = mtable[idx];
+                    Entity mob = world_.create();
+                    world_.add<Position>(mob, {mx, my});
+                    world_.add<Renderable>(mob, {SHEET_MONSTERS, mdef.sprite_x, mdef.sprite_y, {255,255,255,255}, 5});
+                    Stats ms; ms.name = mdef.name;
+                    float scale = 1.2f + dungeon_level_ * 0.2f; // tougher than normal
+                    ms.hp = static_cast<int>(mdef.hp * scale); ms.hp_max = ms.hp;
+                    ms.base_damage = static_cast<int>(mdef.base_damage * scale);
+                    ms.natural_armor = mdef.natural_armor; ms.base_speed = mdef.speed;
+                    ms.xp_value = static_cast<int>(mdef.xp_value * 1.5f);
+                    ms.set_attr(Attr::STR, mdef.str); ms.set_attr(Attr::DEX, mdef.dex);
+                    ms.set_attr(Attr::CON, mdef.con);
+                    world_.add<Stats>(mob, std::move(ms));
+                    AI ai; ai.state = AIState::IDLE; ai.flee_threshold = 5;
+                    world_.add<AI>(mob, ai);
+                    world_.add<Energy>(mob, {0, mdef.speed});
+                    world_.add<StatusEffects>(mob);
+                }
+                // Gold reward in center
+                Entity gold = world_.create();
+                world_.add<Position>(gold, {midx, midy});
+                world_.add<Renderable>(gold, {SHEET_ITEMS, 1, 24, {255,255,255,255}, 1});
+                Item gi; gi.name = "gold coins"; gi.type = ItemType::GOLD;
+                gi.gold_value = rng_.range(30, 80 + dungeon_level_ * 15);
+                gi.stack = gi.gold_value; gi.stackable = true; gi.identified = true;
+                world_.add<Item>(gold, std::move(gi));
+            } else if (roll <= 92 && dungeon_level_ >= 4) {
+                // Shrine room — god shrine + guardian + blessing
+                // Special floor
+                for (int sy = sr.y; sy < sr.y + sr.h; sy++) {
+                    for (int sx = sr.x; sx < sr.x + sr.w; sx++) {
+                        if (!map_.in_bounds(sx, sy)) continue;
+                        if (map_.at(sx, sy).type == params.floor_type)
+                            map_.at(sx, sy).type = TileType::FLOOR_RED_STONE;
+                    }
+                }
+                // Place shrine in center
+                int scx = sr.cx(), scy = sr.cy();
+                if (map_.in_bounds(scx, scy))
+                    map_.at(scx, scy).type = TileType::SHRINE;
+                // 4 braziers at corners
+                int boff = std::min(sr.w, sr.h) / 2 - 1;
+                int corners[][2] = {{-boff,-boff},{boff,-boff},{-boff,boff},{boff,boff}};
+                for (auto& c : corners) {
+                    int bx = scx + c[0], by = scy + c[1];
+                    if (map_.in_bounds(bx, by) && map_.is_walkable(bx, by)) {
+                        Entity braz = world_.create();
+                        world_.add<Position>(braz, {bx, by});
+                        world_.add<Renderable>(braz, {SHEET_ANIMATED, 0, 1, {255,255,255,255}, 0});
+                    }
+                }
             }
         }
     }
@@ -2129,9 +2247,25 @@ void Engine::try_move_player(int dx, int dy) {
         }
 
         if (atk_result.hit && atk_result.critical) { audio_.play(SfxId::CRIT); particles_.crit_flash((float)nx, (float)ny); trigger_screen_shake(4.0f); }
-        else if (atk_result.hit) { audio_.play_hit(); particles_.blood((float)nx, (float)ny); }
+        else if (atk_result.hit) {
+            audio_.play_hit();
+            // Weapon-typed hit particles
+            uint32_t wtags = 0;
+            if (world_.has<Inventory>(player_)) {
+                Entity wpn = world_.get<Inventory>(player_).get_equipped(EquipSlot::MAIN_HAND);
+                if (wpn != NULL_ENTITY && world_.has<Item>(wpn)) wtags = world_.get<Item>(wpn).tags;
+            }
+            particles_.hit_spark_weapon((float)nx, (float)ny, wtags);
+        }
         else audio_.play_miss();
-        if (atk_result.killed) { audio_.play(SfxId::DEATH); particles_.death_burst((float)nx, (float)ny); trigger_screen_shake(3.0f); }
+        if (atk_result.killed) {
+            audio_.play(SfxId::DEATH);
+            // Creature-typed death particles
+            bool is_un = world_.has<Stats>(target) && is_undead(world_.get<Stats>(target).name.c_str());
+            bool is_an = world_.has<Stats>(target) && is_animal(world_.get<Stats>(target).name.c_str());
+            particles_.death_burst_typed((float)nx, (float)ny, is_un, is_an);
+            trigger_screen_shake(3.0f);
+        }
 
         // Quest target killed?
         if (atk_result.quest_target_id >= 0) {
@@ -4655,6 +4789,14 @@ void Engine::handle_inventory_action(InvAction action) {
                     }
                     break;
                 }
+                // Capture old stats for comparison
+                int old_dmg = 0, old_arm = 0, old_atk = 0, old_dodge = 0;
+                if (prev != NULL_ENTITY && world_.has<Item>(prev)) {
+                    auto& pi = world_.get<Item>(prev);
+                    old_dmg = pi.damage_bonus; old_arm = pi.armor_bonus;
+                    old_atk = pi.attack_bonus; old_dodge = pi.dodge_bonus;
+                }
+
                 if (prev != NULL_ENTITY) {
                     inv.unequip(item.slot);
                     // Removing old pet
@@ -4665,6 +4807,32 @@ void Engine::handle_inventory_action(InvAction action) {
                 snprintf(buf, sizeof(buf), "You equip the %s.", item.display_name().c_str());
                 log_.add(buf, {170, 180, 160, 255});
                 audio_.play(SfxId::EQUIP);
+
+                // Brief sparkle on player
+                if (world_.has<Position>(player_)) {
+                    auto& pp = world_.get<Position>(player_);
+                    particles_.equip_flash(static_cast<float>(pp.x), static_cast<float>(pp.y));
+                }
+
+                // Show stat changes vs previous item
+                {
+                    auto show_diff = [&](const char* label, int new_val, int old_val) {
+                        if (new_val == old_val) return;
+                        int diff = new_val - old_val;
+                        char dbuf[64];
+                        snprintf(dbuf, sizeof(dbuf), "  %s %+d", label, diff);
+                        SDL_Color dc = diff > 0 ? SDL_Color{100, 200, 100, 255}
+                                                 : SDL_Color{200, 100, 100, 255};
+                        log_.add(dbuf, dc);
+                    };
+                    if (item.type == ItemType::WEAPON) {
+                        show_diff("Damage", item.damage_bonus, old_dmg);
+                        show_diff("Attack", item.attack_bonus, old_atk);
+                    } else {
+                        show_diff("Armor", item.armor_bonus, old_arm);
+                        show_diff("Dodge", item.dodge_bonus, old_dodge);
+                    }
+                }
                 item.identified = true;
                 // Reveal curse/binding on equip
                 if (item.curse_state == 1 && item.relic_god >= 0) {
@@ -5912,17 +6080,17 @@ void Engine::handle_input() {
                                     auto& si = get_spell_info(spell);
                                     switch (si.school) {
                                         case SpellSchool::CONJURATION:
-                                            particles_.burst(sp.x, sp.y, 15, 255, 180, 80, 0.1f, 0.5f, 5); break;
+                                            particles_.spell_fire(sp.x, sp.y); break;
                                         case SpellSchool::TRANSMUTATION:
-                                            particles_.burst(sp.x, sp.y, 12, 180, 160, 120, 0.06f, 0.6f, 5); break;
+                                            particles_.spell_ice(sp.x, sp.y); break;
                                         case SpellSchool::DIVINATION:
-                                            particles_.burst(sp.x, sp.y, 15, 120, 160, 240, 0.1f, 0.5f, 4); break;
+                                            particles_.spell_holy(sp.x, sp.y); break;
                                         case SpellSchool::HEALING:
-                                            particles_.rise(sp.x, sp.y, 15, 120, 240, 140, 0.8f, 5); break;
+                                            particles_.spell_holy(sp.x, sp.y); break;
                                         case SpellSchool::NATURE:
-                                            particles_.drift(sp.x, sp.y, 15, 80, 180, 60, 0.8f, 5); break;
+                                            particles_.spell_nature(sp.x, sp.y); break;
                                         case SpellSchool::DARK_ARTS:
-                                            particles_.burst(sp.x, sp.y, 15, 140, 60, 180, 0.1f, 0.6f, 5); break;
+                                            particles_.spell_dark(sp.x, sp.y); break;
                                         default:
                                             particles_.spell_effect(sp.x, sp.y, 160, 140, 200); break;
                                     }
@@ -7414,6 +7582,9 @@ void Engine::render() {
     // Message log
     log_.render(renderer_, font_, 0, height_ - LOG_HEIGHT, width_, LOG_HEIGHT);
 
+    // Dungeon minimap (top-right corner)
+    render_minimap();
+
     // Overlay screens
     inventory_screen_.render(renderer_, font_, sprites_, world_, width_, height_);
     spell_screen_.render(renderer_, font_, world_, width_, height_);
@@ -7520,6 +7691,89 @@ void Engine::render_transition() {
     SDL_SetRenderDrawColor(renderer_, transition_color_.r, transition_color_.g,
                             transition_color_.b, alpha);
     SDL_RenderFillRect(renderer_, &overlay);
+}
+
+void Engine::render_minimap() {
+    // Only show in dungeons, not overworld (overworld has the M world map)
+    if (dungeon_level_ <= 0 || !minimap_visible_) return;
+    if (!world_.has<Position>(player_)) return;
+
+    auto& pp = world_.get<Position>(player_);
+    int map_w = map_.width();
+    int map_h = map_.height();
+    if (map_w == 0 || map_h == 0) return;
+
+    // Minimap size and position (top-right corner, below HUD)
+    int mm_size = std::min(160, std::min(width_ / 5, height_ / 4));
+    int mm_margin = 8;
+    int mm_x = width_ - mm_size - mm_margin;
+    int mm_y = HUD_HEIGHT + mm_margin;
+
+    // Scale: fit map into minimap
+    float scale_x = static_cast<float>(mm_size) / map_w;
+    float scale_y = static_cast<float>(mm_size) / map_h;
+    float scale = std::min(scale_x, scale_y);
+
+    // Center the map in the minimap area
+    int drawn_w = static_cast<int>(map_w * scale);
+    int drawn_h = static_cast<int>(map_h * scale);
+    int ox = mm_x + (mm_size - drawn_w) / 2;
+    int oy = mm_y + (mm_size - drawn_h) / 2;
+
+    // Background
+    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+    SDL_Rect bg = {mm_x - 2, mm_y - 2, mm_size + 4, mm_size + 4};
+    SDL_SetRenderDrawColor(renderer_, 10, 8, 14, 200);
+    SDL_RenderFillRect(renderer_, &bg);
+    SDL_SetRenderDrawColor(renderer_, 50, 45, 60, 200);
+    SDL_RenderDrawRect(renderer_, &bg);
+
+    // Draw explored tiles
+    for (int y = 0; y < map_h; y++) {
+        for (int x = 0; x < map_w; x++) {
+            auto& tile = map_.at(x, y);
+            if (!tile.explored) continue;
+
+            int dx = ox + static_cast<int>(x * scale);
+            int dy = oy + static_cast<int>(y * scale);
+            int dw = std::max(1, static_cast<int>(scale));
+            int dh = std::max(1, static_cast<int>(scale));
+
+            if (tile.visible) {
+                // Visible: brighter
+                if (map_.is_opaque(x, y))
+                    SDL_SetRenderDrawColor(renderer_, 80, 75, 90, 255); // wall
+                else
+                    SDL_SetRenderDrawColor(renderer_, 50, 48, 58, 255); // floor
+            } else {
+                // Explored but not visible: dim
+                SDL_SetRenderDrawColor(renderer_, 35, 33, 42, 255);
+            }
+
+            SDL_Rect px_rect = {dx, dy, dw, dh};
+            SDL_RenderFillRect(renderer_, &px_rect);
+
+            // Stairs
+            if (tile.type == TileType::STAIRS_DOWN) {
+                SDL_SetRenderDrawColor(renderer_, 100, 200, 100, 255);
+                SDL_RenderFillRect(renderer_, &px_rect);
+            } else if (tile.type == TileType::STAIRS_UP) {
+                SDL_SetRenderDrawColor(renderer_, 200, 200, 100, 255);
+                SDL_RenderFillRect(renderer_, &px_rect);
+            }
+        }
+    }
+
+    // Player dot (bright, pulsing)
+    {
+        int pdx = ox + static_cast<int>(pp.x * scale);
+        int pdy = oy + static_cast<int>(pp.y * scale);
+        int ps = std::max(2, static_cast<int>(scale * 2));
+        Uint8 pulse = static_cast<Uint8>(200 + static_cast<int>(std::sin(SDL_GetTicks() / 300.0f) * 55));
+        SDL_SetRenderDrawColor(renderer_, 255, 255, pulse, 255);
+        SDL_Rect pd = {pdx - ps / 2, pdy - ps / 2, ps, ps};
+        SDL_RenderFillRect(renderer_, &pd);
+    }
 }
 
 void Engine::run() {

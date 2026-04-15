@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Reliquary VERSION 0.3.10 LANGUAGES CXX)
+project(Reliquary VERSION 0.3.11 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -35,6 +35,9 @@ FetchContent_MakeAvailable(json)
 file(GLOB_RECURSE SOURCES src/*.cpp)
 
 add_executable(reliquary ${SOURCES})
+
+target_compile_definitions(reliquary PRIVATE
+    RELIQUARY_VERSION="v${PROJECT_VERSION}")
 
 target_include_directories(reliquary PRIVATE
     src

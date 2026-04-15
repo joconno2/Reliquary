@@ -265,6 +265,8 @@ private:
         transition_color_ = color;
     }
     void render_transition();
+    void render_minimap();
+    bool minimap_visible_ = true; // toggle with Tab in gameplay
 
     // Methods
     void handle_input();

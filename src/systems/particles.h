@@ -38,15 +38,24 @@ public:
     // Presets
     void blood(float wx, float wy);
     void hit_spark(float wx, float wy);
+    void hit_spark_weapon(float wx, float wy, uint32_t weapon_tags); // varies by weapon type
     void crit_flash(float wx, float wy);
     void death_burst(float wx, float wy);
+    void death_burst_typed(float wx, float wy, bool undead, bool beast); // varies by creature
     void heal_effect(float wx, float wy);
     void poison_effect(float wx, float wy);
     void burn_effect(float wx, float wy);
     void bleed_effect(float wx, float wy);
     void spell_effect(float wx, float wy, uint8_t r, uint8_t g, uint8_t b);
+    // School-specific spell impacts
+    void spell_fire(float wx, float wy);
+    void spell_ice(float wx, float wy);
+    void spell_nature(float wx, float wy);
+    void spell_dark(float wx, float wy);
+    void spell_holy(float wx, float wy);
     void levelup_effect(float wx, float wy);
     void gold_sparkle(float wx, float wy);
+    void equip_flash(float wx, float wy); // brief sparkle on equip
     void prayer_effect(float wx, float wy, uint8_t r, uint8_t g, uint8_t b);
     void arrow_trail(float x0, float y0, float x1, float y1);
 

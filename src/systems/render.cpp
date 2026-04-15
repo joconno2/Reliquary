@@ -53,7 +53,7 @@ void compute_lighting(TileMap& map, World& world, int ambient, const Camera& cam
         auto& rend = world.get<Renderable>(e);
         if (rend.sprite_sheet != SHEET_ANIMATED) continue;
         int row = rend.sprite_y;
-        if (row != 1 && row != 3 && row != 5 && row != 7) continue;
+        if (row != 1 && row != 3 && row != 5 && row != 7 && row != 8) continue;
 
         auto& lpos = pos_pool.at_index(i);
         // Skip if far from viewport

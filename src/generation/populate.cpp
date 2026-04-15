@@ -47,6 +47,16 @@ static const MonsterDef MONSTER_TABLE[] = {
     {"minotaur",        SHEET_MONSTERS,  7, 7, 45,  20, 10, 18,  9, 3,  85, 10,  90},
     {"naga",            SHEET_MONSTERS,  4, 7, 30,  14, 16, 12,  6, 1, 120, 15,  60},
     {"dragon",          SHEET_MONSTERS,  2, 8,120,  22, 12, 22, 18, 5,  80,  0, 200},
+    // New monsters from unused sprites
+    {"myconid",         SHEET_MONSTERS,  0,10, 20,   8,  6, 14,  4, 2,  60, 10,  30}, // mushroom creature (warrens)
+    {"ogre",            SHEET_MONSTERS,  0, 1, 40,  20,  6, 16,  8, 2,  70,  5,  55}, // big brute
+    {"golem",           SHEET_MONSTERS,  4, 1, 55,  16,  4, 22, 10, 5,  50,  0,  70}, // stone construct
+    {"basilisk",        SHEET_MONSTERS,  6, 7, 30,  12, 10, 14,  5, 2,  90, 10,  55}, // reptile, stun gaze
+    {"yeti",            SHEET_MONSTERS,  2, 7, 42,  18, 10, 16,  8, 2,  85, 10,  65}, // cold zones
+    {"centaur",         SHEET_MONSTERS,  5, 7, 28,  14, 16, 12,  5, 1, 130, 15,  45}, // fast, ranged
+    {"imp",             SHEET_MONSTERS,  0,11, 12,   6, 18,  6,  3, 0, 140, 50,  20}, // small demon
+    {"gargoyle",        SHEET_MONSTERS,  3,11, 35,  14, 12, 18,  6, 4,  80,  0,  60}, // stone flyer
+    {"lizardfolk",      SHEET_MONSTERS,  1, 9, 18,  12, 14, 10,  4, 1, 110, 20,  30}, // swamp dweller
 };
 
 static constexpr int MONSTER_COUNT = sizeof(MONSTER_TABLE) / sizeof(MONSTER_TABLE[0]);
@@ -133,6 +143,18 @@ void spawn_monsters(World& world, const TileMap& map,
                 ai_comp.behavior = BehaviorType::SHAMAN;
             } else if (mname == "bandit") {
                 ai_comp.behavior = BehaviorType::THIEF;
+            } else if (mname == "centaur") {
+                ai_comp.behavior = BehaviorType::ARCHER;
+                ai_comp.ranged_range = 6;
+                ai_comp.ranged_damage = static_cast<int>(3 * dmg_scale);
+            } else if (mname == "ogre") {
+                ai_comp.flee_threshold = 5; // ogres don't run
+            } else if (mname == "golem") {
+                ai_comp.flee_threshold = 0; // golems never flee
+            } else if (mname == "imp") {
+                ai_comp.behavior = BehaviorType::THIEF; // hit and run
+            } else if (mname == "yeti") {
+                ai_comp.behavior = BehaviorType::CHARGER; // charges like minotaur
             }
 
             world.add<AI>(e, ai_comp);
@@ -1439,6 +1461,48 @@ void spawn_doodads(World& world, TileMap& map,
             }
         }
     }
+
+    // Unlit torches / dead campfires — atmospheric in darker zones
+    // Row 4 = unlit torch, Row 2 = dead campfire, Row 0 = dead plant
+    if (is_catacombs || is_warrens || is_sepulchre) {
+        for (size_t r = 2; r < rooms.size(); r++) {
+            if (!rng.chance(25)) continue;
+            auto& room = rooms[r];
+            for (int a = 0; a < 10; a++) {
+                int x = rng.range(room.x + 1, room.x + room.w - 2);
+                int y = rng.range(room.y + 1, room.y + room.h - 2);
+                if (!map.is_walkable(x, y)) continue;
+                bool adj = false;
+                for (auto [dx,dy] : std::initializer_list<std::pair<int,int>>{{-1,0},{1,0},{0,-1},{0,1}}) {
+                    int nx = x+dx, ny = y+dy;
+                    if (map.in_bounds(nx, ny) && !map.is_walkable(nx, ny)) adj = true;
+                }
+                if (!adj) continue;
+                Entity e = world.create();
+                world.add<Position>(e, {x, y});
+                int row = rng.chance(60) ? 4 : 2; // unlit torch or dead campfire
+                world.add<Renderable>(e, {SHEET_ANIMATED, 0, row, {180, 170, 160, 255}, 0});
+                break;
+            }
+        }
+    }
+
+    // Glowing crystals — deep halls and molten zones (row 8 of animated sheet)
+    if (is_deep_halls || is_molten) {
+        for (size_t r = 1; r < rooms.size(); r++) {
+            if (!rng.chance(15)) continue;
+            auto& room = rooms[r];
+            int x = rng.range(room.x + 1, room.x + room.w - 2);
+            int y = rng.range(room.y + 1, room.y + room.h - 2);
+            if (!map.is_walkable(x, y)) continue;
+            Entity e = world.create();
+            world.add<Position>(e, {x, y});
+            world.add<Renderable>(e, {SHEET_ANIMATED, 0, 8, {255, 255, 255, 255}, 0});
+        }
+    }
+
+    // Saplings in overworld (row 25 col 0 of tiles sheet) — near forests
+    // (handled by overworld generation, not dungeon doodads)
 
     // God shrine — ~20% chance per floor, placed in a mid-room
     // Uses the dungeon's patron god if available, otherwise random

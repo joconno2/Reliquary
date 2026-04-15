@@ -118,7 +118,39 @@ void MainMenu::render(SDL_Renderer* renderer, TTF_Font* body, TTF_Font* title,
         menu_y += line_h + 16;
     }
 
+    // Rising ember particles (simple animated dots)
+    {
+        Uint32 ticks = SDL_GetTicks();
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        for (int i = 0; i < 20; i++) {
+            // Deterministic pseudo-random per particle, animated over time
+            int seed = i * 7919 + 1301;
+            float life = std::fmod((ticks + seed * 47) / 4000.0f, 1.0f);
+            int px = fire_cx + ((seed * 13) % 200) - 100;
+            int py = fire_cy - static_cast<int>(life * h * 0.5f);
+            // Drift horizontally
+            px += static_cast<int>(std::sin(life * 6.28f + seed) * 20);
+            // Fade out as they rise
+            int alpha = static_cast<int>((1.0f - life) * 120);
+            int size = (life < 0.3f) ? 3 : 2;
+            // Warm color: orange to red
+            int r = 200 + (seed % 55);
+            int g = 100 + (seed % 80);
+            int b = 20 + (seed % 40);
+            SDL_SetRenderDrawColor(renderer, static_cast<Uint8>(r), static_cast<Uint8>(g),
+                                    static_cast<Uint8>(b), static_cast<Uint8>(alpha));
+            SDL_Rect dot = {px, py, size, size};
+            SDL_RenderFillRect(renderer, &dot);
+        }
+    }
+
     // Hint
-    SDL_Color hint_col = {70, 65, 60, 255};
-    ui::draw_text_centered(renderer, body, "[Up/Down] select   [Enter] confirm", hint_col, cx, h - 30);
+    SDL_Color hint_col = {90, 85, 75, 255};
+    ui::draw_text_centered(renderer, body, "[Up/Down] select   [Enter] confirm", hint_col, cx, h - 50);
+
+    // Version
+#ifdef RELIQUARY_VERSION
+    SDL_Color ver_col = {60, 58, 52, 255};
+    ui::draw_text(renderer, body, RELIQUARY_VERSION, ver_col, 8, h - 20);
+#endif
 }

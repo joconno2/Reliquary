@@ -401,12 +401,14 @@ Full design doc: [[Games/Development/Reliquary - Progression Overhaul]]
 - [x] Inventory UX: sort by type/rarity/value (Tab key cycles modes)
 - [ ] World map improvements (terrain legend, player trail, fog of war)
 - [x] Death screen: run stats (class/level, god, location, turns, kills, floor, gold, quests, items)
-- [ ] Main menu visual polish (animated background, version display)
+- [x] Main menu visual polish (rising embers, version display, brighter hints)
 - [x] Message log scroll-back (mouse wheel + PgUp/PgDn, 3-line scroll, "N newer" indicator)
-- [ ] Minimap or compass HUD element
-- [ ] Visual feedback on equip/unequip (flash, stat change preview)
+- [x] Dungeon minimap (top-right corner, explored layout, player dot, stairs markers)
+- [x] Visual feedback on equip/unequip (stat change log + particle sparkle)
 - [x] Screen transitions (fade-in on stairs 400ms, flash on level up 250ms)
-- [ ] Particle polish pass (more varied death particles, spell impact variety)
+- [x] Per-tile lighting system (torch/brazier light pools, ambient occlusion, FOV edge fade, depth-scaled ambient, player light)
+- [x] HUD clarity (brightened dim elements, overflow protection, steady passive point indicator)
+- [x] Particle polish pass: weapon-typed hit sparks (blade/blunt/axe/unarmed), creature-typed death (undead bone shards, beast fur tufts, humanoid blood), 5 spell school impacts
 - [x] UI layout pass: text clipping, wrapping, clip guards across 11 screens
 
 ### Tier 8 — Content Depth
@@ -414,7 +416,7 @@ Full design doc: [[Games/Development/Reliquary - Progression Overhaul]]
 - [ ] God-specific church questlines (6 provinces, unique quest chains)
 - [ ] Living world (NPC schedules, town events, merchant caravans)
 - [ ] More side quest variety (escort, defend, timed, multi-step)
-- [ ] Unique dungeon rooms (treasure vault, library, arena, shrine room)
+- [x] Unique dungeon rooms: library (bookshelves + divination tomes + lore), arena (pillar ring + tough enemies + gold), shrine room (red stone floor + centered shrine + 4 braziers). Plus existing vault, flooded, bone crypt.
 
 ---
 

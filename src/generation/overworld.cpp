@@ -728,6 +728,23 @@ void populate(World& world, TileMap& map, RNG& rng,
         world.add<Renderable>(e, {SHEET_TILES, rng.range(0, 1), 20, {255,255,255,255}, 0});
     }
 
+    // Saplings near forest edges (col 0, row 25 of tiles sheet)
+    for (int i = 0; i < 40; i++) {
+        int x = rng.range(100, 1900);
+        int y = rng.range(200, 1300);
+        if (!map.in_bounds(x, y) || !map.is_walkable(x, y)) continue;
+        // Place near trees but not in dense forest
+        int tree_count = 0;
+        for (int dy = -2; dy <= 2; dy++)
+            for (int dx = -2; dx <= 2; dx++)
+                if (map.in_bounds(x+dx, y+dy) && map.at(x+dx, y+dy).type == TileType::TREE)
+                    tree_count++;
+        if (tree_count < 1 || tree_count > 4) continue; // forest edge, not deep forest
+        Entity e = world.create();
+        world.add<Position>(e, {x, y});
+        world.add<Renderable>(e, {SHEET_TILES, 0, 25, {255,255,255,255}, 0});
+    }
+
     // =============================================
     // SIGNPOSTS — directions to nearby POIs
     // =============================================
@@ -879,6 +896,21 @@ void populate(World& world, TileMap& map, RNG& rng,
         // Boar wallows (temperate zones)
         {800, 800, "boar", 3},      // central Heartlands
         {650, 1000, "boar", 3},     // south Greenwood
+        // Lion pride (Dust Provinces, warm)
+        {1200, 1150, "lion", 2},    // south desert
+        {1050, 1200, "lion", 3},    // near Sandmoor
+        // Scorpion nest (Dust Provinces)
+        {1300, 1200, "scorpion", 4}, // deep desert
+        {900, 1250, "scorpion", 3},  // far south
+        // Hyena pack (Dust Provinces, Iron Coast)
+        {1400, 900, "hyena", 3},     // Iron Coast border
+        {1100, 1100, "hyena", 3},    // Dust Provinces
+        // Crocodile (rivers, swamps)
+        {400, 1100, "crocodile", 2}, // southern swamp
+        {1000, 1050, "crocodile", 2},// river crossing
+        // Lynx (cold forests)
+        {500, 400, "lynx", 2},       // Greenwood north
+        {900, 300, "lynx", 2},       // Frozen Marches
     };
 
     for (auto& lair : LAIRS) {
@@ -902,6 +934,21 @@ void populate(World& world, TileMap& map, RNG& rng,
             } else if (std::string(name) == "bandit") {
                 sheet = SHEET_ROGUES; sx = 4; sy = 0;
                 hp = 14; str = 11; dex = 13; con = 10; dmg = 3; arm = 1; spd = 105; flee = 30; xp = 20;
+            } else if (std::string(name) == "lion") {
+                sheet = SHEET_ANIMALS; sx = 5; sy = 2;
+                hp = 28; str = 18; dex = 12; con = 14; dmg = 6; arm = 1; spd = 95; flee = 10; xp = 40;
+            } else if (std::string(name) == "scorpion") {
+                sheet = SHEET_ANIMALS; sx = 1; sy = 5;
+                hp = 10; str = 8; dex = 12; con = 8; dmg = 4; arm = 1; spd = 100; flee = 20; xp = 18;
+            } else if (std::string(name) == "hyena") {
+                sheet = SHEET_ANIMALS; sx = 2; sy = 4;
+                hp = 14; str = 12; dex = 14; con = 10; dmg = 3; arm = 0; spd = 115; flee = 25; xp = 18;
+            } else if (std::string(name) == "crocodile") {
+                sheet = SHEET_ANIMALS; sx = 0; sy = 6;
+                hp = 22; str = 14; dex = 6; con = 16; dmg = 5; arm = 3; spd = 70; flee = 5; xp = 35;
+            } else if (std::string(name) == "lynx") {
+                sheet = SHEET_ANIMALS; sx = 2; sy = 3;
+                hp = 10; str = 8; dex = 16; con = 8; dmg = 3; arm = 0; spd = 135; flee = 40; xp = 12;
             } else { // boar
                 sheet = SHEET_ANIMALS; sx = 7; sy = 9;
                 hp = 18; str = 14; dex = 8; con = 12; dmg = 4; arm = 1; spd = 90; flee = 20; xp = 20;
@@ -941,18 +988,40 @@ void populate(World& world, TileMap& map, RNG& rng,
     // =============================================
     struct HerdDef { int x, y; int count; int spr_x, spr_y; const char* name; };
     static const HerdDef HERDS[] = {
-        // Deer (temperate/cold)
-        {750, 550, 4, 4, 6, "deer"},
-        {950, 650, 3, 4, 6, "deer"},
-        {600, 800, 5, 4, 6, "deer"},
-        {1100, 400, 3, 4, 6, "deer"},
+        // Deer/stags (temperate/cold)
+        {750, 550, 4, 0, 7, "deer"},
+        {950, 650, 3, 0, 7, "deer"},
+        {600, 800, 5, 0, 7, "deer"},
+        {1100, 400, 3, 0, 7, "deer"},
         // Goats (mountains/hills)
-        {900, 350, 3, 5, 6, "mountain goat"},
-        {1200, 300, 4, 5, 6, "mountain goat"},
+        {900, 350, 3, 5, 3, "mountain goat"},
+        {1200, 300, 4, 5, 3, "mountain goat"},
+        // Cows/oxen (farmland near towns)
+        {800, 750, 3, 3, 7, "cow"},
+        {1050, 850, 3, 3, 7, "cow"},
+        // Horses (Heartlands, Iron Coast roads)
+        {1000, 700, 2, 1, 6, "horse"},
+        {1350, 750, 2, 1, 6, "horse"},
+        // Rabbits (temperate zones)
+        {700, 700, 4, 6, 4, "rabbit"},
+        {850, 600, 3, 6, 4, "rabbit"},
+        {550, 900, 4, 6, 4, "rabbit"},
         // Ravens (everywhere, atmospheric)
-        {400, 700, 3, 0, 2, "raven"},
-        {1300, 500, 2, 0, 2, "raven"},
-        {1000, 1000, 3, 0, 2, "raven"},
+        {400, 700, 3, 2, 8, "raven"},
+        {1300, 500, 2, 2, 8, "raven"},
+        {1000, 1000, 3, 2, 8, "raven"},
+        // Hawks (mountain/cliff areas)
+        {1000, 300, 2, 1, 8, "hawk"},
+        {800, 250, 2, 1, 8, "hawk"},
+        // Roosters (near towns)
+        {1010, 760, 2, 1, 7, "rooster"},
+        {760, 660, 2, 1, 7, "rooster"},
+        // Foxes (Greenwood, Pale Reach)
+        {550, 700, 2, 4, 2, "fox"},
+        {1300, 450, 2, 4, 2, "fox"},
+        // Lizards (Dust Provinces, warm areas)
+        {1100, 1200, 3, 0, 5, "lizard"},
+        {900, 1150, 2, 0, 5, "lizard"},
     };
     for (auto& h : HERDS) {
         for (int i = 0; i < h.count; i++) {
@@ -1118,7 +1187,8 @@ void try_spawn_overworld_enemy(World& world, TileMap& map, RNG& rng,
         int sheet, sx, sy, hp, str, dex, con, dmg, armor, speed, flee, xp;
     };
     // All overworld enemy definitions (indexed below by climate tables)
-    enum OWId { WOLF, BOAR, HIGHWAYMAN, SPIDER, BEAR, BANDIT, SNAKE, DIRE_WOLF, SKELETON };
+    enum OWId { WOLF, BOAR, HIGHWAYMAN, SPIDER, BEAR, BANDIT, SNAKE, DIRE_WOLF, SKELETON,
+                FOX, SCORPION, LION, CROCODILE, HYENA, LYNX, OW_COUNT };
     static const OWMonster OW_TABLE[] = {
         {"wolf",         SHEET_ANIMALS,  6, 4, 12, 10, 14,  8, 3, 0, 120, 30, 15},
         {"wild boar",    SHEET_ANIMALS,  7, 9, 18, 14,  8, 12, 4, 1,  90, 20, 20},
@@ -1129,15 +1199,22 @@ void try_spawn_overworld_enemy(World& world, TileMap& map, RNG& rng,
         {"snake",        SHEET_ANIMALS,  0, 7,  6,  6, 16,  6, 2, 0, 130, 40, 10},
         {"dire wolf",    SHEET_ANIMALS,  6, 4, 20, 14, 14, 12, 5, 1, 125, 15, 35},
         {"wandering skeleton", SHEET_MONSTERS, 0, 4, 16, 10, 10, 10, 3, 2, 90, 0, 20},
+        // New animals using unused sprites
+        {"fox",          SHEET_ANIMALS,  4, 2,  8,  6, 16,  6, 2, 0, 140, 60, 8},
+        {"scorpion",     SHEET_ANIMALS,  1, 5, 10,  8, 12,  8, 4, 1, 100, 20, 18},
+        {"lion",         SHEET_ANIMALS,  5, 2, 28, 18, 12, 14, 6, 1,  95, 10, 40},
+        {"crocodile",    SHEET_ANIMALS,  0, 6, 22, 14,  6, 16, 5, 3,  70,  5, 35},
+        {"hyena",        SHEET_ANIMALS,  2, 4, 14, 12, 14, 10, 3, 0, 115, 25, 18},
+        {"lynx",         SHEET_ANIMALS,  2, 3, 10,  8, 16,  8, 3, 0, 135, 40, 12},
     };
 
-    // Climate-zoned enemy tables per province
-    static const OWId FROZEN[]    = {DIRE_WOLF, WOLF, WOLF, SKELETON, BEAR};
-    static const OWId PALE[]      = {WOLF, BEAR, SPIDER, HIGHWAYMAN, SKELETON};
-    static const OWId GREENWOOD[] = {SPIDER, BOAR, SNAKE, BEAR, WOLF};
-    static const OWId HEARTLAND[] = {WOLF, BOAR, HIGHWAYMAN, BANDIT, SPIDER};
-    static const OWId IRON[]      = {BANDIT, HIGHWAYMAN, SPIDER, BOAR, SKELETON};
-    static const OWId DUST[]      = {SNAKE, SKELETON, BANDIT, SNAKE, HIGHWAYMAN};
+    // Climate-zoned enemy tables per province (expanded)
+    static const OWId FROZEN[]    = {DIRE_WOLF, WOLF, WOLF, SKELETON, BEAR, LYNX};
+    static const OWId PALE[]      = {WOLF, BEAR, SPIDER, HIGHWAYMAN, SKELETON, FOX};
+    static const OWId GREENWOOD[] = {SPIDER, BOAR, SNAKE, BEAR, WOLF, LYNX, FOX};
+    static const OWId HEARTLAND[] = {WOLF, BOAR, HIGHWAYMAN, BANDIT, SPIDER, FOX};
+    static const OWId IRON[]      = {BANDIT, HIGHWAYMAN, SPIDER, BOAR, SKELETON, HYENA};
+    static const OWId DUST[]      = {SNAKE, SKELETON, BANDIT, SCORPION, LION, CROCODILE, HYENA};
 
     // Try to spawn at edge of visibility
     for (int attempt = 0; attempt < 15; attempt++) {
@@ -1156,15 +1233,15 @@ void try_spawn_overworld_enemy(World& world, TileMap& map, RNG& rng,
 
         // Pick enemy from climate-appropriate table
         const OWId* table = HEARTLAND;
-        int table_size = 5;
+        int table_size = 6; // HEARTLAND default size
         GodId region = get_town_god(sx, sy);
         switch (region) {
-            case GodId::GATHRUUN: table = FROZEN;    break; // Frozen Marches
-            case GodId::SOLETH:   table = PALE;      break; // Pale Reach
-            case GodId::KHAEL:    table = GREENWOOD;  break; // Greenwood
-            case GodId::OSSREN:   table = IRON;      break; // Iron Coast
-            case GodId::SYTHARA:  table = DUST;      break; // Dust Provinces
-            default:              table = HEARTLAND;  break; // Heartlands
+            case GodId::GATHRUUN: table = FROZEN;    table_size = 6; break;
+            case GodId::SOLETH:   table = PALE;      table_size = 6; break;
+            case GodId::KHAEL:    table = GREENWOOD;  table_size = 7; break;
+            case GodId::OSSREN:   table = IRON;      table_size = 6; break;
+            case GodId::SYTHARA:  table = DUST;      table_size = 7; break;
+            default:              table = HEARTLAND;  table_size = 6; break;
         }
         auto& def = OW_TABLE[table[rng.range(0, table_size - 1)]];
 
