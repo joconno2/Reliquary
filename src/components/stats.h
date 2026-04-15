@@ -58,7 +58,10 @@ struct Stats {
     int melee_damage() const { return base_damage + attr(Attr::STR) / 3; }
     int dodge_value() const { return attr(Attr::DEX) / 2; }
     int protection() const { return natural_armor; }
-    int fov_radius() const { return 8 + attr(Attr::PER) / 3; }
+    int fov_radius() const { return 8 + attr(Attr::PER) / 3 + fov_bonus; }
+
+    // Equipment FOV bonus (from unique items)
+    int fov_bonus = 0;
 
     // Passive tree XP bonus (percent, e.g. 10 = +10%)
     int xp_bonus_pct = 0;

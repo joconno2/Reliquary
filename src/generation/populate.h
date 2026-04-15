@@ -48,6 +48,11 @@ Entity spawn_relic(World& world, const std::vector<Room>& rooms, RNG& rng,
 Entity spawn_legendary(World& world, const std::vector<Room>& rooms, RNG& rng,
                         const std::string& dungeon_name);
 
+// Spawn a unique item in a dungeon (zone-specific, chance-based).
+// Returns the entity, or NULL_ENTITY if no eligible unique or failed roll.
+Entity spawn_unique(World& world, const std::vector<Room>& rooms, RNG& rng,
+                     int dungeon_level, const std::string& zone);
+
 // Spawn traps in dungeon rooms
 void spawn_traps(World& world, const TileMap& map,
                   const std::vector<Room>& rooms, RNG& rng,

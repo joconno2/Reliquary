@@ -1477,6 +1477,15 @@ void Engine::generate_level() {
             }
         }
 
+        // Unique items — 12% chance per floor, zone-aware
+        if (current_dungeon_idx_ >= 0 &&
+            current_dungeon_idx_ < static_cast<int>(dungeon_registry_.size()) &&
+            rng_.chance(12)) {
+            auto& dentry = dungeon_registry_[current_dungeon_idx_];
+            int effective_depth = dungeon_level_ + dentry.zone_difficulty;
+            populate::spawn_unique(world_, rooms_, rng_, effective_depth, dentry.zone);
+        }
+
         // Spawn quest bosses, quest items, and depth-triggered quest auto-starts
         {
             const quest_gen::DungeonContext* ctx = nullptr;
@@ -2308,6 +2317,25 @@ void Engine::try_move_player(int dx, int dy) {
                 break;
             }
 
+            // Unique effect: TRAP_IMMUNITY
+            {
+                bool trap_immune = false;
+                if (world_.has<Inventory>(player_)) {
+                    auto& tinv = world_.get<Inventory>(player_);
+                    for (int s = 0; s < EQUIP_SLOT_COUNT; s++) {
+                        Entity eq = tinv.equipped[s];
+                        if (eq != NULL_ENTITY && world_.has<Item>(eq) &&
+                            world_.get<Item>(eq).unique_effect == UniqueEffect::TRAP_IMMUNITY) {
+                            trap_immune = true; break;
+                        }
+                    }
+                }
+                if (trap_immune) {
+                    trap.triggered = true; trap.revealed = true;
+                    log_.add("You step over the trap unharmed.", {180, 200, 140, 255});
+                    break;
+                }
+            }
             // Trigger the trap
             trap.triggered = true;
             trap.revealed = true;
@@ -2630,6 +2658,19 @@ void Engine::process_turn() {
     player_acted_ = false;
     game_turn_++;
 
+    // Recalculate equipment-derived stats (unique effects)
+    if (world_.has<Stats>(player_) && world_.has<Inventory>(player_)) {
+        auto& pstats = world_.get<Stats>(player_);
+        auto& pinv = world_.get<Inventory>(player_);
+        pstats.fov_bonus = 0;
+        for (int s = 0; s < EQUIP_SLOT_COUNT; s++) {
+            Entity eq = pinv.equipped[s];
+            if (eq == NULL_ENTITY || !world_.has<Item>(eq)) continue;
+            if (world_.get<Item>(eq).unique_effect == UniqueEffect::LIGHT_RADIUS)
+                pstats.fov_bonus += 2;
+        }
+    }
+
     // Check tenet violations for this turn's actions
     check_tenets();
     turn_actions_.clear();
@@ -2846,10 +2887,63 @@ void Engine::process_turn() {
                     log_.add("You pass an old shrine. It means nothing to you.", {130, 130, 120, 255});
                 }
             }
+        } else if (roll <= 85) {
+            // Lost supply cache: free consumables
+            int heal = rng_.range(10, 25);
+            ps.hp = std::min(ps.hp + heal, ps.hp_max);
+            int gfind = rng_.range(5, 20);
+            gold_ += gfind;
+            char cbuf[96];
+            snprintf(cbuf, sizeof(cbuf), "You stumble on an abandoned pack. (+%d HP, +%d gold)", heal, gfind);
+            log_.add(cbuf, {180, 200, 140, 255});
+        } else if (roll <= 92) {
+            // Strange weather event (province-flavored)
+            GodId region = get_town_god(pp.x, pp.y);
+            switch (region) {
+                case GodId::GATHRUUN:
+                    log_.add("The ground trembles underfoot. Rocks shift in the distance.", {160, 160, 180, 255});
+                    break;
+                case GodId::SOLETH:
+                    log_.add("A column of fire flickers on the horizon and dies.", {255, 180, 80, 255});
+                    break;
+                case GodId::KHAEL:
+                    log_.add("The trees sway without wind. Something moves through the canopy.", {120, 180, 120, 255});
+                    break;
+                case GodId::SYTHARA:
+                    log_.add("A foul mist drifts across the road and dissipates.", {160, 200, 140, 255});
+                    break;
+                case GodId::OSSREN:
+                    log_.add("You hear hammering from deep underground. It stops when you listen.", {180, 180, 200, 255});
+                    break;
+                default:
+                    log_.add("The wind shifts direction three times in as many breaths.", {160, 160, 160, 255});
+                    break;
+            }
         } else {
-            // Ambush: tough wandering monster
+            // Ambush: tough wandering monster spawns close
             log_.add("Something stirs in the brush nearby.", {200, 160, 100, 255});
-            // The existing overworld spawner handles this
+            // Spawn a stronger-than-normal enemy at close range
+            for (int a = 0; a < 20; a++) {
+                int sx = pp.x + rng_.range(-4, 4);
+                int sy = pp.y + rng_.range(-4, 4);
+                if (sx == pp.x && sy == pp.y) continue;
+                if (!map_.in_bounds(sx, sy) || !map_.is_walkable(sx, sy)) continue;
+                if (combat::entity_at(world_, sx, sy, player_) != NULL_ENTITY) continue;
+                // Spawn a bandit or highwayman ambush
+                Entity e = world_.create();
+                world_.add<Position>(e, {sx, sy});
+                world_.add<Renderable>(e, {SHEET_ROGUES, 4, 0, {255,255,255,255}, 5});
+                Stats ms; ms.name = "ambusher";
+                ms.hp = 18 + ps.level * 2; ms.hp_max = ms.hp;
+                ms.set_attr(Attr::STR, 12); ms.set_attr(Attr::DEX, 14); ms.set_attr(Attr::CON, 10);
+                ms.base_damage = 4 + ps.level / 2; ms.natural_armor = 1;
+                ms.base_speed = 110; ms.xp_value = 25 + ps.level * 3;
+                world_.add<Stats>(e, std::move(ms));
+                AI ai; ai.state = AIState::HUNTING; ai.flee_threshold = 25;
+                world_.add<AI>(e, ai);
+                world_.add<Energy>(e, {0, 110});
+                break;
+            }
         }
     }
 
@@ -3537,7 +3631,9 @@ void Engine::describe_tile(int x, int y) {
             } else {
                 snprintf(buf, sizeof(buf), "%s.", item.display_name().c_str());
             }
-            log_.add(buf, {180, 200, 160, 255});
+            SDL_Color examine_col = (item.rarity != Rarity::COMMON)
+                ? rarity_color(item.rarity) : SDL_Color{180, 200, 160, 255};
+            log_.add(buf, examine_col);
             found_entity = true;
         } else if (world_.has<Container>(e)) {
             auto& cont = world_.get<Container>(e);
@@ -4024,9 +4120,19 @@ void Engine::try_pickup() {
 
         // Gold is auto-collected
         if (item.type == ItemType::GOLD) {
-            gold_ += item.gold_value; run_gold_earned_ += item.gold_value;
+            int gv = item.gold_value;
+            // Unique effect: GOLD_FIND (+50%)
+            for (int s = 0; s < EQUIP_SLOT_COUNT; s++) {
+                Entity eq = inv.equipped[s];
+                if (eq != NULL_ENTITY && world_.has<Item>(eq) &&
+                    world_.get<Item>(eq).unique_effect == UniqueEffect::GOLD_FIND) {
+                    gv = gv * 150 / 100;
+                    break;
+                }
+            }
+            gold_ += gv; run_gold_earned_ += gv;
             char buf[64];
-            snprintf(buf, sizeof(buf), "You pick up %d gold.", item.gold_value);
+            snprintf(buf, sizeof(buf), "You pick up %d gold.", gv);
             log_.add(buf, {220, 200, 80, 255});
             audio_.play(SfxId::GOLD);
             { auto& gp = world_.get<Position>(player_); particles_.gold_sparkle(gp.x, gp.y); }
@@ -4040,9 +4146,23 @@ void Engine::try_pickup() {
             return;
         }
 
+        // Unique effect: auto-identify on pickup
+        if (!item.identified) {
+            for (int s = 0; s < EQUIP_SLOT_COUNT; s++) {
+                Entity eq = inv.equipped[s];
+                if (eq != NULL_ENTITY && world_.has<Item>(eq) &&
+                    world_.get<Item>(eq).unique_effect == UniqueEffect::IDENTIFY_ON_PICKUP) {
+                    item.identified = true;
+                    break;
+                }
+            }
+        }
+
         char buf[128];
         snprintf(buf, sizeof(buf), "You pick up the %s.", item.display_name().c_str());
-        log_.add(buf, {180, 175, 160, 255});
+        SDL_Color pickup_col = (item.rarity != Rarity::COMMON)
+            ? rarity_color(item.rarity) : SDL_Color{180, 175, 160, 255};
+        log_.add(buf, pickup_col);
         audio_.play(SfxId::PICKUP);
 
         // Sacred/profane check on pickup

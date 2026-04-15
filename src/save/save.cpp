@@ -67,6 +67,8 @@ static json item_to_json(const Item& item) {
     j["slot"] = static_cast<int>(item.slot);
     j["damage_bonus"] = item.damage_bonus; j["armor_bonus"] = item.armor_bonus;
     j["attack_bonus"] = item.attack_bonus; j["dodge_bonus"] = item.dodge_bonus;
+    j["str_bonus"] = item.str_bonus; j["dex_bonus"] = item.dex_bonus;
+    j["con_bonus"] = item.con_bonus;
     j["heal_amount"] = item.heal_amount; j["gold_value"] = item.gold_value;
     j["identified"] = item.identified; j["unid_name"] = item.unid_name;
     j["stack"] = item.stack; j["stackable"] = item.stackable;
@@ -78,6 +80,21 @@ static json item_to_json(const Item& item) {
     j["material"] = static_cast<int>(item.material);
     j["tags"] = item.tags;
     j["relic_god"] = item.relic_god;
+    j["rarity"] = static_cast<int>(item.rarity);
+    j["unique_effect"] = static_cast<int>(item.unique_effect);
+    // Serialize affixes
+    if (!item.affixes.empty()) {
+        json affix_arr = json::array();
+        for (auto& a : item.affixes) {
+            json aj;
+            aj["name"] = a.name;
+            aj["effect"] = static_cast<int>(a.effect);
+            aj["magnitude"] = a.magnitude;
+            aj["is_prefix"] = a.is_prefix;
+            affix_arr.push_back(aj);
+        }
+        j["affixes"] = affix_arr;
+    }
     return j;
 }
 
@@ -91,6 +108,9 @@ static Item json_to_item(const json& j) {
     item.armor_bonus = j.value("armor_bonus", 0);
     item.attack_bonus = j.value("attack_bonus", 0);
     item.dodge_bonus = j.value("dodge_bonus", 0);
+    item.str_bonus = j.value("str_bonus", 0);
+    item.dex_bonus = j.value("dex_bonus", 0);
+    item.con_bonus = j.value("con_bonus", 0);
     item.heal_amount = j.value("heal_amount", 0);
     item.gold_value = j.value("gold_value", 0);
     item.identified = j.value("identified", false);
@@ -105,6 +125,20 @@ static Item json_to_item(const json& j) {
     item.material = static_cast<MaterialType>(j.value("material", 0));
     item.tags = j.value("tags", (uint32_t)0);
     item.relic_god = j.value("relic_god", -1);
+    item.rarity = static_cast<Rarity>(j.value("rarity", 0));
+    item.unique_effect = static_cast<UniqueEffect>(j.value("unique_effect", 0));
+    // Deserialize affixes
+    if (j.contains("affixes")) {
+        for (auto& aj : j["affixes"]) {
+            Affix a;
+            a.name = aj.value("name", "");
+            a.effect = static_cast<AffixEffect>(aj.value("effect", 0));
+            a.magnitude = aj.value("magnitude", 0);
+            a.is_prefix = aj.value("is_prefix", true);
+            item.affixes.push_back(a);
+        }
+        item.rebuild_affix_cache();
+    }
     return item;
 }
 

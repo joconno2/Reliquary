@@ -28,6 +28,18 @@ namespace god_system {
 
 void adjust_favor(World& world, Entity player, MessageLog& log, int amount) {
     if (!world.has<GodAlignment>(player)) return;
+    // Unique effect: FAVOR_DOUBLED (double positive gains)
+    if (amount > 0 && world.has<Inventory>(player)) {
+        auto& inv = world.get<Inventory>(player);
+        for (int s = 0; s < EQUIP_SLOT_COUNT; s++) {
+            Entity eq = inv.equipped[s];
+            if (eq != NULL_ENTITY && world.has<Item>(eq) &&
+                world.get<Item>(eq).unique_effect == UniqueEffect::FAVOR_DOUBLED) {
+                amount *= 2;
+                break;
+            }
+        }
+    }
     auto& align = world.get<GodAlignment>(player);
     int old_favor = align.favor;
     align.favor = std::max(-100, std::min(100, align.favor + amount));

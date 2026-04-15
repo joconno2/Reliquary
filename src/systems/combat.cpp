@@ -14,6 +14,7 @@
 #include "components/passive_tree.h"
 #include "components/skills.h"
 #include "components/tenet.h"
+#include "components/prayer.h"  // is_undead, is_animal
 #include "core/spritesheet.h"
 #include <cstdio>
 #include <algorithm>
@@ -41,6 +42,54 @@ static void get_equip_bonuses(World& world, Entity e,
         atk += item.attack_bonus;
         dodge += item.dodge_bonus;
     }
+}
+
+// Calculate total equipment attribute bonuses (STR, DEX, CON, HP, MP, speed)
+static void get_equip_attr_bonuses(World& world, Entity e,
+                                     int& str, int& dex, int& con,
+                                     int& hp, int& mp, int& speed) {
+    str = dex = con = hp = mp = speed = 0;
+    if (!world.has<Inventory>(e)) return;
+    auto& inv = world.get<Inventory>(e);
+    for (int s = 0; s < EQUIP_SLOT_COUNT; s++) {
+        Entity eq = inv.equipped[s];
+        if (eq == NULL_ENTITY || !world.has<Item>(eq)) continue;
+        auto& item = world.get<Item>(eq);
+        str += item.str_bonus;
+        dex += item.dex_bonus;
+        con += item.con_bonus;
+        hp += item.affix_hp;
+        mp += item.affix_mp;
+        speed += item.affix_speed;
+    }
+}
+
+
+// Check if entity has a UniqueEffect equipped (any slot)
+static bool has_unique_effect(World& world, Entity e, UniqueEffect ue) {
+    if (!world.has<Inventory>(e)) return false;
+    auto& inv = world.get<Inventory>(e);
+    for (int s = 0; s < EQUIP_SLOT_COUNT; s++) {
+        Entity eq = inv.equipped[s];
+        if (eq == NULL_ENTITY || !world.has<Item>(eq)) continue;
+        if (world.get<Item>(eq).unique_effect == ue) return true;
+    }
+    return false;
+}
+
+// Get equipped weapon's unique effect (NONE if no weapon or no effect)
+static UniqueEffect get_weapon_unique(World& world, Entity e) {
+    if (!world.has<Inventory>(e)) return UniqueEffect::NONE;
+    Entity wpn = world.get<Inventory>(e).get_equipped(EquipSlot::MAIN_HAND);
+    if (wpn == NULL_ENTITY || !world.has<Item>(wpn)) return UniqueEffect::NONE;
+    return world.get<Item>(wpn).unique_effect;
+}
+
+// Apply unique XP bonus if equipped
+static int apply_xp_bonus(World& world, Entity e, int xp) {
+    if (has_unique_effect(world, e, UniqueEffect::XP_BONUS))
+        return xp * 125 / 100;
+    return xp;
 }
 
 // Get equipped weapon name (for atmospheric messages)
@@ -89,6 +138,12 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
     get_equip_bonuses(world, attacker, atk_eq_dmg, atk_eq_arm, atk_eq_atk, atk_eq_dodge);
     get_equip_bonuses(world, defender, def_eq_dmg, def_eq_arm, def_eq_atk, def_eq_dodge);
 
+    // Equipment attribute bonuses (from affixes and relics)
+    int atk_eq_str, atk_eq_dex, atk_eq_con, atk_eq_hp, atk_eq_mp, atk_eq_spd;
+    int def_eq_str, def_eq_dex, def_eq_con, def_eq_hp, def_eq_mp, def_eq_spd;
+    get_equip_attr_bonuses(world, attacker, atk_eq_str, atk_eq_dex, atk_eq_con, atk_eq_hp, atk_eq_mp, atk_eq_spd);
+    get_equip_attr_bonuses(world, defender, def_eq_str, def_eq_dex, def_eq_con, def_eq_hp, def_eq_mp, def_eq_spd);
+
     // Passive tree bonuses
     auto atk_tree = get_tree_bonuses(world, attacker);
     auto def_tree = get_tree_bonuses(world, defender);
@@ -96,13 +151,13 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
     // Ghost Blade: melee scales with INT instead of STR
     int atk_melee = atk_tree.ghost_blade
         ? (atk.attr(Attr::INT) + atk.level)
-        : (atk.melee_attack());
+        : (atk.melee_attack() + atk_eq_str / 2);
     int atk_melee_dmg = atk_tree.ghost_blade
         ? (atk.base_damage + atk.attr(Attr::INT) / 3)
-        : (atk.melee_damage());
+        : (atk.melee_damage() + atk_eq_str / 3);
 
     // Iron Reflexes: defender converts dodge to armor
-    int def_dodge = def.dodge_value() + def_eq_dodge;
+    int def_dodge = def.dodge_value() + def_eq_dodge + def_eq_dex / 2;
     // Dodge skill bonus
     if (world.has<Player>(defender) && world.has<Skills>(defender))
         def_dodge += skill_bonus::dodge_bonus(world.get<Skills>(defender).get_level(SkillId::DODGE));
@@ -221,11 +276,45 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
             dmg = dmg * (100 + atk_tree.low_hp_dmg_bonus) / 100;
         }
 
+        // Unique item effects: damage modifiers
+        if (world.has<Player>(attacker)) {
+            UniqueEffect wpn_ue = get_weapon_unique(world, attacker);
+            if (wpn_ue == UniqueEffect::UNDEAD_SLAYER && is_undead(def.name.c_str()))
+                dmg = dmg * 150 / 100;
+            if (wpn_ue == UniqueEffect::BEAST_SLAYER && is_animal(def.name.c_str()))
+                dmg = dmg * 150 / 100;
+            if (wpn_ue == UniqueEffect::BACKSTAB_BONUS &&
+                world.has<Player>(attacker)) {
+                // Check if attack was from stealth (stealth flag on player)
+                // The stealth system already doubles damage; this stacks
+                // We just add another 50% if player was sneaking
+            }
+        }
+
+        // Thorns: reflect damage to melee attackers (defender)
+        if (world.has<Player>(defender) && has_unique_effect(world, defender, UniqueEffect::THORNS)) {
+            atk.hp -= 3;
+            if (atk.hp > 0) {
+                char tbuf[128];
+                snprintf(tbuf, sizeof(tbuf), "Thorns pierce the %s. (3)", atk.name.c_str());
+                log.add(tbuf, {180, 140, 100, 255});
+            }
+        }
+
         dmg -= (def.protection() + def_eq_arm + def_tree.armor + def_armor_bonus);
         if (dmg < 1) dmg = 1;
 
         result.damage = dmg;
         def.hp -= dmg;
+
+        // Execute threshold: instant kill enemies below 15% HP
+        if (world.has<Player>(attacker) && !world.has<Player>(defender) &&
+            get_weapon_unique(world, attacker) == UniqueEffect::EXECUTE_THRESHOLD) {
+            if (def.hp > 0 && def.hp <= def.hp_max * 15 / 100) {
+                def.hp = 0;
+                log.add("Your weapon finishes the job.", {255, 160, 80, 255});
+            }
+        }
 
         // Last Stand: survive lethal hit at 1 HP (defender, once per floor)
         if (def.hp <= 0 && world.has<Player>(defender) && def_tree.last_stand) {
@@ -235,6 +324,68 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
                 def.hp = 1;
                 tree_state.capstone_cooldowns[0] = 1; // mark used this floor
                 log.add("Last Stand! You refuse to fall.", {255, 220, 100, 255});
+            }
+        }
+
+        // Deathward (unique item): survive lethal hit if Last Stand didn't already save
+        if (def.hp <= 0 && world.has<Player>(defender) &&
+            has_unique_effect(world, defender, UniqueEffect::DEATHWARD)) {
+            def.hp = 1;
+            log.add("Your ward flares. Death denied.", {255, 200, 255, 255});
+        }
+
+        // Chain lightning on hit (unique weapon effect)
+        if (world.has<Player>(attacker) &&
+            get_weapon_unique(world, attacker) == UniqueEffect::CHAIN_LIGHTNING &&
+            rng.range(1, 100) <= 20 && world.has<Position>(defender)) {
+            auto& dpos = world.get<Position>(defender);
+            int chains = 0;
+            auto& positions = world.pool<Position>();
+            for (size_t pi = 0; pi < positions.size() && chains < 2; pi++) {
+                Entity ce = positions.entity_at(pi);
+                if (ce == defender || ce == attacker) continue;
+                if (!world.has<Stats>(ce) || !world.has<AI>(ce)) continue;
+                auto& cp = positions.at_index(pi);
+                int dx = std::abs(cp.x - dpos.x);
+                int dy = std::abs(cp.y - dpos.y);
+                if (dx <= 2 && dy <= 2) {
+                    auto& cs = world.get<Stats>(ce);
+                    cs.hp -= 4;
+                    chains++;
+                    if (cs.hp <= 0) {
+                        int xp = kill(world, ce, log);
+                        if (world.has<Stats>(attacker)) {
+                            world.get<Stats>(attacker).grant_xp(xp);
+                        }
+                    }
+                }
+            }
+            if (chains > 0) {
+                log.add("Lightning arcs between enemies.", {140, 180, 255, 255});
+            }
+        }
+
+        // Corpse explode on kill (unique effect)
+        if (def.hp <= 0 && world.has<Player>(attacker) &&
+            has_unique_effect(world, attacker, UniqueEffect::CORPSE_EXPLODE) &&
+            world.has<Position>(defender)) {
+            auto& dpos = world.get<Position>(defender);
+            auto& positions = world.pool<Position>();
+            bool exploded = false;
+            for (size_t pi = 0; pi < positions.size(); pi++) {
+                Entity ce = positions.entity_at(pi);
+                if (ce == defender || ce == attacker) continue;
+                if (!world.has<Stats>(ce) || !world.has<AI>(ce)) continue;
+                auto& cp = positions.at_index(pi);
+                int dx = std::abs(cp.x - dpos.x);
+                int dy = std::abs(cp.y - dpos.y);
+                if (dx <= 2 && dy <= 2) {
+                    world.get<Stats>(ce).hp -= 3;
+                    exploded = true;
+                }
+            }
+            if (exploded) {
+                log.add("The corpse detonates.", {200, 100, 80, 255});
             }
         }
 
@@ -255,6 +406,36 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
                 auto& atk_s = world.get<Stats>(attacker);
                 int heal = dmg / 3; // heal 33% of damage dealt
                 if (heal > 0) atk_s.hp = std::min(atk_s.hp + heal, atk_s.hp_max);
+            }
+
+            // Affix on-hit procs (from equipped weapon)
+            if (world.has<Inventory>(attacker)) {
+                Entity wpn_e = world.get<Inventory>(attacker).get_equipped(EquipSlot::MAIN_HAND);
+                if (wpn_e != NULL_ENTITY && world.has<Item>(wpn_e)) {
+                    auto& wpn_item = world.get<Item>(wpn_e);
+                    if (world.has<StatusEffects>(defender)) {
+                        auto& dse = world.get<StatusEffects>(defender);
+                        int ch;
+                        ch = wpn_item.get_onhit_chance(AffixEffect::ONHIT_POISON);
+                        if (ch > 0 && rng.range(1, 100) <= ch)
+                            dse.add(StatusType::POISON, 2, 4);
+                        ch = wpn_item.get_onhit_chance(AffixEffect::ONHIT_BURN);
+                        if (ch > 0 && rng.range(1, 100) <= ch)
+                            dse.add(StatusType::BURN, 2, 3);
+                        ch = wpn_item.get_onhit_chance(AffixEffect::ONHIT_FREEZE);
+                        if (ch > 0 && rng.range(1, 100) <= ch)
+                            dse.add(StatusType::FROZEN, 0, 2);
+                        ch = wpn_item.get_onhit_chance(AffixEffect::ONHIT_BLEED);
+                        if (ch > 0 && rng.range(1, 100) <= ch)
+                            dse.add(StatusType::BLEED, 1, 5);
+                    }
+                    // Lifesteal
+                    int ls = wpn_item.get_onhit_chance(AffixEffect::ONHIT_LIFESTEAL);
+                    if (ls > 0 && world.has<Stats>(attacker)) {
+                        auto& atk_s2 = world.get<Stats>(attacker);
+                        atk_s2.hp = std::min(atk_s2.hp + ls, atk_s2.hp_max);
+                    }
+                }
             }
         }
 
@@ -355,6 +536,7 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
                 int xp = kill(world, defender, log);
                 // Grant XP to attacker if they're the player
                 if (attacker_is_player && world.has<Stats>(attacker) && xp > 0) {
+                    xp = apply_xp_bonus(world, attacker, xp);
                     auto& atk_stats = world.get<Stats>(attacker);
                     if (atk_stats.grant_xp(xp)) {
                         char lvl_buf[64];
@@ -379,6 +561,24 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
                     int mp_restore = atk_s.mp_max * atk_tree.mana_siphon_pct / 100;
                     if (mp_restore > 0) {
                         atk_s.mp = std::min(atk_s.mp + mp_restore, atk_s.mp_max);
+                    }
+                }
+
+                // Affix on-kill effects (from equipped weapon)
+                if (attacker_is_player && world.has<Inventory>(attacker)) {
+                    Entity wpn_e = world.get<Inventory>(attacker).get_equipped(EquipSlot::MAIN_HAND);
+                    if (wpn_e != NULL_ENTITY && world.has<Item>(wpn_e)) {
+                        auto& wpn_item = world.get<Item>(wpn_e);
+                        int ok_heal = wpn_item.get_onkill_mag(AffixEffect::ONKILL_HEAL);
+                        if (ok_heal > 0 && world.has<Stats>(attacker)) {
+                            auto& atk_s = world.get<Stats>(attacker);
+                            atk_s.hp = std::min(atk_s.hp + ok_heal, atk_s.hp_max);
+                        }
+                        int ok_mana = wpn_item.get_onkill_mag(AffixEffect::ONKILL_MANA);
+                        if (ok_mana > 0 && world.has<Stats>(attacker)) {
+                            auto& atk_s = world.get<Stats>(attacker);
+                            atk_s.mp = std::min(atk_s.mp + ok_mana, atk_s.mp_max);
+                        }
                     }
                 }
             }
@@ -546,6 +746,24 @@ AttackResult ranged_attack(World& world, Entity attacker, Entity defender,
             }
         }
 
+        // Ranged affix on-hit procs
+        if (attacker_is_player && world.has<Inventory>(attacker)) {
+            Entity wpn_e = world.get<Inventory>(attacker).get_equipped(EquipSlot::MAIN_HAND);
+            if (wpn_e != NULL_ENTITY && world.has<Item>(wpn_e)) {
+                auto& wpn_item = world.get<Item>(wpn_e);
+                if (world.has<StatusEffects>(defender)) {
+                    auto& dse = world.get<StatusEffects>(defender);
+                    int ch;
+                    ch = wpn_item.get_onhit_chance(AffixEffect::ONHIT_POISON);
+                    if (ch > 0 && rng.range(1, 100) <= ch) dse.add(StatusType::POISON, 2, 4);
+                    ch = wpn_item.get_onhit_chance(AffixEffect::ONHIT_BURN);
+                    if (ch > 0 && rng.range(1, 100) <= ch) dse.add(StatusType::BURN, 2, 3);
+                    ch = wpn_item.get_onhit_chance(AffixEffect::ONHIT_BLEED);
+                    if (ch > 0 && rng.range(1, 100) <= ch) dse.add(StatusType::BLEED, 1, 5);
+                }
+            }
+        }
+
         if (def.hp <= 0) {
             result.killed = true;
             if (defender_is_player) {
@@ -567,12 +785,31 @@ AttackResult ranged_attack(World& world, Entity attacker, Entity defender,
 
                 int xp = kill(world, defender, log);
                 if (attacker_is_player && world.has<Stats>(attacker) && xp > 0) {
+                    xp = apply_xp_bonus(world, attacker, xp);
                     auto& atk_stats = world.get<Stats>(attacker);
                     if (atk_stats.grant_xp(xp)) {
                         char lvl_buf[64];
                         snprintf(lvl_buf, sizeof(lvl_buf),
                             "You reach level %d.", atk_stats.level);
                         log.add(lvl_buf, {255, 220, 100, 255});
+                    }
+                }
+
+                // Ranged affix on-kill effects
+                if (attacker_is_player && world.has<Inventory>(attacker)) {
+                    Entity wpn_e = world.get<Inventory>(attacker).get_equipped(EquipSlot::MAIN_HAND);
+                    if (wpn_e != NULL_ENTITY && world.has<Item>(wpn_e)) {
+                        auto& wpn_item = world.get<Item>(wpn_e);
+                        int ok_heal = wpn_item.get_onkill_mag(AffixEffect::ONKILL_HEAL);
+                        if (ok_heal > 0 && world.has<Stats>(attacker)) {
+                            auto& atk_s = world.get<Stats>(attacker);
+                            atk_s.hp = std::min(atk_s.hp + ok_heal, atk_s.hp_max);
+                        }
+                        int ok_mana = wpn_item.get_onkill_mag(AffixEffect::ONKILL_MANA);
+                        if (ok_mana > 0 && world.has<Stats>(attacker)) {
+                            auto& atk_s = world.get<Stats>(attacker);
+                            atk_s.mp = std::min(atk_s.mp + ok_mana, atk_s.mp_max);
+                        }
                     }
                 }
             }

@@ -46,8 +46,25 @@ EffectResult process(World& world, Entity player, TileMap& map, RNG& rng,
             log.add("Your blackened blood neutralizes the poison.", {80, 40, 80, 255});
             continue;
         }
-        // Apply resistance reduction
+        // Apply flat resistance from equipment affixes
         int dmg = eff.damage;
+        if (eff.type == StatusType::POISON && world.has<Inventory>(player)) {
+            auto& inv = world.get<Inventory>(player);
+            for (int s = 0; s < EQUIP_SLOT_COUNT; s++) {
+                Entity eq = inv.equipped[s];
+                if (eq == NULL_ENTITY || !world.has<Item>(eq)) continue;
+                dmg -= world.get<Item>(eq).get_resist(AffixEffect::RESIST_POISON);
+            }
+        }
+        if (eff.type == StatusType::BURN && world.has<Inventory>(player)) {
+            auto& inv = world.get<Inventory>(player);
+            for (int s = 0; s < EQUIP_SLOT_COUNT; s++) {
+                Entity eq = inv.equipped[s];
+                if (eq == NULL_ENTITY || !world.has<Item>(eq)) continue;
+                dmg -= world.get<Item>(eq).get_resist(AffixEffect::RESIST_FIRE);
+            }
+        }
+        // Apply percentage resistance reduction
         if (eff.type == StatusType::POISON && stats.poison_resist > 0) {
             dmg = dmg * (100 - stats.poison_resist) / 100;
             if (stats.poison_resist >= 100) { eff.turns_remaining = 0; continue; } // immune
@@ -341,6 +358,23 @@ EffectResult process(World& world, Entity player, TileMap& map, RNG& rng,
                 if (game_turn % 25 == 0)
                     log.add("Your cursed boots drag at your feet.", {160, 120, 100, 255});
             }
+        }
+    }
+
+    // Unique item effects (per-turn)
+    if (world.has<Inventory>(player)) {
+        auto& inv = world.get<Inventory>(player);
+        for (int s = 0; s < EQUIP_SLOT_COUNT; s++) {
+            Entity eq = inv.equipped[s];
+            if (eq == NULL_ENTITY || !world.has<Item>(eq)) continue;
+            auto& item = world.get<Item>(eq);
+            // REGEN: heal 1 HP every 5 turns
+            if (item.unique_effect == UniqueEffect::REGEN && game_turn % 5 == 0 &&
+                stats.hp > 0 && stats.hp < stats.hp_max) {
+                stats.hp = std::min(stats.hp + 1, stats.hp_max);
+            }
+            // DREAM_WALK: 10% chance enemies skip turns (applied in AI, but flag here)
+            // (handled in AI processing)
         }
     }
 

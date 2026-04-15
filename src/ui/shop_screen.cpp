@@ -481,7 +481,9 @@ void ShopScreen::render(SDL_Renderer* renderer, TTF_Font* font,
             char buf[128];
             snprintf(buf, sizeof(buf), "%s%s", item.display_name().c_str(),
                      inv.is_equipped(item_e) ? " [E]" : "");
-            ui::draw_text(renderer, font, buf, is_sel ? sel_col : item_col, px + 20, y);
+            SDL_Color name_col = is_sel ? sel_col :
+                (item.rarity != Rarity::COMMON ? rarity_color(item.rarity) : item_col);
+            ui::draw_text(renderer, font, buf, name_col, px + 20, y);
 
             char price[32];
             snprintf(price, sizeof(price), "%dg", sell_price);

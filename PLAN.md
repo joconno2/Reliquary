@@ -1,12 +1,34 @@
 # Reliquary — Project Plan
 
-> Last updated: 2026-04-01
+> Last updated: 2026-04-15
 
-## Current Status: Post-Tier 5, Polish Phase
+## Current Status: Post-Tier 6, Item Depth + Overworld Density
 
-**Tier 5 complete.** All god systems implemented. Major codebase refactor done (engine.cpp −40%). Now in polish/content phase.
+**Tier 6 complete.** Passive tree, skills, stealth, churches, monster behaviors, traps, hazards all built. Now adding item depth and overworld density.
 
-The game is fully playable from character creation through a 17-step main quest chain. 17 classes (4 base + 13 unlockable), **13 gods** with deep tenet system, sacred/profane items, **13 god relics** (bound legendary items), god shrines (patron-god-linked), excommunication/conversion, **NPC god factions** (province-based pricing/healing/hostility, 7 wandering priests). 15 backgrounds, 22 traits, 7 permanent diseases, 8 pets, **13 rival paragons**, **50 spells** across 6 schools with **per-school particles**, **80+ items** with material palette swaps. 8 status effects. Full audio with 19 music + 12 ambient + 24 SFX. **Zone-specific dungeon generation** (cramped warrens, cavernous deep halls, narrow catacombs). **Zone-specific ambient sounds** (cave/fire/dripping/river). **Overworld weather** (snow, rain, dust by latitude). **Day/night cycle** (visual overlay + HUD indicator + ambient switching). **Death dissolve animation** (flash-then-fade with dissolve particles). **Regional building materials** (grass walls in Greenwood, sandstone in Dust Provinces, ice walls in Frozen Marches, cobblestone city streets). **Dynamic HUD** (nearest town/province name, dungeon name + depth, day/night indicator). 6 provinces with capital cities, 20 towns + 4 hamlets + 6 cabins + 3 outposts, 27 dungeons, wilderness POIs, wandering NPCs. Signpost navigation (~80+ signs). Meta-save progression, hardcore mode, persistent bestiary/potion IDs. Dungeon floor persistence + quicksave. Resolution scaling for ultrawide/4K. CI/CD for Linux + Windows.
+The game is fully playable from character creation through a 17-step main quest chain. 17 classes (4 base + 13 unlockable), **13 gods** with deep tenet system, sacred/profane items, **13 god relics** (bound legendary items), god shrines (patron-god-linked), excommunication/conversion, **NPC god factions** (province-based pricing/healing/hostility, 7 wandering priests). 15 backgrounds, 22 traits, 7 permanent diseases, 8 pets, **13 rival paragons**, **50 spells** across 6 schools with **per-school particles**. 8 status effects. Full audio with 19 music + 12 ambient + 24 SFX. **Zone-specific dungeon generation** (cramped warrens, cavernous deep halls, narrow catacombs). **Zone-specific ambient sounds** (cave/fire/dripping/river). **Overworld weather** (snow, rain, dust by latitude). **Day/night cycle** (visual overlay + HUD indicator + ambient switching). **Death dissolve animation** (flash-then-fade with dissolve particles). **Regional building materials**. **Dynamic HUD**. 6 provinces with capital cities, 20 towns + 4 hamlets + 6 cabins + 3 outposts, 27 dungeons, wilderness POIs, wandering NPCs. Signpost navigation (~80+ signs). Meta-save progression, hardcore mode, persistent bestiary/potion IDs. Dungeon floor persistence + quicksave. Resolution scaling for ultrawide/4K. CI/CD for Linux + Windows + macOS.
+
+### New: Item Affix System (2026-04-15)
+- **Rarity tiers**: Common (grey), Magic (blue, 1 affix), Rare (yellow, 2 affixes), Legendary (orange), Relic (purple)
+- **40 affixes**: 20 prefixes + 20 suffixes. Elemental on-hit procs (poison/burn/freeze/bleed), lifesteal, on-kill heal/mana, stat bonuses (+STR/DEX/CON/HP/MP/speed), resistances (poison/fire), god favor bonus
+- **Depth-scaled rarity**: 15% magic at depth 1-2, scaling to 42% magic + 28% rare by depth 9+
+- **Full combat integration**: on-hit procs in melee and ranged, on-kill effects, attribute bonuses affect attack/dodge, flat resist reduces status tick damage
+- **UI**: rarity-colored names everywhere (inventory, pickup, examine, shop), affix effect descriptions in inventory, item comparison (green/red vs equipped)
+- **Save/load**: full affix serialization, backward compatible with old saves
+
+### New: Unique Items (2026-04-15)
+- **28 unique items** with hand-authored stats, lore descriptions, and special passive effects
+- **18 UniqueEffect types**: undead/beast slayer (+50% dmg), execute threshold (kill <15% HP), chain lightning (20% on-hit AoE), thorns (reflect 3 dmg), deathward (survive lethal), regen (1 HP/5 turns), identify on pickup, gold find (+50%), trap immunity, XP bonus (+25%), free cast (20% no MP), sight range (+2), favor doubled, corpse explode (3 dmg AoE on kill)
+- **Zone-specific drops**: warrens (Rat King's Fang, Goblin Crown), stonekeep (Bonecleaver, Warden's Plate), catacombs (Grave Warden's Mace, Deathless Shroud), molten (Cinderscale Shield, Flamecaller), sunken (Tidecaller, Naiad's Veil), deep halls (Minotaur's Cleaver, Delver's Eye), sepulchre (The Terminus, Death's Mantle)
+- 12% chance per dungeon floor, weighted by zone match and depth
+
+### New: Overworld Density (2026-04-15)
+- **13 monster lairs**: wolf dens, spider nests, skeleton patrols, bandit camps, boar wallows (42 persistent enemies)
+- **5 wandering merchants**: road-placed shopkeepers in each region
+- **9 animal herds**: deer, mountain goats, ravens (30+ passive wildlife)
+- **New structures**: hunting lodge (Greenwood), bandit roadblock, border watch camp, fisherman's shack
+- **Expanded random encounters**: supply caches (+HP/gold), province-flavored weather events, level-scaled ambushers
+- **~100 new entities** on the overworld (up from ~66 to ~170)
 
 **Repo:** https://github.com/joconno2/Reliquary.git
 **Location:** ~/Reliquary

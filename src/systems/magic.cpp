@@ -128,6 +128,23 @@ CastResult cast(World& world, Entity caster, SpellId spell,
         if (actual_cost < 1 && info.mp_cost > 0) actual_cost = 1;
     }
 
+    // Unique effect: FREE_CAST (20% chance spells cost no MP)
+    if (!arcane_overload && actual_cost > 0 && world.has<Inventory>(caster)) {
+        auto& inv = world.get<Inventory>(caster);
+        for (int s = 0; s < EQUIP_SLOT_COUNT; s++) {
+            Entity eq = inv.equipped[s];
+            if (eq != NULL_ENTITY && world.has<Item>(eq) &&
+                world.get<Item>(eq).unique_effect == UniqueEffect::FREE_CAST) {
+                RNG& local_rng = rng; // use the rng passed in
+                if (local_rng.range(1, 100) <= 20) {
+                    actual_cost = 0;
+                    log.add("The spell flows freely.", {180, 200, 255, 255});
+                }
+                break;
+            }
+        }
+    }
+
     if (!arcane_overload) {
         if (blood_magic) {
             if (stats.hp <= actual_cost) {

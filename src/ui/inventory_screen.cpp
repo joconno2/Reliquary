@@ -276,7 +276,11 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
                  item.display_name().c_str(),
                  is_equipped ? " [E]" : "");
 
-        SDL_Color col = is_sel ? sel_col : (is_equipped ? equip_col : item_col);
+        SDL_Color col;
+        if (is_sel) col = sel_col;
+        else if (is_equipped) col = equip_col;
+        else if (item.rarity != Rarity::COMMON) col = rarity_color(item.rarity);
+        else col = item_col;
         ui::draw_text(renderer, font, buf, col, list_x + 44, y + 8);
 
         y += row_h;
@@ -362,6 +366,117 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
                     ui::draw_text(renderer, font, stats_buf, stat_col, list_x + 10, info_y);
                     info_y += line_h + 2;
                 }
+            }
+
+            // Comparison with equipped item in same slot
+            if (item.slot != EquipSlot::NONE && !inv.is_equipped(item_e)) {
+                Entity cur_eq = inv.get_equipped(item.slot);
+                // For rings, check both slots
+                if (item.slot == EquipSlot::RING_1 && cur_eq == NULL_ENTITY)
+                    cur_eq = inv.get_equipped(EquipSlot::RING_2);
+
+                if (cur_eq != NULL_ENTITY && world.has<Item>(cur_eq)) {
+                    auto& cur = world.get<Item>(cur_eq);
+                    auto draw_cmp = [&](const char* label, int sel_val, int cur_val) {
+                        if (sel_val == cur_val) return;
+                        int diff = sel_val - cur_val;
+                        char cbuf[64];
+                        snprintf(cbuf, sizeof(cbuf), "%s: %+d", label, diff);
+                        SDL_Color cc = (diff > 0) ? SDL_Color{100, 220, 100, 255}
+                                                   : SDL_Color{220, 100, 100, 255};
+                        ui::draw_text(renderer, font, cbuf, cc, list_x + 10, info_y);
+                        info_y += line_h + 1;
+                    };
+                    if (item.type == ItemType::WEAPON) {
+                        draw_cmp("Dmg", item.damage_bonus, cur.damage_bonus);
+                        draw_cmp("Atk", item.attack_bonus, cur.attack_bonus);
+                    } else {
+                        draw_cmp("Armor", item.armor_bonus, cur.armor_bonus);
+                        draw_cmp("Dodge", item.dodge_bonus, cur.dodge_bonus);
+                    }
+                    draw_cmp("STR", item.str_bonus, cur.str_bonus);
+                    draw_cmp("DEX", item.dex_bonus, cur.dex_bonus);
+                    draw_cmp("CON", item.con_bonus, cur.con_bonus);
+                } else if (cur_eq == NULL_ENTITY) {
+                    // Nothing equipped in this slot
+                    ui::draw_text(renderer, font, "(empty slot)", hint_col, list_x + 10, info_y);
+                    info_y += line_h + 1;
+                }
+            }
+
+            // Attribute bonuses from affixes/relics
+            if (item.str_bonus != 0 || item.dex_bonus != 0 || item.con_bonus != 0) {
+                std::string attr_str;
+                if (item.str_bonus != 0) {
+                    char ab[16]; snprintf(ab, sizeof(ab), "STR %+d  ", item.str_bonus);
+                    attr_str += ab;
+                }
+                if (item.dex_bonus != 0) {
+                    char ab[16]; snprintf(ab, sizeof(ab), "DEX %+d  ", item.dex_bonus);
+                    attr_str += ab;
+                }
+                if (item.con_bonus != 0) {
+                    char ab[16]; snprintf(ab, sizeof(ab), "CON %+d", item.con_bonus);
+                    attr_str += ab;
+                }
+                ui::draw_text(renderer, font, attr_str.c_str(), stat_col, list_x + 10, info_y);
+                info_y += line_h + 2;
+            }
+
+            // Affix special effects (on-hit, on-kill, resist, etc.)
+            SDL_Color affix_col = {140, 200, 160, 255};
+            for (auto& a : item.affixes) {
+                char abuf[128];
+                switch (a.effect) {
+                    case AffixEffect::ONHIT_POISON:
+                        snprintf(abuf, sizeof(abuf), "%d%% chance to poison on hit", a.magnitude); break;
+                    case AffixEffect::ONHIT_BURN:
+                        snprintf(abuf, sizeof(abuf), "%d%% chance to burn on hit", a.magnitude); break;
+                    case AffixEffect::ONHIT_FREEZE:
+                        snprintf(abuf, sizeof(abuf), "%d%% chance to freeze on hit", a.magnitude); break;
+                    case AffixEffect::ONHIT_BLEED:
+                        snprintf(abuf, sizeof(abuf), "%d%% chance to bleed on hit", a.magnitude); break;
+                    case AffixEffect::ONHIT_LIFESTEAL:
+                        snprintf(abuf, sizeof(abuf), "+%d HP on hit (lifesteal)", a.magnitude); break;
+                    case AffixEffect::ONKILL_HEAL:
+                        snprintf(abuf, sizeof(abuf), "+%d HP on kill", a.magnitude); break;
+                    case AffixEffect::ONKILL_MANA:
+                        snprintf(abuf, sizeof(abuf), "+%d MP on kill", a.magnitude); break;
+                    case AffixEffect::RESIST_POISON:
+                        snprintf(abuf, sizeof(abuf), "-%d poison damage per tick", a.magnitude); break;
+                    case AffixEffect::RESIST_FIRE:
+                        snprintf(abuf, sizeof(abuf), "-%d fire damage per tick", a.magnitude); break;
+                    case AffixEffect::BONUS_HP:
+                        snprintf(abuf, sizeof(abuf), "+%d max HP", a.magnitude); break;
+                    case AffixEffect::BONUS_MP:
+                        snprintf(abuf, sizeof(abuf), "+%d max MP", a.magnitude); break;
+                    case AffixEffect::BONUS_SPEED:
+                        snprintf(abuf, sizeof(abuf), "+%d speed", a.magnitude); break;
+                    case AffixEffect::BONUS_FAVOR:
+                        snprintf(abuf, sizeof(abuf), "+%d favor per kill", a.magnitude); break;
+                    default: abuf[0] = '\0'; break;
+                }
+                if (abuf[0] != '\0') {
+                    ui::draw_text(renderer, font, abuf, affix_col, list_x + 10, info_y);
+                    info_y += line_h + 2;
+                }
+            }
+
+            // Unique effect description
+            if (item.unique_effect != UniqueEffect::NONE) {
+                const char* ue_desc = unique_effect_description(item.unique_effect);
+                if (ue_desc[0] != '\0') {
+                    SDL_Color ue_col = {255, 200, 100, 255}; // warm gold
+                    ui::draw_text(renderer, font, ue_desc, ue_col, list_x + 10, info_y);
+                    info_y += line_h + 2;
+                }
+            }
+
+            // Rarity tag
+            if (item.rarity != Rarity::COMMON) {
+                ui::draw_text(renderer, font, rarity_name(item.rarity),
+                              rarity_color(item.rarity), list_x + 10, info_y);
+                info_y += line_h + 2;
             }
 
             // Gold value

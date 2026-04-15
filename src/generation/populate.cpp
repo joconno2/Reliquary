@@ -268,6 +268,200 @@ static const RelicDef RELIC_TABLE[] = {
 
 static constexpr int RELIC_COUNT = sizeof(RELIC_TABLE) / sizeof(RELIC_TABLE[0]);
 
+// Unique items — hand-authored items with special effects, zone-specific drops.
+// These are Legendary rarity with UniqueEffect passives.
+struct UniqueDef {
+    const char* name;
+    const char* description;
+    ItemType type;
+    EquipSlot slot;
+    int sprite_x, sprite_y;
+    int damage_bonus, armor_bonus, attack_bonus, dodge_bonus;
+    int str_bonus, dex_bonus, con_bonus;
+    UniqueEffect effect;
+    const char* zone;  // dungeon zone where this can drop ("" = any)
+    int min_depth;     // minimum depth to appear
+};
+
+static const UniqueDef UNIQUE_TABLE[] = {
+    // --- WARRENS (rat tunnels, goblins, tight corridors) ---
+    {"Rat King's Fang",
+     "A dagger caked in filth. It remembers every throat.",
+     ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 0,
+     4, 0, 3, 0,  0, 2, 0,
+     UniqueEffect::EXECUTE_THRESHOLD, "warrens", 2},
+
+    {"Goblin King's Crown",
+     "Too small for a human head. Fits anyway.",
+     ItemType::ARMOR_HEAD, EquipSlot::HEAD, 5, 15,
+     0, 3, 0, 1,  0, 0, 2,
+     UniqueEffect::GOLD_FIND, "warrens", 2},
+
+    {"Tunnel Rat's Blade",
+     "Forged in darkness. Sees in darkness.",
+     ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 0,
+     5, 0, 2, 0,  0, 1, 0,
+     UniqueEffect::LIGHT_RADIUS, "warrens", 3},
+
+    // --- STONEKEEP (ancient fortifications, skeletons) ---
+    {"Bonecleaver",
+     "Etched with prayers against the risen dead.",
+     ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 3,
+     7, 0, 1, 0,  2, 0, 0,
+     UniqueEffect::UNDEAD_SLAYER, "stonekeep", 2},
+
+    {"Warden's Plate",
+     "Worn by the last keeper of Stonekeep. Thorns line the inside.",
+     ItemType::ARMOR_CHEST, EquipSlot::CHEST, 3, 12,
+     0, 5, 0, -1,  0, 0, 2,
+     UniqueEffect::THORNS, "stonekeep", 3},
+
+    {"Keeper's Lantern",
+     "Light that no wind can extinguish.",
+     ItemType::AMULET, EquipSlot::AMULET, 3, 16,
+     0, 0, 1, 0,  0, 0, 1,
+     UniqueEffect::LIGHT_RADIUS, "stonekeep", 2},
+
+    // --- CATACOMBS (undead, bone floors, coffins) ---
+    {"Grave Warden's Mace",
+     "Made to put the dead back down.",
+     ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 5,
+     8, 0, 0, 0,  2, 0, 0,
+     UniqueEffect::UNDEAD_SLAYER, "catacombs", 3},
+
+    {"Deathless Shroud",
+     "The burial cloth of someone who refused to stay buried.",
+     ItemType::ARMOR_CHEST, EquipSlot::CHEST, 2, 12,
+     0, 2, 0, 2,  0, 0, 0,
+     UniqueEffect::DEATHWARD, "catacombs", 4},
+
+    {"Ossuary Ring",
+     "Bone polished smooth by centuries of prayer.",
+     ItemType::RING, EquipSlot::RING_1, 1, 18,
+     0, 1, 0, 0,  0, 0, 2,
+     UniqueEffect::REGEN, "catacombs", 3},
+
+    {"Corpselight",
+     "A pendant that glows when the dead are near. It never stops glowing here.",
+     ItemType::AMULET, EquipSlot::AMULET, 2, 16,
+     0, 0, 2, 0,  0, 0, 0,
+     UniqueEffect::CORPSE_EXPLODE, "catacombs", 4},
+
+    // --- MOLTEN (fire, lava, dragons) ---
+    {"Cinderscale Shield",
+     "Dragonhide stretched over iron. Still warm.",
+     ItemType::SHIELD, EquipSlot::OFF_HAND, 3, 11,
+     0, 5, 0, 0,  0, 0, 2,
+     UniqueEffect::THORNS, "molten", 4},
+
+    {"Flamecaller",
+     "The blade sweats heat. Enemies nearby flinch.",
+     ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 0,
+     8, 0, 1, 0,  0, 0, 0,
+     UniqueEffect::CHAIN_LIGHTNING, "molten", 4},
+
+    {"Ashen Crown",
+     "Forged in eruption. The wearer sees through smoke and stone.",
+     ItemType::ARMOR_HEAD, EquipSlot::HEAD, 4, 15,
+     0, 3, 0, 0,  0, 0, 0,
+     UniqueEffect::LIGHT_RADIUS, "molten", 3},
+
+    // --- SUNKEN (water, flooded rooms, naga) ---
+    {"Tidecaller",
+     "A trident that hums near water. Lightning follows.",
+     ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 6,
+     7, 0, 2, 0,  0, 2, 0,
+     UniqueEffect::CHAIN_LIGHTNING, "sunken", 3},
+
+    {"Drowned Man's Ring",
+     "Pried from a waterlogged corpse. It wants to keep you alive.",
+     ItemType::RING, EquipSlot::RING_1, 2, 18,
+     0, 0, 0, 1,  0, 0, 2,
+     UniqueEffect::REGEN, "sunken", 3},
+
+    {"Naiad's Veil",
+     "Woven from river kelp. Traps slide off you like water.",
+     ItemType::ARMOR_HEAD, EquipSlot::HEAD, 1, 15,
+     0, 1, 0, 2,  0, 1, 0,
+     UniqueEffect::TRAP_IMMUNITY, "sunken", 4},
+
+    // --- DEEP HALLS (cavernous, minotaurs, darkness) ---
+    {"Minotaur's Cleaver",
+     "Bigger than it should be. Hits harder than it should.",
+     ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 3,
+     10, 0, -2, 0,  3, 0, 0,
+     UniqueEffect::EXECUTE_THRESHOLD, "deep_halls", 4},
+
+    {"Deepstone Gauntlets",
+     "Stone that moves like leather. The mountain's gift.",
+     ItemType::ARMOR_HANDS, EquipSlot::HANDS, 3, 13,
+     0, 3, 1, 0,  1, 0, 2,
+     UniqueEffect::TRAP_IMMUNITY, "deep_halls", 3},
+
+    {"Delver's Eye",
+     "A jewel from the deep. It knows things it shouldn't.",
+     ItemType::AMULET, EquipSlot::AMULET, 5, 16,
+     0, 0, 0, 0,  0, 0, 0,
+     UniqueEffect::IDENTIFY_ON_PICKUP, "deep_halls", 2},
+
+    // --- SEPULCHRE (final dungeon, death, endgame) ---
+    {"The Terminus",
+     "The last blade ever forged. Its edge is the end of things.",
+     ItemType::WEAPON, EquipSlot::MAIN_HAND, 5, 0,
+     12, 0, 2, 0,  0, 0, 0,
+     UniqueEffect::EXECUTE_THRESHOLD, "sepulchre", 5},
+
+    {"Death's Mantle",
+     "Sewn from the dark between stars.",
+     ItemType::ARMOR_CHEST, EquipSlot::CHEST, 4, 12,
+     0, 6, 0, 1,  0, 0, 0,
+     UniqueEffect::DEATHWARD, "sepulchre", 5},
+
+    {"The Hungering Ring",
+     "It feeds on death. So do you.",
+     ItemType::RING, EquipSlot::RING_1, 5, 17,
+     2, 0, 1, 0,  0, 0, 0,
+     UniqueEffect::XP_BONUS, "sepulchre", 4},
+
+    // --- ANY ZONE (general purpose, rarer) ---
+    {"Scholar's Lens",
+     "Ground from crystal found only in collapsed libraries.",
+     ItemType::AMULET, EquipSlot::AMULET, 6, 16,
+     0, 0, 1, 0,  0, 0, 0,
+     UniqueEffect::IDENTIFY_ON_PICKUP, "", 3},
+
+    {"Pilgrim's Sash",
+     "Blessed by seven temples. The gods listen closer.",
+     ItemType::ARMOR_CHEST, EquipSlot::CHEST, 0, 12,
+     0, 1, 0, 0,  0, 0, 0,
+     UniqueEffect::FAVOR_DOUBLED, "", 4},
+
+    {"Poacher's Knife",
+     "Notched from a hundred kills. Knows where to cut a beast.",
+     ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 0,
+     4, 0, 3, 0,  0, 2, 0,
+     UniqueEffect::BEAST_SLAYER, "", 2},
+
+    {"Miser's Band",
+     "Gold sticks to whoever wears this.",
+     ItemType::RING, EquipSlot::RING_1, 1, 17,
+     0, 0, 0, 0,  0, 0, 0,
+     UniqueEffect::GOLD_FIND, "", 2},
+
+    {"Channeler's Staff",
+     "The wood is warm. It drinks mana from the air.",
+     ItemType::WEAPON, EquipSlot::MAIN_HAND, 4, 10,
+     4, 0, 2, 0,  0, 0, 0,
+     UniqueEffect::FREE_CAST, "", 4},
+
+    {"Shadowstep Boots",
+     "They make no sound. Neither does anything that steps on them.",
+     ItemType::ARMOR_FEET, EquipSlot::FEET, 3, 14,
+     0, 2, 0, 3,  0, 2, 0,
+     UniqueEffect::TRAP_IMMUNITY, "", 4},
+};
+static constexpr int UNIQUE_COUNT = sizeof(UNIQUE_TABLE) / sizeof(UNIQUE_TABLE[0]);
+
 //                                                                                            sx sy dmg arm atk dge heal gold unid          range
 static const ItemDef RANGED_TABLE[] = {
     {"short bow",      "+3 dmg, +1 atk, range 6.",       ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 9,  3, 0, 1, 0, 0,  25, "",  6},
@@ -479,6 +673,110 @@ static void apply_material(Item& item, int dungeon_level, RNG& rng) {
     // Obsidian: slight fragility (could track later)
 }
 
+// Roll rarity and apply random affixes based on dungeon depth
+static void apply_affixes(Item& item, int dungeon_level, RNG& rng) {
+    // Only equippable gear gets affixes
+    if (item.type == ItemType::POTION || item.type == ItemType::FOOD ||
+        item.type == ItemType::SCROLL || item.type == ItemType::GOLD ||
+        item.type == ItemType::KEY || item.type == ItemType::PET)
+        return;
+
+    // Don't affix items that are already legendary/relic
+    if (item.relic_god >= 0) return;
+
+    // Rarity roll: deeper = better odds
+    // Depth 1-2: 85% common, 15% magic
+    // Depth 3-5: 65% common, 28% magic, 7% rare
+    // Depth 6-8: 45% common, 38% magic, 17% rare
+    // Depth 9+:  30% common, 42% magic, 28% rare
+    int roll = rng.range(1, 100);
+    Rarity rarity = Rarity::COMMON;
+
+    if (dungeon_level <= 2) {
+        if (roll > 85) rarity = Rarity::MAGIC;
+    } else if (dungeon_level <= 5) {
+        if (roll > 93) rarity = Rarity::RARE;
+        else if (roll > 65) rarity = Rarity::MAGIC;
+    } else if (dungeon_level <= 8) {
+        if (roll > 83) rarity = Rarity::RARE;
+        else if (roll > 45) rarity = Rarity::MAGIC;
+    } else {
+        if (roll > 72) rarity = Rarity::RARE;
+        else if (roll > 30) rarity = Rarity::MAGIC;
+    }
+
+    if (rarity == Rarity::COMMON) return;
+
+    item.rarity = rarity;
+
+    bool is_weapon = (item.type == ItemType::WEAPON);
+    bool is_armor = (item.type == ItemType::ARMOR_HEAD || item.type == ItemType::ARMOR_CHEST ||
+                     item.type == ItemType::ARMOR_HANDS || item.type == ItemType::ARMOR_FEET ||
+                     item.type == ItemType::SHIELD);
+
+    // Roll prefix (magic = prefix OR suffix, rare = both)
+    auto roll_affix = [&](const AffixDef* table, int count) -> Affix {
+        // Build eligible list
+        std::vector<int> eligible;
+        for (int i = 0; i < count; i++) {
+            auto& ad = table[i];
+            if (ad.min_depth > dungeon_level) continue;
+            if (ad.weapons_only && !is_weapon) continue;
+            if (ad.armor_only && !is_armor) continue;
+            eligible.push_back(i);
+        }
+        if (eligible.empty()) return {};
+
+        int pick = eligible[rng.range(0, static_cast<int>(eligible.size()) - 1)];
+        auto& ad = table[pick];
+        Affix a;
+        a.name = ad.name;
+        a.effect = ad.effect;
+        a.magnitude = rng.range(ad.min_mag, ad.max_mag);
+        a.is_prefix = ad.is_prefix;
+        return a;
+    };
+
+    if (rarity == Rarity::MAGIC) {
+        // 50/50 prefix or suffix
+        if (rng.chance(50)) {
+            Affix a = roll_affix(PREFIX_TABLE, PREFIX_COUNT);
+            if (a.effect != AffixEffect::NONE) item.affixes.push_back(a);
+        } else {
+            Affix a = roll_affix(SUFFIX_TABLE, SUFFIX_COUNT);
+            if (a.effect != AffixEffect::NONE) item.affixes.push_back(a);
+        }
+    } else {
+        // Rare: one prefix + one suffix
+        Affix pre = roll_affix(PREFIX_TABLE, PREFIX_COUNT);
+        if (pre.effect != AffixEffect::NONE) item.affixes.push_back(pre);
+        Affix suf = roll_affix(SUFFIX_TABLE, SUFFIX_COUNT);
+        if (suf.effect != AffixEffect::NONE) item.affixes.push_back(suf);
+    }
+
+    // If we didn't actually get any affixes, revert to common
+    if (item.affixes.empty()) {
+        item.rarity = Rarity::COMMON;
+        return;
+    }
+
+    // Build cached stat bonuses
+    item.rebuild_affix_cache();
+
+    // Affix stat bonuses add to the item's base stats
+    item.damage_bonus += item.affix_damage;
+    item.armor_bonus  += item.affix_armor;
+    item.attack_bonus += item.affix_attack;
+    item.dodge_bonus  += item.affix_dodge;
+    item.str_bonus    += item.affix_str;
+    item.dex_bonus    += item.affix_dex;
+    item.con_bonus    += item.affix_con;
+
+    // Bump gold value for magic/rare items
+    int rarity_mult = (rarity == Rarity::RARE) ? 3 : 2;
+    item.gold_value = item.gold_value * rarity_mult;
+}
+
 // Assign item tags for sacred/profane system
 static void apply_tags(Item& item) {
     // Weapon tags based on name
@@ -565,6 +863,7 @@ void spawn_items(World& world, const TileMap& map,
             apply_tags(item);
             apply_quality(item, dungeon_level, rng);
             apply_curse_bless(item, dungeon_level, rng);
+            apply_affixes(item, dungeon_level, rng);
         } else if (roll <= 21) {
             // Ranged weapon
             int idx = weighted_item_pick(rng, dungeon_level, RANGED_COUNT, 3);
@@ -573,11 +872,14 @@ void spawn_items(World& world, const TileMap& map,
             apply_material(item, dungeon_level, rng);
             apply_tags(item);
             apply_quality(item, dungeon_level, rng);
+            apply_affixes(item, dungeon_level, rng);
         } else if (roll <= 25) {
             // Staff (mage weapon)
             int idx = weighted_item_pick(rng, dungeon_level, STAFF_COUNT, 3);
             Entity e = create_item_from_def(world, STAFF_TABLE[idx], x, y);
-            apply_tags(world.get<Item>(e));
+            auto& item = world.get<Item>(e);
+            apply_tags(item);
+            apply_affixes(item, dungeon_level, rng);
         } else if (roll <= 44) {
             // Armor — no material, the sprite IS the tier
             int idx = weighted_item_pick(rng, dungeon_level, ARMOR_COUNT, 2);
@@ -586,6 +888,7 @@ void spawn_items(World& world, const TileMap& map,
             apply_tags(item);
             apply_quality(item, dungeon_level, rng);
             apply_curse_bless(item, dungeon_level, rng);
+            apply_affixes(item, dungeon_level, rng);
         } else if (roll <= 56) {
             // Spellbook — teaches a random spell (increased: tomes are primary spell source)
             // Ordered by power — weak first, powerful last. 50 spells.
@@ -635,12 +938,16 @@ void spawn_items(World& world, const TileMap& map,
             // Amulet — depth 2+
             int idx = weighted_item_pick(rng, dungeon_level, AMULET_COUNT, 3);
             Entity e = create_item_from_def(world, AMULET_TABLE[idx], x, y);
-            apply_curse_bless(world.get<Item>(e), dungeon_level, rng);
+            auto& item = world.get<Item>(e);
+            apply_curse_bless(item, dungeon_level, rng);
+            apply_affixes(item, dungeon_level, rng);
         } else if (roll <= 64 && dungeon_level >= 2) {
             // Ring — depth 2+
             int idx = weighted_item_pick(rng, dungeon_level, RING_COUNT, 3);
             Entity e = create_item_from_def(world, RING_TABLE[idx], x, y);
-            apply_curse_bless(world.get<Item>(e), dungeon_level, rng);
+            auto& item = world.get<Item>(e);
+            apply_curse_bless(item, dungeon_level, rng);
+            apply_affixes(item, dungeon_level, rng);
         } else if (roll <= 67) {
             // Lore item — readable journal/inscription
             struct LoreEntry { const char* name; const char* text; };
@@ -803,6 +1110,7 @@ Entity spawn_relic(World& world, const std::vector<Room>& rooms, RNG& rng,
     item.identified = true;
     item.curse_state = 1; // can't unequip
     item.relic_god = patron_god_idx;
+    item.rarity = Rarity::RELIC;
     world.add<Item>(e, std::move(item));
     return e;
 }
@@ -843,6 +1151,60 @@ Entity spawn_legendary(World& world, const std::vector<Room>& rooms, [[maybe_unu
     item.gold_value = 0; // priceless
     item.identified = true;
     item.curse_state = 2; // blessed
+    item.rarity = Rarity::LEGENDARY;
+    world.add<Item>(e, std::move(item));
+    return e;
+}
+
+Entity spawn_unique(World& world, const std::vector<Room>& rooms, RNG& rng,
+                     int dungeon_level, const std::string& zone) {
+    if (rooms.size() < 3) return NULL_ENTITY;
+
+    // Build eligible unique list for this zone and depth
+    std::vector<int> eligible;
+    for (int i = 0; i < UNIQUE_COUNT; i++) {
+        auto& ud = UNIQUE_TABLE[i];
+        if (dungeon_level < ud.min_depth) continue;
+        // Zone match: empty string = any zone, otherwise must match
+        if (ud.zone[0] != '\0' && zone != ud.zone) continue;
+        eligible.push_back(i);
+    }
+    if (eligible.empty()) return NULL_ENTITY;
+
+    // Pick one at random
+    int pick = eligible[rng.range(0, static_cast<int>(eligible.size()) - 1)];
+    auto& ud = UNIQUE_TABLE[pick];
+
+    // Place in a mid-to-late room (not first, not last which is for legendaries/relics)
+    int room_idx = rng.range(static_cast<int>(rooms.size()) / 2,
+                              static_cast<int>(rooms.size()) - 2);
+    if (room_idx < 1) room_idx = 1;
+    auto& room = rooms[room_idx];
+    int x = room.cx() + rng.range(-1, 1);
+    int y = room.cy() + rng.range(-1, 1);
+
+    Entity e = world.create();
+    world.add<Position>(e, {x, y});
+    world.add<Renderable>(e, {SHEET_ITEMS, ud.sprite_x, ud.sprite_y,
+                               {255, 200, 100, 255}, 2}); // warm gold tint, high z
+
+    Item item;
+    item.name = ud.name;
+    item.description = ud.description;
+    item.type = ud.type;
+    item.slot = ud.slot;
+    item.damage_bonus = ud.damage_bonus;
+    item.armor_bonus = ud.armor_bonus;
+    item.attack_bonus = ud.attack_bonus;
+    item.dodge_bonus = ud.dodge_bonus;
+    item.str_bonus = ud.str_bonus;
+    item.dex_bonus = ud.dex_bonus;
+    item.con_bonus = ud.con_bonus;
+    item.gold_value = 0; // priceless
+    item.identified = true;
+    item.unique_effect = ud.effect;
+    item.rarity = Rarity::LEGENDARY;
+    apply_tags(item);
     world.add<Item>(e, std::move(item));
     return e;
 }

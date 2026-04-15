@@ -855,6 +855,170 @@ void populate(World& world, TileMap& map, RNG& rng,
     for (auto& rs : road_signs) {
         place_sign(rs.x, rs.y);
     }
+
+    // =============================================
+    // MONSTER LAIRS — small clusters that hint at dungeon proximity
+    // =============================================
+    struct LairDef { int x, y; const char* type; int count; };
+    static const LairDef LAIRS[] = {
+        // Wolf dens (Frozen Marches, Greenwood)
+        {350, 350, "wolf", 3},      // north wilderness
+        {1150, 250, "wolf", 4},     // near Glacierveil
+        {550, 850, "wolf", 3},      // Greenwood fringe
+        // Spider nests (Greenwood, caves)
+        {450, 650, "spider", 3},    // deep Greenwood
+        {600, 950, "spider", 4},    // near Tanglewood
+        // Skeleton patrols (near catacombs/ruins)
+        {850, 650, "skeleton", 3},  // near Ashford
+        {1200, 680, "skeleton", 4}, // near Greywatch
+        {1350, 1050, "skeleton", 3},// Dust Province ruins
+        // Bandit camps (roads, trade routes)
+        {1250, 780, "bandit", 3},   // Iron Coast road
+        {950, 1050, "bandit", 3},   // Dustfall approach
+        {700, 600, "bandit", 2},    // Greenwood road
+        // Boar wallows (temperate zones)
+        {800, 800, "boar", 3},      // central Heartlands
+        {650, 1000, "boar", 3},     // south Greenwood
+    };
+
+    for (auto& lair : LAIRS) {
+        for (int i = 0; i < lair.count; i++) {
+            int lx = lair.x + rng.range(-8, 8);
+            int ly = lair.y + rng.range(-8, 8);
+            if (!map.in_bounds(lx, ly) || !map.is_walkable(lx, ly)) continue;
+
+            // Determine monster stats by type
+            const char* name = lair.type;
+            int sheet, sx, sy, hp, str, dex, con, dmg, arm, spd, flee, xp;
+            if (std::string(name) == "wolf") {
+                sheet = SHEET_ANIMALS; sx = 6; sy = 4;
+                hp = 14; str = 12; dex = 14; con = 10; dmg = 3; arm = 0; spd = 120; flee = 25; xp = 15;
+            } else if (std::string(name) == "spider") {
+                sheet = SHEET_MONSTERS; sx = 8; sy = 6;
+                hp = 10; str = 8; dex = 14; con = 6; dmg = 3; arm = 0; spd = 120; flee = 30; xp = 15;
+            } else if (std::string(name) == "skeleton") {
+                sheet = SHEET_MONSTERS; sx = 0; sy = 4;
+                hp = 16; str = 10; dex = 10; con = 10; dmg = 3; arm = 2; spd = 100; flee = 0; xp = 20;
+            } else if (std::string(name) == "bandit") {
+                sheet = SHEET_ROGUES; sx = 4; sy = 0;
+                hp = 14; str = 11; dex = 13; con = 10; dmg = 3; arm = 1; spd = 105; flee = 30; xp = 20;
+            } else { // boar
+                sheet = SHEET_ANIMALS; sx = 7; sy = 9;
+                hp = 18; str = 14; dex = 8; con = 12; dmg = 4; arm = 1; spd = 90; flee = 20; xp = 20;
+            }
+
+            Entity e = world.create();
+            world.add<Position>(e, {lx, ly});
+            world.add<Renderable>(e, {sheet, sx, sy, {255,255,255,255}, 5});
+            Stats ms; ms.name = name; ms.hp = hp; ms.hp_max = hp;
+            ms.set_attr(Attr::STR, str); ms.set_attr(Attr::DEX, dex); ms.set_attr(Attr::CON, con);
+            ms.base_damage = dmg; ms.natural_armor = arm; ms.base_speed = spd; ms.xp_value = xp;
+            world.add<Stats>(e, std::move(ms));
+            AI ai; ai.flee_threshold = flee;
+            if (std::string(name) == "wolf") ai.behavior = BehaviorType::PACK;
+            world.add<AI>(e, ai);
+            world.add<Energy>(e, {0, spd});
+        }
+    }
+
+    // =============================================
+    // WANDERING MERCHANTS — buy/sell on the road
+    // =============================================
+    struct MerchPos { int x, y; const char* name; const char* dialogue; };
+    static const MerchPos MERCHANTS[] = {
+        {900, 700,  "Traveling Merchant", "I sell what I find. Everything has a price."},
+        {1200, 850, "Peddler",           "Trinkets, potions, and a few things I shouldn't have."},
+        {750, 950,  "Herb Seller",       "Fresh stock. The forest provides."},
+        {1400, 600, "Arms Dealer",       "I supply both sides. Business is business."},
+        {1100, 1100,"Dustland Trader",   "Water's more valuable than gold out here. I sell both."},
+    };
+    for (auto& m : MERCHANTS) {
+        spawn_ow_npc(m.x, m.y, m.name, m.dialogue, NPCRole::SHOPKEEPER, 3, 6, 25);
+    }
+
+    // =============================================
+    // ANIMAL HERDS — passive wildlife clusters
+    // =============================================
+    struct HerdDef { int x, y; int count; int spr_x, spr_y; const char* name; };
+    static const HerdDef HERDS[] = {
+        // Deer (temperate/cold)
+        {750, 550, 4, 4, 6, "deer"},
+        {950, 650, 3, 4, 6, "deer"},
+        {600, 800, 5, 4, 6, "deer"},
+        {1100, 400, 3, 4, 6, "deer"},
+        // Goats (mountains/hills)
+        {900, 350, 3, 5, 6, "mountain goat"},
+        {1200, 300, 4, 5, 6, "mountain goat"},
+        // Ravens (everywhere, atmospheric)
+        {400, 700, 3, 0, 2, "raven"},
+        {1300, 500, 2, 0, 2, "raven"},
+        {1000, 1000, 3, 0, 2, "raven"},
+    };
+    for (auto& h : HERDS) {
+        for (int i = 0; i < h.count; i++) {
+            int hx = h.x + rng.range(-10, 10);
+            int hy = h.y + rng.range(-10, 10);
+            if (!map.in_bounds(hx, hy) || !map.is_walkable(hx, hy)) continue;
+            Entity e = world.create();
+            world.add<Position>(e, {hx, hy});
+            world.add<Renderable>(e, {SHEET_ANIMALS, h.spr_x, h.spr_y, {255,255,255,255}, 3});
+            Stats ds; ds.name = h.name; ds.hp = 6; ds.hp_max = 6;
+            ds.base_damage = 0; ds.base_speed = 80; ds.xp_value = 3;
+            world.add<Stats>(e, std::move(ds));
+            AI dai; dai.flee_threshold = 100; // always flee
+            world.add<AI>(e, dai);
+            world.add<Energy>(e, {0, 80});
+        }
+    }
+
+    // =============================================
+    // ROADSIDE CAMPS — small structures with NPCs
+    // =============================================
+
+    // Bandit roadblock (Iron Coast road)
+    paint_ruin(1350, 720);
+    spawn_ow_npc(1350, 720, "Bandit Leader",
+                 "Pay the toll or bleed. Your choice.", NPCRole::FARMER, 4, 0, 30);
+    place_lore(1352, 721, "threatening note",
+               "Any merchant who tries the Iron Coast road without paying answers to us. No exceptions.");
+
+    // Abandoned caravan (Dust Provinces)
+    paint_ruin(1150, 1150);
+    place_lore(1152, 1151, "trade manifest",
+               "Fifty bolts of silk, twelve casks of wine, and a sealed chest marked DO NOT OPEN. Destination: Endgate. The chest is gone.");
+
+    // Hunting lodge (Greenwood)
+    {
+        int lx = 500, ly = 750;
+        for (int dy = 0; dy < 3; dy++)
+            for (int dx = 0; dx < 4; dx++)
+                if (map.in_bounds(lx+dx, ly+dy))
+                    map.at(lx+dx, ly+dy).type = TileType::FLOOR_STONE;
+        // Walls
+        for (int dx = 0; dx < 4; dx++) {
+            if (map.in_bounds(lx+dx, ly-1)) map.at(lx+dx, ly-1).type = TileType::WALL_WOOD;
+            if (map.in_bounds(lx+dx, ly+3)) map.at(lx+dx, ly+3).type = TileType::WALL_WOOD;
+        }
+        for (int dy = 0; dy < 3; dy++) {
+            if (map.in_bounds(lx-1, ly+dy)) map.at(lx-1, ly+dy).type = TileType::WALL_WOOD;
+            if (map.in_bounds(lx+4, ly+dy)) map.at(lx+4, ly+dy).type = TileType::WALL_WOOD;
+        }
+        if (map.in_bounds(lx+1, ly+3)) map.at(lx+1, ly+3).type = TileType::DOOR_CLOSED;
+        spawn_ow_npc(lx+2, ly+1, "Lodge Keeper",
+                     "The Greenwood's full of things that hunt back. Rest here if you need to.",
+                     NPCRole::FARMER, 2, 6, 20);
+    }
+
+    // Watchtower camp (Pale Reach border)
+    paint_ruin(1350, 450);
+    spawn_ow_npc(1350, 450, "Border Watcher",
+                 "Past here, you're in Soleth's land. The zealots don't take kindly to outsiders.",
+                 NPCRole::GUARD, 3, 2, 30);
+
+    // Fisherman's shack (near lake)
+    spawn_ow_npc(850, 700, "Fisherman",
+                 "The fish have been strange lately. Eyes where eyes shouldn't be.",
+                 NPCRole::FARMER, 1, 6, 20);
 }
 
 // =============================================
