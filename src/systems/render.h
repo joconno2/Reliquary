@@ -7,6 +7,8 @@ struct Camera {
     int x = 0, y = 0; // top-left tile coordinate
     int viewport_w = 0, viewport_h = 0; // in pixels
     int tile_size = 48; // rendered tile size (base 32 * scale)
+    int px = 0, py = 0; // player tile position (for FOV edge fade)
+    int fov_r = 10;     // player FOV radius
 
     int tiles_wide() const { return viewport_w / tile_size; }
     int tiles_high() const { return viewport_h / tile_size; }
@@ -32,6 +34,11 @@ struct FloorSprite {
 };
 
 SpriteRef tile_sprite(TileType type, uint8_t variant);
+
+// Compute per-tile brightness from light sources and ambient level.
+// ambient: base brightness (0-255). dungeon_level 0 = overworld.
+// Writes to tile.brightness for all visible tiles.
+void compute_lighting(TileMap& map, World& world, int ambient, const Camera& cam);
 
 void draw_map(SDL_Renderer* renderer, const SpriteManager& sprites,
               const TileMap& map, const Camera& cam, int y_offset = 0);

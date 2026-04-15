@@ -8,6 +8,96 @@
 
 namespace render {
 
+// ── Per-tile lighting ────────────────────────────────────────────────
+void compute_lighting(TileMap& map, World& world, int ambient, const Camera& cam) {
+    // Only compute for visible viewport + margin (performance)
+    int margin = 4;
+    int x0 = std::max(0, cam.x - margin);
+    int y0 = std::max(0, cam.y - margin);
+    int x1 = std::min(map.width(), cam.x + cam.tiles_wide() + margin);
+    int y1 = std::min(map.height(), cam.y + cam.tiles_high() + margin);
+
+    // Set ambient on all viewport tiles
+    uint8_t amb = static_cast<uint8_t>(std::clamp(ambient, 40, 255));
+    for (int y = y0; y < y1; y++) {
+        for (int x = x0; x < x1; x++) {
+            map.at(x, y).brightness = amb;
+        }
+    }
+
+    // Wall-adjacent ambient occlusion: tiles next to walls get slightly darker
+    for (int y = y0; y < y1; y++) {
+        for (int x = x0; x < x1; x++) {
+            auto& tile = map.at(x, y);
+            if (!tile.visible) continue;
+            if (map.is_opaque(x, y)) continue; // walls don't get AO
+            int walls = 0;
+            for (int dy = -1; dy <= 1; dy++)
+                for (int dx = -1; dx <= 1; dx++)
+                    if ((dx || dy) && map.in_bounds(x+dx, y+dy) && map.is_opaque(x+dx, y+dy))
+                        walls++;
+            if (walls > 0) {
+                int reduction = std::min(30, walls * 6); // up to -30 brightness near walls
+                tile.brightness = static_cast<uint8_t>(
+                    std::max(40, static_cast<int>(tile.brightness) - reduction));
+            }
+        }
+    }
+
+    // Light sources: find all animated entities that are torches/braziers
+    // Rows 1,3,5,7 on SHEET_ANIMATED are light sources
+    auto& pos_pool = world.pool<Position>();
+    for (size_t i = 0; i < pos_pool.size(); i++) {
+        Entity e = pos_pool.entity_at(i);
+        if (!world.has<Renderable>(e)) continue;
+        auto& rend = world.get<Renderable>(e);
+        if (rend.sprite_sheet != SHEET_ANIMATED) continue;
+        int row = rend.sprite_y;
+        if (row != 1 && row != 3 && row != 5 && row != 7) continue;
+
+        auto& lpos = pos_pool.at_index(i);
+        // Skip if far from viewport
+        if (lpos.x < x0 - 6 || lpos.x > x1 + 6 || lpos.y < y0 - 6 || lpos.y > y1 + 6) continue;
+
+        // Light radius: 5 tiles, brightness falls off with distance squared
+        int light_r = 5;
+        int light_strength = 120; // max brightness contribution at source
+        for (int dy = -light_r; dy <= light_r; dy++) {
+            for (int dx = -light_r; dx <= light_r; dx++) {
+                int tx = lpos.x + dx, ty = lpos.y + dy;
+                if (!map.in_bounds(tx, ty)) continue;
+                if (tx < x0 || tx >= x1 || ty < y0 || ty >= y1) continue;
+                int dist_sq = dx * dx + dy * dy;
+                if (dist_sq > light_r * light_r) continue;
+                // Inverse distance falloff (not squared, feels more natural)
+                float falloff = 1.0f - static_cast<float>(dist_sq) / static_cast<float>(light_r * light_r);
+                int add = static_cast<int>(light_strength * falloff);
+                auto& t = map.at(tx, ty);
+                t.brightness = static_cast<uint8_t>(std::min(255, static_cast<int>(t.brightness) + add));
+            }
+        }
+    }
+
+    // Player emits a small amount of light (carrying a torch conceptually)
+    {
+        int pr = 3; // player light radius
+        int ps = 60; // player light strength
+        for (int dy = -pr; dy <= pr; dy++) {
+            for (int dx = -pr; dx <= pr; dx++) {
+                int tx = cam.px + dx, ty = cam.py + dy;
+                if (!map.in_bounds(tx, ty)) continue;
+                if (tx < x0 || tx >= x1 || ty < y0 || ty >= y1) continue;
+                int dist_sq = dx * dx + dy * dy;
+                if (dist_sq > pr * pr) continue;
+                float falloff = 1.0f - static_cast<float>(dist_sq) / static_cast<float>(pr * pr);
+                int add = static_cast<int>(ps * falloff);
+                auto& t = map.at(tx, ty);
+                t.brightness = static_cast<uint8_t>(std::min(255, static_cast<int>(t.brightness) + add));
+            }
+        }
+    }
+}
+
 // Tile sprite mappings into tiles.png
 // Layout: tiles.txt group N = spritesheet row (N-1), letter = column (a=0, b=1, ...)
 // Walls: row 0-5, col 0 = top view, col 1 = side view
@@ -242,15 +332,29 @@ void draw_map(SDL_Renderer* renderer, const SpriteManager& sprites,
             }
 
             if (tile.visible) {
-                draw_tile({255, 255, 255, 255});
+                // Use per-tile brightness from lighting system
+                Uint8 b = tile.brightness;
+                // FOV edge fade: outer 40% of radius dims further
+                int fdx = x - cam.px;
+                int fdy = y - cam.py;
+                int dist_sq = fdx * fdx + fdy * fdy;
+                int fov_r_sq = cam.fov_r * cam.fov_r;
+                if (fov_r_sq > 0 && dist_sq > fov_r_sq * 60 / 100) {
+                    float t = static_cast<float>(dist_sq - fov_r_sq * 60 / 100) /
+                              static_cast<float>(fov_r_sq * 40 / 100);
+                    if (t > 1.0f) t = 1.0f;
+                    b = static_cast<Uint8>(std::max(40, static_cast<int>(b) - static_cast<int>(t * 60)));
+                }
+                draw_tile({b, b, b, 255});
                 // Animated water overlay
                 if (tile.type == TileType::WATER) {
                     int wf = static_cast<int>((SDL_GetTicks() / 200 + x * 3 + y * 7) % 6);
+                    Uint8 wa = static_cast<Uint8>(std::min(120, static_cast<int>(b) * 120 / 255));
                     sprites.draw_sprite_sized(renderer, SHEET_ANIMATED, wf, 10,
-                                              screen_x, screen_y, TS, {255, 255, 255, 120});
+                                              screen_x, screen_y, TS, {b, b, b, wa});
                 }
             } else if (tile.explored) {
-                draw_tile({100, 100, 120, 255});
+                draw_tile({65, 63, 72, 255}); // dark, barely visible memory
             }
         }
     }
@@ -306,40 +410,20 @@ void draw_entities(SDL_Renderer* renderer, const SpriteManager& sprites,
     std::sort(cmds.begin(), cmds.end(),
               [](const DrawCmd& a, const DrawCmd& b) { return a.z_order < b.z_order; });
 
-    int anim_frame = static_cast<int>((SDL_GetTicks() / 150) % 6);
+    Uint32 ticks = SDL_GetTicks();
 
     for (auto& cmd : cmds) {
         int sx = cmd.sx, sy = cmd.sy;
-        // Animated sprites: cycle columns as frames
+        // Animated sprites: cycle columns as frames (offset by position for desync)
         if (cmd.sheet == SHEET_ANIMATED) {
-            sx = anim_frame;
+            int offset = (cmd.dx * 7 + cmd.dy * 13) & 0xFF; // spatial hash for per-entity offset
+            sx = static_cast<int>(((ticks + offset * 40) / 150) % 6);
         }
         sprites.draw_sprite_sized(renderer, cmd.sheet, sx, sy,
                                    cmd.dx, cmd.dy, TS, cmd.tint, cmd.flip_h);
 
-        // Warm glow around light sources (torches, braziers, fire pits)
-        if (cmd.sheet == SHEET_ANIMATED && (sy == 1 || sy == 3 || sy == 5 || sy == 7)) {
-            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-            int gcx = cmd.dx + TS / 2;
-            int gcy = cmd.dy + TS / 2;
-            int flicker = 15 + (anim_frame % 3) * 5;
-            // Draw concentric diamond/circle layers for soft circular glow
-            int max_r = TS * 2;
-            int layers = 8;
-            for (int li = layers; li >= 1; li--) {
-                int r = max_r * li / layers;
-                int alpha = flicker * (layers - li + 1) / (layers + 2);
-                SDL_SetRenderDrawColor(renderer, 255, 180, 80, static_cast<Uint8>(alpha));
-                // Approximate circle with a clipped rect per row
-                for (int dy = -r; dy <= r; dy += std::max(1, r / 8)) {
-                    float frac = 1.0f - static_cast<float>(dy * dy) / static_cast<float>(r * r);
-                    if (frac <= 0) continue;
-                    int half_w = static_cast<int>(r * std::sqrt(frac));
-                    SDL_Rect row = {gcx - half_w, gcy + dy, half_w * 2, std::max(1, r / 8)};
-                    SDL_RenderFillRect(renderer, &row);
-                }
-            }
-        }
+        // Light sources: glow handled by per-tile lighting system (compute_lighting)
+        // No post-render overlay needed
     }
 }
 

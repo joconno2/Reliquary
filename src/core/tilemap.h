@@ -42,6 +42,7 @@ struct Tile {
     bool explored = false;
     bool visible = false;
     uint8_t variant = 0; // random variant for floor/wall variation
+    uint8_t brightness = 180; // 0-255, computed from light sources + ambient
 };
 
 class TileMap {

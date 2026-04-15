@@ -6729,7 +6729,7 @@ void Engine::render_day_night() {
     if (night_alpha <= 0.0f) return;
 
     // Dark blue overlay on the game area (between HUD and log)
-    int a = static_cast<int>(night_alpha * 55.0f); // max alpha 55 — subtle
+    int a = static_cast<int>(night_alpha * 85.0f); // max alpha 85 — noticeable darkening
     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(renderer_, 10, 12, 35, static_cast<Uint8>(a));
     SDL_Rect overlay = {0, HUD_HEIGHT, width_, height_ - HUD_HEIGHT - LOG_HEIGHT};
@@ -6749,17 +6749,19 @@ void Engine::render_zone_tint() {
     uint8_t r = 0, g = 0, b = 0;
     int alpha = 0;
     if (zone_str == "molten") {
-        r = 60; g = 15; b = 5; alpha = 25;  // warm red
+        r = 60; g = 15; b = 5; alpha = 40;  // warm red
     } else if (zone_str == "sunken") {
-        r = 5; g = 15; b = 45; alpha = 22;  // deep blue
+        r = 5; g = 15; b = 45; alpha = 38;  // deep blue
     } else if (zone_str == "warrens") {
-        r = 10; g = 25; b = 8; alpha = 18;  // damp green
+        r = 10; g = 25; b = 8; alpha = 30;  // damp green
     } else if (zone_str == "catacombs") {
-        r = 20; g = 15; b = 25; alpha = 18; // dusty purple
+        r = 20; g = 15; b = 25; alpha = 32; // dusty purple
     } else if (zone_str == "sepulchre") {
-        r = 8; g = 5; b = 15; alpha = 28;   // dark violet
+        r = 8; g = 5; b = 15; alpha = 45;   // dark violet
     } else if (zone_str == "deep_halls") {
-        r = 12; g = 12; b = 18; alpha = 15; // cool grey
+        r = 12; g = 12; b = 18; alpha = 28; // cool grey
+    } else if (zone_str == "stonekeep") {
+        r = 15; g = 12; b = 10; alpha = 20; // dusty brown
     }
     // stonekeep and fallback: no tint
 
@@ -6973,27 +6975,21 @@ void Engine::render_hud() {
         }
     }
 
-    // Unspent passive points indicator (flashing)
+    // Unspent passive points indicator (steady, not flashing)
     if (world_.has<PassiveTreeState>(player_)) {
         auto& tree_check = world_.get<PassiveTreeState>(player_);
         if (tree_check.points_available > 0) {
-            // Flash: alternate visibility every ~30 frames
-            bool flash_on = (SDL_GetTicks() / 400) % 2 == 0;
-            if (flash_on) {
-                char ptbuf[32];
-                snprintf(ptbuf, sizeof(ptbuf), "+%d [T]", tree_check.points_available);
-                SDL_Color pt_col = {255, 220, 60, 255};
-                SDL_Surface* pts = TTF_RenderText_Blended(font_, ptbuf, pt_col);
-                if (pts) {
-                    SDL_Texture* ptt = SDL_CreateTextureFromSurface(renderer_, pts);
-                    SDL_Rect ptd = {cursor, bar_y, pts->w, pts->h};
-                    SDL_RenderCopy(renderer_, ptt, nullptr, &ptd);
-                    cursor += pts->w + 8;
-                    SDL_DestroyTexture(ptt);
-                    SDL_FreeSurface(pts);
-                }
-            } else {
-                cursor += 40; // reserve space so nothing shifts
+            char ptbuf[32];
+            snprintf(ptbuf, sizeof(ptbuf), "+%d [T]", tree_check.points_available);
+            SDL_Color pt_col = {255, 220, 60, 255};
+            SDL_Surface* pts = TTF_RenderText_Blended(font_, ptbuf, pt_col);
+            if (pts) {
+                SDL_Texture* ptt = SDL_CreateTextureFromSurface(renderer_, pts);
+                SDL_Rect ptd = {cursor, bar_y, pts->w, pts->h};
+                SDL_RenderCopy(renderer_, ptt, nullptr, &ptd);
+                cursor += pts->w + 8;
+                SDL_DestroyTexture(ptt);
+                SDL_FreeSurface(pts);
             }
         }
     }
@@ -7015,8 +7011,10 @@ void Engine::render_hud() {
             {bonuses.cap_pandemic_cd, "PND", 7},
         };
         int slot = 1;
+        int hud_left_limit = width_ / 2 - 40; // don't overflow into right panel
         for (auto& cap : caps) {
             if (cap.cd_val == 0) continue; // player doesn't have this capstone
+            if (cursor >= hud_left_limit) break; // prevent overflow
             int cd_remaining = tree.capstone_cooldowns[cap.cd_idx];
             bool ready = (cd_remaining <= 0);
             char abuf[16];
@@ -7024,7 +7022,7 @@ void Engine::render_hud() {
                 snprintf(abuf, sizeof(abuf), "[%d]%s", slot, cap.name);
             else
                 snprintf(abuf, sizeof(abuf), "[%d]%d", slot, cd_remaining);
-            SDL_Color acol = ready ? SDL_Color{200, 220, 140, 255} : SDL_Color{100, 90, 80, 255};
+            SDL_Color acol = ready ? SDL_Color{200, 220, 140, 255} : SDL_Color{120, 110, 100, 255};
             SDL_Surface* as = TTF_RenderText_Blended(font_, abuf, acol);
             if (as) {
                 SDL_Texture* at = SDL_CreateTextureFromSurface(renderer_, as);
@@ -7057,7 +7055,7 @@ void Engine::render_hud() {
 
     // Help hint
     {
-        SDL_Color hint = {65, 60, 55, 255};
+        SDL_Color hint = {100, 95, 85, 255};
         SDL_Surface* hs = TTF_RenderText_Blended(font_, "? help", hint);
         if (hs) {
             SDL_Texture* ht = SDL_CreateTextureFromSurface(renderer_, hs);
@@ -7139,8 +7137,36 @@ void Engine::render() {
 
     Camera render_cam = camera_;
 
+    // Set player position on camera for FOV edge fade
+    if (world_.has<Position>(player_)) {
+        auto& pp = world_.get<Position>(player_);
+        render_cam.px = pp.x;
+        render_cam.py = pp.y;
+    }
+    if (world_.has<Stats>(player_))
+        render_cam.fov_r = world_.get<Stats>(player_).fov_radius();
+
     // Screen shake: pixel-level offset passed through y_offset
     int y_off = HUD_HEIGHT + static_cast<int>(shake_dy_);
+
+    // Compute per-tile lighting
+    {
+        int ambient = 220; // overworld daytime default: bright
+        if (dungeon_level_ > 0) {
+            // Dungeons are darker at deeper floors
+            ambient = std::max(80, 160 - dungeon_level_ * 8);
+        } else {
+            // Overworld: night cycle reduces ambient
+            int phase = game_turn_ % 100;
+            if (phase >= 50 && phase < 90)
+                ambient = 130; // night
+            else if (phase >= 40 && phase < 50)
+                ambient = 220 - static_cast<int>((phase - 40) * 9.0f); // dusk
+            else if (phase >= 90)
+                ambient = 130 + static_cast<int>((phase - 90) * 9.0f); // dawn
+        }
+        render::compute_lighting(map_, world_, ambient, render_cam);
+    }
 
     // Draw map
     render::draw_map(renderer_, sprites_, map_, render_cam, y_off);
@@ -7319,11 +7345,7 @@ void Engine::render() {
     // Overworld weather particles (screen-space, after entities, before HUD)
     render_weather();
 
-    // Day/night overlay (subtle darkening during night phase)
-    render_day_night();
-
-    // Dungeon zone color tint
-    render_zone_tint();
+    // Day/night and zone atmosphere handled by per-tile lighting (compute_lighting)
 
     // Screen flash overlay (decays per frame)
     if (flash_alpha_ > 1.0f) {
