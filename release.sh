@@ -86,15 +86,23 @@ if [ -z "$RUN_ID" ]; then
 fi
 
 echo "Watching run $RUN_ID..."
-if gh run watch "$RUN_ID" -R "$REPO" --exit-status; then
+gh run watch "$RUN_ID" -R "$REPO" || true
+
+# Check that the build jobs specifically passed
+LINUX_WIN=$(gh run view "$RUN_ID" -R "$REPO" --json jobs --jq '.jobs[] | select(.name=="build-linux-windows") | .conclusion')
+MACOS=$(gh run view "$RUN_ID" -R "$REPO" --json jobs --jq '.jobs[] | select(.name=="build-macos") | .conclusion')
+RELEASE=$(gh run view "$RUN_ID" -R "$REPO" --json jobs --jq '.jobs[] | select(.name=="release") | .conclusion')
+
+if [ "$LINUX_WIN" != "success" ] || [ "$MACOS" != "success" ]; then
     echo ""
-    echo "CI passed. All platforms built."
-else
-    echo ""
-    echo "CI failed. Check: https://github.com/${REPO}/actions/runs/${RUN_ID}"
+    echo "Build failed! Linux/Win: $LINUX_WIN, macOS: $MACOS"
+    echo "Check: https://github.com/${REPO}/actions/runs/${RUN_ID}"
     echo "Fix the issue, then: git tag -d ${TAG} && git push origin :refs/tags/${TAG}"
     exit 1
 fi
+
+echo ""
+echo "Builds passed. (Linux/Win: $LINUX_WIN, macOS: $MACOS, Release: $RELEASE)"
 
 # ---------------------------------------------------------------------------
 # Upload to Steam

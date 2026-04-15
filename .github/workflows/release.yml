@@ -171,36 +171,5 @@ jobs:
           draft: false
           prerelease: true
 
-  steam-upload:
-    needs: [build-linux-windows, build-macos]
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: steam-files
-          merge-multiple: true
-
-      - name: Extract builds
-        run: |
-          mkdir -p steam/linux steam/windows steam/macos
-          cd steam-files
-          tar xzf reliquary-linux-*.tar.gz -C ../steam/linux --strip-components=1
-          # Windows zip has a nested folder
-          unzip -q reliquary-windows-*.zip
-          cp -r reliquary-windows-*/* ../steam/windows/ || true
-          tar xzf reliquary-macos-*.tar.gz -C ../steam/macos --strip-components=1
-
-      - name: Upload to Steam
-        uses: game-ci/steam-deploy@v3
-        with:
-          username: ${{ secrets.STEAM_USERNAME }}
-          configVdf: ${{ secrets.STEAM_CONFIG_VDF }}
-          appId: 1159080
-          buildDescription: "Reliquary ${{ github.ref_name }}"
-          rootPath: steam
-          depot1Path: linux
-          depot2Path: windows
-          depot3Path: macos
-          releaseBranch: beta
+  # Steam upload handled locally via tools/steam-upload.sh
+  # (config.vdf too large for GitHub secrets — local steamcmd works)

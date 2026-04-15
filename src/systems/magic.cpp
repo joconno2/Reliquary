@@ -258,17 +258,200 @@ CastResult cast(World& world, Entity caster, SpellId spell,
         case SpellId::FORCE_BOLT:
             do_single_target_dmg();
             break;
-        case SpellId::FIREBALL:
-            do_single_target_dmg(StatusType::BURN, 3, 3);
+        case SpellId::FIREBALL: {
+            Entity target = nearest_enemy(world, caster, map, info.range);
+            if (target == NULL_ENTITY) {
+                if (is_player) log.add("No target.", {140, 130, 120, 255});
+                if (blood_magic) stats.hp += actual_cost; else stats.mp += actual_cost;
+                result.consumed_turn = false; break;
+            }
+            auto& tgt = world.get<Stats>(target);
+            int dmg = power + rng.range(0, power / 3);
+            // Shatter combo: frozen + fire = bonus damage
+            bool shattered = false;
+            if (world.has<StatusEffects>(target)) {
+                auto& se = world.get<StatusEffects>(target);
+                for (auto& fx : se.effects) {
+                    if (fx.type == StatusType::FROZEN) {
+                        dmg *= 2;
+                        fx.turns_remaining = 0; // remove frozen
+                        shattered = true;
+                        break;
+                    }
+                }
+            }
+            tgt.hp -= dmg;
+            if (!world.has<StatusEffects>(target)) world.add<StatusEffects>(target, {});
+            world.get<StatusEffects>(target).add(StatusType::BURN, 3, 3);
+            if (is_player) {
+                char buf[128];
+                if (shattered)
+                    snprintf(buf, sizeof(buf), "Fireball shatters the frozen %s! %d damage!", tgt.name.c_str(), dmg);
+                else
+                    snprintf(buf, sizeof(buf), "Fireball hits the %s. %d dmg, burning.", tgt.name.c_str(), dmg);
+                log.add(buf, {255, 160, 60, 255});
+            }
+            // Leave burning ground on target tile
+            if (world.has<Position>(target)) {
+                auto& tp = world.get<Position>(target);
+                if (map.in_bounds(tp.x, tp.y) && map.is_walkable(tp.x, tp.y))
+                    map.at(tp.x, tp.y).type = TileType::LAVA; // burning ground
+            }
+            if (tgt.hp <= 0 && !world.has<Player>(target)) combat::kill(world, target, log);
+            result.success = true;
             break;
-        case SpellId::ICE_SHARD:
-            do_single_target_dmg(StatusType::FROZEN, 0, 2);
+        }
+        case SpellId::ICE_SHARD: {
+            Entity target = nearest_enemy(world, caster, map, info.range);
+            if (target == NULL_ENTITY) {
+                if (is_player) log.add("No target.", {140, 130, 120, 255});
+                if (blood_magic) stats.hp += actual_cost; else stats.mp += actual_cost;
+                result.consumed_turn = false; break;
+            }
+            auto& tgt = world.get<Stats>(target);
+            int dmg = power + rng.range(0, power / 3);
+            // Steam combo: burning + ice = blind AoE
+            bool steamed = false;
+            if (world.has<StatusEffects>(target)) {
+                auto& se = world.get<StatusEffects>(target);
+                for (auto& fx : se.effects) {
+                    if (fx.type == StatusType::BURN) {
+                        fx.turns_remaining = 0; // remove burn
+                        steamed = true;
+                        break;
+                    }
+                }
+            }
+            tgt.hp -= dmg;
+            if (!world.has<StatusEffects>(target)) world.add<StatusEffects>(target, {});
+            world.get<StatusEffects>(target).add(StatusType::FROZEN, 0, 2);
+            if (steamed) {
+                // Steam cloud: blind all visible enemies
+                auto& ai_pool2 = world.pool<AI>();
+                for (size_t j = 0; j < ai_pool2.size(); j++) {
+                    Entity ae = ai_pool2.entity_at(j);
+                    if (world.has<StatusEffects>(ae))
+                        world.get<StatusEffects>(ae).add(StatusType::BLIND, 0, 3);
+                }
+                if (is_player) log.add("Steam erupts! All enemies blinded.", {180, 200, 255, 255});
+            }
+            if (is_player && !steamed) {
+                char buf[128];
+                snprintf(buf, sizeof(buf), "Ice pierces the %s. %d dmg, frozen.", tgt.name.c_str(), dmg);
+                log.add(buf, {140, 200, 255, 255});
+            }
+            if (tgt.hp <= 0 && !world.has<Player>(target)) combat::kill(world, target, log);
+            result.success = true;
             break;
-        case SpellId::LIGHTNING:
-        case SpellId::METEOR:
-        case SpellId::DISINTEGRATE:
-            do_single_target_dmg();
+        }
+        case SpellId::LIGHTNING: {
+            Entity target = nearest_enemy(world, caster, map, info.range);
+            if (target == NULL_ENTITY) {
+                if (is_player) log.add("No target.", {140, 130, 120, 255});
+                if (blood_magic) stats.hp += actual_cost; else stats.mp += actual_cost;
+                result.consumed_turn = false; break;
+            }
+            auto& tgt = world.get<Stats>(target);
+            int dmg = power + rng.range(0, power / 3);
+            // Water combo: if target is on deep water, chain to all adjacent
+            bool water_chain = false;
+            if (world.has<Position>(target)) {
+                auto& tp = world.get<Position>(target);
+                if (map.in_bounds(tp.x, tp.y) && map.at(tp.x, tp.y).type == TileType::DEEP_WATER) {
+                    water_chain = true;
+                    // Damage all entities adjacent to the water tile
+                    static const int DX[] = {-1, 0, 1, -1, 1, -1, 0, 1};
+                    static const int DY[] = {-1, -1, -1, 0, 0, 1, 1, 1};
+                    for (int d = 0; d < 8; d++) {
+                        Entity adj = combat::entity_at(world, tp.x + DX[d], tp.y + DY[d], caster);
+                        if (adj != NULL_ENTITY && world.has<Stats>(adj) && !world.has<Player>(adj)) {
+                            world.get<Stats>(adj).hp -= dmg / 2;
+                            if (world.has<StatusEffects>(adj))
+                                world.get<StatusEffects>(adj).add(StatusType::STUNNED, 0, 1);
+                        }
+                    }
+                }
+            }
+            tgt.hp -= dmg;
+            // Lightning stuns
+            if (world.has<StatusEffects>(target))
+                world.get<StatusEffects>(target).add(StatusType::STUNNED, 0, 1);
+            if (is_player) {
+                char buf[128];
+                if (water_chain)
+                    snprintf(buf, sizeof(buf), "Lightning arcs through the water! %d dmg + chain stun!", dmg);
+                else
+                    snprintf(buf, sizeof(buf), "Lightning strikes the %s. %d dmg, stunned.", tgt.name.c_str(), dmg);
+                log.add(buf, {200, 200, 255, 255});
+            }
+            if (tgt.hp <= 0 && !world.has<Player>(target)) combat::kill(world, target, log);
+            result.success = true;
             break;
+        }
+        case SpellId::METEOR: {
+            // AoE: damage target + all adjacent
+            Entity target = nearest_enemy(world, caster, map, info.range);
+            if (target == NULL_ENTITY) {
+                if (is_player) log.add("No target.", {140, 130, 120, 255});
+                if (blood_magic) stats.hp += actual_cost; else stats.mp += actual_cost;
+                result.consumed_turn = false; break;
+            }
+            auto& tgt = world.get<Stats>(target);
+            int dmg = power + rng.range(0, power / 3);
+            tgt.hp -= dmg;
+            if (!world.has<StatusEffects>(target)) world.add<StatusEffects>(target, {});
+            world.get<StatusEffects>(target).add(StatusType::BURN, 3, 3);
+            world.get<StatusEffects>(target).add(StatusType::STUNNED, 0, 1);
+            // Splash damage to adjacent
+            int splash = 0;
+            if (world.has<Position>(target)) {
+                auto& tp = world.get<Position>(target);
+                static const int DX[] = {-1, 0, 1, -1, 1, -1, 0, 1};
+                static const int DY[] = {-1, -1, -1, 0, 0, 1, 1, 1};
+                for (int d = 0; d < 8; d++) {
+                    Entity adj = combat::entity_at(world, tp.x + DX[d], tp.y + DY[d], caster);
+                    if (adj != NULL_ENTITY && world.has<Stats>(adj) && !world.has<Player>(adj)) {
+                        world.get<Stats>(adj).hp -= dmg / 2;
+                        if (world.has<StatusEffects>(adj))
+                            world.get<StatusEffects>(adj).add(StatusType::BURN, 2, 2);
+                        splash++;
+                    }
+                }
+            }
+            if (is_player) {
+                char buf[128];
+                snprintf(buf, sizeof(buf), "Meteor crashes down! %d dmg%s.", dmg,
+                         splash > 0 ? ", splash burns nearby" : "");
+                log.add(buf, {255, 200, 60, 255});
+            }
+            if (tgt.hp <= 0 && !world.has<Player>(target)) combat::kill(world, target, log);
+            result.success = true;
+            break;
+        }
+        case SpellId::DISINTEGRATE: {
+            // Massive single target, destroys corpse (no raise dead possible)
+            Entity target = nearest_enemy(world, caster, map, info.range);
+            if (target == NULL_ENTITY) {
+                if (is_player) log.add("No target.", {140, 130, 120, 255});
+                if (blood_magic) stats.hp += actual_cost; else stats.mp += actual_cost;
+                result.consumed_turn = false; break;
+            }
+            auto& tgt = world.get<Stats>(target);
+            int dmg = power * 2 + rng.range(0, power);
+            tgt.hp -= dmg;
+            if (is_player) {
+                char buf[128];
+                snprintf(buf, sizeof(buf), "A beam of annihilation hits the %s. %d damage.", tgt.name.c_str(), dmg);
+                log.add(buf, {255, 255, 200, 255});
+            }
+            if (tgt.hp <= 0 && !world.has<Player>(target)) {
+                // Destroy completely, no corpse
+                world.destroy(target);
+                if (is_player) log.add("Nothing remains.", {200, 200, 180, 255});
+            }
+            result.success = true;
+            break;
+        }
         case SpellId::ACID_SPLASH: {
             Entity target = nearest_enemy(world, caster, map, info.range);
             if (target == NULL_ENTITY) {
@@ -616,8 +799,17 @@ CastResult cast(World& world, Entity caster, SpellId spell,
 
         // === NATURE ===
         case SpellId::ENTANGLE: {
-            int count = do_aoe([&](Entity e) { world.get<Stats>(e).hp -= power; });
-            if (is_player && count > 0) { char buf[64]; snprintf(buf, sizeof(buf), "Vines erupt. %d entangled.", count); log.add(buf, {80, 160, 80, 255}); }
+            // Root + damage all visible enemies (stun 2 turns + minor damage)
+            int count = do_aoe([&](Entity e) {
+                world.get<Stats>(e).hp -= power / 2;
+                if (!world.has<StatusEffects>(e)) world.add<StatusEffects>(e, {});
+                world.get<StatusEffects>(e).add(StatusType::STUNNED, 0, 2);
+            });
+            if (is_player && count > 0) {
+                char buf[64];
+                snprintf(buf, sizeof(buf), "Vines erupt from the ground! %d rooted for 2 turns.", count);
+                log.add(buf, {80, 180, 80, 255});
+            }
             result.success = count > 0;
             break;
         }
@@ -674,7 +866,7 @@ CastResult cast(World& world, Entity caster, SpellId spell,
             result.success = true;
             break;
         case SpellId::EARTHQUAKE: {
-            // Damage ALL enemies on floor, stun adjacent
+            // Damage ALL enemies on floor, stun adjacent, create rubble
             auto& cpos = world.get<Position>(caster);
             int count = 0;
             auto& ai_pool = world.pool<AI>();
@@ -694,8 +886,23 @@ CastResult cast(World& world, Entity caster, SpellId spell,
                 if (es.hp <= 0 && !world.has<Player>(e)) combat::kill(world, e, log);
                 count++;
             }
-            if (is_player) { char buf[64]; snprintf(buf, sizeof(buf), "The ground shakes. %d hit.", count); log.add(buf, {140, 120, 80, 255}); }
-            result.success = count > 0;
+            // Create rubble: 3-5 random walkable tiles near caster become ROCK (impassable)
+            int rubble = 0;
+            for (int a = 0; a < 30 && rubble < rng.range(3, 5); a++) {
+                int rx = cpos.x + rng.range(-3, 3);
+                int ry = cpos.y + rng.range(-3, 3);
+                if (rx == cpos.x && ry == cpos.y) continue;
+                if (!map.in_bounds(rx, ry) || !map.is_walkable(rx, ry)) continue;
+                if (combat::entity_at(world, rx, ry, caster) != NULL_ENTITY) continue;
+                map.at(rx, ry).type = TileType::ROCK;
+                rubble++;
+            }
+            if (is_player) {
+                char buf[96];
+                snprintf(buf, sizeof(buf), "The earth splits! %d hit, %d rubble tiles created.", count, rubble);
+                log.add(buf, {180, 140, 80, 255});
+            }
+            result.success = count > 0 || rubble > 0;
             break;
         }
         case SpellId::LIGHTNING_STORM: {
@@ -831,6 +1038,7 @@ CastResult cast(World& world, Entity caster, SpellId spell,
             break;
         }
         case SpellId::HEX: {
+            // Curse: confuse + weaken (reduce damage and speed permanently)
             Entity target = nearest_enemy(world, caster, map, info.range);
             if (target == NULL_ENTITY) {
                 if (is_player) log.add("No target.", {140, 130, 120, 255});
@@ -838,9 +1046,16 @@ CastResult cast(World& world, Entity caster, SpellId spell,
                 result.consumed_turn = false;
                 break;
             }
+            auto& tgt = world.get<Stats>(target);
             if (!world.has<StatusEffects>(target)) world.add<StatusEffects>(target, {});
-            world.get<StatusEffects>(target).add(StatusType::CONFUSED, 0, 4);
-            if (is_player) { auto& tgt = world.get<Stats>(target); char buf[128]; snprintf(buf, sizeof(buf), "The %s's mind fractures.", tgt.name.c_str()); log.add(buf, {140, 80, 160, 255}); }
+            world.get<StatusEffects>(target).add(StatusType::CONFUSED, 0, 5);
+            tgt.base_damage = std::max(1, tgt.base_damage - 2);
+            tgt.base_speed = std::max(50, tgt.base_speed - 20);
+            if (is_player) {
+                char buf[128];
+                snprintf(buf, sizeof(buf), "The %s is hexed. Confused, -2 damage, -20 speed.", tgt.name.c_str());
+                log.add(buf, {160, 80, 180, 255});
+            }
             result.success = true;
             break;
         }
@@ -848,12 +1063,18 @@ CastResult cast(World& world, Entity caster, SpellId spell,
             do_single_target_dmg(StatusType::BLEED, 3, 4);
             break;
         case SpellId::DARKNESS: {
+            // Blind all visible enemies AND grant caster invisibility
             int count = do_aoe([&](Entity e) {
                 if (!world.has<StatusEffects>(e)) world.add<StatusEffects>(e, {});
-                world.get<StatusEffects>(e).add(StatusType::BLIND, 0, 4);
+                world.get<StatusEffects>(e).add(StatusType::BLIND, 0, 5);
             });
-            if (is_player) { char buf[64]; snprintf(buf, sizeof(buf), "Darkness falls on %d creatures.", count); log.add(buf, {80, 60, 100, 255}); }
-            result.success = count > 0;
+            // Caster gets invisible turns (like Zhavek stealth)
+            stats.invisible_turns = std::max(stats.invisible_turns, 4);
+            if (is_player) {
+                if (count > 0) log.add("Darkness swallows the room. You vanish into shadow.", {80, 60, 120, 255});
+                else log.add("Darkness wraps around you. You are hidden.", {80, 60, 120, 255});
+            }
+            result.success = true;
             break;
         }
         case SpellId::WITHER: {
@@ -872,19 +1093,39 @@ CastResult cast(World& world, Entity caster, SpellId spell,
             result.success = true;
             break;
         }
-        case SpellId::BLOOD_PACT:
-            // Sacrifice 20 HP for permanent bonuses
-            if (stats.hp <= 20) {
-                if (is_player) log.add("Not enough HP to sacrifice.", {200, 80, 80, 255});
+        case SpellId::BLOOD_PACT: {
+            // Sacrifice MAX HP (permanent) for a random powerful bonus
+            if (stats.hp_max <= 15) {
+                if (is_player) log.add("Your body can't survive another pact.", {200, 80, 80, 255});
                 if (blood_magic) stats.hp += actual_cost; else stats.mp += actual_cost;
                 result.consumed_turn = false; break;
             }
-            stats.hp -= 20;
-            stats.base_damage += 5;
-            stats.natural_armor += 2;
-            if (is_player) log.add("Blood for power. -20 HP, +5 damage, +2 armor permanently.", {140, 40, 40, 255});
+            int sacrifice = 10 + stats.level;
+            stats.hp_max -= sacrifice;
+            if (stats.hp > stats.hp_max) stats.hp = stats.hp_max;
+            // Random powerful bonus
+            int roll = rng.range(1, 6);
+            const char* bonus_desc = "";
+            switch (roll) {
+                case 1: stats.base_damage += 4; bonus_desc = "+4 permanent damage"; break;
+                case 2: stats.natural_armor += 3; bonus_desc = "+3 permanent armor"; break;
+                case 3: stats.mp_max += 15; stats.mp += 15; bonus_desc = "+15 permanent MP"; break;
+                case 4: stats.base_speed += 15; bonus_desc = "+15 permanent speed"; break;
+                case 5:
+                    stats.set_attr(Attr::STR, stats.attr(Attr::STR) + 3);
+                    stats.set_attr(Attr::INT, stats.attr(Attr::INT) + 3);
+                    bonus_desc = "+3 STR, +3 INT"; break;
+                case 6: stats.base_damage += 2; stats.natural_armor += 2; stats.base_speed += 10;
+                    bonus_desc = "+2 damage, +2 armor, +10 speed"; break;
+            }
+            if (is_player) {
+                char buf[128];
+                snprintf(buf, sizeof(buf), "Blood for power. -%d max HP. Gained: %s.", sacrifice, bonus_desc);
+                log.add(buf, {180, 40, 40, 255});
+            }
             result.success = true;
             break;
+        }
         case SpellId::DOOM: {
             Entity target = nearest_enemy(world, caster, map, info.range);
             if (target == NULL_ENTITY) {

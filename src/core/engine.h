@@ -181,6 +181,10 @@ private:
     int rest_count_this_floor_ = 0;  // exhaustion: diminishing rest returns per floor
     bool sneaking_ = false;           // player is in sneak mode
 
+    // Screen flash (brief color overlay, decays per frame)
+    float flash_r_ = 0, flash_g_ = 0, flash_b_ = 0, flash_alpha_ = 0;
+    void screen_flash(float r, float g, float b, float alpha = 80.0f);
+
     // Tutorial tips: fire once per run
     struct TutorialFlags {
         bool first_combat = false;

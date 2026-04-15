@@ -66,18 +66,24 @@ Engine::~Engine() {
 }
 
 bool Engine::init() {
+    fprintf(stderr, "[init] SDL_Init...\n"); fflush(stderr);
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
         fprintf(stderr, "SDL_Init error: %s\n", SDL_GetError());
+        fflush(stderr);
         return false;
     }
 
+    fprintf(stderr, "[init] IMG_Init...\n"); fflush(stderr);
     if (IMG_Init(IMG_INIT_PNG) == 0) {
         fprintf(stderr, "IMG_Init error: %s\n", IMG_GetError());
+        fflush(stderr);
         return false;
     }
 
+    fprintf(stderr, "[init] TTF_Init...\n"); fflush(stderr);
     if (TTF_Init() < 0) {
         fprintf(stderr, "TTF_Init error: %s\n", TTF_GetError());
+        fflush(stderr);
         return false;
     }
 
@@ -86,8 +92,10 @@ bool Engine::init() {
     if (SDL_GetDesktopDisplayMode(0, &dm) == 0) {
         width_ = dm.w;
         height_ = dm.h;
+        fprintf(stderr, "[init] Display: %dx%d\n", width_, height_); fflush(stderr);
     }
 
+    fprintf(stderr, "[init] Creating window...\n"); fflush(stderr);
     window_ = SDL_CreateWindow(
         "Reliquary",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
@@ -97,20 +105,26 @@ bool Engine::init() {
     fullscreen_ = true;
     if (!window_) {
         fprintf(stderr, "Window creation error: %s\n", SDL_GetError());
+        fflush(stderr);
         return false;
     }
 
+    fprintf(stderr, "[init] Creating renderer...\n"); fflush(stderr);
     renderer_ = SDL_CreateRenderer(window_, -1,
         SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     if (!renderer_) {
         fprintf(stderr, "Renderer creation error: %s\n", SDL_GetError());
+        fflush(stderr);
         return false;
     }
 
+    fprintf(stderr, "[init] Loading spritesheets...\n"); fflush(stderr);
     if (!sprites_.load_all(renderer_, "assets/32rogues")) {
-        fprintf(stderr, "Failed to load spritesheets\n");
+        fprintf(stderr, "Failed to load spritesheets from assets/32rogues\n");
+        fflush(stderr);
         return false;
     }
+    fprintf(stderr, "[init] Spritesheets loaded.\n"); fflush(stderr);
 
     // Compute UI scale from resolution — base reference is 1080p
     // At 1440p this gives ~1.33, at 2160p ~2.0, at 800p ~0.74
@@ -5184,6 +5198,8 @@ void Engine::handle_input() {
                                         particles_.projectile(sp.x, sp.y, tx, ty, 15, 255, 140, 40, 0.25f, 6);
                                         particles_.burst(tx, ty, 25, 255, 120, 30, 0.15f, 0.6f, 8);
                                         particles_.burst(tx, ty, 15, 255, 200, 60, 0.1f, 0.4f, 6);
+                                        trigger_screen_shake(3.0f);
+                                        screen_flash(255, 120, 30, 50);
                                     }
                                     break;
                                 case SpellId::DRAIN_LIFE:
@@ -5230,16 +5246,23 @@ void Engine::handle_input() {
                                     if (has_target) {
                                         particles_.projectile(sp.x, sp.y, tx, ty, 18, 255, 255, 180, 0.5f, 2);
                                         particles_.burst(tx, ty, 20, 255, 255, 140, 0.2f, 0.3f, 3);
+                                        trigger_screen_shake(2.0f);
+                                        screen_flash(255, 255, 220, 70);
                                     }
                                     break;
                                 case SpellId::FROST_NOVA:
-                                    particles_.burst(sp.x, sp.y, 30, 160, 220, 255, 0.15f, 0.8f, 5);
-                                    particles_.drift(sp.x, sp.y, 20, 200, 240, 255, 1.0f, 3);
+                                    particles_.burst(sp.x, sp.y, 45, 160, 220, 255, 0.2f, 1.0f, 6);
+                                    particles_.drift(sp.x, sp.y, 30, 200, 240, 255, 1.5f, 4);
+                                    particles_.burst(sp.x, sp.y, 15, 255, 255, 255, 0.25f, 0.4f, 2);
+                                    trigger_screen_shake(2.0f);
+                                    screen_flash(140, 200, 255, 50);
                                     break;
                                 case SpellId::METEOR:
                                     if (has_target) {
                                         particles_.fall(tx, ty, 15, 255, 160, 40, 0.5f, 8);
                                         particles_.burst(tx, ty, 30, 255, 100, 20, 0.18f, 0.7f, 7);
+                                        trigger_screen_shake(6.0f);
+                                        screen_flash(255, 160, 40, 80);
                                     }
                                     break;
                                 case SpellId::ACID_SPLASH:
@@ -5252,6 +5275,9 @@ void Engine::handle_input() {
                                     if (has_target) {
                                         particles_.projectile(sp.x, sp.y, tx, ty, 22, 200, 40, 200, 0.4f, 3);
                                         particles_.burst(tx, ty, 25, 220, 60, 220, 0.2f, 0.5f, 4);
+                                        particles_.burst(tx, ty, 35, 255, 200, 255, 0.25f, 0.3f, 2);
+                                        trigger_screen_shake(4.0f);
+                                        screen_flash(200, 40, 200, 60);
                                     }
                                     break;
                                 // --- Transmutation: earthy/metallic ---
@@ -5291,18 +5317,24 @@ void Engine::handle_input() {
                                     particles_.drift(sp.x, sp.y, 25, 100, 200, 60, 1.5f, 5);
                                     break;
                                 case SpellId::EARTHQUAKE:
-                                    particles_.burst(sp.x, sp.y, 30, 140, 120, 80, 0.2f, 0.5f, 8);
+                                    particles_.burst(sp.x, sp.y, 40, 140, 120, 80, 0.25f, 0.8f, 8);
+                                    particles_.burst(sp.x, sp.y, 20, 200, 180, 100, 0.15f, 0.5f, 10);
+                                    trigger_screen_shake(8.0f);
+                                    screen_flash(140, 100, 50, 60);
                                     break;
                                 case SpellId::BARKSKIN:
                                     particles_.burst(sp.x, sp.y, 14, 100, 140, 60, 0.04f, 0.7f, 6);
                                     break;
                                 case SpellId::LIGHTNING_STORM:
-                                    particles_.burst(sp.x, sp.y, 25, 255, 255, 160, 0.2f, 0.4f, 3);
-                                    particles_.burst(sp.x, sp.y, 15, 200, 200, 255, 0.15f, 0.6f, 5);
+                                    particles_.burst(sp.x, sp.y, 35, 255, 255, 160, 0.25f, 0.5f, 3);
+                                    particles_.burst(sp.x, sp.y, 25, 200, 200, 255, 0.2f, 0.7f, 5);
+                                    trigger_screen_shake(5.0f);
                                     break;
                                 // --- Dark Arts: purple/red drains ---
                                 case SpellId::RAISE_DEAD:
-                                    particles_.rise(sp.x, sp.y, 15, 120, 60, 160, 1.0f, 5);
+                                    particles_.rise(sp.x, sp.y, 25, 120, 60, 160, 1.2f, 6);
+                                    particles_.burst(sp.x, sp.y, 15, 80, 200, 80, 0.08f, 0.8f, 5);
+                                    particles_.drift(sp.x, sp.y, 10, 160, 100, 200, 1.5f, 4);
                                     break;
                                 case SpellId::HEX:
                                     if (has_target) particles_.drift(tx, ty, 15, 140, 60, 180, 1.0f, 4);
@@ -5314,18 +5346,26 @@ void Engine::handle_input() {
                                     }
                                     break;
                                 case SpellId::DARKNESS:
-                                    particles_.burst(sp.x, sp.y, 25, 40, 20, 60, 0.12f, 1.0f, 7);
+                                    particles_.burst(sp.x, sp.y, 40, 20, 10, 40, 0.15f, 1.5f, 10);
+                                    particles_.drift(sp.x, sp.y, 25, 40, 20, 60, 2.0f, 8);
+                                    screen_flash(10, 5, 20, 100); // heavy dark flash
                                     break;
                                 case SpellId::WITHER:
                                     if (has_target) particles_.fall(tx, ty, 15, 100, 80, 40, 0.8f, 4);
                                     break;
                                 case SpellId::BLOOD_PACT:
-                                    particles_.burst(sp.x, sp.y, 18, 200, 40, 40, 0.08f, 0.7f, 6);
+                                    particles_.burst(sp.x, sp.y, 30, 200, 40, 40, 0.12f, 1.0f, 7);
+                                    particles_.rise(sp.x, sp.y, 15, 255, 60, 60, 0.8f, 4);
+                                    particles_.fall(sp.x, sp.y, 10, 180, 0, 0, 0.6f, 5);
+                                    trigger_screen_shake(3.0f);
+                                    screen_flash(180, 20, 20, 70);
                                     break;
                                 case SpellId::DOOM:
                                     if (has_target) {
-                                        particles_.fall(tx, ty, 20, 80, 0, 120, 1.2f, 6);
-                                        particles_.burst(tx, ty, 12, 160, 40, 200, 0.08f, 0.8f, 7);
+                                        particles_.fall(tx, ty, 30, 80, 0, 120, 1.5f, 8);
+                                        particles_.burst(tx, ty, 20, 160, 40, 200, 0.1f, 1.0f, 8);
+                                        particles_.drift(tx, ty, 15, 60, 0, 80, 2.0f, 6);
+                                        trigger_screen_shake(3.0f);
                                     }
                                     break;
                                 // --- Fallback by school ---
@@ -6179,6 +6219,11 @@ void Engine::update_screen_shake() {
     shake_intensity_ *= 0.75f; // fast decay
 }
 
+void Engine::screen_flash(float r, float g, float b, float alpha) {
+    flash_r_ = r; flash_g_ = g; flash_b_ = b;
+    flash_alpha_ = alpha;
+}
+
 void Engine::trigger_screen_shake(float intensity) {
     shake_intensity_ = intensity;
 }
@@ -6557,6 +6602,18 @@ void Engine::render() {
 
     // Dungeon zone color tint
     render_zone_tint();
+
+    // Screen flash overlay (decays per frame)
+    if (flash_alpha_ > 1.0f) {
+        SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+        SDL_Rect flash_rect = {0, 0, width_, height_};
+        SDL_SetRenderDrawColor(renderer_, static_cast<uint8_t>(flash_r_),
+                                static_cast<uint8_t>(flash_g_),
+                                static_cast<uint8_t>(flash_b_),
+                                static_cast<uint8_t>(flash_alpha_));
+        SDL_RenderFillRect(renderer_, &flash_rect);
+        flash_alpha_ *= 0.85f; // rapid decay
+    }
 
     // Sneak visual: keep player alpha synced + draw detection ranges
     if (world_.has<Renderable>(player_)) {
