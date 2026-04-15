@@ -1521,6 +1521,10 @@ void Engine::grant_skill_xp(SkillId skill, int amount) {
         char buf[96];
         snprintf(buf, sizeof(buf), "%s increased to %d.", skill_name(skill), new_lv);
         log_.add(buf, {140, 200, 160, 255});
+        if (!tips_shown_.first_skill_levelup) {
+            tips_shown_.first_skill_levelup = true;
+            log_.add("Tip: skills level through use. Press c to see all skills and their unlock thresholds.", {100, 180, 140, 255});
+        }
         // Milestone notifications
         if (new_lv == 25 || new_lv == 50 || new_lv == 75) {
             const char* unlock = nullptr;
@@ -1678,6 +1682,10 @@ void Engine::try_move_player(int dx, int dy) {
                 journal_, meta_, gold_, game_turn_, dungeon_level_,
                 pending_levelup_, pending_quest_npc_
             };
+            if (!tips_shown_.first_npc) {
+                tips_shown_.first_npc = true;
+                log_.add("Tip: NPCs offer quests, shops, and healing. Sneak + bump to pickpocket.", {100, 180, 140, 255});
+            }
             if (npc_interaction::interact(npc_ctx, target, nx, ny))
                 return;
         }
@@ -1721,6 +1729,12 @@ void Engine::try_move_player(int dx, int dy) {
             victim_god = world_.get<GodAlignment>(target).god;
         auto atk_result = combat::melee_attack(world_, player_, target, rng_, log_);
         player_acted_ = true;
+
+        // Tutorial: first combat
+        if (!tips_shown_.first_combat) {
+            tips_shown_.first_combat = true;
+            log_.add("Tip: weapon skills level through use. z to cast spells, f to fire ranged.", {100, 180, 140, 255});
+        }
 
         // Backstab: bonus damage from sneak attack
         if (sneaking_ && atk_result.hit && !atk_result.killed && world_.has<Stats>(target)) {
@@ -2131,6 +2145,10 @@ void Engine::try_move_player(int dx, int dy) {
                 world_.get<PassiveTreeState>(player_).grant_point();
             }
             audio_.play(SfxId::LEVELUP);
+            if (!tips_shown_.first_levelup) {
+                tips_shown_.first_levelup = true;
+                log_.add("Tip: you earned a passive tree point! Press t to open the tree and spend it.", {100, 180, 140, 255});
+            }
         }
         return;
     }
@@ -2221,6 +2239,10 @@ void Engine::try_move_player(int dx, int dy) {
             trap.triggered = true;
             trap.revealed = true;
             trap_sprite(trap.type, true, trap.sprite_x, trap.sprite_y);
+            if (!tips_shown_.first_trap) {
+                tips_shown_.first_trap = true;
+                log_.add("Tip: traps are hidden. High PER detects them. Reveal Map spell shows all.", {100, 180, 140, 255});
+            }
             // Show triggered sprite
             if (!world_.has<Renderable>(te)) {
                 world_.add<Renderable>(te, {SHEET_TILES, trap.sprite_x, trap.sprite_y,
@@ -2431,6 +2453,10 @@ void Engine::try_move_player(int dx, int dy) {
             ps.hp += heal;
             char sbuf[128];
             snprintf(sbuf, sizeof(sbuf), "A shrine of %s. You feel your god's presence. (+5 favor, +%d HP)", sginfo.name, heal);
+            if (!tips_shown_.first_shrine) {
+                tips_shown_.first_shrine = true;
+                log_.add("Tip: same-god shrines heal, identify items, and let you respec passive tree points.", {100, 180, 140, 255});
+            }
             log_.add(sbuf, {sginfo.color.r, sginfo.color.g, sginfo.color.b, 255});
             // Identify curse/bless on all equipped items
             if (world_.has<Inventory>(player_)) {
@@ -4664,7 +4690,9 @@ void Engine::handle_input() {
                 // Opening messages
                 log_.add("You arrive at the outskirts of Thornwall.", {180, 170, 150, 255});
                 log_.add("Rumors of ancient evil stir beneath the land.", {150, 140, 130, 255});
-                log_.add("Press ? for help.  Press q for your quest journal.", {120, 130, 110, 255});
+                log_.add("Tip: ? for help  |  q quests  |  t passive tree  |  c character  |  o sneak", {100, 180, 140, 255});
+                log_.add("Tip: bump NPCs to talk. Bump enemies to fight. g to pick up items.", {100, 180, 140, 255});
+                tips_shown_ = {}; // reset tips for new run
             }
             return;
         }
@@ -4948,22 +4976,6 @@ void Engine::handle_input() {
                         }
                     }
                     else if (sym == SDLK_ESCAPE) { prayer_mode_ = false; }
-                }
-                return;
-            }
-
-            if (levelup_screen_.is_open()) {
-                LevelUpAction act = levelup_screen_.handle_input(event);
-                if (act == LevelUpAction::CHOSEN) {
-                    levelup_screen_.apply_choice(world_);
-                    levelup_screen_.close();
-                    pending_levelup_ = false;
-                    if (world_.has<Stats>(player_)) {
-                        auto& stats = world_.get<Stats>(player_);
-                        char buf[64];
-                        snprintf(buf, sizeof(buf), "You feel stronger. (Level %d)", stats.level);
-                        log_.add(buf, {255, 220, 100, 255});
-                    }
                 }
                 return;
             }
@@ -5428,6 +5440,11 @@ void Engine::handle_input() {
                     sneaking_ = !sneaking_;
                     if (sneaking_) {
                         log_.add("You crouch and move carefully.", {140, 140, 200, 255});
+                        if (!tips_shown_.first_sneak) {
+                            tips_shown_.first_sneak = true;
+                            log_.add("Tip: sneaking halves your speed but enemies detect you from much closer.", {100, 180, 140, 255});
+                            log_.add("Tip: attack from sneak for a backstab. Bump NPCs to pickpocket.", {100, 180, 140, 255});
+                        }
                         // Dim player sprite
                         if (world_.has<Renderable>(player_)) {
                             auto& r = world_.get<Renderable>(player_);
@@ -5800,6 +5817,11 @@ void Engine::handle_input() {
                             char ebuf[128];
                             snprintf(ebuf, sizeof(ebuf), "You descend into %s.", de.name.c_str());
                             log_.add(ebuf, {180, 170, 150, 255});
+                            if (!tips_shown_.first_dungeon) {
+                                tips_shown_.first_dungeon = true;
+                                log_.add("Tip: watch for traps (high PER helps). r to rest, but rest gets weaker each time.", {100, 180, 140, 255});
+                                log_.add("Tip: o to sneak. Backstab from sneak does 2-4x damage.", {100, 180, 140, 255});
+                            }
                             // Zone-flavored entrance line
                             if (de.zone == "warrens")
                                 log_.add("Dirt walls close in around you. The air is thick.", {140, 130, 100, 255});
@@ -6599,7 +6621,7 @@ void Engine::render() {
     quest_offer_.render(renderer_, font_, font_title_, width_, height_);
     help_screen_.render(renderer_, font_, font_title_, width_, height_);
     passive_tree_screen_.render(renderer_, font_, font_title_, width_, height_);
-    levelup_screen_.render(renderer_, font_, width_, height_);
+    // Old levelup_screen_ removed; passive tree replaces it
     shop_screen_.render(renderer_, font_, sprites_, world_, width_, height_);
 
     // World map overlay — needs player position and tilemap

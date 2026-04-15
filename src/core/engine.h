@@ -180,6 +180,21 @@ private:
     bool rested_this_floor_ = false; // Lethis tenet tracking
     int rest_count_this_floor_ = 0;  // exhaustion: diminishing rest returns per floor
     bool sneaking_ = false;           // player is in sneak mode
+
+    // Tutorial tips: fire once per run
+    struct TutorialFlags {
+        bool first_combat = false;
+        bool first_levelup = false;
+        bool first_spell = false;
+        bool first_dungeon = false;
+        bool first_trap = false;
+        bool first_rest = false;
+        bool first_sneak = false;
+        bool first_shrine = false;
+        bool first_skill_levelup = false;
+        bool first_npc = false;
+        bool first_potion = false;
+    } tips_shown_;
     static constexpr int MAX_SUMMONS = 3;
     std::vector<Entity> summons_;     // active friendly summons
     bool ascending_ = false; // set before generate_level to indicate stair direction
