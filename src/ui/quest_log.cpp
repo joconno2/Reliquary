@@ -100,7 +100,7 @@ void QuestLog::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_tit
                  info.name, state_str);
 
         SDL_Color col = is_sel ? (info.is_main ? main_col : side_col) : state_col;
-        ui::draw_text(renderer, font, buf, col, panel_x + 16, y);
+        ui::draw_text_clipped(renderer, font, buf, col, panel_x + 16, y, panel_w - 32);
 
         // Progress for count-based quests
         if (entry.target > 0 && entry.state == QuestState::ACTIVE) {
@@ -154,7 +154,7 @@ void QuestLog::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_tit
                 y += line_h + 4;
                 header_shown = true;
             }
-            ui::draw_text(renderer, font, dq.name.c_str(), active_col, panel_x + 16, y);
+            ui::draw_text_clipped(renderer, font, dq.name.c_str(), active_col, panel_x + 16, y, panel_w - 32);
             y += line_h;
             ui::draw_text_wrapped(renderer, font, dq.objective.c_str(), dim_col,
                                    panel_x + 24, y, panel_w - 48);

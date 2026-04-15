@@ -281,7 +281,8 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
         else if (is_equipped) col = equip_col;
         else if (item.rarity != Rarity::COMMON) col = rarity_color(item.rarity);
         else col = item_col;
-        ui::draw_text(renderer, font, buf, col, list_x + 44, y + 8);
+        int name_max_w = list_w - 54; // 44px sprite offset + 10px right margin
+        ui::draw_text_clipped(renderer, font, buf, col, list_x + 44, y + 8, name_max_w);
 
         y += row_h;
         if (y > base_y + total_h - line_h * 4) break;
@@ -310,19 +311,32 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     draw_button(use_btn_, "[U]se");
     draw_button(drop_btn_, "[D]rop");
 
-    // Item description and stats
+    // Item description and stats (clip to available area between item list and buttons)
     if (sel >= 0 && sel < count) {
         Entity item_e = inv.items[sel];
         if (world.has<Item>(item_e)) {
             auto& item = world.get<Item>(item_e);
             SDL_Color stat_col = {140, 160, 180, 255};
             SDL_Color value_col = {200, 180, 80, 255};
-            int info_y = btn_y - line_h * 3 - 12;
+            int detail_max_w = list_w - 20;
+
+            // Detail area: from separator line to button row
+            int detail_top = base_y + total_h / 2 + 4;
+            int detail_bottom = btn_y - 4;
+            SDL_Rect detail_clip = {list_x, detail_top, list_w, detail_bottom - detail_top};
+            ui::ClipGuard cg(renderer, detail_clip);
+
+            // Separator line
+            SDL_SetRenderDrawColor(renderer, 60, 50, 70, 255);
+            SDL_RenderDrawLine(renderer, list_x + 8, detail_top - 2, list_x + list_w - 8, detail_top - 2);
+
+            int info_y = detail_top + 4;
 
             if (!item.description.empty()) {
                 ui::draw_text_wrapped(renderer, font, item.description.c_str(), hint_col,
-                                       list_x + 10, info_y, list_w - 20);
-                info_y += line_h + 4;
+                                       list_x + 10, info_y, detail_max_w);
+                int desc_h = ui::text_wrapped_height(font, item.description.c_str(), detail_max_w);
+                info_y += desc_h + 4;
             }
 
             // Item stats
@@ -457,7 +471,7 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
                     default: abuf[0] = '\0'; break;
                 }
                 if (abuf[0] != '\0') {
-                    ui::draw_text(renderer, font, abuf, affix_col, list_x + 10, info_y);
+                    ui::draw_text_clipped(renderer, font, abuf, affix_col, list_x + 10, info_y, detail_max_w);
                     info_y += line_h + 2;
                 }
             }
@@ -467,7 +481,7 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
                 const char* ue_desc = unique_effect_description(item.unique_effect);
                 if (ue_desc[0] != '\0') {
                     SDL_Color ue_col = {255, 200, 100, 255}; // warm gold
-                    ui::draw_text(renderer, font, ue_desc, ue_col, list_x + 10, info_y);
+                    ui::draw_text_clipped(renderer, font, ue_desc, ue_col, list_x + 10, info_y, detail_max_w);
                     info_y += line_h + 2;
                 }
             }

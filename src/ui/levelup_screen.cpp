@@ -297,7 +297,7 @@ void LevelUpScreen::render(SDL_Renderer* renderer, TTF_Font* font,
 
         // Description on second line
         if (!c.description.empty()) {
-            ui::draw_text(renderer, font, c.description.c_str(), desc_col, px + 40, y);
+            ui::draw_text_wrapped(renderer, font, c.description.c_str(), desc_col, px + 40, y, panel_w - 60);
         }
         y += line_h + 8;
     }

@@ -406,10 +406,11 @@ void ShopScreen::render(SDL_Renderer* renderer, TTF_Font* font,
             sprites.draw_sprite(renderer, SHEET_ITEMS, si.sprite_x, si.sprite_y,
                                px + 20, y, 1);
 
-            // Item name
+            // Item name (clipped to panel width minus price area)
             char buf[128];
             snprintf(buf, sizeof(buf), "%s", si.item.name.c_str());
-            ui::draw_text(renderer, font, buf, is_sel ? sel_col : item_col, px + 56, y + 2);
+            int name_max = panel_w - 56 - 90; // 56px left offset, 90px right for price
+            ui::draw_text_clipped(renderer, font, buf, is_sel ? sel_col : item_col, px + 56, y + 2, name_max);
 
             // Inline stats
             char stat_buf[64];
@@ -438,7 +439,7 @@ void ShopScreen::render(SDL_Renderer* renderer, TTF_Font* font,
             SDL_RenderDrawLine(renderer, px + 10, y - 4, px + panel_w - 10, y - 4);
 
             auto& si = stock_[sel];
-            ui::draw_text(renderer, font, si.item.description.c_str(), hint_col, px + 20, y);
+            ui::draw_text_wrapped(renderer, font, si.item.description.c_str(), hint_col, px + 20, y, panel_w - 40);
             y += line_h + 2;
 
             char stats[128];
@@ -483,7 +484,8 @@ void ShopScreen::render(SDL_Renderer* renderer, TTF_Font* font,
                      inv.is_equipped(item_e) ? " [E]" : "");
             SDL_Color name_col = is_sel ? sel_col :
                 (item.rarity != Rarity::COMMON ? rarity_color(item.rarity) : item_col);
-            ui::draw_text(renderer, font, buf, name_col, px + 20, y);
+            int sell_name_max = panel_w - 20 - 90;
+            ui::draw_text_clipped(renderer, font, buf, name_col, px + 20, y, sell_name_max);
 
             char price[32];
             snprintf(price, sizeof(price), "%dg", sell_price);

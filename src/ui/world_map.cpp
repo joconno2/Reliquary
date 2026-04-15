@@ -137,7 +137,7 @@ void WorldMap::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_tit
         SDL_RenderFillRect(renderer, &dot);
 
         // Label
-        ui::draw_text(renderer, font, t.name, town_label, sx + ds, sy - line_h / 2);
+        ui::draw_text_clipped(renderer, font, t.name, town_label, sx + ds, sy - line_h / 2, 150);
     }
 
     // Dungeon markers (red dots)

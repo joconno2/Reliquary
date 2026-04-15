@@ -328,14 +328,15 @@ void CharacterSheet::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* fo
             "Weapon", "Off Hand", "Head", "Chest", "Hands", "Feet",
             "Amulet", "Ring 1", "Ring 2", "Pet"
         };
+        int right_col_w = panel_w / 3 - 16;
         for (int s = 0; s < EQUIP_SLOT_COUNT; s++) {
             Entity eq = inv.equipped[s];
-            char buf[64];
+            char buf[96];
             if (eq != NULL_ENTITY && world.has<Item>(eq)) {
                 auto& item = world.get<Item>(eq);
                 snprintf(buf, sizeof(buf), "  %s: %s", slot_names[s],
                          item.display_name().c_str());
-                ui::draw_text(renderer, font, buf, val_col, rx, ry);
+                ui::draw_text_clipped(renderer, font, buf, val_col, rx, ry, right_col_w);
             } else {
                 snprintf(buf, sizeof(buf), "  %s: -", slot_names[s]);
                 ui::draw_text(renderer, font, buf, dim_col, rx, ry);

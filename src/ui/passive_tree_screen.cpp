@@ -436,7 +436,8 @@ void PassiveTreeScreen::draw_tooltip(SDL_Renderer* renderer, TTF_Font* font,
 
     int line_h = TTF_FontLineSkip(font);
     int tooltip_w = 320;
-    int tooltip_h = line_h * 4 + 24;
+    int desc_h = ui::text_wrapped_height(font, desc, tooltip_w - 20);
+    int tooltip_h = line_h * 2 + desc_h + line_h + 24; // name + tag line, desc, status, padding
     int tx = mouse_x_ + 20;
     int ty = mouse_y_ - tooltip_h / 2;
 
@@ -482,15 +483,15 @@ void PassiveTreeScreen::draw_tooltip(SDL_Renderer* renderer, TTF_Font* font,
         snprintf(tag, sizeof(tag), "%s / %s", type_label, sec_name);
         SDL_Color tag_col = {100, 95, 85, 200};
         // Right-align: estimate width
-        int est_w = static_cast<int>(strlen(tag)) * 7; // rough
+        int est_w = ui::text_width(font, tag);
         ui::draw_text(renderer, font, tag, tag_col, tx + tooltip_w - est_w - 10, cy);
     }
     cy += line_h + 4;
 
     // Description
     SDL_Color desc_col = {190, 185, 175, 255};
-    ui::draw_text(renderer, font, desc, desc_col, tx + 10, cy);
-    cy += line_h + 4;
+    ui::draw_text_wrapped(renderer, font, desc, desc_col, tx + 10, cy, tooltip_w - 20);
+    cy += ui::text_wrapped_height(font, desc, tooltip_w - 20) + 4;
 
     // Status
     if (world_ && world_->has<PassiveTreeState>(player_)) {

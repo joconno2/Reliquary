@@ -170,13 +170,13 @@ void ChurchScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font
         if (entry.label[0]) {
             char buf[128];
             snprintf(buf, sizeof(buf), "%s %s", prefix, entry.label);
-            ui::draw_text(renderer, font, buf, col, lx, y);
+            ui::draw_text_clipped(renderer, font, buf, col, lx, y, panel_w - 40);
             y += line_h;
         }
         if (entry.detail[0]) {
             char buf[128];
             snprintf(buf, sizeof(buf), "    %s", entry.detail);
-            ui::draw_text(renderer, font, buf, unlocked ? desc_col : locked_col, lx, y);
+            ui::draw_text_clipped(renderer, font, buf, unlocked ? desc_col : locked_col, lx, y, panel_w - 40);
             y += line_h;
         }
     }
@@ -193,7 +193,7 @@ void ChurchScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font
         char buf[128];
         snprintf(buf, sizeof(buf), "%s %s", is_sel ? ">" : " ", text);
         SDL_Color col = !available ? locked_col : is_sel ? sel_col : avail_col;
-        ui::draw_text(renderer, font, buf, col, lx, y);
+        ui::draw_text_clipped(renderer, font, buf, col, lx, y, panel_w - 40);
         y += line_h + 2;
         opt++;
     };

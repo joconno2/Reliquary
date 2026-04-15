@@ -395,10 +395,25 @@ Full design doc: [[Games/Development/Reliquary - Progression Overhaul]]
 - [x] Zone-exclusive rare tomes: Meteor in molten, Raise Dead in catacombs, Frost Nova in sunken, Earthquake in deep halls, Disintegrate in sepulchre, Poison Cloud in warrens
 - [x] Mage-town shops: Thessarka/Soleth province shops sell 1-2 spell tomes, 20% chance elsewhere, mage-town tome shops
 
-### Tier 7 — Ship
-- [ ] Steam upload (steamcmd, raw build for testers)
-- [ ] Steamworks SDK integration (achievements, cloud save, controller)
-- [ ] Store page, balance pass, playtesting
+### Tier 7 — Visual & UX Polish
+
+- [ ] Dungeon room variety visual pass (themed furniture, wall decorations per zone)
+- [ ] Inventory UX: sort by type/rarity, filter, search
+- [ ] World map improvements (terrain legend, player trail, fog of war)
+- [ ] Death screen: show run stats (kills, floors, time, items found)
+- [ ] Main menu visual polish (animated background, version display)
+- [ ] Message log scroll-back and history
+- [ ] Minimap or compass HUD element
+- [ ] Visual feedback on equip/unequip (flash, stat change preview)
+- [ ] Screen transitions (fade on stairs, flash on level up)
+- [ ] Particle polish pass (more varied death particles, spell impact variety)
+
+### Tier 8 — Content Depth
+
+- [ ] God-specific church questlines (6 provinces, unique quest chains)
+- [ ] Living world (NPC schedules, town events, merchant caravans)
+- [ ] More side quest variety (escort, defend, timed, multi-step)
+- [ ] Unique dungeon rooms (treasure vault, library, arena, shrine room)
 
 ---
 

@@ -112,7 +112,7 @@ void SettingsScreen::render(SDL_Renderer* renderer, TTF_Font* font,
 
     ui::draw_text_centered(renderer, font, "Settings", title_col, cx, 40);
 
-    int panel_w = 500;
+    int panel_w = std::min(w * 2 / 3, 500);
     int panel_x = cx - panel_w / 2;
     int panel_y = 80;
     int panel_h = h - 140;
