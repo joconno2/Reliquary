@@ -44,7 +44,7 @@ cat > app_build.vdf << VDFEOF
     "Desc" "Reliquary ${TAG}"
     "BuildOutput" "/tmp/reliquary-steam/output/"
     "ContentRoot" "/tmp/reliquary-steam/"
-    "SetLive" ""
+    "SetLive" "default"
     "Depots"
     {
         "${DEPOT_LINUX}"
@@ -84,5 +84,4 @@ echo "Uploading to Steam..."
 steamcmd +login blademaster313 +run_app_build /tmp/reliquary-steam/app_build.vdf +quit
 
 echo ""
-echo "Done. Build live on 'beta' branch."
-echo "Testers: right-click Reliquary > Properties > Betas > select 'beta'"
+echo "Done. Build live on default branch."
