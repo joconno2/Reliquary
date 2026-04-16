@@ -35,7 +35,7 @@ The game is fully playable from character creation through a 17-step main quest 
 **Build:** `cd ~/Reliquary && cmake -B build -DCMAKE_BUILD_TYPE=Debug && cmake --build build`
 **Run:** `cd ~/Reliquary/build && ./reliquary`
 **Design doc:** ~/Documents/Work/Games/Development/Roguelike Project.md
-**Steam:** App 4627800, depots 4627801 (Linux) + 4627802 (Windows). macOS depot 4627803 removed Apr 16. Release via `./release.sh` (idempotent, safe to re-run after partial failure). Logs in `logs/`.
+**Steam:** App 4627800, depots 4627801 (Linux) + 4627802 (Windows). macOS depot 4627803 removed Apr 16. Release via `./release.sh` (idempotent, safe to re-run after partial failure). Logs in `logs/`. **Known issue:** `SetLive "default"` fails on commit. Likely because Steamworks packages still reference deleted depot 4627803. Fix: remove 4627803 from all packages on Steamworks, publish, then SetLive should work. Until then, set builds live manually on the builds page.
 
 ---
 

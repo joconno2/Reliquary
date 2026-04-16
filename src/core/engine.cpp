@@ -4556,7 +4556,7 @@ void Engine::try_rest() {
         return;
     }
 
-    // Can't rest if enemies are visible (check FOV for any AI entities)
+    // Can't rest if enemies are visible
     auto& ai_pool = world_.pool<AI>();
     for (size_t i = 0; i < ai_pool.size(); i++) {
         Entity e = ai_pool.entity_at(i);
@@ -4568,66 +4568,18 @@ void Engine::try_rest() {
         }
     }
 
-    // In dungeon: 30% base interruption (+ 2% per floor, +5% per rest this floor, Heavy Sleeper: +15%)
-    int rest_interrupt = 30 + dungeon_level_ * 2 + rest_count_this_floor_ * 5;
-    for (auto tid : build_traits_) if (tid == TraitId::HEAVY_SLEEPER) rest_interrupt += 15;
-    if (dungeon_level_ > 0 && rng_.chance(rest_interrupt)) {
-        // Spawn a wandering monster nearby
-        auto& ppos = world_.get<Position>(player_);
-        // Try to place monster within 3 tiles
-        for (int attempt = 0; attempt < 20; attempt++) {
-            int mx = ppos.x + rng_.range(-3, 3);
-            int my = ppos.y + rng_.range(-3, 3);
-            if (mx == ppos.x && my == ppos.y) continue;
-            if (!map_.in_bounds(mx, my) || !map_.is_walkable(mx, my)) continue;
-            // Check no entity there
-            if (combat::entity_at(world_, mx, my, player_) != NULL_ENTITY) continue;
+    // Dungeon: limited rests per floor (2 base, Lethis/Monk get 3)
+    int max_rests = 2;
+    if (world_.has<GodAlignment>(player_)) {
+        auto& ga = world_.get<GodAlignment>(player_);
+        if (ga.god == GodId::LETHIS) max_rests = 3;
+    }
+    if (background_ == BackgroundId::MONK_OF_ORDER) max_rests = 3;
 
-            // Spawn a simple monster appropriate for depth
-            Entity mob = world_.create();
-            world_.add<Position>(mob, {mx, my});
-
-            // Spawn a real monster from the depth-appropriate pool
-            const auto* mtable = populate::get_monster_table();
-            int mcount = populate::get_monster_count();
-            int max_idx = std::min(mcount - 1, 6 + dungeon_level_ * 2);
-            int midx = rng_.range(0, max_idx);
-            auto& mdef = mtable[midx];
-
-            Stats ms;
-            ms.name = mdef.name;
-            float scale = 1.0f + dungeon_level_ * 0.15f;
-            ms.hp = static_cast<int>(mdef.hp * scale); ms.hp_max = ms.hp;
-            ms.base_damage = static_cast<int>(mdef.base_damage * scale);
-            ms.natural_armor = mdef.natural_armor;
-            ms.base_speed = mdef.speed;
-            ms.xp_value = mdef.xp_value;
-            for (int a = 0; a < ATTR_COUNT; a++) ms.attributes[a] = 10;
-            ms.set_attr(Attr::STR, mdef.str);
-            ms.set_attr(Attr::DEX, mdef.dex);
-            ms.set_attr(Attr::CON, mdef.con);
-
-            world_.add<Renderable>(mob, {SHEET_MONSTERS, mdef.sprite_x, mdef.sprite_y, {255, 255, 255, 255}, 5});
-            { AI rest_ai; rest_ai.state = AIState::HUNTING; rest_ai.last_seen_x = ppos.x; rest_ai.last_seen_y = ppos.y; rest_ai.flee_threshold = 20; world_.add<AI>(mob, rest_ai); }
-            world_.add<Energy>(mob, {0, 100});
-            std::string mob_name = ms.name;
-            world_.add<Stats>(mob, std::move(ms));
-            world_.add<StatusEffects>(mob);
-
-            char ambush_buf[128];
-            snprintf(ambush_buf, sizeof(ambush_buf), "A %s attacks while you sleep!", mob_name.c_str());
-            log_.add(ambush_buf, {255, 120, 80, 255});
-
-            // The ambush monster gets a free attack (you were asleep)
-            if (world_.has<Stats>(mob) && world_.has<Stats>(player_)) {
-                combat::melee_attack(world_, mob, player_, rng_, log_);
-            }
-            // Spend the monster's energy so it can't act again this turn
-            if (world_.has<Energy>(mob))
-                world_.get<Energy>(mob).current = -100;
-            player_acted_ = true;
-            return;
-        }
+    if (dungeon_level_ > 0 && rest_count_this_floor_ >= max_rests) {
+        log_.add("You have no rests remaining on this floor.", {200, 120, 100, 255});
+        log_.add("Descend to the next floor to rest again.", {160, 140, 120, 255});
+        return;
     }
 
     // Track rest for tenets
@@ -4635,62 +4587,41 @@ void Engine::try_rest() {
     rested_this_floor_ = true;
     if (dungeon_level_ <= 0) turn_actions_.rested_on_surface = true;
 
-    // Rest succeeds — restore HP and MP with diminishing returns per floor
-    // Exhaustion: each rest on this floor reduces effectiveness
+    // Spend the rest charge
     rest_count_this_floor_++;
-    float exhaustion_mult = 1.0f;
-    if (rest_count_this_floor_ == 2) {
-        exhaustion_mult = 0.5f;
-        log_.add("You're getting tired. Rest is less effective.", {200, 180, 120, 255});
-    } else if (rest_count_this_floor_ == 3) {
-        exhaustion_mult = 0.25f;
-        log_.add("Exhaustion sets in. This rest barely helps.", {200, 160, 100, 255});
-    } else if (rest_count_this_floor_ >= 4) {
-        log_.add("Too exhausted. Your body refuses to sleep.", {180, 120, 100, 255});
-        game_turn_ += 10; // still costs time
-        player_acted_ = true;
-        return;
-    }
 
-    // Base: ~10% HP, ~15% MP (MP recovers faster than HP)
-    int hp_pct = 10; // default divide by 10
-    int mp_pct = 7;  // divide by 7
-    if (world_.has<GodAlignment>(player_)) {
-        auto& ga = world_.get<GodAlignment>(player_);
-        if (ga.god == GodId::LETHIS) { hp_pct = 5; mp_pct = 3; } // Lethis: better rest
-    }
-    if (background_ == BackgroundId::MONK_OF_ORDER) { hp_pct = 5; mp_pct = 3; }
-    else if (background_ == BackgroundId::FARMER && hp_pct > 7) hp_pct = 7;
-
-    // Tree rest efficiency bonus
-    if (world_.has<PassiveTreeState>(player_)) {
-        auto tb = passive_tree::compute_bonuses(world_.get<PassiveTreeState>(player_));
-        if (tb.rest_efficiency > 0) {
-            hp_pct = std::max(3, hp_pct - tb.rest_efficiency / 5);
-            mp_pct = std::max(2, mp_pct - tb.rest_efficiency / 5);
-        }
-    }
-
-    int hp_restore = std::max(1, static_cast<int>(stats.hp_max / hp_pct * exhaustion_mult));
-    int mp_restore = std::max(1, static_cast<int>(stats.mp_max / mp_pct * exhaustion_mult));
-
-    // Vampirism: no natural HP regen
+    // Full heal: restore all HP and MP
     bool is_vampire = world_.has<Diseases>(player_) &&
                       world_.get<Diseases>(player_).has(DiseaseId::VAMPIRISM);
-    if (is_vampire) hp_restore = 0;
 
-    int hp_actual = std::min(hp_restore, stats.hp_max - stats.hp);
-    int mp_actual = (stats.mp_max > 0) ? std::min(mp_restore, stats.mp_max - stats.mp) : 0;
-    stats.hp += hp_actual;
-    stats.mp += mp_actual;
+    int hp_actual = 0;
+    int mp_actual = 0;
+
+    if (!is_vampire) {
+        hp_actual = stats.hp_max - stats.hp;
+        stats.hp = stats.hp_max;
+    }
+    if (stats.mp_max > 0) {
+        mp_actual = stats.mp_max - stats.mp;
+        stats.mp = stats.mp_max;
+    }
     if (hp_actual > 0) meta_.total_hp_healed += hp_actual;
 
     // Yashkhet tenet: healed above 75%
     if (stats.hp * 4 > stats.hp_max * 3)
         turn_actions_.healed_above_75pct = true;
 
-    // Costs 25 turns (rest takes real time — monsters move, things happen)
-    game_turn_ += 25;
+    // Costs 10 turns
+    game_turn_ += 10;
+
+    // Clear non-permanent status effects on rest
+    if (world_.has<StatusEffects>(player_)) {
+        auto& fx = world_.get<StatusEffects>(player_);
+        fx.effects.clear();
+    }
+
+    // Rest message with clear resource feedback
+    int rests_left = (dungeon_level_ > 0) ? (max_rests - rest_count_this_floor_) : -1;
 
     char buf[128];
     if (is_vampire && hp_actual == 0 && mp_actual > 0)
@@ -4698,22 +4629,17 @@ void Engine::try_rest() {
     else if (is_vampire && hp_actual == 0 && mp_actual == 0)
         snprintf(buf, sizeof(buf), "You rest, but nothing heals. The hunger gnaws.");
     else
-        snprintf(buf, sizeof(buf), "You rest for a while. (+%d HP, +%d MP)", hp_actual, mp_actual);
-    SDL_Color rest_col = (exhaustion_mult < 1.0f) ? SDL_Color{200, 200, 120, 255}
-                                                    : SDL_Color{100, 200, 100, 255};
-    log_.add(buf, rest_col);
+        snprintf(buf, sizeof(buf), "You rest. Fully restored. (+%d HP, +%d MP)", hp_actual, mp_actual);
+    log_.add(buf, {100, 220, 100, 255});
 
-    // Show remaining rests
-    if (dungeon_level_ > 0) {
-        int rests_left = 3 - rest_count_this_floor_;
-        if (rests_left > 0) {
-            char rbuf[64];
-            snprintf(rbuf, sizeof(rbuf), "(%d rest%s remaining this floor)",
-                     rests_left, rests_left == 1 ? "" : "s");
-            log_.add(rbuf, {140, 140, 120, 255});
-        } else {
-            log_.add("(No rests remaining this floor)", {160, 120, 100, 255});
-        }
+    // Prominent rest counter feedback
+    if (rests_left > 0) {
+        char rbuf[64];
+        snprintf(rbuf, sizeof(rbuf), "%d rest%s remaining this floor.",
+                 rests_left, rests_left == 1 ? "" : "s");
+        log_.add(rbuf, {220, 200, 100, 255});
+    } else if (rests_left == 0) {
+        log_.add("No rests remaining. You must descend to rest again.", {220, 140, 80, 255});
     }
     audio_.play(SfxId::REST);
 
@@ -7053,14 +6979,20 @@ void Engine::render_hud() {
     // Sneak
     if (sneaking_) draw_tag("SNK", {140, 140, 200, 255});
 
-    // Rest
+    // Rest counter
     if (dungeon_level_ > 0) {
-        int rests_left = std::max(0, 3 - rest_count_this_floor_);
-        char rstbuf[16];
-        snprintf(rstbuf, sizeof(rstbuf), "R:%d", rests_left);
+        int max_rests = 2;
+        if (world_.has<GodAlignment>(player_)) {
+            auto& ga = world_.get<GodAlignment>(player_);
+            if (ga.god == GodId::LETHIS) max_rests = 3;
+        }
+        if (background_ == BackgroundId::MONK_OF_ORDER) max_rests = 3;
+        int rests_left = std::max(0, max_rests - rest_count_this_floor_);
+        char rstbuf[24];
+        snprintf(rstbuf, sizeof(rstbuf), "REST:%d/%d", rests_left, max_rests);
         SDL_Color rst_col = rests_left == 0 ? SDL_Color{160, 100, 80, 255} :
-                            rests_left == 1 ? SDL_Color{200, 180, 80, 255} :
-                                              SDL_Color{120, 160, 120, 255};
+                            rests_left == 1 ? SDL_Color{220, 180, 60, 255} :
+                                              SDL_Color{100, 200, 100, 255};
         draw_tag(rstbuf, rst_col);
     }
 
