@@ -1,0 +1,50 @@
+1.a. dagger
+1.b. short sword
+1.c. short sword 2
+1.d. long sword
+1.e. bastard sword
+1.f. zweihander
+1.g. sanguine dagger
+
+2.a. wide short sword
+2.b. wide long sword
+2.c. rapier
+2.d. long rapier
+2.e. flamberge
+2.f. large flamberge
+2.g. great sword
+
+3.a. shotel
+3.b. scimitar
+3.c. large scimitar
+3.d. great scimitar
+3.e. kukri
+
+4.a. hand axe
+4.b. battle axe
+4.c. halberd
+4.d. great axe
+4.e. giant axe
+4.f. hatchet
+4.g. woodcutter's axe
+
+5.a. blacksmiths hammer
+5.b. short warhammer
+5.c. long warhammer
+5.d. hammer
+5.e. great hammer
+
+6.a. mace 1
+6.b. mace 2
+6.c. great mace
+6.d. spiked bat
+
+7.a. spear
+7.b. short spear
+7.c. pitchfork
+
+8.a. flail 1
+8.b. flail 2
+8.c. flail 3
+
+repeated for each color

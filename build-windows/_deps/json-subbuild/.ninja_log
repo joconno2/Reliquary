@@ -1,0 +1,21 @@
+# ninja log v7
+0	7	1776315897057676782	json-populate-prefix/src/json-populate-stamp/json-populate-mkdir	72f28cdbad24543a
+0	7	1776315897057676782	/home/jim/Reliquary/build-windows/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/json-populate-mkdir	72f28cdbad24543a
+7	5008	1776315902058805965	json-populate-prefix/src/json-populate-stamp/json-populate-download	4e8dd86d15a8410c
+7	5008	1776315902058805965	/home/jim/Reliquary/build-windows/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/json-populate-download	4e8dd86d15a8410c
+5008	5014	1776315902058805965	json-populate-prefix/src/json-populate-stamp/json-populate-update	6c1a57d187df635f
+5008	5014	1776315902058805965	/home/jim/Reliquary/build-windows/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/json-populate-update	6c1a57d187df635f
+5014	5021	1776315902070806275	json-populate-prefix/src/json-populate-stamp/json-populate-patch	444a7408edd94da5
+5014	5021	1776315902070806275	/home/jim/Reliquary/build-windows/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/json-populate-patch	444a7408edd94da5
+5021	5028	1776315902078806481	json-populate-prefix/src/json-populate-stamp/json-populate-configure	6e81c71f9dad6a72
+5021	5028	1776315902078806481	/home/jim/Reliquary/build-windows/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/json-populate-configure	6e81c71f9dad6a72
+5028	5034	1776315902084806637	json-populate-prefix/src/json-populate-stamp/json-populate-build	562686d4f31d9db6
+5028	5034	1776315902084806637	/home/jim/Reliquary/build-windows/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/json-populate-build	562686d4f31d9db6
+5034	5040	1776315902089806765	json-populate-prefix/src/json-populate-stamp/json-populate-install	33f1cc696f42b5b3
+5034	5040	1776315902089806765	/home/jim/Reliquary/build-windows/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/json-populate-install	33f1cc696f42b5b3
+5040	5045	1776315902095806921	json-populate-prefix/src/json-populate-stamp/json-populate-test	d8c962515feebce8
+5040	5045	1776315902095806921	/home/jim/Reliquary/build-windows/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/json-populate-test	d8c962515feebce8
+5045	5053	1776315902103807127	CMakeFiles/json-populate-complete	9f3964bb2ba657a8
+5045	5053	1776315902103807127	json-populate-prefix/src/json-populate-stamp/json-populate-done	9f3964bb2ba657a8
+5045	5053	1776315902103807127	/home/jim/Reliquary/build-windows/_deps/json-subbuild/CMakeFiles/json-populate-complete	9f3964bb2ba657a8
+5045	5053	1776315902103807127	/home/jim/Reliquary/build-windows/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/json-populate-done	9f3964bb2ba657a8

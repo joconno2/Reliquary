@@ -1,0 +1,14 @@
+# Target labels
+ json-populate
+# Source files and their labels
+/home/jim/Reliquary/build-windows/_deps/json-subbuild/CMakeFiles/json-populate
+/home/jim/Reliquary/build-windows/_deps/json-subbuild/CMakeFiles/json-populate.rule
+/home/jim/Reliquary/build-windows/_deps/json-subbuild/CMakeFiles/json-populate-complete.rule
+/home/jim/Reliquary/build-windows/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/json-populate-build.rule
+/home/jim/Reliquary/build-windows/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/json-populate-configure.rule
+/home/jim/Reliquary/build-windows/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/json-populate-download.rule
+/home/jim/Reliquary/build-windows/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/json-populate-install.rule
+/home/jim/Reliquary/build-windows/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/json-populate-mkdir.rule
+/home/jim/Reliquary/build-windows/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/json-populate-patch.rule
+/home/jim/Reliquary/build-windows/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/json-populate-test.rule
+/home/jim/Reliquary/build-windows/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/json-populate-update.rule
