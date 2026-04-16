@@ -1,49 +1,111 @@
 #!/usr/bin/env bash
-# Upload latest release builds to Steam
-# Usage: ./tools/steam-upload.sh [TAG]
-#   Defaults to latest tag if not specified.
+# Build locally and upload to Steam
+# Usage: ./tools/steam-upload.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 APP_ID=4627800
-DEPOT_LINUX=4627801    # "Reliquary Content" — shared content + Linux binary
-DEPOT_WINDOWS=4627802  # "Windows"
-DEPOT_MACOS=4627803    # "macOS"
+DEPOT_LINUX=4627801
+DEPOT_WINDOWS=4627802
+TAG="$(git describe --tags --abbrev=0 2>/dev/null || echo 'dev')"
 
-TAG="${1:-$(git describe --tags --abbrev=0)}"
 echo "=== Steam Upload: Reliquary ${TAG} ==="
 echo "App ID: ${APP_ID}"
 echo ""
 
-# Download release artifacts from GitHub
-mkdir -p /tmp/reliquary-steam
-cd /tmp/reliquary-steam
-rm -rf linux windows macos *.tar.gz *.zip
+STAGING=/tmp/reliquary-steam
+rm -rf "$STAGING"
+mkdir -p "$STAGING"/{linux,windows,output}
 
-echo "Downloading builds from GitHub Release ${TAG}..."
-gh release download "${TAG}" -R joconno2/Reliquary -p "*.tar.gz" -p "*.zip" --clobber
+# ── Linux: build locally ──
+echo "Building Linux..."
+cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release -G Ninja 2>/dev/null
+cmake --build build-release --parallel $(nproc)
+strip build-release/reliquary
 
-echo "Extracting..."
-mkdir -p linux windows macos
-tar xzf reliquary-linux-*.tar.gz -C linux --strip-components=1
-unzip -qo reliquary-windows-*.zip -d windows_tmp && cp -r windows_tmp/reliquary-windows-*/* windows/ && rm -rf windows_tmp
-tar xzf reliquary-macos-*.tar.gz -C macos --strip-components=1
+echo "Packaging Linux..."
+cp build-release/reliquary "$STAGING/linux/"
+cp -r assets "$STAGING/linux/"
+cp -r data "$STAGING/linux/"
+mkdir -p "$STAGING/linux/save"
+printf '#!/bin/bash\ncd "$(dirname "$0")"\n./reliquary\n' > "$STAGING/linux/run.sh"
+chmod +x "$STAGING/linux/run.sh"
 
+# ── Windows: cross-compile locally ──
+echo "Building Windows..."
+SDL2_DIR="$(pwd)/deps/windows"
+if [ ! -d "$SDL2_DIR" ]; then
+    echo "Fetching Windows SDL2 packages..."
+    mkdir -p "$SDL2_DIR" && cd "$SDL2_DIR"
+    wget -q "https://github.com/libsdl-org/SDL/releases/download/release-2.32.4/SDL2-devel-2.32.4-mingw.tar.gz"
+    wget -q "https://github.com/libsdl-org/SDL_image/releases/download/release-2.8.8/SDL2_image-devel-2.8.8-mingw.tar.gz"
+    wget -q "https://github.com/libsdl-org/SDL_ttf/releases/download/release-2.24.0/SDL2_ttf-devel-2.24.0-mingw.tar.gz"
+    wget -q "https://github.com/libsdl-org/SDL_mixer/releases/download/release-2.8.1/SDL2_mixer-devel-2.8.1-mingw.tar.gz"
+    for f in *.tar.gz; do tar xf "$f"; done
+    cd "$(dirname "$0")/.."
+fi
+
+SDL2_PREFIX="${SDL2_DIR}/SDL2-2.32.4/x86_64-w64-mingw32"
+SDL2_IMAGE_PREFIX="${SDL2_DIR}/SDL2_image-2.8.8/x86_64-w64-mingw32"
+SDL2_TTF_PREFIX="${SDL2_DIR}/SDL2_ttf-2.24.0/x86_64-w64-mingw32"
+SDL2_MIXER_PREFIX="${SDL2_DIR}/SDL2_mixer-2.8.1/x86_64-w64-mingw32"
+ALL_INCLUDES="${SDL2_PREFIX}/include;${SDL2_PREFIX}/include/SDL2;${SDL2_IMAGE_PREFIX}/include;${SDL2_IMAGE_PREFIX}/include/SDL2;${SDL2_TTF_PREFIX}/include;${SDL2_TTF_PREFIX}/include/SDL2;${SDL2_MIXER_PREFIX}/include;${SDL2_MIXER_PREFIX}/include/SDL2"
+
+cmake -S . -B build-windows -G Ninja \
+    -DCMAKE_TOOLCHAIN_FILE=tools/mingw-toolchain.cmake \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DSDL2_INCLUDE_DIRS="${ALL_INCLUDES}" \
+    -DSDL2_LIBRARIES="-L${SDL2_PREFIX}/lib -lmingw32 -lSDL2main -lSDL2" \
+    -DSDL2_IMAGE_INCLUDE_DIRS="" \
+    -DSDL2_IMAGE_LIBRARIES="-L${SDL2_IMAGE_PREFIX}/lib -lSDL2_image" \
+    -DSDL2_TTF_INCLUDE_DIRS="" \
+    -DSDL2_TTF_LIBRARIES="-L${SDL2_TTF_PREFIX}/lib -lSDL2_ttf" \
+    -DSDL2_MIXER_INCLUDE_DIRS="" \
+    -DSDL2_MIXER_LIBRARIES="-L${SDL2_MIXER_PREFIX}/lib -lSDL2_mixer" 2>/dev/null
+cmake --build build-windows --parallel $(nproc)
+x86_64-w64-mingw32-strip build-windows/reliquary.exe
+
+echo "Packaging Windows..."
+cp build-windows/reliquary.exe "$STAGING/windows/"
+cp -r assets "$STAGING/windows/"
+cp -r data "$STAGING/windows/"
+mkdir -p "$STAGING/windows/save"
+
+# SDL2 DLLs
+for prefix in SDL2-2.32.4 SDL2_image-2.8.8 SDL2_ttf-2.24.0 SDL2_mixer-2.8.1; do
+    find "${SDL2_DIR}/${prefix}/x86_64-w64-mingw32/bin" -name "*.dll" -exec cp {} "$STAGING/windows/" \; 2>/dev/null || true
+done
+
+# MinGW runtime DLLs from the posix toolchain
+MINGW_BIN=$(dirname $(x86_64-w64-mingw32-g++ -print-file-name=libstdc++-6.dll) 2>/dev/null || echo "")
+for dll in libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll; do
+    if [ -n "$MINGW_BIN" ] && [ -f "$MINGW_BIN/$dll" ]; then
+        cp "$MINGW_BIN/$dll" "$STAGING/windows/"
+    else
+        found=$(find /usr -name "$dll" 2>/dev/null | head -1)
+        [ -n "$found" ] && cp "$found" "$STAGING/windows/"
+    fi
+done
+
+# Verify DLL consistency
 echo ""
-echo "Contents:"
-echo "  Linux:   $(ls linux/ | wc -l) files"
-echo "  Windows: $(ls windows/ | wc -l) files"
-echo "  macOS:   $(ls macos/ | wc -l) files"
+echo "Windows DLLs:"
+ls "$STAGING/windows/"*.dll
+echo ""
+echo "libstdc++ imports:"
+x86_64-w64-mingw32-objdump -p "$STAGING/windows/libstdc++-6.dll" 2>/dev/null | grep "DLL Name" || true
+echo "exe imports:"
+x86_64-w64-mingw32-objdump -p "$STAGING/windows/reliquary.exe" 2>/dev/null | grep "DLL Name" || true
 echo ""
 
-# Create VDF build scripts
-cat > app_build.vdf << VDFEOF
+# ── Upload to Steam ──
+cat > "$STAGING/app_build.vdf" << VDFEOF
 "AppBuild"
 {
     "AppID" "${APP_ID}"
     "Desc" "Reliquary ${TAG}"
-    "BuildOutput" "/tmp/reliquary-steam/output/"
-    "ContentRoot" "/tmp/reliquary-steam/"
+    "BuildOutput" "${STAGING}/output/"
+    "ContentRoot" "${STAGING}/"
     "SetLive" "default"
     "Depots"
     {
@@ -65,23 +127,14 @@ cat > app_build.vdf << VDFEOF
                 "recursive" "1"
             }
         }
-        "${DEPOT_MACOS}"
-        {
-            "FileMapping"
-            {
-                "LocalPath" "macos/*"
-                "DepotPath" "."
-                "recursive" "1"
-            }
-        }
     }
 }
 VDFEOF
 
-mkdir -p output
-
 echo "Uploading to Steam..."
-steamcmd +login blademaster313 +run_app_build /tmp/reliquary-steam/app_build.vdf +quit
+steamcmd +login blademaster313 +run_app_build "$STAGING/app_build.vdf" +quit
 
 echo ""
-echo "Done. Build live on default branch."
+echo "=== Done. Build live on default branch. ==="
+echo "Linux: $(ls "$STAGING/linux/" | wc -l) files"
+echo "Windows: $(ls "$STAGING/windows/" | wc -l) files"
