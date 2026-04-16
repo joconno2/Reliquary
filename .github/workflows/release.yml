@@ -99,10 +99,26 @@ jobs:
           done
           # Copy dependency DLLs from runtime packages (libpng, zlib, freetype, etc.)
           find "${SDL2_DIR}/runtime_dlls" -name "*.dll" -exec cp {} "$DIR/" \; 2>/dev/null || true
+          # MinGW runtime DLLs — must match the posix/SEH toolchain
+          MINGW_BIN="/usr/lib/gcc/x86_64-w64-mingw32/13-posix"
+          if [ ! -d "$MINGW_BIN" ]; then
+            MINGW_BIN=$(dirname $(x86_64-w64-mingw32-g++-posix -print-file-name=libgcc_s_seh-1.dll) 2>/dev/null || echo "")
+          fi
           for dll in libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll; do
-            found=$(find /usr -name "$dll" 2>/dev/null | head -1)
-            [ -n "$found" ] && cp "$found" "$DIR/"
+            # First try the posix toolchain directory
+            if [ -n "$MINGW_BIN" ] && [ -f "$MINGW_BIN/$dll" ]; then
+              cp "$MINGW_BIN/$dll" "$DIR/"
+            else
+              found=$(find /usr/lib/gcc/x86_64-w64-mingw32 -name "$dll" -path "*posix*" 2>/dev/null | head -1)
+              [ -z "$found" ] && found=$(find /usr -name "$dll" 2>/dev/null | head -1)
+              [ -n "$found" ] && cp "$found" "$DIR/"
+            fi
           done
+          # Verify DLL consistency
+          echo "=== Bundled DLLs ==="
+          ls -la "$DIR"/*.dll
+          echo "=== libstdc++ deps ==="
+          x86_64-w64-mingw32-objdump -p "$DIR/libstdc++-6.dll" 2>/dev/null | grep "DLL Name" || true
           cd dist && zip -rq "reliquary-windows-x64-${TAG}.zip" "reliquary-windows-x64-${TAG}/"
 
       - name: Upload Linux+Windows artifacts

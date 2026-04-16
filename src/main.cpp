@@ -46,6 +46,17 @@ static void setup_logging() {
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
     fix_working_directory(argv[0]);
+
+    // Write startup log FIRST, before any SDL init, so crashes are visible
+    {
+        FILE* f = fopen("reliquary_log.txt", "w");
+        if (f) {
+            fprintf(f, "Reliquary starting up.\n");
+            fprintf(f, "Working directory set.\n");
+            fclose(f);
+        }
+    }
+
     setup_logging();
 
     fprintf(stderr, "Creating engine...\n");
