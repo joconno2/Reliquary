@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Reliquary VERSION 0.3.19 LANGUAGES CXX)
+project(Reliquary VERSION 0.3.20 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -68,6 +68,12 @@ target_link_libraries(reliquary PRIVATE
     ${SDL2_TTF_LIBRARIES}
     nlohmann_json::nlohmann_json
 )
+
+# Windows: hide console window, link crash handler support
+if(CMAKE_CROSSCOMPILING AND WIN32)
+    target_link_options(reliquary PRIVATE -mwindows)
+    target_link_libraries(reliquary PRIVATE dbghelp)
+endif()
 
 target_compile_options(reliquary PRIVATE
     ${SDL2_CFLAGS_OTHER}

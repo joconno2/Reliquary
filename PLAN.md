@@ -2,7 +2,7 @@
 
 > Last updated: 2026-04-15
 
-## Current Status: Post-Tier 6, Item Depth + Overworld Density
+## Current Status: Post-Tier 7, UI Rearchitecture + Rest Redesign
 
 **Tier 6 complete.** Passive tree, skills, stealth, churches, monster behaviors, traps, hazards all built. Now adding item depth and overworld density.
 
