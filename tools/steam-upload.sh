@@ -150,7 +150,7 @@ cat > "$STAGING/app_build.vdf" << VDFEOF
 VDFEOF
 
 log "Uploading to Steam..."
-steamcmd +login blademaster313 +run_app_build "$STAGING/app_build.vdf" +quit >> "$LOGFILE" 2>&1 \
+steamcmd +login blademaster313 +run_app_build "$STAGING/app_build.vdf" +quit 2>&1 | tee -a "$LOGFILE" \
     || fail "Steam upload"
 
 log ""
