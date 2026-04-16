@@ -12,6 +12,7 @@
 #include "generation/mapfile.h"
 #include "ui/inventory_screen.h"
 #include "ui/creation_screen.h"
+#include "ui/intro_screen.h"
 #include "ui/spell_screen.h"
 #include "ui/character_sheet.h"
 #include "ui/quest_log.h"
@@ -80,6 +81,7 @@ enum class GameState {
     MAIN_MENU,
     SETTINGS,
     CREATING,
+    INTRO,
     PLAYING,
     DEAD,
     VICTORY,
@@ -217,6 +219,7 @@ private:
     // UI
     InventoryScreen inventory_screen_;
     CreationScreen creation_screen_;
+    IntroScreen intro_screen_;
     SpellScreen spell_screen_;
     CharacterSheet char_sheet_;
     QuestLog quest_log_;

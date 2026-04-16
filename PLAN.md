@@ -35,6 +35,7 @@ The game is fully playable from character creation through a 17-step main quest 
 **Build:** `cd ~/Reliquary && cmake -B build -DCMAKE_BUILD_TYPE=Debug && cmake --build build`
 **Run:** `cd ~/Reliquary/build && ./reliquary`
 **Design doc:** ~/Documents/Work/Games/Development/Roguelike Project.md
+**Steam:** App 4627800, depots 4627801 (Linux) + 4627802 (Windows). macOS depot 4627803 removed Apr 16. Release via `./release.sh` (idempotent, safe to re-run after partial failure). Logs in `logs/`.
 
 ---
 

@@ -39,7 +39,6 @@ bool BackgroundSelectScreen::handle_input(SDL_Event& event) {
             return true;
         case SDLK_ESCAPE:
         case SDLK_BACKSPACE:
-            // Signal to caller to go back — we don't handle this ourselves
             return false;
         default:
             return false;
@@ -50,7 +49,6 @@ void BackgroundSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
                                      int w, int h) const {
     if (!font) return;
 
-    // Dark background
     SDL_SetRenderDrawColor(renderer, 8, 6, 10, 255);
     SDL_RenderClear(renderer);
 
@@ -62,71 +60,65 @@ void BackgroundSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     SDL_Color desc_col   = {140, 130, 120, 255};
     SDL_Color green_col  = {120, 200, 120, 255};
 
-    int margin = w / 30;
-    int pad = 10; // inner padding for panel content
+    auto screen = ui::Layout::from_screen(w, h, line_h);
 
-    int header_y = margin;
-    ui::draw_text_centered(renderer, font, "Choose your background.", title_col, w / 2, header_y);
+    // Header
+    auto header = screen.row(line_h + screen.gap);
+    ui::draw_text_in(renderer, font, "Choose your background.", title_col, header, ui::Align::CENTER);
 
-    // Centered two-column layout — 80% of screen
-    int content_w = w * 4 / 5;
-    int content_x = (w - content_w) / 2;
-    int list_w = content_w * 2 / 5;
-    int detail_w = content_w * 3 / 5 - margin;
-    int list_x = content_x;
-    int detail_x_bg = content_x + list_w + margin;
+    // Content: 80% width, split 2:3 list vs detail
+    screen.skip(screen.gap);
+    auto hint_row = screen.row_bottom(line_h + screen.pad);
+    auto content_rect = screen.cursor.inset(w / 10, 0);
+    auto cols = ui::Layout::from_rect(content_rect, line_h).split_cols_ratio(2, 3);
+    auto list_area = ui::Layout::col(cols[0], line_h);
+    auto detail_rect = cols[1];
 
-    int list_top = header_y + line_h + line_h;
-    int list_bottom = h - line_h * 2;
-    // Scale row height to fill available list space
-    int row_h = std::max(line_h + 6, (list_bottom - list_top) / BACKGROUND_COUNT);
+    // Scale row height to fill list
+    int row_h = std::max(line_h + 6, list_area.cursor.h / BACKGROUND_COUNT);
     row_h_ = row_h;
-    list_y_ = list_top;
+    list_y_ = list_area.cursor.y;
 
     for (int i = 0; i < BACKGROUND_COUNT; i++) {
         const BackgroundInfo& bg = get_background_info(static_cast<BackgroundId>(i));
         bool is_sel = (i == selected_);
-        int iy = list_top + i * row_h;
+        auto row = list_area.row(row_h);
 
         if (is_sel) {
-            ui::draw_panel(renderer, list_x - 4, iy - 2, list_w + 8, row_h - 2);
+            ui::draw_panel(renderer, row.x - 4, row.y - 2, row.w + 8, row.h - 2);
         }
 
         ui::draw_text(renderer, font, bg.name,
-                     is_sel ? sel_col : normal_col, list_x + 6, iy + 4);
+                     is_sel ? sel_col : normal_col, row.x + 6, row.y + 4);
     }
 
     // Detail panel
-    int detail_x = detail_x_bg;
-    int detail_y = list_top;
+    auto detail = ui::draw_panel_in(renderer, detail_rect, line_h);
 
     const BackgroundInfo& sel = get_background_info(static_cast<BackgroundId>(selected_));
 
-    int dp_x = detail_x - pad - 6;
-    int dp_y = detail_y - pad - 6;
-    int dp_w = detail_w + (pad + 6) * 2;
-    int dp_h = h - detail_y - line_h * 2 + pad;
-    ui::draw_panel(renderer, dp_x, dp_y, dp_w, dp_h);
+    auto name_row = detail.row(line_h + 8);
+    ui::draw_text(renderer, font, sel.name, sel_col, name_row.x, name_row.y);
 
-    ui::draw_text(renderer, font, sel.name, sel_col, detail_x, detail_y);
-    detail_y += line_h + 8;
-
+    int desc_h = ui::text_wrapped_height(font, sel.description, detail.cursor.w - detail.pad);
+    auto desc_area = detail.row(desc_h + 12);
     ui::draw_text_wrapped(renderer, font, sel.description, desc_col,
-                         detail_x, detail_y, detail_w - pad);
-    detail_y += line_h * 2 + 12;
+                         desc_area.x, desc_area.y, detail.cursor.w - detail.pad);
 
     // Passive
-    ui::draw_text(renderer, font, "Passive:", dim_col, detail_x, detail_y);
-    detail_y += line_h + 4;
-    ui::draw_text(renderer, font, sel.passive_name, sel_col, detail_x + 8, detail_y);
-    detail_y += line_h + 4;
+    auto passive_label = detail.row();
+    ui::draw_text(renderer, font, "Passive:", dim_col, passive_label.x, passive_label.y);
+    detail.skip(4);
+    auto passive_name = detail.row(line_h + 4);
+    ui::draw_text(renderer, font, sel.passive_name, sel_col, passive_name.x + 8, passive_name.y);
+    int pdesc_h = ui::text_wrapped_height(font, sel.passive_desc, detail.cursor.w - detail.pad - 8);
+    auto pdesc_area = detail.row(pdesc_h + 12);
     ui::draw_text_wrapped(renderer, font, sel.passive_desc, desc_col,
-                         detail_x + 8, detail_y, detail_w - pad - 8);
-    detail_y += line_h * 2 + 12;
+                         pdesc_area.x + 8, pdesc_area.y, detail.cursor.w - detail.pad - 8);
 
     // Stat bonuses
-    ui::draw_text(renderer, font, "Bonuses:", dim_col, detail_x, detail_y);
-    detail_y += line_h + 2;
+    auto bonus_label = detail.row(line_h + 2);
+    ui::draw_text(renderer, font, "Bonuses:", dim_col, bonus_label.x, bonus_label.y);
 
     struct BonusPair { const char* label; int val; };
     BonusPair bonuses[] = {
@@ -139,23 +131,23 @@ void BackgroundSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     for (auto& b : bonuses) {
         if (b.val == 0) continue;
         any_bonus = true;
+        auto brow = detail.row();
         char buf[32];
         snprintf(buf, sizeof(buf), "  %s %+d", b.label, b.val);
         SDL_Color col = b.val > 0
             ? SDL_Color{120, 200, 120, 255}
             : SDL_Color{200, 120, 120, 255};
-        ui::draw_text(renderer, font, buf, col, detail_x, detail_y);
-        detail_y += line_h;
+        ui::draw_text(renderer, font, buf, col, brow.x, brow.y);
     }
     if (!any_bonus) {
-        ui::draw_text(renderer, font, "  (none)", dim_col, detail_x, detail_y);
-        detail_y += line_h;
+        auto brow = detail.row();
+        ui::draw_text(renderer, font, "  (none)", dim_col, brow.x, brow.y);
     }
 
     // Controls hint
-    ui::draw_text(renderer, font,
-                 "[Enter] select   [Up/Down] browse   [Esc] back",
-                 dim_col, 40, h - 30);
+    ui::draw_text_in(renderer, font,
+                     "[Enter] select   [Up/Down] browse   [Esc] back",
+                     dim_col, hint_row, ui::Align::LEFT);
 
-    (void)green_col; // used if needed for extension
+    (void)green_col;
 }

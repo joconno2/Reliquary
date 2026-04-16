@@ -1,4 +1,5 @@
 #include "core/engine.h"
+#include "ui/ui_draw.h"
 #include "systems/god_system.h"
 #include "systems/npc_interaction.h"
 #include "components/position.h"
@@ -1126,7 +1127,6 @@ void Engine::generate_level() {
 
             Entity priest = world_.create();
             world_.add<Position>(priest, {cx, cy});
-            // Use priest sprite with god-colored tint
             world_.add<Renderable>(priest, {SHEET_ROGUES, 1, 4,
                 {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255}, 8});
 
@@ -1143,7 +1143,10 @@ void Engine::generate_level() {
             npc_comp.quest_id = -1;
             world_.add<NPC>(priest, npc_comp);
 
-            // Add Church component so the engine knows this NPC opens the church screen
+            { Stats ps; ps.name = name_buf; ps.hp = 999; ps.hp_max = 999;
+              world_.add<Stats>(priest, std::move(ps)); }
+            world_.add<Energy>(priest, {0, 35});
+
             world_.add<Church>(priest, {cl.god, false});
         }
     } else {
@@ -4619,6 +4622,9 @@ void Engine::try_rest() {
             if (world_.has<Stats>(mob) && world_.has<Stats>(player_)) {
                 combat::melee_attack(world_, mob, player_, rng_, log_);
             }
+            // Spend the monster's energy so it can't act again this turn
+            if (world_.has<Energy>(mob))
+                world_.get<Energy>(mob).current = -100;
             player_acted_ = true;
             return;
         }
@@ -5232,7 +5238,6 @@ void Engine::handle_input() {
                 log_ = MessageLog();
                 bestiary_.clear();
 
-                state_ = GameState::PLAYING;
                 hardcore_ = creation_screen_.get_build().hardcore;
                 background_ = creation_screen_.get_build().background;
                 // Pre-populate bestiary from meta-progression
@@ -5243,56 +5248,28 @@ void Engine::handle_input() {
                     entry.damage = me.damage;
                     entry.armor = me.armor;
                     entry.speed = me.speed;
-                    entry.kills = 0; // kills reset per run, totals tracked in meta
+                    entry.kills = 0;
                 }
                 generate_level();
 
-                // Opening narrative
-                {
-                    auto build = creation_screen_.get_build();
-                    auto& ginfo = get_god_info(build.god);
-                    const char* god_name = (build.god != GodId::NONE) ? ginfo.name : "no god";
-                    SDL_Color nar_col = {180, 170, 150, 255};
-                    SDL_Color god_col = (build.god != GodId::NONE)
-                        ? SDL_Color{ginfo.color.r, ginfo.color.g, ginfo.color.b, 255}
-                        : SDL_Color{160, 160, 160, 255};
-                    SDL_Color dark_col = {140, 130, 110, 255};
-                    SDL_Color brand_col = {200, 180, 120, 255};
+                // Launch cinematic intro instead of dumping text into the log
+                intro_screen_.start(creation_screen_.get_build().god);
+                state_ = GameState::INTRO;
 
-                    log_.add("You wake face-down in the dirt outside Thornwall.", nar_col);
-                    log_.add("You don't remember how you got here.", nar_col);
-                    log_.add("", nar_col);
-
-                    if (build.god != GodId::NONE) {
-                        char buf[128];
-                        snprintf(buf, sizeof(buf),
-                            "There is a brand on your face. It glows %s, the color of %s.",
-                            ginfo.color.r > 200 ? "warm" : ginfo.color.b > 150 ? "cold" : "faintly",
-                            god_name);
-                        log_.add(buf, god_col);
-                    } else {
-                        log_.add("There is a brand on your face. It glows pale, bound to nothing.", dark_col);
-                    }
-
-                    log_.add("It was not there before. You are sure of that much.", dark_col);
-                    log_.add("", nar_col);
-                    log_.add("The ground trembled last night. Everyone felt it.", nar_col);
-                    log_.add("Something pulsed from deep underground, east of town.", nar_col);
-                    log_.add("The Barrow has been restless since. The dead are walking.", {200, 140, 100, 255});
-                    log_.add("", nar_col);
-                    log_.add("An elder watches you from the road. He sees the brand.", brand_col);
-                    log_.add("He knows what it means, or thinks he does.", dark_col);
-                    log_.add("", nar_col);
-
-                    // Auto-give MQ_01
-                    journal_.add_quest(QuestId::MQ_01_BARROW_WIGHT);
-                    log_.add("The Barrow Wight must be put down. You feel it pulling at your mark.", {220, 200, 100, 255});
-                    log_.add("", nar_col);
-                    log_.add("? for help  |  q quests  |  t passive tree  |  c character  |  o sneak", {100, 180, 140, 255});
-                }
+                // Seed the message log with a reminder (visible after intro)
+                log_.add("? for help  |  q quests  |  t passive tree  |  c character  |  o sneak", {100, 180, 140, 255});
                 tips_shown_ = {}; // reset tips for new run
             }
             return;
+        }
+
+        // Intro cinematic
+        if (state_ == GameState::INTRO) {
+            intro_screen_.handle_input(event);
+            if (intro_screen_.is_done()) {
+                state_ = GameState::PLAYING;
+            }
+            continue;
         }
 
         // Church screen
@@ -6969,6 +6946,7 @@ void Engine::render_hud() {
 
     auto& stats = world_.get<Stats>(player_);
     SDL_Color white = {200, 200, 200, 255};
+    int line_h = TTF_FontLineSkip(font_);
 
     // HUD background
     SDL_Rect hud_bg = {0, 0, width_, HUD_HEIGHT};
@@ -6979,31 +6957,42 @@ void Engine::render_hud() {
 
     int bar_h = 14;
     int bar_y = (HUD_HEIGHT - bar_h) / 2;
-    int cursor = 8; // running x position — everything flows left to right
+
+    // Left half: bars + status indicators. Use Layout for cursor management.
+    auto left_hud = ui::Layout::from_rect({0, 0, width_ / 2, HUD_HEIGHT}, line_h);
+    left_hud.skip_h(8);
+
+    // Scale bar widths proportionally to HUD width
+    int hp_bar_w = width_ / 20;
+    int mp_bar_w = width_ / 25;
+    int xp_bar_w = width_ / 30;
+    int tag_gap = 6;
 
     // Helper: draw a stat bar + label, advance cursor
     auto draw_bar = [&](const char* label, int val, int max_val,
                          SDL_Color bg_col, SDL_Color fill_col, int bar_w) {
-        // Bar
-        SDL_Rect bg = {cursor, bar_y, bar_w, bar_h};
+        if (left_hud.remaining_w() < bar_w + 20) return;
+        auto bar_col = left_hud.col_left(bar_w);
+        SDL_Rect bg = {bar_col.x, bar_y, bar_w, bar_h};
         SDL_SetRenderDrawColor(renderer_, bg_col.r, bg_col.g, bg_col.b, 255);
         SDL_RenderFillRect(renderer_, &bg);
         int fill = (val * bar_w) / std::max(1, max_val);
-        SDL_Rect fill_r = {cursor, bar_y, fill, bar_h};
+        SDL_Rect fill_r = {bar_col.x, bar_y, fill, bar_h};
         SDL_SetRenderDrawColor(renderer_, fill_col.r, fill_col.g, fill_col.b, 255);
         SDL_RenderFillRect(renderer_, &fill_r);
-        cursor += bar_w + 4;
+        left_hud.skip_h(4);
 
-        // Label
-        SDL_Surface* surf = TTF_RenderText_Blended(font_, label, white);
-        if (surf) {
-            SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer_, surf);
-            SDL_Rect dst = {cursor, bar_y, surf->w, surf->h};
-            SDL_RenderCopy(renderer_, tex, nullptr, &dst);
-            cursor += surf->w + 12;
-            SDL_DestroyTexture(tex);
-            SDL_FreeSurface(surf);
-        }
+        int tw = ui::text_width(font_, label);
+        auto label_area = left_hud.col_left(tw + 12);
+        ui::draw_text(renderer_, font_, label, white, label_area.x, bar_y);
+    };
+
+    // Helper: draw a text tag, advance cursor
+    auto draw_tag = [&](const char* tag, SDL_Color col) {
+        int tw = ui::text_width(font_, tag);
+        if (left_hud.remaining_w() < tw + tag_gap) return;
+        auto area = left_hud.col_left(tw + tag_gap);
+        ui::draw_text(renderer_, font_, tag, col, area.x, bar_y);
     };
 
     // HP bar
@@ -7012,21 +7001,21 @@ void Engine::render_hud() {
     SDL_Color hp_fill = stats.hp > stats.hp_max / 2 ? SDL_Color{140, 40, 40, 255}
                       : stats.hp > stats.hp_max / 4 ? SDL_Color{160, 100, 30, 255}
                                                       : SDL_Color{200, 50, 50, 255};
-    draw_bar(hp_text, stats.hp, stats.hp_max, {40, 10, 10, 255}, hp_fill, 100);
+    draw_bar(hp_text, stats.hp, stats.hp_max, {40, 10, 10, 255}, hp_fill, hp_bar_w);
 
-    // MP bar (only if has MP)
+    // MP bar
     if (stats.mp_max > 0) {
         char mp_text[32];
         snprintf(mp_text, sizeof(mp_text), "MP:%d/%d", stats.mp, stats.mp_max);
-        draw_bar(mp_text, stats.mp, stats.mp_max, {10, 10, 40, 255}, {60, 60, 160, 255}, 80);
+        draw_bar(mp_text, stats.mp, stats.mp_max, {10, 10, 40, 255}, {60, 60, 160, 255}, mp_bar_w);
     }
 
     // XP bar
     char lvl_text[32];
     snprintf(lvl_text, sizeof(lvl_text), "Lv%d", stats.level);
-    draw_bar(lvl_text, stats.xp, stats.xp_next, {15, 15, 40, 255}, {80, 80, 180, 255}, 60);
+    draw_bar(lvl_text, stats.xp, stats.xp_next, {15, 15, 40, 255}, {80, 80, 180, 255}, xp_bar_w);
 
-    // Status effect indicators
+    // Status effects
     if (world_.has<StatusEffects>(player_)) {
         auto& fx = world_.get<StatusEffects>(player_);
         for (auto& eff : fx.effects) {
@@ -7042,19 +7031,11 @@ void Engine::render_hud() {
                 case StatusType::BLIND:    tag = "BLN"; col = {120, 120, 120, 255}; break;
                 case StatusType::FEARED:   tag = "FER"; col = {255, 255, 255, 255}; break;
             }
-            SDL_Surface* surf = TTF_RenderText_Blended(font_, tag, col);
-            if (surf) {
-                SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer_, surf);
-                SDL_Rect dst = {cursor, bar_y, surf->w, surf->h};
-                SDL_RenderCopy(renderer_, tex, nullptr, &dst);
-                cursor += surf->w + 6;
-                SDL_DestroyTexture(tex);
-                SDL_FreeSurface(surf);
-            }
+            draw_tag(tag, col);
         }
     }
 
-    // Summon count indicator
+    // Summon count
     {
         int summon_count = 0;
         auto& ai_pool = world_.pool<AI>();
@@ -7063,106 +7044,49 @@ void Engine::render_hud() {
                 summon_count++;
         }
         if (summon_count > 0) {
-            char sumbuf[16];
+            char sumbuf[24];
             snprintf(sumbuf, sizeof(sumbuf), "SUM:%d/%d", summon_count, 3);
-            SDL_Color sum_col = {120, 180, 140, 255};
-            SDL_Surface* ss = TTF_RenderText_Blended(font_, sumbuf, sum_col);
-            if (ss) {
-                SDL_Texture* st = SDL_CreateTextureFromSurface(renderer_, ss);
-                SDL_Rect sd = {cursor, bar_y, ss->w, ss->h};
-                SDL_RenderCopy(renderer_, st, nullptr, &sd);
-                cursor += ss->w + 6;
-                SDL_DestroyTexture(st);
-                SDL_FreeSurface(ss);
-            }
+            draw_tag(sumbuf, {120, 180, 140, 255});
         }
     }
 
-    // Sneak indicator
-    if (sneaking_) {
-        SDL_Color snk_col = {140, 140, 200, 255};
-        SDL_Surface* snk_surf = TTF_RenderText_Blended(font_, "SNK", snk_col);
-        if (snk_surf) {
-            SDL_Texture* snk_tex = SDL_CreateTextureFromSurface(renderer_, snk_surf);
-            SDL_Rect snk_dst = {cursor, bar_y, snk_surf->w, snk_surf->h};
-            SDL_RenderCopy(renderer_, snk_tex, nullptr, &snk_dst);
-            cursor += snk_surf->w + 6;
-            SDL_DestroyTexture(snk_tex);
-            SDL_FreeSurface(snk_surf);
-        }
-    }
+    // Sneak
+    if (sneaking_) draw_tag("SNK", {140, 140, 200, 255});
 
-    // Rest indicator (in dungeons, show remaining rests)
+    // Rest
     if (dungeon_level_ > 0) {
         int rests_left = std::max(0, 3 - rest_count_this_floor_);
-        char rstbuf[12];
+        char rstbuf[16];
         snprintf(rstbuf, sizeof(rstbuf), "R:%d", rests_left);
         SDL_Color rst_col = rests_left == 0 ? SDL_Color{160, 100, 80, 255} :
                             rests_left == 1 ? SDL_Color{200, 180, 80, 255} :
                                               SDL_Color{120, 160, 120, 255};
-        SDL_Surface* rst_surf = TTF_RenderText_Blended(font_, rstbuf, rst_col);
-        if (rst_surf) {
-            SDL_Texture* rst_tex = SDL_CreateTextureFromSurface(renderer_, rst_surf);
-            SDL_Rect rst_dst = {cursor, bar_y, rst_surf->w, rst_surf->h};
-            SDL_RenderCopy(renderer_, rst_tex, nullptr, &rst_dst);
-            cursor += rst_surf->w + 6;
-            SDL_DestroyTexture(rst_tex);
-            SDL_FreeSurface(rst_surf);
-        }
+        draw_tag(rstbuf, rst_col);
     }
 
-    // Hardcore indicator
-    if (hardcore_) {
-        SDL_Color hc_col = {200, 80, 80, 255};
-        SDL_Surface* hc_surf = TTF_RenderText_Blended(font_, "HC", hc_col);
-        if (hc_surf) {
-            SDL_Texture* hc_tex = SDL_CreateTextureFromSurface(renderer_, hc_surf);
-            SDL_Rect hc_dst = {cursor, bar_y, hc_surf->w, hc_surf->h};
-            SDL_RenderCopy(renderer_, hc_tex, nullptr, &hc_dst);
-            cursor += hc_surf->w + 6;
-            SDL_DestroyTexture(hc_tex);
-            SDL_FreeSurface(hc_surf);
-        }
-    }
+    // Hardcore
+    if (hardcore_) draw_tag("HC", {200, 80, 80, 255});
 
-    // Disease indicators (permanent, purple-tinted)
+    // Diseases
     if (world_.has<Diseases>(player_)) {
         auto& diseases = world_.get<Diseases>(player_);
         for (auto did : diseases.active) {
             auto& dinfo = get_disease_info(did);
-            SDL_Color dcol = {180, 120, 200, 255};
-            SDL_Surface* dsurf = TTF_RenderText_Blended(font_, dinfo.hud_tag, dcol);
-            if (dsurf) {
-                SDL_Texture* dtex = SDL_CreateTextureFromSurface(renderer_, dsurf);
-                SDL_Rect ddst = {cursor, bar_y, dsurf->w, dsurf->h};
-                SDL_RenderCopy(renderer_, dtex, nullptr, &ddst);
-                cursor += dsurf->w + 6;
-                SDL_DestroyTexture(dtex);
-                SDL_FreeSurface(dsurf);
-            }
+            draw_tag(dinfo.hud_tag, {180, 120, 200, 255});
         }
     }
 
-    // Unspent passive points indicator (steady, not flashing)
+    // Unspent passive points
     if (world_.has<PassiveTreeState>(player_)) {
         auto& tree_check = world_.get<PassiveTreeState>(player_);
         if (tree_check.points_available > 0) {
             char ptbuf[32];
             snprintf(ptbuf, sizeof(ptbuf), "+%d [T]", tree_check.points_available);
-            SDL_Color pt_col = {255, 220, 60, 255};
-            SDL_Surface* pts = TTF_RenderText_Blended(font_, ptbuf, pt_col);
-            if (pts) {
-                SDL_Texture* ptt = SDL_CreateTextureFromSurface(renderer_, pts);
-                SDL_Rect ptd = {cursor, bar_y, pts->w, pts->h};
-                SDL_RenderCopy(renderer_, ptt, nullptr, &ptd);
-                cursor += pts->w + 8;
-                SDL_DestroyTexture(ptt);
-                SDL_FreeSurface(pts);
-            }
+            draw_tag(ptbuf, {255, 220, 60, 255});
         }
     }
 
-    // Active abilities from passive tree
+    // Active abilities
     if (world_.has<PassiveTreeState>(player_)) {
         auto& tree = world_.get<PassiveTreeState>(player_);
         auto bonuses = passive_tree::compute_bonuses(tree);
@@ -7179,10 +7103,9 @@ void Engine::render_hud() {
             {bonuses.cap_pandemic_cd, "PND", 7},
         };
         int slot = 1;
-        int hud_left_limit = width_ / 2 - 40; // don't overflow into right panel
         for (auto& cap : caps) {
-            if (cap.cd_val == 0) continue; // player doesn't have this capstone
-            if (cursor >= hud_left_limit) break; // prevent overflow
+            if (cap.cd_val == 0) continue;
+            if (left_hud.remaining_w() < 60) break;
             int cd_remaining = tree.capstone_cooldowns[cap.cd_idx];
             bool ready = (cd_remaining <= 0);
             char abuf[16];
@@ -7190,49 +7113,21 @@ void Engine::render_hud() {
                 snprintf(abuf, sizeof(abuf), "[%d]%s", slot, cap.name);
             else
                 snprintf(abuf, sizeof(abuf), "[%d]%d", slot, cd_remaining);
-            SDL_Color acol = ready ? SDL_Color{200, 220, 140, 255} : SDL_Color{120, 110, 100, 255};
-            SDL_Surface* as = TTF_RenderText_Blended(font_, abuf, acol);
-            if (as) {
-                SDL_Texture* at = SDL_CreateTextureFromSurface(renderer_, as);
-                SDL_Rect ad = {cursor, bar_y, as->w, as->h};
-                SDL_RenderCopy(renderer_, at, nullptr, &ad);
-                cursor += as->w + 6;
-                SDL_DestroyTexture(at);
-                SDL_FreeSurface(as);
-            }
+            draw_tag(abuf, ready ? SDL_Color{200, 220, 140, 255} : SDL_Color{120, 110, 100, 255});
             slot++;
         }
     }
 
-    // Quick-cast spell indicator
+    // Quick-cast
     if (quick_cast_ != SpellId::COUNT) {
         auto& qsi = get_spell_info(quick_cast_);
         char qbuf[64];
         snprintf(qbuf, sizeof(qbuf), "[v] %s", qsi.name);
-        SDL_Color qc_col = {120, 140, 180, 255};
-        SDL_Surface* qs = TTF_RenderText_Blended(font_, qbuf, qc_col);
-        if (qs) {
-            SDL_Texture* qt = SDL_CreateTextureFromSurface(renderer_, qs);
-            SDL_Rect qd = {cursor + 4, bar_y, qs->w, qs->h};
-            SDL_RenderCopy(renderer_, qt, nullptr, &qd);
-            cursor += qs->w + 8;
-            SDL_DestroyTexture(qt);
-            SDL_FreeSurface(qs);
-        }
+        draw_tag(qbuf, {120, 140, 180, 255});
     }
 
-    // Help hint
-    {
-        SDL_Color hint = {100, 95, 85, 255};
-        SDL_Surface* hs = TTF_RenderText_Blended(font_, "? help", hint);
-        if (hs) {
-            SDL_Texture* ht = SDL_CreateTextureFromSurface(renderer_, hs);
-            SDL_Rect hd = {cursor + 4, bar_y, hs->w, hs->h};
-            SDL_RenderCopy(renderer_, ht, nullptr, &hd);
-            SDL_DestroyTexture(ht);
-            SDL_FreeSurface(hs);
-        }
-    }
+    // Help hint (only if space remains)
+    draw_tag("? help", {100, 95, 85, 255});
 
     // Right side: god + location + gold + turn
     const char* god_name = "";
@@ -7240,11 +7135,9 @@ void Engine::render_hud() {
         auto& ga = world_.get<GodAlignment>(player_);
         god_name = get_god_info(ga.god).name;
     }
-    char info[128];
+    char info[256];
     if (dungeon_level_ <= 0) {
-        // Use cached location (updated on player move, not every frame)
         const char* location = cached_location_;
-        // Day/night indicator
         int phase = game_turn_ % 100;
         const char* time_icon = (phase >= 50 && phase < 90) ? "Night" :
                                 (phase >= 40 && phase < 50) ? "Dusk" :
@@ -7252,7 +7145,6 @@ void Engine::render_hud() {
         snprintf(info, sizeof(info), "%s  %s  %s  Gold:%d  T:%d",
                  god_name, location, time_icon, gold_, game_turn_);
     } else {
-        // Show dungeon name if available
         const char* dname = "Dungeon";
         if (current_dungeon_idx_ >= 0 &&
             current_dungeon_idx_ < static_cast<int>(dungeon_registry_.size())) {
@@ -7261,20 +7153,18 @@ void Engine::render_hud() {
         snprintf(info, sizeof(info), "%s  %s D:%d  Gold:%d  T:%d",
                  god_name, dname, dungeon_level_, gold_, game_turn_);
     }
-    SDL_Surface* surf = TTF_RenderText_Blended(font_, info, white);
-    if (surf) {
-        SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer_, surf);
-        // Clip to right half of HUD to prevent overlap with left-side status
-        int max_w = width_ / 2;
-        int draw_x = width_ - std::min(surf->w, max_w) - 8;
-        SDL_Rect clip = {width_ / 2, 0, width_ / 2, HUD_HEIGHT};
-        SDL_RenderSetClipRect(renderer_, &clip);
-        SDL_Rect dst = {draw_x, bar_y - 1, surf->w, surf->h};
-        SDL_RenderCopy(renderer_, tex, nullptr, &dst);
-        SDL_RenderSetClipRect(renderer_, nullptr);
-        SDL_DestroyTexture(tex);
-        SDL_FreeSurface(surf);
+
+    // Right half: clip and right-align
+    SDL_Rect right_clip = {width_ / 2, 0, width_ / 2, HUD_HEIGHT};
+    SDL_RenderSetClipRect(renderer_, &right_clip);
+    int info_tw = ui::text_width(font_, info);
+    int max_w = width_ / 2 - 8;
+    if (info_tw > max_w) {
+        ui::draw_text_clipped(renderer_, font_, info, white, width_ - max_w, bar_y - 1, max_w);
+    } else {
+        ui::draw_text(renderer_, font_, info, white, width_ - info_tw - 8, bar_y - 1);
     }
+    SDL_RenderSetClipRect(renderer_, nullptr);
 }
 
 void Engine::render() {
@@ -7295,6 +7185,16 @@ void Engine::render() {
     // Character creation screen
     if (state_ == GameState::CREATING) {
         creation_screen_.render(renderer_, font_, font_title_, sprites_, width_, height_);
+        SDL_RenderPresent(renderer_);
+        return;
+    }
+
+    // Intro cinematic
+    if (state_ == GameState::INTRO) {
+        intro_screen_.render(renderer_, font_, font_title_, width_, height_);
+        if (intro_screen_.is_done()) {
+            state_ = GameState::PLAYING;
+        }
         SDL_RenderPresent(renderer_);
         return;
     }

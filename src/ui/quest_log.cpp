@@ -1,6 +1,7 @@
 #include <algorithm>
 #include "ui/quest_log.h"
 #include "ui/ui_draw.h"
+#include "ui/ui_layout.h"
 #include "components/dynamic_quest.h"
 #include <cstdio>
 
@@ -34,6 +35,7 @@ void QuestLog::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_tit
     if (!open_ || !font) return;
 
     int line_h = TTF_FontLineSkip(font);
+    int title_h = font_title ? TTF_FontLineSkip(font_title) : line_h;
 
     SDL_Color title_col = {200, 180, 160, 255};
     SDL_Color main_col = {220, 200, 140, 255};
@@ -45,26 +47,33 @@ void QuestLog::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_tit
     SDL_Color desc_col = {140, 130, 120, 255};
 
     // Darken background
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_Rect overlay = {0, 0, w, h};
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 180);
-    SDL_RenderFillRect(renderer, &overlay);
+    ui::draw_overlay(renderer, w, h);
 
-    int panel_w = std::min(w * 2 / 3, 900);
-    int panel_h = h - 60;
-    int panel_x = (w - panel_w) / 2;
-    int panel_y = 30;
+    // Panel: 2/3 screen width, full height minus margins
+    auto screen = ui::Layout::from_screen(w, h, line_h);
+    ui::Rect outer = screen.panel_outer(2, 3, 1, 1);
+    // Shrink vertically to leave 30px margins top and bottom
+    outer.y = 30;
+    outer.h = h - 60;
+    auto panel = ui::draw_panel_in(renderer, outer, line_h);
 
-    ui::draw_panel(renderer, panel_x, panel_y, panel_w, panel_h);
+    // Title row
+    ui::Rect title_row = panel.row(title_h);
+    ui::draw_text_in(renderer, font_title ? font_title : font,
+                     "Quest Journal", title_col, title_row, ui::Align::CENTER);
+    panel.skip(8);
 
-    int y = panel_y + 12;
-    ui::draw_text_centered(renderer, font_title, "Quest Journal", title_col, w / 2, y);
-    y += (font_title ? TTF_FontLineSkip(font_title) : line_h) + 8;
+    // Footer row (cut from bottom before filling content)
+    ui::Rect footer = panel.row_bottom(line_h);
+    panel.skip(8); // gap above footer -- no, row_bottom already took from bottom
+    // Actually need a gap between content and footer. Cut a small spacer from bottom.
+    panel.row_bottom(8);
+
+    ui::draw_text_in(renderer, font, "[q / Esc] close", dim_col, footer, ui::Align::CENTER);
 
     if (journal.entries.empty()) {
-        ui::draw_text(renderer, font, "No quests yet.", dim_col, panel_x + 16, y);
-        ui::draw_text_centered(renderer, font, "[q / Esc] close", dim_col, w / 2,
-                                panel_y + panel_h - line_h - 8);
+        ui::Rect empty_row = panel.row();
+        ui::draw_text_in(renderer, font, "No quests yet.", dim_col, empty_row, ui::Align::LEFT);
         return;
     }
 
@@ -72,14 +81,28 @@ void QuestLog::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_tit
     int count = static_cast<int>(journal.entries.size());
     if (selected_ >= count) selected_ = count - 1;
 
+    // Calculate how much vertical space the quest list can use (half the remaining panel)
+    int list_budget = panel.remaining_h() / 2;
+
     // Quest list
     for (int i = 0; i < count; i++) {
         auto& entry = journal.entries[i];
         auto& info = get_quest_info(entry.id);
         bool is_sel = (i == selected_);
 
+        int row_h = line_h + 4;
+        if (!panel.fits(row_h)) break;
+        // Stop if we'd exceed the list half of the panel
+        if (panel.bounds.y + panel.bounds.h - panel.remaining_h() + row_h >
+            outer.y + outer.h / 2) break;
+
+        ui::Rect quest_row = panel.row(row_h);
+
         if (is_sel) {
-            SDL_Rect hl = {panel_x + 6, y - 2, panel_w - 12, line_h + 4};
+            SDL_Rect hl = quest_row.inset(-2, -2).sdl();
+            // Inset horizontally to match old panel_x + 6 style
+            hl.x = quest_row.x - 10;
+            hl.w = quest_row.w + 20;
             SDL_SetRenderDrawColor(renderer, 30, 25, 40, 255);
             SDL_RenderFillRect(renderer, &hl);
         }
@@ -100,44 +123,56 @@ void QuestLog::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_tit
                  info.name, state_str);
 
         SDL_Color col = is_sel ? (info.is_main ? main_col : side_col) : state_col;
-        ui::draw_text_clipped(renderer, font, buf, col, panel_x + 16, y, panel_w - 32);
+        ui::draw_text_in(renderer, font, buf, col, quest_row, ui::Align::LEFT);
 
         // Progress for count-based quests
         if (entry.target > 0 && entry.state == QuestState::ACTIVE) {
             char prog[32];
             snprintf(prog, sizeof(prog), "(%d/%d)", entry.progress, entry.target);
-            int tw = 0, th = 0;
-            TTF_SizeText(font, prog, &tw, &th);
-            ui::draw_text(renderer, font, prog, dim_col, panel_x + panel_w - tw - 16, y);
+            ui::draw_text_in(renderer, font, prog, dim_col, quest_row, ui::Align::RIGHT);
         }
-
-        y += line_h + 4;
-        if (y > panel_y + panel_h / 2) break;
     }
 
-    // Detail panel for selected quest
-    y += 8;
-    SDL_Rect sep = {panel_x + 10, y, panel_w - 20, 1};
+    // Separator
+    panel.skip(8);
+    ui::Rect sep_row = panel.row(1);
+    SDL_Rect sep = sep_row.inset(4, 0).sdl();
     SDL_SetRenderDrawColor(renderer, 60, 50, 70, 255);
     SDL_RenderFillRect(renderer, &sep);
-    y += 8;
+    panel.skip(8);
 
+    // Detail panel for selected quest
     if (selected_ >= 0 && selected_ < count) {
         auto& entry = journal.entries[selected_];
         auto& info = get_quest_info(entry.id);
 
-        ui::draw_text_wrapped(renderer, font, info.description, desc_col,
-                               panel_x + 16, y, panel_w - 32);
-        y += line_h * 3 + 8;
+        // Description (wrapped, estimate 3 lines)
+        int desc_h = line_h * 3;
+        if (panel.fits(desc_h)) {
+            ui::Rect desc_area = panel.row(desc_h);
+            ui::draw_text_wrapped(renderer, font, info.description, desc_col,
+                                   desc_area.x, desc_area.y, desc_area.w);
+        }
+        panel.skip(8);
 
         // Current objective
         if (entry.state == QuestState::ACTIVE) {
-            ui::draw_text(renderer, font, "Objective:", dim_col, panel_x + 16, y);
-            y += line_h;
-            ui::draw_text_wrapped(renderer, font, info.objective, active_col,
-                                   panel_x + 24, y, panel_w - 48);
+            if (panel.fits(line_h)) {
+                ui::Rect obj_label = panel.row();
+                ui::draw_text_in(renderer, font, "Objective:", dim_col, obj_label, ui::Align::LEFT);
+            }
+            if (panel.fits(line_h)) {
+                ui::Rect obj_text = panel.row();
+                // Indent the objective text
+                ui::Rect indented = {obj_text.x + 8, obj_text.y, obj_text.w - 16, obj_text.h};
+                ui::draw_text_wrapped(renderer, font, info.objective, active_col,
+                                       indented.x, indented.y, indented.w);
+            }
         } else if (entry.state == QuestState::COMPLETE) {
-            ui::draw_text(renderer, font, "Return to turn in.", complete_col, panel_x + 16, y);
+            if (panel.fits(line_h)) {
+                ui::Rect turn_in = panel.row();
+                ui::draw_text_in(renderer, font, "Return to turn in.", complete_col, turn_in, ui::Align::LEFT);
+            }
         }
     }
 
@@ -149,19 +184,24 @@ void QuestLog::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_tit
             auto& dq = dq_pool.at_index(di);
             if (!dq.accepted || dq.completed) continue;
             if (!header_shown) {
-                y += line_h;
-                ui::draw_text(renderer, font, "--- Side Tasks ---", dim_col, panel_x + 10, y);
-                y += line_h + 4;
+                if (!panel.fits(line_h)) break;
+                panel.skip(line_h);
+                if (!panel.fits(line_h)) break;
+                ui::Rect hdr = panel.row();
+                ui::draw_text_in(renderer, font, "--- Side Tasks ---", dim_col, hdr, ui::Align::LEFT);
+                panel.skip(4);
                 header_shown = true;
             }
-            ui::draw_text_clipped(renderer, font, dq.name.c_str(), active_col, panel_x + 16, y, panel_w - 32);
-            y += line_h;
+            if (!panel.fits(line_h)) break;
+            ui::Rect name_row = panel.row();
+            ui::draw_text_in(renderer, font, dq.name.c_str(), active_col, name_row, ui::Align::LEFT);
+
+            int obj_h = line_h * 2;
+            if (!panel.fits(obj_h)) break;
+            ui::Rect obj_area = panel.row(obj_h);
+            ui::Rect indented = {obj_area.x + 8, obj_area.y, obj_area.w - 16, obj_area.h};
             ui::draw_text_wrapped(renderer, font, dq.objective.c_str(), dim_col,
-                                   panel_x + 24, y, panel_w - 48);
-            y += line_h * 2;
+                                   indented.x, indented.y, indented.w);
         }
     }
-
-    ui::draw_text_centered(renderer, font, "[q / Esc] close", dim_col, w / 2,
-                            panel_y + panel_h - line_h - 8);
 }

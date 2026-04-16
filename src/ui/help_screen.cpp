@@ -28,25 +28,19 @@ void HelpScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_t
     int line_h = TTF_FontLineSkip(font);
     int title_h = font_title ? TTF_FontLineSkip(font_title) : line_h;
 
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_Rect overlay = {0, 0, w, h};
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 210);
-    SDL_RenderFillRect(renderer, &overlay);
+    ui::draw_overlay(renderer, w, h, 210);
 
-    int panel_w = std::min(w * 4 / 5, 1200);
-    int panel_h = h - 40;
-    int px = (w - panel_w) / 2;
-    int py = 20;
-    ui::draw_panel(renderer, px, py, panel_w, panel_h);
+    auto screen = ui::Layout::from_screen(w, h, line_h);
+    auto outer = screen.panel_outer(4, 5, 19, 20);
+    auto panel = ui::draw_panel_in(renderer, outer, line_h);
 
     // Clip rendering to panel
-    SDL_Rect clip = {px + 4, py + 4, panel_w - 8, panel_h - 8};
+    SDL_Rect clip = panel.cursor.inset(0).sdl();
     SDL_RenderSetClipRect(renderer, &clip);
 
-    int x1 = px + 20;           // left column key
-    int x2 = px + 180;          // left column desc
-    int x3 = px + panel_w / 2;  // right column key
-    int x4 = px + panel_w / 2 + 160; // right column desc
+    // Two-column keybind layout: key column = left 40%, desc column = right 60%
+    int key_x = panel.cursor.x;
+    int desc_x = panel.cursor.x + panel.cursor.w * 2 / 5;
 
     SDL_Color title_col = {220, 200, 160, 255};
     SDL_Color section_col = {200, 180, 120, 255};
@@ -65,15 +59,15 @@ void HelpScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_t
         }
     };
 
-    int y = py + 10 - scroll_;
+    int y = panel.cursor.y - scroll_;
 
     // Title
     ui::draw_text_centered(renderer, font_title ? font_title : font,
-                            "Guide to Reliquary", title_col, w / 2, y);
+                            "Guide to Reliquary", title_col, panel.cursor.cx(), y);
     y += title_h + 12;
 
-    // ── MOVEMENT ──
-    ui::draw_text(renderer, font, "MOVEMENT", section_col, x1, y);
+    // MOVEMENT
+    ui::draw_text(renderer, font, "MOVEMENT", section_col, key_x, y);
     y += line_h + 4;
     Bind movement[] = {
         {"Arrows / WASD", "Move (cardinal)"},
@@ -81,11 +75,11 @@ void HelpScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_t
         {". / Numpad 5",  "Wait one turn"},
         {"o",             "Toggle sneak mode"},
     };
-    draw_binds(x1, x2, movement, 4, y);
+    draw_binds(key_x, desc_x, movement, 4, y);
 
-    // ── ACTIONS ──
+    // ACTIONS
     y += 8;
-    ui::draw_text(renderer, font, "ACTIONS", section_col, x1, y);
+    ui::draw_text(renderer, font, "ACTIONS", section_col, key_x, y);
     y += line_h + 4;
     Bind actions[] = {
         {"g / ,",          "Pick up / forage (Nature 25)"},
@@ -97,11 +91,11 @@ void HelpScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_t
         {"Bump NPC",       "Talk / trade (or pickpocket while sneaking)"},
         {"Bump enemy",     "Melee attack (backstab from sneak)"},
     };
-    draw_binds(x1, x2, actions, 8, y);
+    draw_binds(key_x, desc_x, actions, 8, y);
 
-    // ── SCREENS ──
+    // SCREENS
     y += 8;
-    ui::draw_text(renderer, font, "SCREENS", section_col, x1, y);
+    ui::draw_text(renderer, font, "SCREENS", section_col, key_x, y);
     y += line_h + 4;
     Bind screens[] = {
         {"i",   "Inventory"},
@@ -114,11 +108,11 @@ void HelpScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_t
         {"?",   "This help screen"},
         {"Esc", "Pause (save/load/settings)"},
     };
-    draw_binds(x1, x2, screens, 9, y);
+    draw_binds(key_x, desc_x, screens, 9, y);
 
-    // ── COMBAT ──
+    // COMBAT
     y += 8;
-    ui::draw_text(renderer, font, "COMBAT", section_col, x1, y);
+    ui::draw_text(renderer, font, "COMBAT", section_col, key_x, y);
     y += line_h + 4;
     Bind combat[] = {
         {"Bump",     "Melee attack"},
@@ -128,11 +122,11 @@ void HelpScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_t
         {"p",        "God prayers (2 + mastery)"},
         {"1-4",      "Use passive tree active abilities"},
     };
-    draw_binds(x1, x2, combat, 6, y);
+    draw_binds(key_x, desc_x, combat, 6, y);
 
-    // ── STEALTH ──
+    // STEALTH
     y += 8;
-    ui::draw_text(renderer, font, "STEALTH", section_col, x1, y);
+    ui::draw_text(renderer, font, "STEALTH", section_col, key_x, y);
     y += line_h + 4;
     const char* stealth_tips[] = {
         "Press O to toggle sneak. You move at half speed.",
@@ -144,13 +138,13 @@ void HelpScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_t
         "Stealth 50: detection range drops to 1 tile.",
     };
     for (auto& t : stealth_tips) {
-        ui::draw_text(renderer, font, t, tip_col, x1, y);
+        ui::draw_text_clipped(renderer, font, t, tip_col, key_x, y, panel.cursor.w);
         y += line_h + 1;
     }
 
-    // ── PASSIVE TREE ──
+    // PASSIVE TREE
     y += 8;
-    ui::draw_text(renderer, font, "PASSIVE TREE (T key)", section_col, x1, y);
+    ui::draw_text(renderer, font, "PASSIVE TREE (T key)", section_col, key_x, y);
     y += line_h + 4;
     const char* tree_tips[] = {
         "Earn 1 point per level. Spend on the shared passive tree.",
@@ -164,13 +158,13 @@ void HelpScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_t
         "Flashing +N [T] on HUD means you have unspent points.",
     };
     for (auto& t : tree_tips) {
-        ui::draw_text(renderer, font, t, tip_col, x1, y);
+        ui::draw_text_clipped(renderer, font, t, tip_col, key_x, y, panel.cursor.w);
         y += line_h + 1;
     }
 
-    // ── SKILLS ──
+    // SKILLS
     y += 8;
-    ui::draw_text(renderer, font, "SKILLS (level through use)", section_col, x1, y);
+    ui::draw_text(renderer, font, "SKILLS (level through use)", section_col, key_x, y);
     y += line_h + 4;
     const char* skill_info[] = {
         "Blades/Axes/Blunt/Unarmed: level by hitting with that weapon type.",
@@ -186,13 +180,13 @@ void HelpScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_t
         "Dark Arts 25: examine corpses for dungeon hints.",
     };
     for (auto& s : skill_info) {
-        ui::draw_text(renderer, font, s, skill_col, x1, y);
+        ui::draw_text_clipped(renderer, font, s, skill_col, key_x, y, panel.cursor.w);
         y += line_h + 1;
     }
 
-    // ── GODS ──
+    // GODS
     y += 8;
-    ui::draw_text(renderer, font, "GODS & FAVOR", section_col, x1, y);
+    ui::draw_text(renderer, font, "GODS & FAVOR", section_col, key_x, y);
     y += line_h + 4;
     const char* god_tips[] = {
         "Each god has tenets (rules). Breaking them loses favor.",
@@ -202,13 +196,13 @@ void HelpScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_t
         "God factions affect shop prices and priest reactions.",
     };
     for (auto& t : god_tips) {
-        ui::draw_text(renderer, font, t, tip_col, x1, y);
+        ui::draw_text_clipped(renderer, font, t, tip_col, key_x, y, panel.cursor.w);
         y += line_h + 1;
     }
 
-    // ── TIPS ──
+    // TIPS
     y += 8;
-    ui::draw_text(renderer, font, "GENERAL TIPS", section_col, x1, y);
+    ui::draw_text(renderer, font, "GENERAL TIPS", section_col, key_x, y);
     y += line_h + 4;
     const char* gen_tips[] = {
         "Rest heals less each time per floor (exhaustion). Plan carefully.",
@@ -224,13 +218,13 @@ void HelpScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_t
         "Follow road signs for directions between towns.",
     };
     for (auto& t : gen_tips) {
-        ui::draw_text(renderer, font, t, tip_col, x1, y);
+        ui::draw_text_clipped(renderer, font, t, tip_col, key_x, y, panel.cursor.w);
         y += line_h + 1;
     }
 
-    // ── SYSTEM ──
+    // SYSTEM
     y += 8;
-    ui::draw_text(renderer, font, "SYSTEM", section_col, x1, y);
+    ui::draw_text(renderer, font, "SYSTEM", section_col, key_x, y);
     y += line_h + 4;
     Bind sys[] = {
         {"F5",  "Quicksave"},
@@ -238,19 +232,19 @@ void HelpScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_t
         {"F11", "Toggle fullscreen"},
         {"F12", "Screenshot"},
     };
-    draw_binds(x1, x2, sys, 4, y);
+    draw_binds(key_x, desc_x, sys, 4, y);
 
     y += 12;
-    max_scroll_ = std::max(0, y - py - panel_h + scroll_ + 20);
+    max_scroll_ = std::max(0, y - panel.cursor.y - panel.cursor.h + scroll_ + 20);
 
     SDL_RenderSetClipRect(renderer, nullptr);
 
     // Scroll indicators
     if (scroll_ > 0)
-        ui::draw_text_centered(renderer, font, "^ scroll up ^", dim_col, w / 2, py + 6);
+        ui::draw_text_centered(renderer, font, "^ scroll up ^", dim_col, outer.cx(), outer.y + 6);
     if (scroll_ < max_scroll_)
-        ui::draw_text_centered(renderer, font, "v scroll down v", dim_col, w / 2, py + panel_h - line_h - 4);
+        ui::draw_text_centered(renderer, font, "v scroll down v", dim_col, outer.cx(), outer.y2() - line_h - 4);
 
     ui::draw_text_centered(renderer, font, "Any other key to close  |  Up/Down/Scroll to navigate",
-                            dim_col, w / 2, py + panel_h - 4);
+                            dim_col, outer.cx(), outer.y2() - 4);
 }

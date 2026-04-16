@@ -68,110 +68,77 @@ void QuestOffer::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_t
     SDL_Color normal_col = {160, 155, 150, 255};
     SDL_Color main_tag = {200, 180, 100, 255};
 
-    // Darken background
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_Rect overlay = {0, 0, w, h};
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 180);
-    SDL_RenderFillRect(renderer, &overlay);
+    ui::draw_overlay(renderer, w, h);
 
-    // Modal panel
-    int panel_w = 560;
-    int panel_h = std::min(h - 40, 520);
-    int panel_x = (w - panel_w) / 2;
-    int panel_y = (h - panel_h) / 2;
-
-    ui::draw_panel(renderer, panel_x, panel_y, panel_w, panel_h);
-
-    // Helper: draw wrapped text and return the height it used
-    auto draw_wrapped_measured = [&](const char* text, SDL_Color col, int tx, int ty, int tw) -> int {
-        if (!text || !text[0]) return 0;
-        SDL_Surface* surf = TTF_RenderText_Blended_Wrapped(font, text, col, static_cast<Uint32>(tw));
-        if (!surf) return line_h;
-        SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
-        SDL_Rect dst = {tx, ty, surf->w, surf->h};
-        SDL_RenderCopy(renderer, tex, nullptr, &dst);
-        int used_h = surf->h;
-        SDL_DestroyTexture(tex);
-        SDL_FreeSurface(surf);
-        return used_h;
-    };
-
-    int y = panel_y + 16;
-    int cx = w / 2;
-    int content_w = panel_w - 40;
+    auto screen = ui::Layout::from_screen(w, h, line_h);
+    auto outer = screen.panel_outer(2, 5, 2, 3);
+    auto panel = ui::draw_panel_in(renderer, outer, line_h);
 
     // NPC name header
     char header[128];
     snprintf(header, sizeof(header), "%s offers a quest:", npc_name_.c_str());
-    ui::draw_text_centered(renderer, font, header, npc_col, cx, y);
-    y += line_h + 12;
+    auto hdr_row = panel.row(line_h + panel.gap);
+    ui::draw_text_in(renderer, font, header, npc_col, hdr_row, ui::Align::CENTER);
 
     // Quest name
-    ui::draw_text_centered(renderer, font_title, info.name, title_col, cx, y);
-    y += title_h + 8;
+    auto name_row = panel.row(title_h + panel.gap);
+    ui::draw_text_in(renderer, font_title, info.name, title_col, name_row, ui::Align::CENTER);
 
     // Main quest tag
     if (info.is_main) {
-        ui::draw_text_centered(renderer, font, "[Main Quest]", main_tag, cx, y);
-        y += line_h + 8;
+        auto tag_row = panel.row(line_h + panel.gap);
+        ui::draw_text_in(renderer, font, "[Main Quest]", main_tag, tag_row, ui::Align::CENTER);
     }
 
-    // Description
-    int desc_h = draw_wrapped_measured(info.description, desc_col, panel_x + 20, y, content_w);
-    y += desc_h + 12;
+    // Description (wrapped)
+    int desc_h = ui::text_wrapped_height(font, info.description, panel.cursor.w);
+    auto desc_row = panel.row(desc_h + panel.gap);
+    ui::draw_text_wrapped(renderer, font, info.description, desc_col,
+                           desc_row.x, desc_row.y, desc_row.w);
 
     // Objective
-    ui::draw_text(renderer, font, "Objective:", dim_col, panel_x + 20, y);
-    y += line_h + 4;
-    int obj_h = draw_wrapped_measured(info.objective, obj_col, panel_x + 28, y, content_w - 16);
-    y += obj_h + 12;
+    auto obj_label = panel.row();
+    ui::draw_text(renderer, font, "Objective:", dim_col, obj_label.x, obj_label.y);
+    int obj_h = ui::text_wrapped_height(font, info.objective, panel.cursor.w - panel.pad);
+    auto obj_row = panel.row(obj_h + panel.gap);
+    ui::draw_text_wrapped(renderer, font, info.objective, obj_col,
+                           obj_row.x + panel.pad, obj_row.y, obj_row.w - panel.pad);
 
     // Rewards
     if (info.xp_reward > 0 || info.gold_reward > 0) {
         char reward[64];
-        if (info.gold_reward > 0) {
-            snprintf(reward, sizeof(reward), "Reward: %d XP, %d Gold",
-                     info.xp_reward, info.gold_reward);
-        } else {
+        if (info.gold_reward > 0)
+            snprintf(reward, sizeof(reward), "Reward: %d XP, %d Gold", info.xp_reward, info.gold_reward);
+        else
             snprintf(reward, sizeof(reward), "Reward: %d XP", info.xp_reward);
-        }
-        ui::draw_text_centered(renderer, font, reward, dim_col, cx, y);
+        auto rew_row = panel.row(line_h + panel.gap);
+        ui::draw_text_in(renderer, font, reward, dim_col, rew_row, ui::Align::CENTER);
     }
 
-    // Accept / Decline buttons
-    int btn_w = 120;
+    // Accept / Decline buttons at bottom
+    auto btn_area = panel.cursor.bottom(line_h + panel.pad * 2);
+    int btn_w = btn_area.w * 2 / 7;
     int btn_h = line_h + 12;
-    int btn_y = panel_y + panel_h - btn_h - 16;
-    int btn_gap = 30;
+    int btn_gap = panel.gap * 2;
+    int cx = btn_area.cx();
 
-    accept_btn_ = {cx - btn_w - btn_gap / 2, btn_y, btn_w, btn_h};
-    decline_btn_ = {cx + btn_gap / 2, btn_y, btn_w, btn_h};
+    accept_btn_ = {cx - btn_w - btn_gap / 2, btn_area.y + (btn_area.h - btn_h) / 2, btn_w, btn_h};
+    decline_btn_ = {cx + btn_gap / 2, btn_area.y + (btn_area.h - btn_h) / 2, btn_w, btn_h};
 
-    // Accept button
-    {
-        bool is_sel = (selected_ == 0);
+    auto draw_btn = [&](const SDL_Rect& r, const char* label, bool is_sel) {
         SDL_SetRenderDrawColor(renderer, is_sel ? 40 : 25, is_sel ? 35 : 22, is_sel ? 55 : 35, 255);
-        SDL_RenderFillRect(renderer, &accept_btn_);
+        SDL_RenderFillRect(renderer, &r);
         SDL_SetRenderDrawColor(renderer, is_sel ? 100 : 60, is_sel ? 90 : 50, is_sel ? 120 : 70, 255);
-        SDL_RenderDrawRect(renderer, &accept_btn_);
-        ui::draw_text_centered(renderer, font, "Accept",
-                                is_sel ? sel_col : normal_col,
-                                accept_btn_.x + btn_w / 2, btn_y + 6);
-    }
+        SDL_RenderDrawRect(renderer, &r);
+        ui::Rect br = {r.x, r.y, r.w, r.h};
+        ui::draw_text_in(renderer, font, label, is_sel ? sel_col : normal_col,
+                         br, ui::Align::CENTER);
+    };
 
-    // Decline button
-    {
-        bool is_sel = (selected_ == 1);
-        SDL_SetRenderDrawColor(renderer, is_sel ? 40 : 25, is_sel ? 35 : 22, is_sel ? 55 : 35, 255);
-        SDL_RenderFillRect(renderer, &decline_btn_);
-        SDL_SetRenderDrawColor(renderer, is_sel ? 100 : 60, is_sel ? 90 : 50, is_sel ? 120 : 70, 255);
-        SDL_RenderDrawRect(renderer, &decline_btn_);
-        ui::draw_text_centered(renderer, font, "Decline",
-                                is_sel ? sel_col : normal_col,
-                                decline_btn_.x + btn_w / 2, btn_y + 6);
-    }
+    draw_btn(accept_btn_, "Accept", selected_ == 0);
+    draw_btn(decline_btn_, "Decline", selected_ == 1);
 
-    // Hint
+    // Hint below panel
     ui::draw_text_centered(renderer, font, "[Y] accept  [Esc] decline  [Left/Right] select  [Enter] confirm",
-                            dim_col, cx, panel_y + panel_h + 8);
+                            dim_col, w / 2, outer.y2() + 8);
 }

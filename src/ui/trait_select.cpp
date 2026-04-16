@@ -37,7 +37,6 @@ bool TraitSelectScreen::can_confirm() const {
 }
 
 bool TraitSelectScreen::handle_input(SDL_Event& event) {
-    // Helper: toggle trait at cursor
     auto toggle_trait = [&]() {
         if (can_confirm()) {
             confirmed_ = true;
@@ -52,9 +51,8 @@ bool TraitSelectScreen::handle_input(SDL_Event& event) {
         } else {
             if (info.is_positive && positive_selected_count() < 3) {
                 selected_traits_.push_back(id);
-                // Auto-jump to negative section when 3 positives selected
                 if (positive_selected_count() >= 3 && cursor_ < POSITIVE_TRAIT_COUNT) {
-                    cursor_ = POSITIVE_TRAIT_COUNT; // jump to first negative
+                    cursor_ = POSITIVE_TRAIT_COUNT;
                 }
             } else if (!info.is_positive && negative_selected_count() < 2) {
                 selected_traits_.push_back(id);
@@ -62,11 +60,7 @@ bool TraitSelectScreen::handle_input(SDL_Event& event) {
         }
     };
 
-    // Mouse support
     if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
-        // Calculate which trait was clicked based on list layout
-        // List starts at approximately y=list_top, each row is row_h tall
-        // We store these as member estimates — row_h_ and list_y_ set during render
         if (row_h_ > 0) {
             int click_y = event.button.y;
             int rel_y = click_y - list_y_;
@@ -85,25 +79,19 @@ bool TraitSelectScreen::handle_input(SDL_Event& event) {
     if (event.type != SDL_KEYDOWN) return false;
 
     switch (event.key.keysym.sym) {
-        case SDLK_UP:
-        case SDLK_w:
-        case SDLK_k:
+        case SDLK_UP: case SDLK_w: case SDLK_k:
             if (cursor_ > 0) cursor_--;
             return true;
-        case SDLK_DOWN:
-        case SDLK_s:
-        case SDLK_j:
+        case SDLK_DOWN: case SDLK_s: case SDLK_j:
             if (cursor_ < TRAIT_COUNT - 1) cursor_++;
             return true;
-        case SDLK_RETURN:
-        case SDLK_e:
+        case SDLK_RETURN: case SDLK_e:
             toggle_trait();
             return true;
         case SDLK_SPACE:
             if (can_confirm()) { confirmed_ = true; }
             return true;
-        case SDLK_ESCAPE:
-        case SDLK_BACKSPACE:
+        case SDLK_ESCAPE: case SDLK_BACKSPACE:
             return false;
         default:
             return false;
@@ -127,35 +115,36 @@ void TraitSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     SDL_Color neg_col     = {200, 120, 120, 255};
     SDL_Color section_col = {180, 160, 100, 255};
 
-    int margin = w / 30;
-    int pad = 10; // inner padding for panel content
+    auto screen = ui::Layout::from_screen(w, h, line_h);
 
     // Title + counter
-    int header_y = margin;
-    ui::draw_text_centered(renderer, font, "Choose your traits.", title_col, w / 2, header_y);
+    auto title_row = screen.row(line_h + 2);
+    ui::draw_text_in(renderer, font, "Choose your traits.", title_col, title_row, ui::Align::CENTER);
 
     char count_buf[64];
     snprintf(count_buf, sizeof(count_buf), "Positive: %d/3   Negative: %d/2",
              positive_selected_count(), negative_selected_count());
-    ui::draw_text_centered(renderer, font, count_buf, dim_col, w / 2, header_y + line_h + 2);
+    auto counter_row = screen.row(line_h + screen.gap);
+    ui::draw_text_in(renderer, font, count_buf, dim_col, counter_row, ui::Align::CENTER);
 
-    // Centered two-column layout — 80% of screen
-    int content_w = w * 4 / 5;
-    int content_x = (w - content_w) / 2;
-    int list_w = content_w * 2 / 5;
-    int list_x = content_x;
-    int list_y = header_y + line_h * 2 + line_h;
-    int list_bottom = h - line_h * 2;
-    // Scale row height to fill available space (2 section headers + gap take ~3 rows)
-    int row_h  = std::max(line_h + 6, (list_bottom - list_y - line_h * 2 - 16) / TRAIT_COUNT);
+    // Reserve hint row at bottom
+    auto hint_row = screen.row_bottom(line_h + screen.pad);
 
-    // Cache layout for mouse hit-testing
+    // Content: 80% width, split 2:3 list vs detail
+    auto content_rect = screen.cursor.inset(w / 10, 0);
+    auto cols = ui::Layout::from_rect(content_rect, line_h).split_cols_ratio(2, 3);
+    auto list_layout = ui::Layout::col(cols[0], line_h);
+    auto detail_rect = cols[1];
+
+    // Scale row height to fill list (account for 2 section headers + gap)
+    int avail_for_traits = list_layout.cursor.h - line_h * 2 - 16;
+    int row_h = std::max(line_h + 6, avail_for_traits / TRAIT_COUNT);
     row_h_ = row_h;
-    list_y_ = list_y + line_h + 4; // skip section header
 
     // Section header: Positive
-    ui::draw_text(renderer, font, "-- Positive Traits --", section_col, list_x, list_y);
-    list_y += line_h + 4;
+    auto pos_hdr = list_layout.row(line_h + 4);
+    ui::draw_text(renderer, font, "-- Positive Traits --", section_col, pos_hdr.x, pos_hdr.y);
+    list_y_ = list_layout.cursor.y;
 
     for (int i = 0; i < POSITIVE_TRAIT_COUNT; i++) {
         TraitId id = static_cast<TraitId>(i);
@@ -163,30 +152,25 @@ void TraitSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
         bool is_cursor = (cursor_ == i);
         bool is_picked = is_selected(id);
 
+        auto row = list_layout.row(row_h);
+
         if (is_cursor) {
-            SDL_Rect hl = {list_x - 4, list_y - 1, list_w + 8, row_h};
+            SDL_Rect hl = {row.x - 4, row.y - 1, row.w + 8, row.h};
             SDL_SetRenderDrawColor(renderer, 30, 25, 40, 255);
             SDL_RenderFillRect(renderer, &hl);
         }
 
-        // Checkmark prefix
         char buf[128];
         snprintf(buf, sizeof(buf), "%s %s", is_picked ? "[x]" : "[ ]", info.name);
-
-        SDL_Color text_col;
-        if (is_picked) text_col = chosen_col;
-        else if (is_cursor) text_col = sel_col;
-        else text_col = normal_col;
-
-        ui::draw_text(renderer, font, buf, text_col, list_x, list_y);
-        list_y += row_h;
+        SDL_Color text_col = is_picked ? chosen_col : is_cursor ? sel_col : normal_col;
+        ui::draw_text(renderer, font, buf, text_col, row.x, row.y);
     }
 
-    list_y += 6;
+    list_layout.skip(6);
 
     // Section header: Negative
-    ui::draw_text(renderer, font, "-- Negative Traits --", section_col, list_x, list_y);
-    list_y += line_h + 4;
+    auto neg_hdr = list_layout.row(line_h + 4);
+    ui::draw_text(renderer, font, "-- Negative Traits --", section_col, neg_hdr.x, neg_hdr.y);
 
     for (int i = POSITIVE_TRAIT_COUNT; i < TRAIT_COUNT; i++) {
         TraitId id = static_cast<TraitId>(i);
@@ -194,48 +178,37 @@ void TraitSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
         bool is_cursor = (cursor_ == i);
         bool is_picked = is_selected(id);
 
+        auto row = list_layout.row(row_h);
+
         if (is_cursor) {
-            SDL_Rect hl = {list_x - 4, list_y - 1, list_w + 8, row_h};
+            SDL_Rect hl = {row.x - 4, row.y - 1, row.w + 8, row.h};
             SDL_SetRenderDrawColor(renderer, 30, 25, 40, 255);
             SDL_RenderFillRect(renderer, &hl);
         }
 
         char buf[128];
         snprintf(buf, sizeof(buf), "%s %s", is_picked ? "[x]" : "[ ]", info.name);
-
-        SDL_Color text_col;
-        if (is_picked) text_col = neg_col;
-        else if (is_cursor) text_col = sel_col;
-        else text_col = normal_col;
-
-        ui::draw_text(renderer, font, buf, text_col, list_x, list_y);
-        list_y += row_h;
+        SDL_Color text_col = is_picked ? neg_col : is_cursor ? sel_col : normal_col;
+        ui::draw_text(renderer, font, buf, text_col, row.x, row.y);
     }
 
-    // Detail panel on right
-    int detail_x = content_x + list_w + margin;
-    int detail_w = content_w * 3 / 5 - margin;
-    int detail_y = header_y + line_h * 2 + line_h;
-
-    int tp_x = detail_x - pad - 6;
-    int tp_y = detail_y - pad - 6;
-    int tp_w = detail_w + (pad + 6) * 2;
-    int tp_h = h - detail_y - line_h * 2 + pad;
-    ui::draw_panel(renderer, tp_x, tp_y, tp_w, tp_h);
+    // Detail panel
+    auto detail = ui::draw_panel_in(renderer, detail_rect, line_h);
 
     const TraitInfo& cur = get_trait_info(static_cast<TraitId>(cursor_));
 
     SDL_Color name_col = cur.is_positive ? chosen_col : neg_col;
-    ui::draw_text(renderer, font, cur.name, name_col, detail_x, detail_y);
-    detail_y += line_h + 8;
+    auto dname = detail.row(line_h + 8);
+    ui::draw_text(renderer, font, cur.name, name_col, dname.x, dname.y);
 
+    int tdesc_h = ui::text_wrapped_height(font, cur.description, detail.cursor.w - detail.pad);
+    auto tdesc = detail.row(tdesc_h + 12);
     ui::draw_text_wrapped(renderer, font, cur.description, desc_col,
-                         detail_x, detail_y, detail_w - pad);
-    detail_y += line_h * 2 + 12;
+                         tdesc.x, tdesc.y, detail.cursor.w - detail.pad);
 
     // Stat modifiers
-    ui::draw_text(renderer, font, "Modifiers:", dim_col, detail_x, detail_y);
-    detail_y += line_h + 2;
+    auto mod_label = detail.row(line_h + 2);
+    ui::draw_text(renderer, font, "Modifiers:", dim_col, mod_label.x, mod_label.y);
 
     struct ModPair { const char* label; int val; };
     ModPair mods[] = {
@@ -248,77 +221,57 @@ void TraitSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     for (auto& m : mods) {
         if (m.val == 0) continue;
         any_mod = true;
+        auto mrow = detail.row();
         char buf[32];
         snprintf(buf, sizeof(buf), "  %s %+d", m.label, m.val);
         SDL_Color col = m.val > 0
             ? SDL_Color{120, 200, 120, 255}
             : SDL_Color{200, 120, 120, 255};
-        ui::draw_text(renderer, font, buf, col, detail_x, detail_y);
-        detail_y += line_h;
+        ui::draw_text(renderer, font, buf, col, mrow.x, mrow.y);
     }
     if (!any_mod) {
-        ui::draw_text(renderer, font, "  (no stat changes)", dim_col, detail_x, detail_y);
-        detail_y += line_h;
+        auto mrow = detail.row();
+        ui::draw_text(renderer, font, "  (no stat changes)", dim_col, mrow.x, mrow.y);
     }
 
     // Gameplay modifiers
-    detail_y += 4;
-    if (cur.bonus_hp != 0) {
-        char buf[32]; snprintf(buf, sizeof(buf), "  HP %+d", cur.bonus_hp);
-        ui::draw_text(renderer, font, buf, cur.bonus_hp > 0 ? chosen_col : neg_col, detail_x, detail_y);
-        detail_y += line_h;
-    }
-    if (cur.bonus_natural_armor != 0) {
-        char buf[32]; snprintf(buf, sizeof(buf), "  Armor %+d", cur.bonus_natural_armor);
-        ui::draw_text(renderer, font, buf, cur.bonus_natural_armor > 0 ? chosen_col : neg_col, detail_x, detail_y);
-        detail_y += line_h;
-    }
-    if (cur.bonus_speed != 0) {
-        char buf[32]; snprintf(buf, sizeof(buf), "  Speed %+d", cur.bonus_speed);
-        ui::draw_text(renderer, font, buf, cur.bonus_speed > 0 ? chosen_col : neg_col, detail_x, detail_y);
-        detail_y += line_h;
-    }
-    if (cur.bonus_fov != 0) {
-        char buf[32]; snprintf(buf, sizeof(buf), "  FOV %+d", cur.bonus_fov);
-        ui::draw_text(renderer, font, buf, cur.bonus_fov > 0 ? chosen_col : neg_col, detail_x, detail_y);
-        detail_y += line_h;
-    }
-    if (cur.fire_resist != 0) {
-        char buf[32]; snprintf(buf, sizeof(buf), "  Fire resist %+d%%", cur.fire_resist);
-        ui::draw_text(renderer, font, buf, cur.fire_resist > 0 ? chosen_col : neg_col, detail_x, detail_y);
-        detail_y += line_h;
-    }
-    if (cur.poison_resist != 0) {
-        char buf[32]; snprintf(buf, sizeof(buf), "  Poison resist %+d%%", cur.poison_resist);
-        ui::draw_text(renderer, font, buf, cur.poison_resist > 0 ? chosen_col : neg_col, detail_x, detail_y);
-        detail_y += line_h;
-    }
-    if (cur.bleed_resist != 0) {
-        char buf[32]; snprintf(buf, sizeof(buf), "  Bleed resist %+d%%", cur.bleed_resist);
-        ui::draw_text(renderer, font, buf, cur.bleed_resist > 0 ? chosen_col : neg_col, detail_x, detail_y);
-        detail_y += line_h;
-    }
+    detail.skip(4);
+    auto draw_gmod = [&](const char* fmt_str, int val, bool positive) {
+        if (val == 0) return;
+        auto gr = detail.row();
+        char buf[48];
+        snprintf(buf, sizeof(buf), fmt_str, val);
+        ui::draw_text(renderer, font, buf, positive ? chosen_col : neg_col, gr.x, gr.y);
+    };
+
+    draw_gmod("  HP %+d", cur.bonus_hp, cur.bonus_hp > 0);
+    draw_gmod("  Armor %+d", cur.bonus_natural_armor, cur.bonus_natural_armor > 0);
+    draw_gmod("  Speed %+d", cur.bonus_speed, cur.bonus_speed > 0);
+    draw_gmod("  FOV %+d", cur.bonus_fov, cur.bonus_fov > 0);
+    if (cur.fire_resist != 0) draw_gmod("  Fire resist %+d%%", cur.fire_resist, cur.fire_resist > 0);
+    if (cur.poison_resist != 0) draw_gmod("  Poison resist %+d%%", cur.poison_resist, cur.poison_resist > 0);
+    if (cur.bleed_resist != 0) draw_gmod("  Bleed resist %+d%%", cur.bleed_resist, cur.bleed_resist > 0);
     if (cur.hp_on_kill > 0) {
+        auto gr = detail.row();
         char buf[32]; snprintf(buf, sizeof(buf), "  Heal %d per kill", cur.hp_on_kill);
-        ui::draw_text(renderer, font, buf, chosen_col, detail_x, detail_y);
-        detail_y += line_h;
+        ui::draw_text(renderer, font, buf, chosen_col, gr.x, gr.y);
     }
     if (cur.immune_fear) {
-        ui::draw_text(renderer, font, "  Immune to fear", chosen_col, detail_x, detail_y);
-        detail_y += line_h;
+        auto gr = detail.row();
+        ui::draw_text(renderer, font, "  Immune to fear", chosen_col, gr.x, gr.y);
     }
     if (cur.immune_confuse) {
-        ui::draw_text(renderer, font, "  Immune to confusion", chosen_col, detail_x, detail_y);
-        detail_y += line_h;
+        auto gr = detail.row();
+        ui::draw_text(renderer, font, "  Immune to confusion", chosen_col, gr.x, gr.y);
     }
 
     // Confirm hint
     if (can_confirm()) {
-        ui::draw_text(renderer, font, "[Enter/Space] CONFIRM SELECTION",
-                     sel_col, 40, h - 30);
+        ui::draw_text_in(renderer, font, "[Enter/Space] CONFIRM SELECTION",
+                         sel_col, hint_row, ui::Align::LEFT);
     } else {
-        ui::draw_text(renderer, font,
-                     "[Enter] toggle   [Up/Down] browse   [Esc] back",
-                     dim_col, 40, h - 30);
+        ui::draw_text_in(renderer, font,
+                         "[Enter] toggle   [Up/Down] browse   [Esc] back",
+                         dim_col, hint_row, ui::Align::LEFT);
     }
 }

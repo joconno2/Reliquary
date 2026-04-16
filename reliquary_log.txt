@@ -1,0 +1,2 @@
+Reliquary starting up.
+Working directory set.

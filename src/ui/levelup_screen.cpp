@@ -250,6 +250,7 @@ void LevelUpScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     if (!open_ || !font) return;
 
     int line_h = TTF_FontLineSkip(font);
+    int num_choices = static_cast<int>(choices_.size());
 
     SDL_Color title_col = {255, 220, 100, 255};
     SDL_Color normal_col = {180, 175, 170, 255};
@@ -259,50 +260,61 @@ void LevelUpScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     SDL_Color hint_col = {120, 110, 100, 255};
 
     // Darken background
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_Rect overlay = {0, 0, screen_w, screen_h};
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 180);
-    SDL_RenderFillRect(renderer, &overlay);
+    ui::draw_overlay(renderer, screen_w, screen_h);
 
-    // Panel
-    int panel_w = std::min(550, screen_w - 40);
-    int panel_h = line_h * (8 + static_cast<int>(choices_.size()) * 3);
-    int px = (screen_w - panel_w) / 2;
-    int py = (screen_h - panel_h) / 2;
-    ui::draw_panel(renderer, px, py, panel_w, panel_h);
+    // Panel sized by fractions: ~55% width, height dynamic from content
+    auto screen = ui::Layout::from_screen(screen_w, screen_h, line_h);
+    int choice_h = line_h * 2 + screen.gap + 2; // label + desc + spacing
+    int content_h = line_h * 2 + screen.gap * 2 + choice_h * num_choices
+                  + screen.gap + line_h + ui::Layout::PANEL_INSET * 2;
+    ui::Rect outer = screen.bounds.center(
+        screen.bounds.w * 11 / 20, content_h);
+    auto layout = ui::draw_panel_in(renderer, outer, line_h);
 
-    int y = py + 12;
-    ui::draw_text_centered(renderer, font, "Level Up!", title_col, screen_w / 2, y);
-    y += line_h + 8;
-    ui::draw_text_centered(renderer, font, "Choose a bonus:", hint_col, screen_w / 2, y);
-    y += line_h + 12;
+    // Title
+    ui::draw_text_in(renderer, font, "Level Up!", title_col,
+                     layout.row(), ui::Align::CENTER);
+    layout.skip(layout.gap);
 
-    for (int i = 0; i < static_cast<int>(choices_.size()); i++) {
+    // Subtitle
+    ui::draw_text_in(renderer, font, "Choose a bonus:", hint_col,
+                     layout.row(), ui::Align::CENTER);
+    layout.skip(layout.gap);
+
+    for (int i = 0; i < num_choices; i++) {
         bool is_sel = (i == selected_);
         auto& c = choices_[i];
         bool is_class = (c.class_req != ClassId::COUNT);
         SDL_Color col = is_sel ? sel_col : (is_class ? class_col : normal_col);
 
+        // Highlight background for selected choice
+        ui::Rect choice_area = layout.cursor.top(line_h * 2 + 4);
         if (is_sel) {
-            SDL_Rect sel_rect = {px + 8, y - 2, panel_w - 16, line_h * 2 + 8};
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
             SDL_SetRenderDrawColor(renderer, 60, 50, 30, 100);
+            SDL_Rect sel_rect = choice_area.sdl();
             SDL_RenderFillRect(renderer, &sel_rect);
         }
 
+        // Label row
         char buf[128];
         snprintf(buf, sizeof(buf), "%s%d) %s", is_sel ? "> " : "  ", i + 1,
                  c.label.c_str());
-        ui::draw_text(renderer, font, buf, col, px + 20, y);
-        y += line_h + 2;
+        ui::draw_text_in(renderer, font, buf, col,
+                         layout.row().inset(layout.pad, 0), ui::Align::LEFT);
+        layout.skip(2);
 
-        // Description on second line
+        // Description row (indented a bit more)
         if (!c.description.empty()) {
-            ui::draw_text_wrapped(renderer, font, c.description.c_str(), desc_col, px + 40, y, panel_w - 60);
+            ui::Rect desc_row = layout.row();
+            ui::draw_text_in(renderer, font, c.description.c_str(), desc_col,
+                             desc_row.inset(layout.pad * 2, 0), ui::Align::LEFT);
         }
-        y += line_h + 8;
+        layout.skip(layout.gap);
     }
 
-    y += 4;
-    ui::draw_text_centered(renderer, font, "[1-3] or Up/Down + Enter",
-                           hint_col, screen_w / 2, y);
+    // Hint at bottom
+    layout.skip(layout.gap / 2);
+    ui::draw_text_in(renderer, font, "[1-3] or Up/Down + Enter",
+                     hint_col, layout.row(), ui::Align::CENTER);
 }

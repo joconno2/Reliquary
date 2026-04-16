@@ -1,15 +1,16 @@
 #pragma once
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
+#include "ui/ui_layout.h"
 
 namespace ui {
 
-// ── Layout constants ────────────────────────────────────────────────
-constexpr int PANEL_PAD = 10;       // inner padding from panel edge to content
-constexpr int PANEL_BORDER = 8;     // total border thickness (outer 3 + gap + inner 2)
-constexpr int ITEM_ROW_PAD = 4;     // vertical padding between item rows
-constexpr int SECTION_GAP = 8;      // gap between sections
-constexpr int COLUMN_GAP = 12;      // gap between columns
+// ── Legacy constants (kept for backward compat during migration) ────
+constexpr int PANEL_PAD = 10;
+constexpr int PANEL_BORDER = 8;
+constexpr int ITEM_ROW_PAD = 4;
+constexpr int SECTION_GAP = 8;
+constexpr int COLUMN_GAP = 12;
 
 // ── Text helpers ────────────────────────────────────────────────────
 
@@ -47,5 +48,21 @@ struct ClipGuard {
     ClipGuard(SDL_Renderer* r, const SDL_Rect& rect);
     ~ClipGuard();
 };
+
+// ── Layout-aware helpers ─────────────────────────────────────────────
+
+enum class Align { LEFT, CENTER, RIGHT };
+
+// Draw text positioned within a Rect. Vertically centered, horizontally aligned.
+void draw_text_in(SDL_Renderer* renderer, TTF_Font* font,
+                  const char* text, SDL_Color col, const Rect& area,
+                  Align align = Align::LEFT);
+
+// Draw a panel and return a Layout for its interior.
+// Draws the SNES border, returns inset rect as a Layout ready for content.
+Layout draw_panel_in(SDL_Renderer* renderer, const Rect& outer, int line_h);
+
+// Draw a dark overlay (semi-transparent background dimming).
+void draw_overlay(SDL_Renderer* renderer, int w, int h, Uint8 alpha = 180);
 
 } // namespace ui

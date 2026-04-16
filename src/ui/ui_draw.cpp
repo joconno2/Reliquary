@@ -155,4 +155,40 @@ ClipGuard::~ClipGuard() {
         SDL_RenderSetClipRect(renderer, nullptr);
 }
 
+void draw_text_in(SDL_Renderer* renderer, TTF_Font* font,
+                  const char* text, SDL_Color col, const Rect& area,
+                  Align align) {
+    if (!font || !text || !text[0] || area.w <= 0 || area.h <= 0) return;
+    int tw = 0, th = 0;
+    TTF_SizeText(font, text, &tw, &th);
+
+    int tx;
+    switch (align) {
+        case Align::CENTER: tx = area.x + (area.w - tw) / 2; break;
+        case Align::RIGHT:  tx = area.x + area.w - tw; break;
+        default:            tx = area.x; break;
+    }
+    int ty = area.y + (area.h - th) / 2;
+
+    // Clip to area bounds
+    if (tw > area.w) {
+        draw_text_clipped(renderer, font, text, col, tx, ty, area.w);
+    } else {
+        draw_text(renderer, font, text, col, tx, ty);
+    }
+}
+
+Layout draw_panel_in(SDL_Renderer* renderer, const Rect& outer, int line_h) {
+    draw_panel(renderer, outer.x, outer.y, outer.w, outer.h);
+    Rect inner = outer.inset(Layout::PANEL_INSET);
+    return Layout::from_rect(inner, line_h);
+}
+
+void draw_overlay(SDL_Renderer* renderer, int w, int h, Uint8 alpha) {
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_Rect overlay = {0, 0, w, h};
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, alpha);
+    SDL_RenderFillRect(renderer, &overlay);
+}
+
 } // namespace ui

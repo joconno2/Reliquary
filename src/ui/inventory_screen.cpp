@@ -120,79 +120,48 @@ int InventoryScreen::find_button_at(int mx, int my) const {
 InvAction InventoryScreen::handle_input(SDL_Event& event) {
     if (!open_) return InvAction::NONE;
 
-    // Mouse click
     if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
         int mx = event.button.x;
         int my = event.button.y;
-
-        // Click on carried item — select it
         int item_idx = find_item_at(mx, my);
-        if (item_idx >= 0) {
-            selected_ = item_idx;
-            return InvAction::NONE;
-        }
-
-        // Click on equipment slot — if item equipped, select it
+        if (item_idx >= 0) { selected_ = item_idx; return InvAction::NONE; }
         int slot_idx = find_slot_at(mx, my);
-        if (slot_idx >= 0) {
-            // Find this equipped item in the carried list
-            // For now just return EQUIP to toggle
-            return InvAction::EQUIP;
-        }
-
-        // Click action buttons
+        if (slot_idx >= 0) return InvAction::EQUIP;
         int btn = find_button_at(mx, my);
         if (btn == 0) return InvAction::EQUIP;
         if (btn == 1) return InvAction::USE;
         if (btn == 2) return InvAction::DROP;
-
         return InvAction::NONE;
     }
 
-    // Double-click to equip/use
     if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT) {
         int mx = event.button.x;
         int my = event.button.y;
         int item_idx = find_item_at(mx, my);
-        if (item_idx >= 0) {
-            selected_ = item_idx;
-            return InvAction::EQUIP;
-        }
+        if (item_idx >= 0) { selected_ = item_idx; return InvAction::EQUIP; }
         return InvAction::NONE;
     }
 
     if (event.type != SDL_KEYDOWN) return InvAction::NONE;
 
     switch (event.key.keysym.sym) {
-        case SDLK_ESCAPE:
-        case SDLK_i:
-            return InvAction::CLOSE;
-        case SDLK_UP:
-        case SDLK_w:
-        case SDLK_k:
+        case SDLK_ESCAPE: case SDLK_i: return InvAction::CLOSE;
+        case SDLK_UP: case SDLK_w: case SDLK_k:
             if (selected_ > 0) selected_--;
             return InvAction::NONE;
-        case SDLK_DOWN:
-        case SDLK_s:
-        case SDLK_j:
+        case SDLK_DOWN: case SDLK_s: case SDLK_j:
             selected_++;
             return InvAction::NONE;
-        case SDLK_e:
-        case SDLK_RETURN:
-            return InvAction::EQUIP;
-        case SDLK_u:
-            return InvAction::USE;
-        case SDLK_d:
-            return InvAction::DROP;
+        case SDLK_e: case SDLK_RETURN: return InvAction::EQUIP;
+        case SDLK_u: return InvAction::USE;
+        case SDLK_d: return InvAction::DROP;
         case SDLK_TAB:
-            // Cycle sort mode
             sort_mode_ = static_cast<InvSortMode>(
                 (static_cast<int>(sort_mode_) + 1) % static_cast<int>(InvSortMode::COUNT));
             return InvAction::NONE;
         default:
-            if (event.key.keysym.sym >= SDLK_a && event.key.keysym.sym <= SDLK_z) {
+            if (event.key.keysym.sym >= SDLK_a && event.key.keysym.sym <= SDLK_z)
                 selected_ = event.key.keysym.sym - SDLK_a;
-            }
             return InvAction::NONE;
     }
 }
@@ -226,62 +195,47 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     SDL_Color empty_col = {60, 55, 50, 255};
     SDL_Color btn_col = {160, 155, 150, 255};
 
-    // Darken background
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_Rect overlay = {0, 0, screen_w, screen_h};
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 160);
-    SDL_RenderFillRect(renderer, &overlay);
+    ui::draw_overlay(renderer, screen_w, screen_h, 160);
 
-    // Layout: left panel = paper doll, right panel = carried items — centered
-    int total_w = std::min(screen_w * 3 / 4, 1200);
-    int total_h = std::min(screen_h * 3 / 4, screen_h - 100);
-    int base_x = (screen_w - total_w) / 2;
-    int base_y = (screen_h - total_h) / 2;
+    auto screen = ui::Layout::from_screen(screen_w, screen_h, line_h);
+    auto outer = screen.panel_outer(3, 4, 3, 4);
+    auto cols = ui::Layout::from_rect(outer, line_h).split_cols_ratio(2, 3);
 
-    int doll_w = total_w * 2 / 5;
-    int list_w = total_w - doll_w - 12;
-    int doll_x = base_x;
-    int list_x = base_x + doll_w + 12;
+    // Paper doll panel (left)
+    auto doll_outer = cols[0];
+    ui::draw_panel(renderer, doll_outer.x, doll_outer.y, doll_outer.w, doll_outer.h);
+    auto doll = ui::Layout::from_rect(doll_outer.inset(ui::Layout::PANEL_INSET), line_h);
 
-    // Paper doll panel
-    ui::draw_panel(renderer, doll_x, base_y, doll_w, total_h);
-
-    // Character sprite (big)
+    // Character sprite
     if (world.has<Renderable>(player_)) {
         auto& rend = world.get<Renderable>(player_);
+        int sprite_sz = std::min(96, doll.cursor.w / 2);
         sprites.draw_sprite_sized(renderer, rend.sprite_sheet, rend.sprite_x, rend.sprite_y,
-                                   doll_x + doll_w / 2 - 48, base_y + 12, 96);
+                                   doll.cursor.cx() - sprite_sz / 2, doll.cursor.y, sprite_sz);
+        doll.skip(sprite_sz + 8);
     }
 
-    // Equipment slots — 3-column grid layout
+    // Equipment slots: scale slot size to panel width
     slot_rects_.clear();
-    int slot_size = 40;
-    int slot_gap = 10;
-    int dcx = doll_x + doll_w / 2;
-    int slots_y = base_y + 120;
+    int slot_size = std::max(32, doll.cursor.w / 5);
+    int slot_gap = slot_size / 4;
+    int dcx = doll.cursor.cx();
 
-    int col_l = dcx - 80;
-    int col_c = dcx - 20;
-    int col_r = dcx + 40;
+    int col_l = dcx - slot_size - slot_gap / 2;
+    int col_c = dcx - slot_size / 2;
+    int col_r = dcx + slot_gap / 2;
 
     int row_step = slot_size + slot_gap + line_h + 4;
-    int r0 = slots_y;
-    int r1 = slots_y + row_step;
+    int r0 = doll.cursor.y;
+    int r1 = r0 + row_step;
     int r2 = r1 + row_step;
     int r3 = r2 + row_step;
 
     struct SL { int x, y; };
     SL positions[] = {
-        {col_l, r1},  // 0: main hand
-        {col_r, r1},  // 1: off hand
-        {col_c, r0},  // 2: head
-        {col_c, r1},  // 3: chest
-        {col_l, r2},  // 4: hands
-        {col_c, r2},  // 5: feet
-        {col_r, r0},  // 6: amulet
-        {col_l, r3},  // 7: ring 1
-        {col_r, r3},  // 8: ring 2
-        {col_c, r3},  // 9: pet
+        {col_l, r1}, {col_r, r1}, {col_c, r0}, {col_c, r1},
+        {col_l, r2}, {col_c, r2}, {col_r, r0}, {col_l, r3},
+        {col_r, r3}, {col_c, r3},
     };
 
     for (int s = 0; s < EQUIP_SLOT_COUNT; s++) {
@@ -290,7 +244,6 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
         SDL_Rect slot_rect = {sx, sy, slot_size, slot_size};
         slot_rects_.push_back({slot_rect, s});
 
-        // Slot background with border
         SDL_SetRenderDrawColor(renderer, 22, 20, 30, 255);
         SDL_RenderFillRect(renderer, &slot_rect);
         SDL_SetRenderDrawColor(renderer, 55, 48, 65, 255);
@@ -302,18 +255,25 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
             sprites.draw_sprite_sized(renderer, rend.sprite_sheet, rend.sprite_x, rend.sprite_y,
                                        sx + 4, sy + 4, slot_size - 8);
         } else {
-            // Label inside slot (centered, small text) when empty
             ui::draw_text_centered(renderer, font, slot_label(s), empty_col,
                                     sx + slot_size / 2, sy + (slot_size - line_h) / 2);
         }
     }
 
-    // Carried items panel
-    ui::draw_panel(renderer, list_x, base_y, list_w, total_h);
+    // Carried items panel (right)
+    auto list_outer = cols[1];
+    ui::draw_panel(renderer, list_outer.x, list_outer.y, list_outer.w, list_outer.h);
+    auto list = ui::Layout::from_rect(list_outer.inset(ui::Layout::PANEL_INSET), line_h);
 
-    int y = base_y + 10;
-    ui::draw_text(renderer, font, "Inventory", title_col, list_x + 10, y);
-    y += line_h + 6;
+    // Title row
+    auto title_row = list.row(line_h + 6);
+    ui::draw_text(renderer, font, "Inventory", title_col, title_row.x, title_row.y);
+
+    // Sort mode indicator (right-aligned in title row)
+    char sort_buf[32];
+    snprintf(sort_buf, sizeof(sort_buf), "[Tab] %s", sort_mode_name(sort_mode_));
+    int sort_tw = ui::text_width(font, sort_buf);
+    ui::draw_text(renderer, font, sort_buf, hint_col, title_row.x2() - sort_tw, title_row.y - 8);
 
     item_rects_.clear();
 
@@ -322,19 +282,18 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     int count = static_cast<int>(sorted.size());
     if (sel >= count && count > 0) sel = count - 1;
 
-    // Sort mode indicator
-    {
-        char sort_buf[32];
-        snprintf(sort_buf, sizeof(sort_buf), "[Tab] %s", sort_mode_name(sort_mode_));
-        ui::draw_text(renderer, font, sort_buf, hint_col, list_x + list_w - 140, base_y + 2);
+    if (sorted.empty()) {
+        auto empty_row = list.row();
+        ui::draw_text(renderer, font, "(empty)", hint_col, empty_row.x, empty_row.y);
     }
 
-    if (sorted.empty()) {
-        ui::draw_text(renderer, font, "(empty)", hint_col, list_x + 10, y);
-    }
+    // Reserve bottom for buttons + detail
+    auto btn_strip = list.row_bottom(line_h + 20);
+    auto detail_area = list.row_bottom(list.remaining_h() / 2);
+    // Remaining space is item list
 
     for (int di = 0; di < count; di++) {
-        int i = sorted[di]; // original index
+        int i = sorted[di];
         Entity item_e = inv.items[i];
         if (!world.has<Item>(item_e)) continue;
         auto& item = world.get<Item>(item_e);
@@ -343,8 +302,10 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
         bool is_sel = (di == sel);
 
         int row_h = std::max(line_h + 8, 36);
-        SDL_Rect row_rect = {list_x + 6, y, list_w - 12, row_h};
-        item_rects_.push_back({row_rect, i}); // store original index for selection
+        if (!list.fits(row_h)) break;
+        auto row = list.row(row_h);
+        SDL_Rect row_rect = row.sdl();
+        item_rects_.push_back({row_rect, i});
 
         if (is_sel) {
             SDL_SetRenderDrawColor(renderer, 35, 30, 48, 255);
@@ -355,7 +316,7 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
         if (world.has<Renderable>(item_e)) {
             auto& rend = world.get<Renderable>(item_e);
             sprites.draw_sprite(renderer, rend.sprite_sheet, rend.sprite_x, rend.sprite_y,
-                                list_x + 10, y + 2, 1);
+                                row.x + 2, row.y + 2, 1);
         }
 
         char letter = 'a' + static_cast<char>(i);
@@ -369,23 +330,19 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
         else if (is_equipped) col = equip_col;
         else if (item.rarity != Rarity::COMMON) col = rarity_color(item.rarity);
         else col = item_col;
-        int name_max_w = list_w - 54; // 44px sprite offset + 10px right margin
-        ui::draw_text_clipped(renderer, font, buf, col, list_x + 44, y + 8, name_max_w);
-
-        y += row_h;
-        if (y > base_y + total_h - line_h * 4) break;
+        int sprite_offset = 36;
+        ui::draw_text_clipped(renderer, font, buf, col,
+                              row.x + sprite_offset, row.y + 8, row.w - sprite_offset);
     }
 
-    // Action buttons at bottom of item list
-    int btn_y = base_y + total_h - line_h - 20;
-    int btn_w = 80;
+    // Action buttons
+    int btn_w = btn_strip.w / 4;
     int btn_h = line_h + 8;
-    int btn_gap = 10;
-    int btn_start = list_x + 10;
+    int btn_gap_px = list.gap;
 
-    equip_btn_ = {btn_start, btn_y, btn_w, btn_h};
-    use_btn_ = {btn_start + btn_w + btn_gap, btn_y, btn_w, btn_h};
-    drop_btn_ = {btn_start + (btn_w + btn_gap) * 2, btn_y, btn_w, btn_h};
+    equip_btn_ = {btn_strip.x, btn_strip.y + (btn_strip.h - btn_h) / 2, btn_w, btn_h};
+    use_btn_ = {btn_strip.x + btn_w + btn_gap_px, btn_strip.y + (btn_strip.h - btn_h) / 2, btn_w, btn_h};
+    drop_btn_ = {btn_strip.x + (btn_w + btn_gap_px) * 2, btn_strip.y + (btn_strip.h - btn_h) / 2, btn_w, btn_h};
 
     auto draw_button = [&](const SDL_Rect& r, const char* label) {
         SDL_SetRenderDrawColor(renderer, 30, 25, 40, 255);
@@ -399,7 +356,7 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     draw_button(use_btn_, "[U]se");
     draw_button(drop_btn_, "[D]rop");
 
-    // Item description and stats (clip to available area between item list and buttons)
+    // Item description and stats in detail area
     if (sel >= 0 && sel < count) {
         int orig_sel = sorted[sel];
         Entity item_e = inv.items[orig_sel];
@@ -407,88 +364,80 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
             auto& item = world.get<Item>(item_e);
             SDL_Color stat_col = {140, 160, 180, 255};
             SDL_Color value_col = {200, 180, 80, 255};
-            int detail_max_w = list_w - 20;
 
-            // Detail area: from separator line to button row
-            int detail_top = base_y + total_h / 2 + 4;
-            int detail_bottom = btn_y - 4;
-            SDL_Rect detail_clip = {list_x, detail_top, list_w, detail_bottom - detail_top};
-            ui::ClipGuard cg(renderer, detail_clip);
-
-            // Separator line
+            // Separator
             SDL_SetRenderDrawColor(renderer, 60, 50, 70, 255);
-            SDL_RenderDrawLine(renderer, list_x + 8, detail_top - 2, list_x + list_w - 8, detail_top - 2);
+            SDL_RenderDrawLine(renderer, detail_area.x + 4, detail_area.y - 2,
+                               detail_area.x2() - 4, detail_area.y - 2);
 
-            int info_y = detail_top + 4;
+            auto det = ui::Layout::from_rect(detail_area.inset(4, 4), line_h);
+            ui::ClipGuard cg(renderer, detail_area.sdl());
 
             if (!item.description.empty()) {
+                int dh = ui::text_wrapped_height(font, item.description.c_str(), det.cursor.w);
+                auto dr = det.row(dh + 4);
                 ui::draw_text_wrapped(renderer, font, item.description.c_str(), hint_col,
-                                       list_x + 10, info_y, detail_max_w);
-                int desc_h = ui::text_wrapped_height(font, item.description.c_str(), detail_max_w);
-                info_y += desc_h + 4;
+                                       dr.x, dr.y, dr.w);
             }
 
             // Item stats
             char stats_buf[128];
             if (item.type == ItemType::WEAPON) {
                 if (item.range > 0) {
-                    // Ranged weapon — effective damage uses DEX
                     int eff_dmg = item.damage_bonus;
                     if (world.has<Stats>(player_))
                         eff_dmg += world.get<Stats>(player_).attr(Attr::DEX) / 3;
                     snprintf(stats_buf, sizeof(stats_buf), "Dmg: +%d  Atk: +%d  Range: %d",
                              item.damage_bonus, item.attack_bonus, item.range);
-                    ui::draw_text(renderer, font, stats_buf, stat_col, list_x + 10, info_y);
-                    info_y += line_h + 2;
+                    auto sr = det.row(line_h + 2);
+                    ui::draw_text(renderer, font, stats_buf, stat_col, sr.x, sr.y);
                     snprintf(stats_buf, sizeof(stats_buf), "Effective: %d dmg (DEX)", eff_dmg);
-                    ui::draw_text(renderer, font, stats_buf, SDL_Color{120, 200, 180, 255}, list_x + 10, info_y);
-                    info_y += line_h + 2;
+                    auto er = det.row(line_h + 2);
+                    ui::draw_text(renderer, font, stats_buf, SDL_Color{120, 200, 180, 255}, er.x, er.y);
                 } else {
-                    // Melee weapon — effective damage uses STR
                     int eff_dmg = item.damage_bonus;
                     if (world.has<Stats>(player_))
                         eff_dmg += world.get<Stats>(player_).melee_damage();
                     snprintf(stats_buf, sizeof(stats_buf), "Dmg: +%d  Atk: +%d",
                              item.damage_bonus, item.attack_bonus);
-                    ui::draw_text(renderer, font, stats_buf, stat_col, list_x + 10, info_y);
-                    info_y += line_h + 2;
+                    auto sr = det.row(line_h + 2);
+                    ui::draw_text(renderer, font, stats_buf, stat_col, sr.x, sr.y);
                     snprintf(stats_buf, sizeof(stats_buf), "Effective: %d dmg (STR)", eff_dmg);
-                    ui::draw_text(renderer, font, stats_buf, SDL_Color{120, 200, 180, 255}, list_x + 10, info_y);
-                    info_y += line_h + 2;
+                    auto er = det.row(line_h + 2);
+                    ui::draw_text(renderer, font, stats_buf, SDL_Color{120, 200, 180, 255}, er.x, er.y);
                 }
             } else if (item.type == ItemType::ARMOR_HEAD || item.type == ItemType::ARMOR_CHEST ||
                        item.type == ItemType::ARMOR_HANDS || item.type == ItemType::ARMOR_FEET ||
                        item.type == ItemType::SHIELD) {
                 snprintf(stats_buf, sizeof(stats_buf), "Armor: +%d  Dodge: +%d",
                          item.armor_bonus, item.dodge_bonus);
-                ui::draw_text(renderer, font, stats_buf, stat_col, list_x + 10, info_y);
-                info_y += line_h + 2;
+                auto sr = det.row(line_h + 2);
+                ui::draw_text(renderer, font, stats_buf, stat_col, sr.x, sr.y);
             } else if (item.type == ItemType::POTION || item.type == ItemType::FOOD) {
                 if (item.heal_amount > 0) {
                     snprintf(stats_buf, sizeof(stats_buf), "Heals: %d HP", item.heal_amount);
-                    ui::draw_text(renderer, font, stats_buf, stat_col, list_x + 10, info_y);
-                    info_y += line_h + 2;
+                    auto sr = det.row(line_h + 2);
+                    ui::draw_text(renderer, font, stats_buf, stat_col, sr.x, sr.y);
                 }
             }
 
-            // Comparison with equipped item in same slot
+            // Comparison with equipped
             if (item.slot != EquipSlot::NONE && !inv.is_equipped(item_e)) {
                 Entity cur_eq = inv.get_equipped(item.slot);
-                // For rings, check both slots
                 if (item.slot == EquipSlot::RING_1 && cur_eq == NULL_ENTITY)
                     cur_eq = inv.get_equipped(EquipSlot::RING_2);
 
                 if (cur_eq != NULL_ENTITY && world.has<Item>(cur_eq)) {
                     auto& cur = world.get<Item>(cur_eq);
                     auto draw_cmp = [&](const char* label, int sel_val, int cur_val) {
-                        if (sel_val == cur_val) return;
+                        if (sel_val == cur_val || !det.fits_row()) return;
                         int diff = sel_val - cur_val;
                         char cbuf[64];
                         snprintf(cbuf, sizeof(cbuf), "%s: %+d", label, diff);
                         SDL_Color cc = (diff > 0) ? SDL_Color{100, 220, 100, 255}
                                                    : SDL_Color{220, 100, 100, 255};
-                        ui::draw_text(renderer, font, cbuf, cc, list_x + 10, info_y);
-                        info_y += line_h + 1;
+                        auto cr = det.row(line_h + 1);
+                        ui::draw_text(renderer, font, cbuf, cc, cr.x, cr.y);
                     };
                     if (item.type == ItemType::WEAPON) {
                         draw_cmp("Dmg", item.damage_bonus, cur.damage_bonus);
@@ -501,97 +450,78 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
                     draw_cmp("DEX", item.dex_bonus, cur.dex_bonus);
                     draw_cmp("CON", item.con_bonus, cur.con_bonus);
                 } else if (cur_eq == NULL_ENTITY) {
-                    // Nothing equipped in this slot
-                    ui::draw_text(renderer, font, "(empty slot)", hint_col, list_x + 10, info_y);
-                    info_y += line_h + 1;
+                    auto er = det.row(line_h + 1);
+                    ui::draw_text(renderer, font, "(empty slot)", hint_col, er.x, er.y);
                 }
             }
 
-            // Attribute bonuses from affixes/relics
+            // Attribute bonuses
             if (item.str_bonus != 0 || item.dex_bonus != 0 || item.con_bonus != 0) {
                 std::string attr_str;
-                if (item.str_bonus != 0) {
-                    char ab[16]; snprintf(ab, sizeof(ab), "STR %+d  ", item.str_bonus);
-                    attr_str += ab;
+                if (item.str_bonus != 0) { char ab[16]; snprintf(ab, sizeof(ab), "STR %+d  ", item.str_bonus); attr_str += ab; }
+                if (item.dex_bonus != 0) { char ab[16]; snprintf(ab, sizeof(ab), "DEX %+d  ", item.dex_bonus); attr_str += ab; }
+                if (item.con_bonus != 0) { char ab[16]; snprintf(ab, sizeof(ab), "CON %+d", item.con_bonus); attr_str += ab; }
+                if (det.fits_row()) {
+                    auto ar = det.row(line_h + 2);
+                    ui::draw_text(renderer, font, attr_str.c_str(), stat_col, ar.x, ar.y);
                 }
-                if (item.dex_bonus != 0) {
-                    char ab[16]; snprintf(ab, sizeof(ab), "DEX %+d  ", item.dex_bonus);
-                    attr_str += ab;
-                }
-                if (item.con_bonus != 0) {
-                    char ab[16]; snprintf(ab, sizeof(ab), "CON %+d", item.con_bonus);
-                    attr_str += ab;
-                }
-                ui::draw_text(renderer, font, attr_str.c_str(), stat_col, list_x + 10, info_y);
-                info_y += line_h + 2;
             }
 
-            // Affix special effects (on-hit, on-kill, resist, etc.)
+            // Affix effects
             SDL_Color affix_col = {140, 200, 160, 255};
             for (auto& a : item.affixes) {
+                if (!det.fits_row()) break;
                 char abuf[128];
                 switch (a.effect) {
-                    case AffixEffect::ONHIT_POISON:
-                        snprintf(abuf, sizeof(abuf), "%d%% chance to poison on hit", a.magnitude); break;
-                    case AffixEffect::ONHIT_BURN:
-                        snprintf(abuf, sizeof(abuf), "%d%% chance to burn on hit", a.magnitude); break;
-                    case AffixEffect::ONHIT_FREEZE:
-                        snprintf(abuf, sizeof(abuf), "%d%% chance to freeze on hit", a.magnitude); break;
-                    case AffixEffect::ONHIT_BLEED:
-                        snprintf(abuf, sizeof(abuf), "%d%% chance to bleed on hit", a.magnitude); break;
-                    case AffixEffect::ONHIT_LIFESTEAL:
-                        snprintf(abuf, sizeof(abuf), "+%d HP on hit (lifesteal)", a.magnitude); break;
-                    case AffixEffect::ONKILL_HEAL:
-                        snprintf(abuf, sizeof(abuf), "+%d HP on kill", a.magnitude); break;
-                    case AffixEffect::ONKILL_MANA:
-                        snprintf(abuf, sizeof(abuf), "+%d MP on kill", a.magnitude); break;
-                    case AffixEffect::RESIST_POISON:
-                        snprintf(abuf, sizeof(abuf), "-%d poison damage per tick", a.magnitude); break;
-                    case AffixEffect::RESIST_FIRE:
-                        snprintf(abuf, sizeof(abuf), "-%d fire damage per tick", a.magnitude); break;
-                    case AffixEffect::BONUS_HP:
-                        snprintf(abuf, sizeof(abuf), "+%d max HP", a.magnitude); break;
-                    case AffixEffect::BONUS_MP:
-                        snprintf(abuf, sizeof(abuf), "+%d max MP", a.magnitude); break;
-                    case AffixEffect::BONUS_SPEED:
-                        snprintf(abuf, sizeof(abuf), "+%d speed", a.magnitude); break;
-                    case AffixEffect::BONUS_FAVOR:
-                        snprintf(abuf, sizeof(abuf), "+%d favor per kill", a.magnitude); break;
+                    case AffixEffect::ONHIT_POISON:    snprintf(abuf, sizeof(abuf), "%d%% chance to poison on hit", a.magnitude); break;
+                    case AffixEffect::ONHIT_BURN:      snprintf(abuf, sizeof(abuf), "%d%% chance to burn on hit", a.magnitude); break;
+                    case AffixEffect::ONHIT_FREEZE:    snprintf(abuf, sizeof(abuf), "%d%% chance to freeze on hit", a.magnitude); break;
+                    case AffixEffect::ONHIT_BLEED:     snprintf(abuf, sizeof(abuf), "%d%% chance to bleed on hit", a.magnitude); break;
+                    case AffixEffect::ONHIT_LIFESTEAL: snprintf(abuf, sizeof(abuf), "+%d HP on hit (lifesteal)", a.magnitude); break;
+                    case AffixEffect::ONKILL_HEAL:     snprintf(abuf, sizeof(abuf), "+%d HP on kill", a.magnitude); break;
+                    case AffixEffect::ONKILL_MANA:     snprintf(abuf, sizeof(abuf), "+%d MP on kill", a.magnitude); break;
+                    case AffixEffect::RESIST_POISON:   snprintf(abuf, sizeof(abuf), "-%d poison damage per tick", a.magnitude); break;
+                    case AffixEffect::RESIST_FIRE:     snprintf(abuf, sizeof(abuf), "-%d fire damage per tick", a.magnitude); break;
+                    case AffixEffect::BONUS_HP:        snprintf(abuf, sizeof(abuf), "+%d max HP", a.magnitude); break;
+                    case AffixEffect::BONUS_MP:        snprintf(abuf, sizeof(abuf), "+%d max MP", a.magnitude); break;
+                    case AffixEffect::BONUS_SPEED:     snprintf(abuf, sizeof(abuf), "+%d speed", a.magnitude); break;
+                    case AffixEffect::BONUS_FAVOR:     snprintf(abuf, sizeof(abuf), "+%d favor per kill", a.magnitude); break;
                     default: abuf[0] = '\0'; break;
                 }
                 if (abuf[0] != '\0') {
-                    ui::draw_text_clipped(renderer, font, abuf, affix_col, list_x + 10, info_y, detail_max_w);
-                    info_y += line_h + 2;
+                    auto ar = det.row(line_h + 2);
+                    ui::draw_text_clipped(renderer, font, abuf, affix_col, ar.x, ar.y, ar.w);
                 }
             }
 
-            // Unique effect description
-            if (item.unique_effect != UniqueEffect::NONE) {
+            // Unique effect
+            if (item.unique_effect != UniqueEffect::NONE && det.fits_row()) {
                 const char* ue_desc = unique_effect_description(item.unique_effect);
                 if (ue_desc[0] != '\0') {
-                    SDL_Color ue_col = {255, 200, 100, 255}; // warm gold
-                    ui::draw_text_clipped(renderer, font, ue_desc, ue_col, list_x + 10, info_y, detail_max_w);
-                    info_y += line_h + 2;
+                    auto ur = det.row(line_h + 2);
+                    ui::draw_text_clipped(renderer, font, ue_desc, {255, 200, 100, 255}, ur.x, ur.y, ur.w);
                 }
             }
 
             // Rarity tag
-            if (item.rarity != Rarity::COMMON) {
+            if (item.rarity != Rarity::COMMON && det.fits_row()) {
+                auto rr = det.row(line_h + 2);
                 ui::draw_text(renderer, font, rarity_name(item.rarity),
-                              rarity_color(item.rarity), list_x + 10, info_y);
-                info_y += line_h + 2;
+                              rarity_color(item.rarity), rr.x, rr.y);
             }
 
             // Gold value
-            if (item.gold_value > 0) {
+            if (item.gold_value > 0 && det.fits_row()) {
                 char val_buf[64];
                 snprintf(val_buf, sizeof(val_buf), "Value: %d gold", item.gold_value);
-                ui::draw_text(renderer, font, val_buf, value_col, list_x + 10, info_y);
+                auto vr = det.row(line_h + 2);
+                ui::draw_text(renderer, font, val_buf, value_col, vr.x, vr.y);
             }
         }
     }
 
     // Close hint
-    ui::draw_text(renderer, font, "[i/Esc] close   [Tab] sort   Right-click to equip",
-                  hint_col, doll_x + 10, base_y + total_h - line_h - 8);
+    auto hint_rect = ui::Rect{outer.x, outer.y2() - line_h - 8, outer.w, line_h};
+    ui::draw_text_in(renderer, font, "[i/Esc] close   [Tab] sort   Right-click to equip",
+                     hint_col, hint_rect, ui::Align::LEFT);
 }

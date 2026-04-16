@@ -349,70 +349,93 @@ void ShopScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     SDL_Color stat_col = {140, 160, 180, 255};
 
     // Darken background
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_Rect overlay = {0, 0, screen_w, screen_h};
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 180);
-    SDL_RenderFillRect(renderer, &overlay);
+    ui::draw_overlay(renderer, screen_w, screen_h);
 
-    // Panel
-    int panel_w = std::min(screen_w * 2 / 3, 900);
-    int panel_h = screen_h - 60;
-    int px = (screen_w - panel_w) / 2;
-    int py = 30;
-    ui::draw_panel(renderer, px, py, panel_w, panel_h);
+    // Panel: 2/3 width, near-full height
+    auto screen = ui::Layout::from_screen(screen_w, screen_h, line_h);
+    auto outer = screen.panel_outer(2, 3, 9, 10);
+    auto panel = ui::draw_panel_in(renderer, outer, line_h);
 
-    int y = py + 10;
-    ui::draw_text_centered(renderer, font, "Shop", title_col, screen_w / 2, y);
-    y += line_h + 4;
+    // Title row
+    auto title_row = panel.row();
+    ui::draw_text_in(renderer, font, "Shop", title_col, title_row, ui::Align::CENTER);
 
-    // Gold display
+    // Gold display -- right-aligned in the title row
     char gold_buf[64];
     snprintf(gold_buf, sizeof(gold_buf), "Gold: %d", gold_ ? *gold_ : 0);
-    ui::draw_text(renderer, font, gold_buf, price_col, px + panel_w - 180, py + 10);
+    ui::draw_text_in(renderer, font, gold_buf, price_col, title_row, ui::Align::RIGHT);
 
-    // Tabs
-    ui::draw_text(renderer, font, "[Buy]", buy_tab_ ? tab_active : tab_inactive, px + 20, y);
-    ui::draw_text(renderer, font, "[Sell]", !buy_tab_ ? tab_active : tab_inactive, px + 120, y);
-    y += line_h + 8;
+    panel.skip(panel.gap);
+
+    // Tabs row
+    auto tab_row = panel.row();
+    int tab_w = panel.bounds.w / 6;
+    ui::draw_text_in(renderer, font, "[Buy]", buy_tab_ ? tab_active : tab_inactive,
+                     tab_row.left(tab_w), ui::Align::LEFT);
+    ui::draw_text_in(renderer, font, "[Sell]", !buy_tab_ ? tab_active : tab_inactive,
+                     {tab_row.x + tab_w, tab_row.y, tab_w, tab_row.h}, ui::Align::LEFT);
+
+    panel.skip(panel.gap / 2);
 
     // Separator
     SDL_SetRenderDrawColor(renderer, 60, 50, 70, 255);
-    SDL_RenderDrawLine(renderer, px + 10, y, px + panel_w - 10, y);
-    y += 6;
+    SDL_RenderDrawLine(renderer, panel.cursor.x, panel.cursor.y,
+                       panel.cursor.x + panel.cursor.w, panel.cursor.y);
+    panel.skip(panel.gap / 2);
+
+    // Reserve bottom area: hint row + detail section (4 lines)
+    auto hint_row = panel.row_bottom(line_h);
+    panel.row_bottom(panel.gap / 2); // spacing above hint
+    int detail_h = line_h * 4 + panel.gap;
+    auto detail_area = panel.row_bottom(detail_h);
+
+    // Separator above detail area
+    SDL_SetRenderDrawColor(renderer, 60, 50, 70, 255);
+    SDL_RenderDrawLine(renderer, detail_area.x, detail_area.y - 2,
+                       detail_area.x + detail_area.w, detail_area.y - 2);
+
+    // Column positions derived from panel width
+    int sprite_col_x = panel.cursor.x;                      // left edge for sprite
+    int name_col_x = panel.cursor.x + 36;                   // after 32px sprite + 4px gap
+    int price_col_w = panel.cursor.w / 6;                    // right 1/6 for price
+    int price_col_x = panel.cursor.x + panel.cursor.w - price_col_w;
+    int name_max_w = price_col_x - name_col_x - panel.gap;  // name fills the middle
 
     if (buy_tab_) {
-        // Buy tab — show shop stock
+        // Buy tab -- show shop stock
         int count = static_cast<int>(stock_.size());
         int sel = std::min(selected_, count - 1);
 
         if (count == 0) {
-            ui::draw_text(renderer, font, "(sold out)", hint_col, px + 20, y);
+            auto empty_row = panel.row();
+            ui::draw_text_in(renderer, font, "(sold out)", hint_col, empty_row, ui::Align::LEFT);
         }
 
         for (int i = 0; i < count; i++) {
             int row_h = std::max(line_h + 8, 36);
-            if (y > py + panel_h - line_h * 6) break;
+            if (!panel.fits(row_h)) break;
+            auto item_row = panel.row(row_h);
             auto& si = stock_[i];
             bool is_sel = (i == sel);
             bool can_afford = gold_ && *gold_ >= si.item.gold_value;
 
             if (is_sel) {
-                SDL_Rect sel_rect = {px + 8, y - 2, panel_w - 16, row_h};
+                SDL_Rect sel_rect = item_row.inset(0).sdl();
                 SDL_SetRenderDrawColor(renderer, 35, 30, 48, 255);
                 SDL_RenderFillRect(renderer, &sel_rect);
             }
 
             // Item sprite (32x32)
             sprites.draw_sprite(renderer, SHEET_ITEMS, si.sprite_x, si.sprite_y,
-                               px + 20, y, 1);
+                               sprite_col_x, item_row.y, 1);
 
-            // Item name (clipped to panel width minus price area)
+            // Item name
             char buf[128];
             snprintf(buf, sizeof(buf), "%s", si.item.name.c_str());
-            int name_max = panel_w - 56 - 90; // 56px left offset, 90px right for price
-            ui::draw_text_clipped(renderer, font, buf, is_sel ? sel_col : item_col, px + 56, y + 2, name_max);
+            ui::draw_text_clipped(renderer, font, buf, is_sel ? sel_col : item_col,
+                                  name_col_x, item_row.y + 2, name_max_w);
 
-            // Inline stats
+            // Inline stats below name
             char stat_buf[64];
             if (si.item.type == ItemType::WEAPON) {
                 snprintf(stat_buf, sizeof(stat_buf), "+%d dmg", si.item.damage_bonus);
@@ -421,26 +444,24 @@ void ShopScreen::render(SDL_Renderer* renderer, TTF_Font* font,
             } else {
                 snprintf(stat_buf, sizeof(stat_buf), "+%d arm", si.item.armor_bonus);
             }
-            ui::draw_text(renderer, font, stat_buf, stat_col, px + 56, y + 2 + line_h);
+            ui::draw_text(renderer, font, stat_buf, stat_col, name_col_x, item_row.y + 2 + line_h);
 
             // Price right-aligned
             char price[32];
             snprintf(price, sizeof(price), "%dg", si.item.gold_value);
-            ui::draw_text(renderer, font, price, can_afford ? price_col : cant_col,
-                         px + panel_w - 80, y + 8);
-
-            y += row_h;
+            ui::Rect price_rect = {price_col_x, item_row.y, price_col_w, item_row.h};
+            ui::draw_text_in(renderer, font, price, can_afford ? price_col : cant_col,
+                             price_rect, ui::Align::RIGHT);
         }
 
-        // Show selected item stats
+        // Detail area for selected item
         if (sel >= 0 && sel < count) {
-            y = py + panel_h - line_h * 4 - 10;
-            SDL_SetRenderDrawColor(renderer, 60, 50, 70, 255);
-            SDL_RenderDrawLine(renderer, px + 10, y - 4, px + panel_w - 10, y - 4);
-
+            auto dl = ui::Layout::from_rect(detail_area, line_h);
+            dl.skip(dl.gap);
             auto& si = stock_[sel];
-            ui::draw_text_wrapped(renderer, font, si.item.description.c_str(), hint_col, px + 20, y, panel_w - 40);
-            y += line_h + 2;
+            auto desc_row = dl.row();
+            ui::draw_text_in(renderer, font, si.item.description.c_str(), hint_col,
+                             desc_row, ui::Align::LEFT);
 
             char stats[128];
             if (si.item.type == ItemType::WEAPON) {
@@ -452,21 +473,26 @@ void ShopScreen::render(SDL_Renderer* renderer, TTF_Font* font,
                 snprintf(stats, sizeof(stats), "Armor: +%d  Dodge: +%d",
                          si.item.armor_bonus, si.item.dodge_bonus);
             }
-            ui::draw_text(renderer, font, stats, stat_col, px + 20, y);
+            dl.skip(2);
+            auto stat_row = dl.row();
+            ui::draw_text_in(renderer, font, stats, stat_col, stat_row, ui::Align::LEFT);
         }
     } else {
-        // Sell tab — show player inventory
+        // Sell tab -- show player inventory
         if (!world.has<Inventory>(player_)) return;
         auto& inv = world.get<Inventory>(player_);
         int count = static_cast<int>(inv.items.size());
         int sel = std::min(selected_, count - 1);
 
         if (count == 0) {
-            ui::draw_text(renderer, font, "(nothing to sell)", hint_col, px + 20, y);
+            auto empty_row = panel.row();
+            ui::draw_text_in(renderer, font, "(nothing to sell)", hint_col, empty_row, ui::Align::LEFT);
         }
 
         for (int i = 0; i < count; i++) {
-            if (y > py + panel_h - line_h * 6) break;
+            int row_h = line_h + 4;
+            if (!panel.fits(row_h)) break;
+            auto item_row = panel.row(row_h);
             Entity item_e = inv.items[i];
             if (!world.has<Item>(item_e)) continue;
             auto& item = world.get<Item>(item_e);
@@ -474,7 +500,7 @@ void ShopScreen::render(SDL_Renderer* renderer, TTF_Font* font,
             int sell_price = std::max(1, item.gold_value / 2);
 
             if (is_sel) {
-                SDL_Rect sel_rect = {px + 8, y - 2, panel_w - 16, line_h + 4};
+                SDL_Rect sel_rect = item_row.sdl();
                 SDL_SetRenderDrawColor(renderer, 35, 30, 48, 255);
                 SDL_RenderFillRect(renderer, &sel_rect);
             }
@@ -484,28 +510,26 @@ void ShopScreen::render(SDL_Renderer* renderer, TTF_Font* font,
                      inv.is_equipped(item_e) ? " [E]" : "");
             SDL_Color name_col = is_sel ? sel_col :
                 (item.rarity != Rarity::COMMON ? rarity_color(item.rarity) : item_col);
-            int sell_name_max = panel_w - 20 - 90;
-            ui::draw_text_clipped(renderer, font, buf, name_col, px + 20, y, sell_name_max);
+            int sell_name_max = price_col_x - panel.cursor.x - panel.gap;
+            ui::draw_text_clipped(renderer, font, buf, name_col, item_row.x, item_row.y, sell_name_max);
 
             char price[32];
             snprintf(price, sizeof(price), "%dg", sell_price);
-            ui::draw_text(renderer, font, price, price_col, px + panel_w - 80, y);
-
-            y += line_h + 4;
+            ui::Rect price_rect = {price_col_x, item_row.y, price_col_w, item_row.h};
+            ui::draw_text_in(renderer, font, price, price_col, price_rect, ui::Align::RIGHT);
         }
 
-        // Show selected item stats
+        // Detail area for selected item
         if (sel >= 0 && sel < count) {
             Entity item_e = inv.items[sel];
             if (world.has<Item>(item_e)) {
-                y = py + panel_h - line_h * 4 - 10;
-                SDL_SetRenderDrawColor(renderer, 60, 50, 70, 255);
-                SDL_RenderDrawLine(renderer, px + 10, y - 4, px + panel_w - 10, y - 4);
-
+                auto dl = ui::Layout::from_rect(detail_area, line_h);
+                dl.skip(dl.gap);
                 auto& item = world.get<Item>(item_e);
                 if (!item.description.empty()) {
-                    ui::draw_text(renderer, font, item.description.c_str(), hint_col, px + 20, y);
-                    y += line_h + 2;
+                    auto desc_row = dl.row();
+                    ui::draw_text_in(renderer, font, item.description.c_str(), hint_col,
+                                     desc_row, ui::Align::LEFT);
                 }
 
                 char stats[128];
@@ -518,13 +542,14 @@ void ShopScreen::render(SDL_Renderer* renderer, TTF_Font* font,
                     snprintf(stats, sizeof(stats), "Armor: +%d  Dodge: +%d",
                              item.armor_bonus, item.dodge_bonus);
                 }
-                ui::draw_text(renderer, font, stats, stat_col, px + 20, y);
+                dl.skip(2);
+                auto stat_row = dl.row();
+                ui::draw_text_in(renderer, font, stats, stat_col, stat_row, ui::Align::LEFT);
             }
         }
     }
 
     // Hints at bottom
-    int hint_y = py + panel_h - line_h - 8;
-    ui::draw_text(renderer, font, "[Tab] switch  [Enter] buy/sell  [Esc/s] close",
-                  hint_col, px + 20, hint_y);
+    ui::draw_text_in(renderer, font, "[Tab] switch  [Enter] buy/sell  [Esc/s] close",
+                     hint_col, hint_row, ui::Align::LEFT);
 }

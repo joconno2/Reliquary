@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-# release.sh — stage, bump, commit, tag, push, wait for CI, upload to Steam
+# release.sh — stage, bump, commit, tag, push, upload to Steam
+#
+# Idempotent: if the tag already exists at HEAD, skips git steps
+# and retries the Steam upload. Safe to re-run after a partial failure.
+#
 # Usage:
 #   ./release.sh           — auto-increments patch (0.1.0 → 0.1.1)
 #   ./release.sh 0.2.0     — explicit version
@@ -29,13 +33,35 @@ REPO=$(git remote get-url origin | sed 's|.*github.com[:/]||;s|\.git$||')
 # Safety checks
 # ---------------------------------------------------------------------------
 
-if git rev-parse "$TAG" &>/dev/null; then
-    echo "Error: tag $TAG already exists." >&2
-    exit 1
-fi
-
 command -v gh &>/dev/null || { echo "Error: gh CLI not installed." >&2; exit 1; }
 command -v steamcmd &>/dev/null || { echo "Error: steamcmd not installed." >&2; exit 1; }
+
+# ---------------------------------------------------------------------------
+# Idempotent git: skip if tag exists at HEAD
+# ---------------------------------------------------------------------------
+
+if git rev-parse "$TAG" &>/dev/null; then
+    TAG_SHA=$(git rev-parse "$TAG^{}")
+    HEAD_SHA=$(git rev-parse HEAD)
+    if [ "$TAG_SHA" = "$HEAD_SHA" ]; then
+        echo "=== Reliquary Release (retry) ==="
+        echo "Tag $TAG already exists at HEAD. Skipping git steps."
+        echo "Retrying Steam upload..."
+        echo ""
+        ./tools/steam-upload.sh
+        echo ""
+        echo "=== Release ${TAG} complete ==="
+        echo "  Steam:  app 4627800, live on default branch"
+        echo "  GitHub: CI runs in background, release created when done"
+        exit 0
+    else
+        echo "Error: tag $TAG exists but does not point to HEAD." >&2
+        echo "  tag: $TAG_SHA" >&2
+        echo "  HEAD: $HEAD_SHA" >&2
+        echo "If you want a new release, increment the version." >&2
+        exit 1
+    fi
+fi
 
 # ---------------------------------------------------------------------------
 # Stage everything
@@ -73,7 +99,7 @@ echo "  https://github.com/${REPO}/actions"
 echo ""
 
 # ---------------------------------------------------------------------------
-# Build locally and upload to Steam (no GitHub dependency)
+# Build locally and upload to Steam
 # ---------------------------------------------------------------------------
 
 echo "Building and uploading to Steam locally..."
