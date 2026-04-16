@@ -28,11 +28,17 @@ jobs:
       - name: Fetch Windows SDL2 packages
         run: |
           mkdir -p deps/windows && cd deps/windows
+          # Dev packages (headers + import libs for linking)
           wget -q "https://github.com/libsdl-org/SDL/releases/download/release-2.32.4/SDL2-devel-2.32.4-mingw.tar.gz"
           wget -q "https://github.com/libsdl-org/SDL_image/releases/download/release-2.8.8/SDL2_image-devel-2.8.8-mingw.tar.gz"
           wget -q "https://github.com/libsdl-org/SDL_ttf/releases/download/release-2.24.0/SDL2_ttf-devel-2.24.0-mingw.tar.gz"
           wget -q "https://github.com/libsdl-org/SDL_mixer/releases/download/release-2.8.1/SDL2_mixer-devel-2.8.1-mingw.tar.gz"
+          # Runtime packages (include dependency DLLs: libpng, zlib, freetype, etc.)
+          wget -q "https://github.com/libsdl-org/SDL_image/releases/download/release-2.8.8/SDL2_image-2.8.8-win32-x64.zip" || true
+          wget -q "https://github.com/libsdl-org/SDL_ttf/releases/download/release-2.24.0/SDL2_ttf-2.24.0-win32-x64.zip" || true
+          wget -q "https://github.com/libsdl-org/SDL_mixer/releases/download/release-2.8.1/SDL2_mixer-2.8.1-win32-x64.zip" || true
           for f in *.tar.gz; do tar xf "$f"; done
+          for f in *.zip; do unzip -qo "$f" -d runtime_dlls 2>/dev/null || true; done
 
       - name: Build Linux
         run: |
@@ -87,9 +93,12 @@ jobs:
           if [ -d build-windows/assets ]; then cp -r build-windows/assets "$DIR/"; else cp -r assets "$DIR/"; fi
           cp -r data "$DIR/"
           SDL2_DIR="$(pwd)/deps/windows"
+          # Copy DLLs from dev packages (main SDL2 DLLs)
           for prefix in SDL2-2.32.4 SDL2_image-2.8.8 SDL2_ttf-2.24.0 SDL2_mixer-2.8.1; do
             find "${SDL2_DIR}/${prefix}/x86_64-w64-mingw32/bin" -name "*.dll" -exec cp {} "$DIR/" \; 2>/dev/null || true
           done
+          # Copy dependency DLLs from runtime packages (libpng, zlib, freetype, etc.)
+          find "${SDL2_DIR}/runtime_dlls" -name "*.dll" -exec cp {} "$DIR/" \; 2>/dev/null || true
           for dll in libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll; do
             found=$(find /usr -name "$dll" 2>/dev/null | head -1)
             [ -n "$found" ] && cp "$found" "$DIR/"
