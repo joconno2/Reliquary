@@ -1,8 +1,0 @@
-/home/jim/Reliquary/build-windows/CMakeFiles/reliquary.dir
-/home/jim/Reliquary/build-windows/CMakeFiles/test_data.dir
-/home/jim/Reliquary/build-windows/CMakeFiles/test.dir
-/home/jim/Reliquary/build-windows/CMakeFiles/edit_cache.dir
-/home/jim/Reliquary/build-windows/CMakeFiles/rebuild_cache.dir
-/home/jim/Reliquary/build-windows/_deps/json-build/CMakeFiles/test.dir
-/home/jim/Reliquary/build-windows/_deps/json-build/CMakeFiles/edit_cache.dir
-/home/jim/Reliquary/build-windows/_deps/json-build/CMakeFiles/rebuild_cache.dir
