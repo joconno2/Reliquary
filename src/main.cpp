@@ -6,22 +6,28 @@
 
 #ifdef _WIN32
 #include <windows.h>
-#include <dbghelp.h>
+#include <shlobj.h>
 #else
 #include <unistd.h>
 #include <signal.h>
+#include <sys/stat.h>
 #endif
 
 #ifndef RELIQUARY_VERSION
 #define RELIQUARY_VERSION "dev"
 #endif
 
-// Exe directory, resolved once at startup and used for all log paths
+// Exe directory (for assets/data), resolved once at startup
 static char exe_dir[4096] = ".";
 
-// Build an absolute path into exe_dir for the given filename
-static void log_path(char* out, size_t out_sz, const char* filename) {
-    snprintf(out, out_sz, "%s%c%s", exe_dir,
+// Log directory (writable location for crash/log files)
+// On Windows: %LOCALAPPDATA%\Reliquary\  (always writable)
+// On Linux: same as exe_dir
+static char log_dir[4096] = ".";
+
+// Build an absolute path into a directory for the given filename
+static void make_path(char* out, size_t out_sz, const char* dir, const char* filename) {
+    snprintf(out, out_sz, "%s%c%s", dir,
 #ifdef _WIN32
              '\\',
 #else
@@ -37,6 +43,16 @@ static void fix_working_directory([[maybe_unused]] const char* argv0) {
     char* last_slash = strrchr(exe_dir, '\\');
     if (last_slash) *last_slash = '\0';
     SetCurrentDirectoryA(exe_dir);
+
+    // Log directory: %LOCALAPPDATA%\Reliquary
+    char appdata[MAX_PATH];
+    if (SHGetFolderPathA(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, appdata) == S_OK) {
+        snprintf(log_dir, sizeof(log_dir), "%s\\Reliquary", appdata);
+        CreateDirectoryA(log_dir, nullptr);
+    } else {
+        // Fallback to exe directory
+        strncpy(log_dir, exe_dir, sizeof(log_dir) - 1);
+    }
 #else
     // On Linux/macOS, only chdir if argv0 is an absolute path (e.g. Steam launcher).
     // Relative paths like ./build/reliquary mean the user is already in the repo root.
@@ -49,6 +65,7 @@ static void fix_working_directory([[maybe_unused]] const char* argv0) {
             chdir(exe_dir);
         }
     }
+    strncpy(log_dir, exe_dir, sizeof(log_dir) - 1);
 #endif
 }
 
@@ -72,7 +89,6 @@ static int append_system_info(char* buf, size_t sz) {
                       (unsigned long long)(mem.ullAvailPhys / (1024*1024)),
                       (unsigned long long)(mem.ullTotalPhys / (1024*1024)));
     }
-    // Display resolution
     int sw = GetSystemMetrics(SM_CXSCREEN);
     int sh = GetSystemMetrics(SM_CYSCREEN);
     if (sw > 0 && sh > 0) {
@@ -102,12 +118,18 @@ static void get_module_at_addr(void* addr, char* out, size_t out_sz) {
 // Write a crash log with as much context as possible
 static void write_crash_log(const char* reason) {
     char path[4096];
-    log_path(path, sizeof(path), "reliquary_crash.txt");
+    make_path(path, sizeof(path), log_dir, "reliquary_crash.txt");
     FILE* f = fopen(path, "w");
+    if (!f) {
+        // Fallback: try exe directory
+        make_path(path, sizeof(path), exe_dir, "reliquary_crash.txt");
+        f = fopen(path, "w");
+    }
     if (!f) return;
     fprintf(f, "Reliquary %s crashed.\n\n", RELIQUARY_VERSION);
     fprintf(f, "Reason: %s\n", reason);
     fprintf(f, "Exe directory: %s\n", exe_dir);
+    fprintf(f, "Log directory: %s\n", log_dir);
 #ifdef _WIN32
     char sysinfo[512];
     append_system_info(sysinfo, sizeof(sysinfo));
@@ -141,7 +163,8 @@ static LONG WINAPI crash_handler(EXCEPTION_POINTERS* ep) {
 
     // Access violation detail: read vs write, and what address was targeted
     char av_detail[128] = "";
-    if (code == EXCEPTION_ACCESS_VIOLATION && ep->ExceptionRecord->NumberParameters >= 2) {
+    if (code == EXCEPTION_ACCESS_VIOLATION &&
+        ep->ExceptionRecord->NumberParameters >= 2) {
         const char* op = ep->ExceptionRecord->ExceptionInformation[0] == 0 ? "reading" : "writing";
         snprintf(av_detail, sizeof(av_detail), "Attempted %s address 0x%llx\n",
                  op, (unsigned long long)ep->ExceptionRecord->ExceptionInformation[1]);
@@ -155,13 +178,11 @@ static LONG WINAPI crash_handler(EXCEPTION_POINTERS* ep) {
     char sysinfo[512] = "";
     append_system_info(sysinfo, sizeof(sysinfo));
 
-    // Write crash file
+    // Write crash file (best effort, may fail if disk is full etc.)
     write_crash_log(desc);
-
-    // Append detail to crash file
     {
         char path[4096];
-        log_path(path, sizeof(path), "reliquary_crash.txt");
+        make_path(path, sizeof(path), log_dir, "reliquary_crash.txt");
         FILE* f = fopen(path, "a");
         if (f) {
             fprintf(f, "\nException code: 0x%08lX\n", code);
@@ -176,7 +197,8 @@ static LONG WINAPI crash_handler(EXCEPTION_POINTERS* ep) {
     fprintf(stderr, "\n=== CRASH: %s (0x%08lX) at %p [%s] ===\n", desc, code, addr, module);
     fflush(stderr);
 
-    // MessageBox: everything a tester needs in one screenshot
+    // MessageBox: everything a tester needs in one screenshot.
+    // This works even if all file I/O above failed.
     char msg[2048];
     int n = 0;
     n += snprintf(msg + n, sizeof(msg) - n,
@@ -197,7 +219,7 @@ static LONG WINAPI crash_handler(EXCEPTION_POINTERS* ep) {
                   "\nLOG FILES (please include when reporting):\n"
                   "  %s\\reliquary_crash.txt\n"
                   "  %s\\reliquary_log.txt\n",
-                  exe_dir, exe_dir);
+                  log_dir, log_dir);
     n += snprintf(msg + n, sizeof(msg) - n,
                   "\nYou can copy this text with Ctrl+C.");
 
@@ -227,13 +249,14 @@ static void crash_signal_handler(int sig) {
 // Redirect stdout/stderr to a log file on Windows (no console window)
 static void setup_logging() {
     char path[4096];
-    log_path(path, sizeof(path), "reliquary_log.txt");
+    make_path(path, sizeof(path), log_dir, "reliquary_log.txt");
 #ifdef _WIN32
     freopen(path, "a", stderr);
     freopen(path, "a", stdout);
 #endif
     fprintf(stderr, "Reliquary %s starting...\n", RELIQUARY_VERSION);
     fprintf(stderr, "Exe directory: %s\n", exe_dir);
+    fprintf(stderr, "Log directory: %s\n", log_dir);
     fflush(stderr);
 }
 
@@ -254,11 +277,12 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
     // setup_logging appends to this file, so the marker survives.
     {
         char path[4096];
-        log_path(path, sizeof(path), "reliquary_log.txt");
+        make_path(path, sizeof(path), log_dir, "reliquary_log.txt");
         FILE* f = fopen(path, "w");
         if (f) {
             fprintf(f, "Reliquary %s\n", RELIQUARY_VERSION);
             fprintf(f, "Exe: %s\n", exe_dir);
+            fprintf(f, "Logs: %s\n", log_dir);
             fprintf(f, "---\n");
             fclose(f);
         }
@@ -282,13 +306,12 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
         char last_init[256] = "unknown step";
         {
             char logpath[4096];
-            log_path(logpath, sizeof(logpath), "reliquary_log.txt");
+            make_path(logpath, sizeof(logpath), log_dir, "reliquary_log.txt");
             FILE* lf = fopen(logpath, "r");
             if (lf) {
                 char line[256];
                 while (fgets(line, sizeof(line), lf)) {
                     if (strstr(line, "[init]")) {
-                        // Strip newline
                         size_t len = strlen(line);
                         if (len > 0 && line[len-1] == '\n') line[len-1] = '\0';
                         strncpy(last_init, line, sizeof(last_init) - 1);
@@ -313,7 +336,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
                  "LOG FILE (please include when reporting):\n"
                  "  %s\\reliquary_log.txt\n\n"
                  "You can copy this text with Ctrl+C.",
-                 RELIQUARY_VERSION, last_init, sysinfo, exe_dir);
+                 RELIQUARY_VERSION, last_init, sysinfo, log_dir);
         MessageBoxA(nullptr, msg, "Reliquary Error", MB_OK | MB_ICONERROR);
 #endif
         return 1;

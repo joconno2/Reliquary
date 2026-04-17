@@ -31,9 +31,9 @@ mkdir -p "$STAGING"/{linux,windows,output}
 
 # ── Linux: build locally ──
 log "Building Linux..."
-cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release -G Ninja >> "$LOGFILE" 2>&1 \
+cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release -G Ninja 2>&1 | tee -a "$LOGFILE" \
     || fail "Linux cmake configure"
-cmake --build build-release --parallel $(nproc) >> "$LOGFILE" 2>&1 \
+cmake --build build-release --parallel $(nproc) 2>&1 | tee -a "$LOGFILE" \
     || fail "Linux build"
 strip build-release/reliquary
 log "Linux build OK"
@@ -81,8 +81,8 @@ cmake -S . -B build-windows -G Ninja \
     -DSDL2_TTF_LIBRARIES="-L${SDL2_TTF_PREFIX}/lib -lSDL2_ttf" \
     -DSDL2_MIXER_INCLUDE_DIRS="" \
     -DSDL2_MIXER_LIBRARIES="-L${SDL2_MIXER_PREFIX}/lib -lSDL2_mixer" \
-    >> "$LOGFILE" 2>&1 || fail "Windows cmake configure"
-cmake --build build-windows --parallel $(nproc) >> "$LOGFILE" 2>&1 \
+    2>&1 | tee -a "$LOGFILE" || fail "Windows cmake configure"
+cmake --build build-windows --parallel $(nproc) 2>&1 | tee -a "$LOGFILE" \
     || fail "Windows build"
 x86_64-w64-mingw32-strip build-windows/reliquary.exe
 log "Windows build OK"
@@ -111,12 +111,15 @@ done
 
 # Log DLL manifest for debugging
 log "Windows DLLs:"
-ls "$STAGING/windows/"*.dll >> "$LOGFILE" 2>&1
+ls "$STAGING/windows/"*.dll 2>&1 | tee -a "$LOGFILE"
 log "exe imports:"
-x86_64-w64-mingw32-objdump -p "$STAGING/windows/reliquary.exe" 2>/dev/null | grep "DLL Name" >> "$LOGFILE" || true
+x86_64-w64-mingw32-objdump -p "$STAGING/windows/reliquary.exe" 2>/dev/null | grep "DLL Name" | tee -a "$LOGFILE" || true
 log "Windows packaged: $(ls "$STAGING/windows/" | wc -l) top-level entries"
 
 # ── Upload to Steam ──
+# NOTE: SetLive omitted. Depot 4627803 (macOS, deleted) is still referenced
+# by packages on Steamworks, which causes SetLive to fail. Set the default
+# branch manually on Steamworks until that depot is removed from packages.
 cat > "$STAGING/app_build.vdf" << VDFEOF
 "AppBuild"
 {
@@ -124,7 +127,6 @@ cat > "$STAGING/app_build.vdf" << VDFEOF
     "Desc" "Reliquary ${TAG}"
     "BuildOutput" "${STAGING}/output/"
     "ContentRoot" "${STAGING}/"
-    "SetLive" "default"
     "Depots"
     {
         "${DEPOT_LINUX}"
@@ -154,7 +156,11 @@ steamcmd +login blademaster313 +run_app_build "$STAGING/app_build.vdf" +quit 2>&
     || fail "Steam upload"
 
 log ""
-log "=== Done. Build live on default branch. ==="
+log "=== Done. Build uploaded. ==="
 log "Linux: $(ls "$STAGING/linux/" | wc -l) entries"
 log "Windows: $(ls "$STAGING/windows/" | wc -l) entries"
+log ""
+log ">>> Set live manually: Steamworks -> Reliquary -> Builds -> set default branch <<<"
+log "    (SetLive disabled until depot 4627803 is removed from packages)"
+log ""
 log "Log: $LOGFILE"

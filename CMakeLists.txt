@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Reliquary VERSION 0.3.22 LANGUAGES CXX)
+project(Reliquary VERSION 0.3.23 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -69,10 +69,10 @@ target_link_libraries(reliquary PRIVATE
     nlohmann_json::nlohmann_json
 )
 
-# Windows: hide console window, link crash handler support
+# Windows: hide console window, link shell API for %LOCALAPPDATA% log path
 if(CMAKE_CROSSCOMPILING AND WIN32)
     target_link_options(reliquary PRIVATE -mwindows)
-    target_link_libraries(reliquary PRIVATE dbghelp)
+    target_link_libraries(reliquary PRIVATE shell32 ole32)
 endif()
 
 target_compile_options(reliquary PRIVATE

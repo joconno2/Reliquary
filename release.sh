@@ -51,7 +51,7 @@ if git rev-parse "$TAG" &>/dev/null; then
         ./tools/steam-upload.sh
         echo ""
         echo "=== Release ${TAG} complete ==="
-        echo "  Steam:  app 4627800, live on default branch"
+        echo "  Steam:  app 4627800, uploaded (set live manually on Steamworks)"
         echo "  GitHub: CI runs in background, release created when done"
         exit 0
     else
@@ -107,5 +107,5 @@ echo "Building and uploading to Steam locally..."
 
 echo ""
 echo "=== Release ${TAG} complete ==="
-echo "  Steam:  app 4627800, live on default branch"
+echo "  Steam:  app 4627800, uploaded (set live manually on Steamworks)"
 echo "  GitHub: CI runs in background, release created when done"
