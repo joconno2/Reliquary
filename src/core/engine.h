@@ -170,6 +170,8 @@ private:
     // Player
     Entity player_ = NULL_ENTITY;
     Entity pet_entity_ = NULL_ENTITY; // visual pet that follows player
+    Entity last_bumped_npc_ = NULL_ENTITY; // for push-past on repeated bumps
+    int npc_bump_count_ = 0;
     int game_turn_ = 0;
     int gold_ = 0;
     bool player_acted_ = false;

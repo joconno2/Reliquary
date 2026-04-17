@@ -1922,14 +1922,32 @@ void Engine::try_move_player(int dx, int dy) {
     // Check for entity at target tile
     Entity target = combat::entity_at(world_, nx, ny, player_);
     if (target != NULL_ENTITY) {
-        // NPC — talk or pickpocket
-        if (world_.has<NPC>(target)) {
+        // NPC — talk, pickpocket, or push past
+        if (world_.has<NPC>(target) && !world_.has<AI>(target)) {
+            // Track consecutive bumps: push past after 3 bumps on the same NPC
+            if (target == last_bumped_npc_) {
+                npc_bump_count_++;
+                if (npc_bump_count_ >= 3) {
+                    auto& tpos = world_.get<Position>(target);
+                    int old_px = pos.x, old_py = pos.y;
+                    pos.x = nx; pos.y = ny;
+                    tpos.x = old_px; tpos.y = old_py;
+                    log_.add("You push past.", {180, 180, 160, 255});
+                    npc_bump_count_ = 0;
+                    last_bumped_npc_ = NULL_ENTITY;
+                    player_acted_ = true;
+                    return;
+                }
+            } else {
+                last_bumped_npc_ = target;
+                npc_bump_count_ = 1;
+            }
+
             // Pickpocket while sneaking
             if (sneaking_) {
                 int stealth_lv = 0;
                 if (world_.has<Skills>(player_))
                     stealth_lv = world_.get<Skills>(player_).get_level(SkillId::STEALTH);
-                // Success chance: 20% base + 1% per stealth level
                 int pickpocket_chance = 20 + stealth_lv;
                 if (pickpocket_chance > 85) pickpocket_chance = 85;
 
@@ -2530,6 +2548,8 @@ void Engine::try_move_player(int dx, int dy) {
     pos.x = nx;
     pos.y = ny;
     player_acted_ = true;
+    last_bumped_npc_ = NULL_ENTITY;
+    npc_bump_count_ = 0;
 
     // Sneaking: costs extra turn time, grants stealth XP
     if (sneaking_) {
