@@ -182,7 +182,7 @@ CMAKE_PROJECT_NAME:STATIC=Reliquary
 CMAKE_PROJECT_SPDX_LICENSE:STATIC=
 
 //Value Computed by CMake
-CMAKE_PROJECT_VERSION:STATIC=0.3.22
+CMAKE_PROJECT_VERSION:STATIC=0.3.23
 
 //Value Computed by CMake
 CMAKE_PROJECT_VERSION_MAJOR:STATIC=0
@@ -191,7 +191,7 @@ CMAKE_PROJECT_VERSION_MAJOR:STATIC=0
 CMAKE_PROJECT_VERSION_MINOR:STATIC=3
 
 //Value Computed by CMake
-CMAKE_PROJECT_VERSION_PATCH:STATIC=22
+CMAKE_PROJECT_VERSION_PATCH:STATIC=23
 
 //Value Computed by CMake
 CMAKE_PROJECT_VERSION_TWEAK:STATIC=
@@ -357,25 +357,25 @@ Reliquary_SOURCE_DIR:STATIC=/home/jim/Reliquary
 SDL2_IMAGE_INCLUDE_DIRS:UNINITIALIZED=
 
 //No help, variable specified on the command line.
-SDL2_IMAGE_LIBRARIES:UNINITIALIZED=-L/home/jim/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/lib -lSDL2_image
+SDL2_IMAGE_LIBRARIES:UNINITIALIZED=-Ldeps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/lib -lSDL2_image
 
 //No help, variable specified on the command line.
-SDL2_INCLUDE_DIRS:UNINITIALIZED=/home/jim/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include;/home/jim/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2;/home/jim/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include;/home/jim/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2;/home/jim/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include;/home/jim/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2;/home/jim/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include;/home/jim/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2
+SDL2_INCLUDE_DIRS:UNINITIALIZED=deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include;deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2;deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include;deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2;deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include;deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2;deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include;deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2
 
 //No help, variable specified on the command line.
-SDL2_LIBRARIES:UNINITIALIZED=-L/home/jim/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/lib -lmingw32 -lSDL2main -lSDL2
+SDL2_LIBRARIES:UNINITIALIZED=-Ldeps/windows/SDL2-2.32.4/x86_64-w64-mingw32/lib -lmingw32 -lSDL2main -lSDL2
 
 //No help, variable specified on the command line.
 SDL2_MIXER_INCLUDE_DIRS:UNINITIALIZED=
 
 //No help, variable specified on the command line.
-SDL2_MIXER_LIBRARIES:UNINITIALIZED=-L/home/jim/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/lib -lSDL2_mixer
+SDL2_MIXER_LIBRARIES:UNINITIALIZED=-Ldeps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/lib -lSDL2_mixer
 
 //No help, variable specified on the command line.
 SDL2_TTF_INCLUDE_DIRS:UNINITIALIZED=
 
 //No help, variable specified on the command line.
-SDL2_TTF_LIBRARIES:UNINITIALIZED=-L/home/jim/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/lib -lSDL2_ttf
+SDL2_TTF_LIBRARIES:UNINITIALIZED=-Ldeps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/lib -lSDL2_ttf
 
 //Value Computed by CMake
 nlohmann_json_BINARY_DIR:STATIC=/home/jim/Reliquary/build-windows/_deps/json-build

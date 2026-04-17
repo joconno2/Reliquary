@@ -98,14 +98,13 @@ for prefix in SDL2-2.32.4 SDL2_image-2.8.8 SDL2_ttf-2.24.0 SDL2_mixer-2.8.1; do
     find "${SDL2_DIR}/${prefix}/x86_64-w64-mingw32/bin" -name "*.dll" -exec cp {} "$STAGING/windows/" \; 2>/dev/null || true
 done
 
-# MinGW runtime DLLs
-MINGW_BIN=$(dirname $(x86_64-w64-mingw32-g++ -print-file-name=libstdc++-6.dll) 2>/dev/null || echo "")
+# MinGW runtime DLLs — must be x86_64, not i686
+MINGW_BIN="/usr/x86_64-w64-mingw32/bin"
 for dll in libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll; do
-    if [ -n "$MINGW_BIN" ] && [ -f "$MINGW_BIN/$dll" ]; then
+    if [ -f "$MINGW_BIN/$dll" ]; then
         cp "$MINGW_BIN/$dll" "$STAGING/windows/"
     else
-        found=$(find /usr -name "$dll" 2>/dev/null | head -1)
-        [ -n "$found" ] && cp "$found" "$STAGING/windows/"
+        fail "Missing x86_64 MinGW DLL: $dll (expected in $MINGW_BIN)"
     fi
 done
 
