@@ -7638,4 +7638,9 @@ void Engine::run() {
         render();
         // vsync handles frame pacing; no SDL_Delay needed
     }
+    // Save meta-progression on quit (so kills/depth/etc. aren't lost if the player
+    // closes the game without dying or winning)
+    if (player_ != NULL_ENTITY) {
+        update_meta_on_end();
+    }
 }

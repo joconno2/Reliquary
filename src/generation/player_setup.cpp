@@ -14,6 +14,7 @@
 #include "components/background.h"
 #include "components/traits.h"
 #include "components/item.h"
+#include "components/tenet.h"
 #include "components/passive_tree.h"
 #include "components/skills.h"
 #include "core/spritesheet.h"
@@ -237,6 +238,21 @@ PlayerResult create_player(World& world, const CharacterBuild& build,
             // No armor — trollbloods rely on HP and regen
             break;
         default: break;
+    }
+
+    // --- God-specific starting items ---
+    if (build.god == GodId::VETHRIK) {
+        // Bone dagger: Vethrik's tenet requires carrying a bone item
+        Entity ie = world.create();
+        Item bone;
+        bone.name = "bone dagger"; bone.description = "Carved from a human femur.";
+        bone.type = ItemType::WEAPON; bone.slot = EquipSlot::MAIN_HAND;
+        bone.damage_bonus = 2; bone.attack_bonus = 1;
+        bone.tags = TAG_DAGGER | TAG_BONE_ITEM;
+        bone.identified = true; bone.gold_value = 5;
+        world.add<Item>(ie, std::move(bone));
+        world.add<Renderable>(ie, {SHEET_ITEMS, 0, 0, {200, 200, 220, 255}, 1});
+        world.get<Inventory>(player).add(ie);
     }
 
     // --- Skills ---

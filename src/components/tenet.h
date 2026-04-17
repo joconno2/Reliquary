@@ -54,6 +54,7 @@ enum class TenetCheck : int {
     MUST_DESCEND,             // Gathruun (never backtrack without clearing)
     MUST_KILL_UNDEAD,         // Soleth (never spare undead in sight)
     MUST_REST_EACH_FLOOR,     // Lethis
+    MUST_CARRY_BONE,          // Vethrik (always have a bone item equipped)
 };
 
 struct TenetDef {
@@ -72,7 +73,7 @@ struct GodTenets {
 // VETHRIK — Death, bone, endings
 static const TenetDef TENETS_VETHRIK[] = {
     {TenetCheck::NEVER_USE_DARK_ARTS, "Never raise the dead or practice Dark Arts.", -5},
-    {TenetCheck::NEVER_FLEE_COMBAT,   "Never flee from undead.", -3},
+    {TenetCheck::MUST_CARRY_BONE,     "Always carry a bone weapon or relic.", -3},
 };
 
 // THESSARKA — Knowledge, secrets, madness

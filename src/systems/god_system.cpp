@@ -68,6 +68,30 @@ void check_tenets(World& world, Entity player, const PlayerActions& actions,
     // We need a mutable copy of actions for equipment scanning
     PlayerActions turn_actions = actions;
 
+    // Scan equipped/carried items BEFORE checking tenets so equipment flags are current
+    bool has_bone_item = false;
+    if (world.has<Inventory>(player)) {
+        auto& inv = world.get<Inventory>(player);
+        for (int s = 0; s < EQUIP_SLOT_COUNT; s++) {
+            Entity eq = inv.equipped[s];
+            if (eq != NULL_ENTITY && world.has<Item>(eq)) {
+                auto& item = world.get<Item>(eq);
+                if (item.tags & TAG_HEAVY_ARMOR) turn_actions.wore_heavy_armor = true;
+                if (item.tags & TAG_TORCH) turn_actions.used_light_source = true;
+                if (item.tags & TAG_BONE_ITEM) has_bone_item = true;
+                if (item.curse_state == 1) turn_actions.carrying_cursed = true;
+            }
+        }
+        for (auto ie : inv.items) {
+            if (ie != NULL_ENTITY && world.has<Item>(ie)) {
+                auto& item = world.get<Item>(ie);
+                if (item.tags & TAG_TORCH) turn_actions.used_light_source = true;
+                if (item.tags & TAG_BONE_ITEM) has_bone_item = true;
+                if (item.curse_state == 1) turn_actions.carrying_cursed = true;
+            }
+        }
+    }
+
     for (int i = 0; i < tenets.count; i++) {
         auto& t = tenets.tenets[i];
         bool violated = false;
@@ -125,6 +149,9 @@ void check_tenets(World& world, Entity player, const PlayerActions& actions,
             case TenetCheck::MUST_REST_EACH_FLOOR:
                 // Checked on floor transition
                 break;
+            case TenetCheck::MUST_CARRY_BONE:
+                violated = !has_bone_item;
+                break;
         }
 
         if (violated) {
@@ -136,27 +163,7 @@ void check_tenets(World& world, Entity player, const PlayerActions& actions,
         }
     }
 
-    // Check equipment-based tenet flags (per-turn scan of equipped items)
-    if (world.has<Inventory>(player)) {
-        auto& inv = world.get<Inventory>(player);
-        for (int s = 0; s < EQUIP_SLOT_COUNT; s++) {
-            Entity eq = inv.equipped[s];
-            if (eq != NULL_ENTITY && world.has<Item>(eq)) {
-                auto& item = world.get<Item>(eq);
-                if (item.tags & TAG_HEAVY_ARMOR) turn_actions.wore_heavy_armor = true;
-                if (item.tags & TAG_TORCH) turn_actions.used_light_source = true;
-                if (item.curse_state == 1) turn_actions.carrying_cursed = true;
-            }
-        }
-        // Also check carried (not just equipped) items for torch/cursed
-        for (auto ie : inv.items) {
-            if (ie != NULL_ENTITY && world.has<Item>(ie)) {
-                auto& item = world.get<Item>(ie);
-                if (item.tags & TAG_TORCH) turn_actions.used_light_source = true;
-                if (item.curse_state == 1) turn_actions.carrying_cursed = true;
-            }
-        }
-    }
+    // Equipment scan already done above (before tenet loop)
 
     // Soleth: carrying cursed items drains favor slowly
     if (align.god == GodId::SOLETH && turn_actions.carrying_cursed && game_turn % 10 == 0) {
