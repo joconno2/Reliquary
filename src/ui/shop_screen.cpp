@@ -259,6 +259,49 @@ void ShopScreen::open(Entity player, [[maybe_unused]] World& world, RNG& rng, in
 ShopAction ShopScreen::handle_input(SDL_Event& event) {
     if (!open_) return ShopAction::NONE;
 
+    // Mouse click: select item or switch tabs
+    if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
+        int mx = event.button.x, my = event.button.y;
+        // Tab clicks
+        if (mx >= tab_buy_rect_.x && mx < tab_buy_rect_.x + tab_buy_rect_.w &&
+            my >= tab_buy_rect_.y && my < tab_buy_rect_.y + tab_buy_rect_.h) {
+            buy_tab_ = true; selected_ = 0; return ShopAction::NONE;
+        }
+        if (mx >= tab_sell_rect_.x && mx < tab_sell_rect_.x + tab_sell_rect_.w &&
+            my >= tab_sell_rect_.y && my < tab_sell_rect_.y + tab_sell_rect_.h) {
+            buy_tab_ = false; selected_ = 0; return ShopAction::NONE;
+        }
+        // Item clicks
+        for (int i = 0; i < static_cast<int>(item_rects_.size()); i++) {
+            auto& r = item_rects_[i];
+            if (mx >= r.x && mx < r.x + r.w && my >= r.y && my < r.y + r.h) {
+                if (i == selected_) {
+                    return buy_tab_ ? ShopAction::BUY : ShopAction::SELL;
+                }
+                selected_ = i;
+                return ShopAction::NONE;
+            }
+        }
+        return ShopAction::NONE;
+    }
+    // Mouse hover
+    if (event.type == SDL_MOUSEMOTION) {
+        int mx = event.motion.x, my = event.motion.y;
+        for (int i = 0; i < static_cast<int>(item_rects_.size()); i++) {
+            auto& r = item_rects_[i];
+            if (mx >= r.x && mx < r.x + r.w && my >= r.y && my < r.y + r.h) {
+                selected_ = i; break;
+            }
+        }
+        return ShopAction::NONE;
+    }
+    // Mouse wheel scroll
+    if (event.type == SDL_MOUSEWHEEL) {
+        if (event.wheel.y > 0 && selected_ > 0) selected_--;
+        else if (event.wheel.y < 0) selected_++;
+        return ShopAction::NONE;
+    }
+
     if (event.type != SDL_KEYDOWN) return ShopAction::NONE;
 
     switch (event.key.keysym.sym) {
@@ -370,6 +413,8 @@ void ShopScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     // Tabs row
     auto tab_row = panel.row();
     int tab_w = panel.bounds.w / 6;
+    tab_buy_rect_ = {tab_row.x, tab_row.y, tab_w, tab_row.h};
+    tab_sell_rect_ = {tab_row.x + tab_w, tab_row.y, tab_w, tab_row.h};
     ui::draw_text_in(renderer, font, "[Buy]", buy_tab_ ? tab_active : tab_inactive,
                      tab_row.left(tab_w), ui::Align::LEFT);
     ui::draw_text_in(renderer, font, "[Sell]", !buy_tab_ ? tab_active : tab_inactive,
@@ -401,6 +446,8 @@ void ShopScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     int price_col_x = panel.cursor.x + panel.cursor.w - price_col_w;
     int name_max_w = price_col_x - name_col_x - panel.gap;  // name fills the middle
 
+    item_rects_.clear();
+
     if (buy_tab_) {
         // Buy tab -- show shop stock
         int count = static_cast<int>(stock_.size());
@@ -415,6 +462,7 @@ void ShopScreen::render(SDL_Renderer* renderer, TTF_Font* font,
             int row_h = std::max(line_h + 8, 36);
             if (!panel.fits(row_h)) break;
             auto item_row = panel.row(row_h);
+            item_rects_.push_back(item_row.sdl());
             auto& si = stock_[i];
             bool is_sel = (i == sel);
             bool can_afford = gold_ && *gold_ >= si.item.gold_value;
@@ -493,6 +541,7 @@ void ShopScreen::render(SDL_Renderer* renderer, TTF_Font* font,
             int row_h = line_h + 4;
             if (!panel.fits(row_h)) break;
             auto item_row = panel.row(row_h);
+            item_rects_.push_back(item_row.sdl());
             Entity item_e = inv.items[i];
             if (!world.has<Item>(item_e)) continue;
             auto& item = world.get<Item>(item_e);

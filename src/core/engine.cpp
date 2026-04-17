@@ -1825,7 +1825,10 @@ void Engine::grant_skill_xp(SkillId skill, int amount) {
         log_.add(buf, {140, 200, 160, 255});
         if (!tips_shown_.first_skill_levelup) {
             tips_shown_.first_skill_levelup = true;
-            log_.add("Tip: skills level through use. Press c to see all skills and their unlock thresholds.", {100, 180, 140, 255});
+            tutorial_popup_.show("Skill Up",
+                "Skills improve through use and unlock\n"
+                "bonuses at levels 25, 50, and 75.\n\n"
+                "C - View character sheet and skills");
         }
         // Milestone notifications
         if (new_lv == 25 || new_lv == 50 || new_lv == 75) {
@@ -1959,6 +1962,7 @@ void Engine::try_move_player(int dx, int dy) {
                     char sbuf[64];
                     snprintf(sbuf, sizeof(sbuf), "You lift %d gold from %s.", stolen, npc.name.c_str());
                     log_.add(sbuf, {200, 200, 100, 255});
+                    audio_.play(SfxId::GOLD);
                     if (world_.has<Skills>(player_))
                         grant_skill_xp(SkillId::STEALTH, 8);
                 } else {
@@ -1966,6 +1970,7 @@ void Engine::try_move_player(int dx, int dy) {
                     char fbuf[96];
                     snprintf(fbuf, sizeof(fbuf), "%s catches you stealing! \"Thief!\"", npc.name.c_str());
                     log_.add(fbuf, {255, 100, 80, 255});
+                    audio_.play(SfxId::CURSE);
                     // Spawn a guard that attacks the player
                     for (int gi = 0; gi < 20; gi++) {
                         int gx = nx + rng_.range(-2, 2);
@@ -2004,7 +2009,11 @@ void Engine::try_move_player(int dx, int dy) {
             };
             if (!tips_shown_.first_npc) {
                 tips_shown_.first_npc = true;
-                log_.add("Tip: NPCs offer quests, shops, and healing. Sneak + bump to pickpocket.", {100, 180, 140, 255});
+                tutorial_popup_.show("NPCs",
+                    "NPCs offer quests, shops, and healing.\n\n"
+                    "E - Interact with a nearby NPC\n"
+                    "Bump - Walk into an NPC to talk\n"
+                    "Sneak + Bump - Pickpocket");
             }
             // Church high priest: open church screen
             if (world_.has<Church>(target) && world_.has<GodAlignment>(player_)) {
@@ -2069,7 +2078,11 @@ void Engine::try_move_player(int dx, int dy) {
         // Tutorial: first combat
         if (!tips_shown_.first_combat) {
             tips_shown_.first_combat = true;
-            log_.add("Tip: weapon skills level through use. z to cast spells, f to fire ranged.", {100, 180, 140, 255});
+            tutorial_popup_.show("Combat",
+                "Weapon skills improve through use.\n\n"
+                "Z - Cast spells\n"
+                "F - Fire ranged weapon\n"
+                "O - Toggle sneak (backstab for 2-4x damage)");
         }
 
         // Backstab: bonus damage from sneak attack
@@ -2083,6 +2096,7 @@ void Engine::try_move_player(int dx, int dy) {
             char bbuf[64];
             snprintf(bbuf, sizeof(bbuf), "Backstab! (%d bonus damage)", bonus_dmg);
             log_.add(bbuf, {200, 180, 255, 255});
+            audio_.play(SfxId::CRIT);
             // Stealth skill XP from backstab
             if (world_.has<Skills>(player_))
                 grant_skill_xp(SkillId::STEALTH, 5);
@@ -2267,8 +2281,11 @@ void Engine::try_move_player(int dx, int dy) {
             }
         }
 
-        if (atk_result.hit && atk_result.critical) { audio_.play(SfxId::CRIT); particles_.crit_flash((float)nx, (float)ny); trigger_screen_shake(4.0f); }
-        else if (atk_result.hit) {
+        if (atk_result.hit && atk_result.critical) {
+            audio_.play(SfxId::CRIT); particles_.crit_flash((float)nx, (float)ny); trigger_screen_shake(4.0f);
+            char cbuf[16]; snprintf(cbuf, sizeof(cbuf), "%d", atk_result.damage);
+            floating_text_.spawn((float)nx, (float)ny, cbuf, {255, 200, 80, 255}, true);
+        } else if (atk_result.hit) {
             audio_.play_hit();
             // Weapon-typed hit particles
             uint32_t wtags = 0;
@@ -2277,6 +2294,8 @@ void Engine::try_move_player(int dx, int dy) {
                 if (wpn != NULL_ENTITY && world_.has<Item>(wpn)) wtags = world_.get<Item>(wpn).tags;
             }
             particles_.hit_spark_weapon((float)nx, (float)ny, wtags);
+            char dbuf[16]; snprintf(dbuf, sizeof(dbuf), "%d", atk_result.damage);
+            floating_text_.spawn((float)nx, (float)ny, dbuf, {255, 255, 255, 255});
         }
         else audio_.play_miss();
         if (atk_result.killed) {
@@ -2500,7 +2519,11 @@ void Engine::try_move_player(int dx, int dy) {
             start_transition(TransitionType::FLASH, 250, {255, 255, 200, 255});
             if (!tips_shown_.first_levelup) {
                 tips_shown_.first_levelup = true;
-                log_.add("Tip: you earned a passive tree point! Press t to open the tree and spend it.", {100, 180, 140, 255});
+                tutorial_popup_.show("Level Up",
+                    "You earned a passive tree point!\n\n"
+                    "T - Open the passive tree to spend it\n"
+                    "I - Check inventory and equipment\n"
+                    "C - View character sheet");
             }
         }
         return;
@@ -2586,6 +2609,7 @@ void Engine::try_move_player(int dx, int dy) {
                                                  {255, 200, 100, 200}, -2});
                 }
                 log_.add("You spot a trap!", {255, 220, 100, 255});
+                audio_.play(SfxId::SELECT);
                 // Don't trigger, player can step around it now
                 break;
             }
@@ -2615,7 +2639,11 @@ void Engine::try_move_player(int dx, int dy) {
             trap_sprite(trap.type, true, trap.sprite_x, trap.sprite_y);
             if (!tips_shown_.first_trap) {
                 tips_shown_.first_trap = true;
-                log_.add("Tip: traps are hidden. High PER detects them. Reveal Map spell shows all.", {100, 180, 140, 255});
+                tutorial_popup_.show("Trap!",
+                    "Traps are hidden on dungeon floors.\n"
+                    "High PER reveals them before you step on them.\n\n"
+                    "Revealed traps show as floor markings\n"
+                    "you can walk around.");
             }
             // Show triggered sprite
             if (!world_.has<Renderable>(te)) {
@@ -2637,6 +2665,7 @@ void Engine::try_move_player(int dx, int dy) {
                 case TrapType::PIT:
                     pstats.hp -= trap.damage;
                     log_.add("You fall into a pit!", {255, 100, 80, 255});
+                    audio_.play(SfxId::CRIT);
                     break;
                 case TrapType::DART:
                     pstats.hp -= trap.damage;
@@ -2645,6 +2674,7 @@ void Engine::try_move_player(int dx, int dy) {
                     break;
                 case TrapType::ALARM: {
                     log_.add("An alarm sounds! Monsters stir.", {255, 180, 80, 255});
+                    audio_.play(SfxId::SPELL_IMPACT);
                     // Summon 2-3 monsters at nearby empty tiles
                     for (int si = 0; si < rng_.range(2, 3); si++) {
                         for (int tries = 0; tries < 10; tries++) {
@@ -2673,14 +2703,21 @@ void Engine::try_move_player(int dx, int dy) {
                     if (world_.has<StatusEffects>(player_))
                         world_.get<StatusEffects>(player_).add(StatusType::STUNNED, 0, 3);
                     log_.add("A bear trap snaps shut on your leg!", {255, 120, 80, 255});
+                    audio_.play(SfxId::CRIT);
                     break;
                 case TrapType::POISON_GAS:
                     if (world_.has<StatusEffects>(player_))
                         world_.get<StatusEffects>(player_).add(StatusType::POISON, 3, 5);
                     log_.add("Poison gas erupts from the floor!", {120, 200, 80, 255});
+                    audio_.play(SfxId::POISON);
                     break;
             }
 
+            // Floating damage + hit flash for trap damage
+            if (trap.type == TrapType::SPIKE || trap.type == TrapType::PIT || trap.type == TrapType::DART) {
+                char dbuf[16]; snprintf(dbuf, sizeof(dbuf), "%d", trap.damage);
+                floating_text_.spawn((float)nx, (float)ny, dbuf, {255, 100, 80, 255});
+            }
             // Death check
             if (pstats.hp <= 0) {
                 log_.add("You die.", {255, 50, 50, 255});
@@ -2829,7 +2866,11 @@ void Engine::try_move_player(int dx, int dy) {
             snprintf(sbuf, sizeof(sbuf), "A shrine of %s. You feel your god's presence. (+5 favor, +%d HP)", sginfo.name, heal);
             if (!tips_shown_.first_shrine) {
                 tips_shown_.first_shrine = true;
-                log_.add("Tip: same-god shrines heal, identify items, and let you respec passive tree points.", {100, 180, 140, 255});
+                tutorial_popup_.show("God Shrine",
+                    "Shrines of your god heal you, identify\n"
+                    "items, and let you respec passive tree\n"
+                    "points (costs 10 favor).\n\n"
+                    "Other gods' shrines may help or harm.");
             }
             log_.add(sbuf, {sginfo.color.r, sginfo.color.g, sginfo.color.b, 255});
             // Identify curse/bless on all equipped items
@@ -3012,6 +3053,7 @@ void Engine::process_turn() {
         if (stats.hp <= 0) {
             state_ = GameState::DEAD;
             end_screen_time_ = SDL_GetTicks();
+            audio_.play(SfxId::DEATH);
             audio_.stop_all_ambient(500);
             audio_.play_music(MusicId::DEATH, 1500);
             return;
@@ -3241,6 +3283,10 @@ void Engine::process_turn() {
         if (dist <= 1 && dist > 0) {
             // Melee attack
             auto mresult = combat::melee_attack(world_, e, player_, rng_, log_);
+            // Audio feedback for enemy attacks
+            if (mresult.critical) audio_.play(SfxId::CRIT);
+            else if (mresult.hit) audio_.play_hit();
+            else audio_.play_miss();
             if (mresult.hit) {
                 auto& pp = world_.get<Position>(player_);
                 // Quick-Footed: 15% dodge (negate the hit)
@@ -3301,6 +3347,12 @@ void Engine::process_turn() {
                         world_.get<Stats>(player_).hp += 1; // refund 1 damage
                     }
                 }
+                // Floating damage number + hit flash
+                {
+                    char dbuf[16]; snprintf(dbuf, sizeof(dbuf), "%d", mresult.damage);
+                    floating_text_.spawn(pp.x, pp.y, dbuf, {255, 80, 80, 255}, mresult.critical);
+
+                }
                 if (mresult.critical) {
                     particles_.crit_flash(pp.x, pp.y); trigger_screen_shake(5.0f);
                     // Cowardly trait: crits cause fear
@@ -3336,30 +3388,41 @@ void Engine::process_turn() {
             if (mresult.hit && world_.has<Stats>(e) && world_.has<StatusEffects>(player_)) {
                 auto& mname = world_.get<Stats>(e).name;
                 auto& fx = world_.get<StatusEffects>(player_);
+                bool inflicted = false;
+                SfxId inflict_sfx = SfxId::POISON;
                 // Poison: spiders, naga, snakes
-                if ((mname == "giant spider" || mname == "naga" || mname == "snake") && rng_.chance(25))
-                    fx.add(StatusType::POISON, 2, 5);
+                if ((mname == "giant spider" || mname == "naga" || mname == "snake") && rng_.chance(25)) {
+                    fx.add(StatusType::POISON, 2, 5); inflicted = true; inflict_sfx = SfxId::POISON;
+                }
                 // Bleed: ghouls, wolves, bears
-                else if ((mname == "ghoul" || mname == "wolf" || mname == "dire wolf" || mname == "bear") && rng_.chance(20))
-                    fx.add(StatusType::BLEED, 1, 8);
+                else if ((mname == "ghoul" || mname == "wolf" || mname == "dire wolf" || mname == "bear") && rng_.chance(20)) {
+                    fx.add(StatusType::BLEED, 1, 8); inflicted = true; inflict_sfx = SfxId::CRIT;
+                }
                 // Burn: dragons
-                else if (mname == "dragon" && rng_.chance(30))
-                    fx.add(StatusType::BURN, 3, 4);
+                else if (mname == "dragon" && rng_.chance(30)) {
+                    fx.add(StatusType::BURN, 3, 4); inflicted = true; inflict_sfx = SfxId::BURN;
+                }
                 // Stun: trolls, orc warchief (heavy hit)
-                else if ((mname == "troll" || mname == "orc warchief") && rng_.chance(20))
-                    fx.add(StatusType::STUNNED, 0, 1);
+                else if ((mname == "troll" || mname == "orc warchief") && rng_.chance(20)) {
+                    fx.add(StatusType::STUNNED, 0, 1); inflicted = true; inflict_sfx = SfxId::SPELL_IMPACT;
+                }
                 // Freeze: ice creatures
-                else if ((mname == "ice elemental" || mname == "frost drake") && rng_.chance(25))
-                    fx.add(StatusType::FROZEN, 0, 1);
+                else if ((mname == "ice elemental" || mname == "frost drake") && rng_.chance(25)) {
+                    fx.add(StatusType::FROZEN, 0, 1); inflicted = true; inflict_sfx = SfxId::SPELL_FREEZE;
+                }
                 // Confuse: wraiths, banshees
-                else if ((mname == "wraith" || mname == "banshee") && rng_.chance(20))
-                    fx.add(StatusType::CONFUSED, 0, 3);
+                else if ((mname == "wraith" || mname == "banshee") && rng_.chance(20)) {
+                    fx.add(StatusType::CONFUSED, 0, 3); inflicted = true; inflict_sfx = SfxId::CURSE;
+                }
                 // Fear: death knight on crit
-                else if (mname == "death knight" && mresult.critical)
-                    fx.add(StatusType::FEARED, 0, 2);
+                else if (mname == "death knight" && mresult.critical) {
+                    fx.add(StatusType::FEARED, 0, 2); inflicted = true; inflict_sfx = SfxId::CURSE;
+                }
                 // Blind: basilisk
-                else if (mname == "basilisk" && rng_.chance(15))
-                    fx.add(StatusType::BLIND, 0, 3);
+                else if (mname == "basilisk" && rng_.chance(15)) {
+                    fx.add(StatusType::BLIND, 0, 3); inflicted = true; inflict_sfx = SfxId::CURSE;
+                }
+                if (inflicted) audio_.play(inflict_sfx);
             }
             // Troll/slime regeneration — heals HP per turn if alive
             if (world_.has<Stats>(e)) {
@@ -3507,7 +3570,12 @@ void Engine::process_turn() {
                 particles_.arrow_trail(mpos.x, mpos.y, pp.x, pp.y);
                 audio_.play_bow_fire();
                 auto rresult = combat::ranged_attack(world_, e, player_, ai_comp.ranged_damage, rng_, log_);
-                if (rresult.hit) { audio_.play_bow_hit(); particles_.hit_spark(pp.x, pp.y); }
+                if (rresult.hit) {
+                    audio_.play_bow_hit(); particles_.hit_spark(pp.x, pp.y);
+                    char dbuf[16]; snprintf(dbuf, sizeof(dbuf), "%d", rresult.damage);
+                    floating_text_.spawn(pp.x, pp.y, dbuf, {255, 80, 80, 255});
+
+                }
                 if (rresult.killed) { audio_.play(SfxId::DEATH); }
             }
         } else if (dist <= 6 && dist > 1 && world_.has<Stats>(e) &&
@@ -3705,6 +3773,10 @@ void Engine::fire_ranged() {
     particles_.arrow_trail(shooter.x, shooter.y, tgt_x, tgt_y);
     if (result.hit) {
         audio_.play_bow_hit(); particles_.hit_spark(tgt_x, tgt_y);
+        char dbuf[16]; snprintf(dbuf, sizeof(dbuf), "%d", result.damage);
+        floating_text_.spawn((float)tgt_x, (float)tgt_y, dbuf,
+                              result.critical ? SDL_Color{255,200,80,255} : SDL_Color{255,255,255,255},
+                              result.critical);
         // Archery skill XP
         if (world_.has<Skills>(player_))
             grant_skill_xp(SkillId::ARCHERY, 2);
@@ -4349,6 +4421,70 @@ void Engine::reset_to_main_menu() {
     audio_.play_ambient(AmbientId::FOREST_NIGHT_RAIN, 5000);
 }
 
+void Engine::try_interact() {
+    auto& pos = world_.get<Position>(player_);
+
+    // 1. Items or containers on the ground -> pickup
+    {
+        auto& positions = world_.pool<Position>();
+        for (size_t i = 0; i < positions.size(); i++) {
+            Entity e = positions.entity_at(i);
+            if (e == player_) continue;
+            auto& ipos = positions.at_index(i);
+            if (ipos.x != pos.x || ipos.y != pos.y) continue;
+            if (world_.has<Item>(e) || world_.has<Container>(e)) {
+                try_pickup();
+                return;
+            }
+        }
+    }
+
+    // 2. Adjacent friendly NPC -> talk
+    for (int dy = -1; dy <= 1; dy++) {
+        for (int dx = -1; dx <= 1; dx++) {
+            if (dx == 0 && dy == 0) continue;
+            int nx = pos.x + dx, ny = pos.y + dy;
+            if (!map_.in_bounds(nx, ny)) continue;
+            Entity target = combat::entity_at(world_, nx, ny, player_);
+            if (target != NULL_ENTITY && world_.has<NPC>(target) && !world_.has<AI>(target)) {
+                npc_interaction::Context npc_ctx {
+                    world_, player_, log_, audio_, rng_, particles_,
+                    shop_screen_, quest_offer_, levelup_screen_,
+                    journal_, meta_, gold_, game_turn_, dungeon_level_,
+                    pending_levelup_, pending_quest_npc_
+                };
+                // Church priest
+                if (world_.has<Church>(target) && world_.has<GodAlignment>(player_)) {
+                    auto& church = world_.get<Church>(target);
+                    auto& ga = world_.get<GodAlignment>(player_);
+                    if (ga.god == church.god || ga.god == GodId::NONE) {
+                        church_screen_.open(player_, &world_, church.god,
+                                             ga.god == church.god ? ga.favor : 0);
+                        return;
+                    }
+                }
+                if (npc_interaction::interact(npc_ctx, target, nx, ny)) {
+                    player_acted_ = true;
+                    return;
+                }
+            }
+        }
+    }
+
+    // 3. Stairs underfoot -> hint
+    auto tile_type = map_.at(pos.x, pos.y).type;
+    if (tile_type == TileType::STAIRS_DOWN) {
+        log_.add("Press Enter or > to descend.", {150, 140, 130, 255});
+        return;
+    }
+    if (tile_type == TileType::STAIRS_UP) {
+        log_.add("Press Enter or < to ascend.", {150, 140, 130, 255});
+        return;
+    }
+
+    log_.add("Nothing to interact with.", {140, 130, 120, 255});
+}
+
 void Engine::try_pickup() {
     auto& pos = world_.get<Position>(player_);
     auto& inv = world_.get<Inventory>(player_);
@@ -4864,6 +5000,10 @@ void Engine::handle_inventory_action(InvAction action) {
                     snprintf(use_buf, sizeof(use_buf), "You consume the %s. Healed %d.",
                              item.display_name().c_str(), healed);
                     log_.add(use_buf, {100, 200, 100, 255});
+                    if (healed > 0) {
+                        auto& pp = world_.get<Position>(player_);
+                        floating_text_.spawn(pp.x, pp.y, healed, {80, 220, 80, 255});
+                    }
                     consumed = true;
                 } else if (item.name == "mana potion" && world_.has<Stats>(player_)) {
                     auto& stats = world_.get<Stats>(player_);
@@ -4920,6 +5060,7 @@ void Engine::handle_inventory_action(InvAction action) {
                 player_acted_ = true;
             } else if (item.type == ItemType::SCROLL && item.teaches_spell < 0) {
                 // Lore item — read it
+                audio_.play(SfxId::SELECT);
                 if (!item.description.empty()) {
                     char buf[256];
                     snprintf(buf, sizeof(buf), "You read the %s:", item.display_name().c_str());
@@ -4943,6 +5084,7 @@ void Engine::handle_inventory_action(InvAction action) {
                             char buf[128];
                             snprintf(buf, sizeof(buf), "The %s crumbles as you study it. The spell is lost.", item.display_name().c_str());
                             log_.add(buf, {200, 120, 120, 255});
+                            audio_.play(SfxId::CURSE);
                             turn_actions_.destroyed_book = true;
                             inv.remove(item_e);
                             world_.destroy(item_e);
@@ -5215,6 +5357,12 @@ void Engine::handle_input() {
             if (intro_screen_.is_done()) {
                 state_ = GameState::PLAYING;
             }
+            continue;
+        }
+
+        // Tutorial popup (blocks all game input until dismissed)
+        if (tutorial_popup_.is_open()) {
+            tutorial_popup_.handle_input(event);
             continue;
         }
 
@@ -5632,12 +5780,14 @@ void Engine::handle_input() {
                 } else if (act == ShopAction::BUY) {
                     if (shop_screen_.execute(world_, &gold_)) {
                         log_.add("Purchased.", {180, 200, 140, 255});
+                        audio_.play(SfxId::GOLD);
                     } else {
                         log_.add("You can't buy that.", {180, 120, 120, 255});
                     }
                 } else if (act == ShopAction::SELL) {
                     if (shop_screen_.execute(world_, &gold_)) {
                         log_.add("Sold.", {180, 200, 140, 255});
+                        audio_.play(SfxId::GOLD);
                     }
                 }
                 return;
@@ -5782,7 +5932,7 @@ void Engine::handle_input() {
                             switch (sinfo.school) {
                                 case SpellSchool::CONJURATION: audio_.play(SfxId::SPELL_FIRE); break;
                                 case SpellSchool::TRANSMUTATION: audio_.play(SfxId::SPELL_BUFF); break;
-                                case SpellSchool::DIVINATION: audio_.play(SfxId::SPELL_ICE); break;
+                                case SpellSchool::DIVINATION: audio_.play(SfxId::SPELL); break;
                                 case SpellSchool::HEALING: audio_.play(SfxId::HEAL); break;
                                 case SpellSchool::NATURE: audio_.play(SfxId::SPELL_EARTH); break;
                                 case SpellSchool::DARK_ARTS: audio_.play(SfxId::SPELL_IMPACT); break;
@@ -6079,7 +6229,12 @@ void Engine::handle_input() {
                     player_acted_ = true;
                     break;
 
-                // Pickup
+                // Interact (context-sensitive: pickup, talk, open)
+                case SDLK_e:
+                    try_interact();
+                    break;
+
+                // Pickup (legacy keys, pickup-only)
                 case SDLK_g:
                 case SDLK_COMMA:
                     try_pickup();
@@ -6109,11 +6264,15 @@ void Engine::handle_input() {
                 case SDLK_o:
                     sneaking_ = !sneaking_;
                     if (sneaking_) {
+                        audio_.play(SfxId::SELECT);
                         log_.add("You crouch and move carefully.", {140, 140, 200, 255});
                         if (!tips_shown_.first_sneak) {
                             tips_shown_.first_sneak = true;
-                            log_.add("Tip: sneaking halves your speed but enemies detect you from much closer.", {100, 180, 140, 255});
-                            log_.add("Tip: attack from sneak for a backstab. Bump NPCs to pickpocket.", {100, 180, 140, 255});
+                            tutorial_popup_.show("Stealth",
+                                "Sneaking halves your speed but enemies\n"
+                                "detect you from much closer.\n\n"
+                                "Attack from sneak for a backstab (2-4x damage).\n"
+                                "Bump NPCs while sneaking to pickpocket.");
                         }
                         // Dim player sprite
                         if (world_.has<Renderable>(player_)) {
@@ -6389,7 +6548,7 @@ void Engine::handle_input() {
                                 switch (sinfo.school) {
                                     case SpellSchool::CONJURATION: audio_.play(SfxId::SPELL_FIRE); break;
                                     case SpellSchool::TRANSMUTATION: audio_.play(SfxId::SPELL_BUFF); break;
-                                    case SpellSchool::DIVINATION: audio_.play(SfxId::SPELL_ICE); break;
+                                    case SpellSchool::DIVINATION: audio_.play(SfxId::SPELL); break;
                                     case SpellSchool::HEALING: audio_.play(SfxId::HEAL); break;
                                     case SpellSchool::NATURE: audio_.play(SfxId::SPELL_EARTH); break;
                                     case SpellSchool::DARK_ARTS: audio_.play(SfxId::SPELL_IMPACT); break;
@@ -6490,8 +6649,12 @@ void Engine::handle_input() {
                             log_.add(ebuf, {180, 170, 150, 255});
                             if (!tips_shown_.first_dungeon) {
                                 tips_shown_.first_dungeon = true;
-                                log_.add("Tip: watch for traps (high PER helps). r to rest, but rest gets weaker each time.", {100, 180, 140, 255});
-                                log_.add("Tip: o to sneak. Backstab from sneak does 2-4x damage.", {100, 180, 140, 255});
+                                tutorial_popup_.show("Entering a Dungeon",
+                                    "Watch for traps. High PER helps detect them.\n\n"
+                                    "R - Rest (heals fully, limited uses per floor)\n"
+                                    "O - Toggle sneak\n"
+                                    "E - Interact with items, NPCs, containers\n"
+                                    "< - Return to the surface");
                             }
                             // Zone-flavored entrance line
                             if (de.zone == "warrens")
@@ -7477,6 +7640,9 @@ void Engine::render() {
         particles_.render(renderer_, camera_.x, camera_.y, camera_.tile_size, y_off);
     }
 
+    // Floating damage/heal numbers
+    floating_text_.render(renderer_, font_, font_title_, camera_.x, camera_.y, camera_.tile_size, y_off);
+
     // Pet naming overlay
     if (pet_naming_ && font_) {
         int pw = std::min(width_ / 3, 500);
@@ -7507,6 +7673,9 @@ void Engine::render() {
             SDL_RenderDrawRect(renderer_, &cursor_rect);
         }
     }
+
+    // Tutorial popup (on top of everything except transitions)
+    tutorial_popup_.render(renderer_, font_, font_title_, width_, height_);
 
     render_transition();
     SDL_RenderPresent(renderer_);
@@ -7633,6 +7802,7 @@ void Engine::run() {
         handle_input();
         process_turn();
         particles_.update(); // smooth animation between turns
+        floating_text_.update();
         update_death_anims();
         update_screen_shake();
         render();

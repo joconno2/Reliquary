@@ -192,6 +192,33 @@ bool CreationScreen::handle_input(SDL_Event& event) {
                 return true;
             }
         }
+        if (phase_ == CreationPhase::GOD_SELECT) {
+            int mx = event.button.x, my = event.button.y;
+            for (int i = 0; i < static_cast<int>(god_rects_.size()); i++) {
+                auto& r = god_rects_[i];
+                if (mx >= r.x && mx < r.x + r.w && my >= r.y && my < r.y + r.h) {
+                    if (i == selected_) {
+                        // Double-click: confirm
+                        build_.god = static_cast<GodId>(selected_);
+                        phase_ = CreationPhase::BACKGROUND_SELECT;
+                        return true;
+                    }
+                    selected_ = i;
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+    // Mouse hover for god select
+    if (event.type == SDL_MOUSEMOTION && phase_ == CreationPhase::GOD_SELECT) {
+        int mx = event.motion.x, my = event.motion.y;
+        for (int i = 0; i < static_cast<int>(god_rects_.size()); i++) {
+            auto& r = god_rects_[i];
+            if (mx >= r.x && mx < r.x + r.w && my >= r.y && my < r.y + r.h) {
+                selected_ = i; break;
+            }
+        }
         return false;
     }
 
@@ -514,10 +541,12 @@ void CreationScreen::render_god_select(SDL_Renderer* renderer, TTF_Font* font,
         if (scroll > GOD_COUNT - visible_count) scroll = GOD_COUNT - visible_count;
     }
 
+    god_rects_.clear();
     for (int i = scroll; i < GOD_COUNT && i < scroll + visible_count; i++) {
         auto& god = get_god_info(static_cast<GodId>(i));
         bool is_sel = (i == selected_);
         int gy = list_rect.y + (i - scroll) * god_item_h;
+        god_rects_.push_back({list_rect.x, gy, list_rect.w, god_item_h});
 
         if (is_sel) {
             ui::draw_panel(renderer, list_rect.x - 4, gy - 4, list_rect.w + 8, god_item_h - 2);

@@ -6,10 +6,56 @@
 // With continue:    0=New, 1=Continue, 2=Load, 3=Settings, 4=Quit
 // Without continue: 0=New, 1=Load, 2=Settings, 3=Quit
 
-MenuChoice MainMenu::handle_input(SDL_Event& event) {
-    if (event.type != SDL_KEYDOWN) return MenuChoice::NONE;
+MenuChoice MainMenu::choice_for_index(int idx) const {
+    if (can_continue_) {
+        switch (idx) {
+            case 0: return MenuChoice::NEW_GAME;
+            case 1: return MenuChoice::CONTINUE;
+            case 2: return MenuChoice::LOAD;
+            case 3: return MenuChoice::SETTINGS;
+            case 4: return MenuChoice::QUIT;
+        }
+    } else {
+        switch (idx) {
+            case 0: return MenuChoice::NEW_GAME;
+            case 1: return MenuChoice::LOAD;
+            case 2: return MenuChoice::SETTINGS;
+            case 3: return MenuChoice::QUIT;
+        }
+    }
+    return MenuChoice::NONE;
+}
 
+MenuChoice MainMenu::handle_input(SDL_Event& event) {
     int count = option_count();
+
+    // Mouse click
+    if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
+        int mx = event.button.x, my = event.button.y;
+        for (int i = 0; i < static_cast<int>(option_rects_.size()); i++) {
+            auto& r = option_rects_[i];
+            if (mx >= r.x && mx < r.x + r.w && my >= r.y && my < r.y + r.h) {
+                selected_ = i;
+                return choice_for_index(i);
+            }
+        }
+        return MenuChoice::NONE;
+    }
+
+    // Mouse hover
+    if (event.type == SDL_MOUSEMOTION) {
+        int mx = event.motion.x, my = event.motion.y;
+        for (int i = 0; i < static_cast<int>(option_rects_.size()); i++) {
+            auto& r = option_rects_[i];
+            if (mx >= r.x && mx < r.x + r.w && my >= r.y && my < r.y + r.h) {
+                selected_ = i;
+                break;
+            }
+        }
+        return MenuChoice::NONE;
+    }
+
+    if (event.type != SDL_KEYDOWN) return MenuChoice::NONE;
 
     switch (event.key.keysym.sym) {
         case SDLK_UP:
@@ -24,23 +70,7 @@ MenuChoice MainMenu::handle_input(SDL_Event& event) {
             return MenuChoice::NONE;
         case SDLK_RETURN:
         case SDLK_e:
-            if (can_continue_) {
-                switch (selected_) {
-                    case 0: return MenuChoice::NEW_GAME;
-                    case 1: return MenuChoice::CONTINUE;
-                    case 2: return MenuChoice::LOAD;
-                    case 3: return MenuChoice::SETTINGS;
-                    case 4: return MenuChoice::QUIT;
-                }
-            } else {
-                switch (selected_) {
-                    case 0: return MenuChoice::NEW_GAME;
-                    case 1: return MenuChoice::LOAD;
-                    case 2: return MenuChoice::SETTINGS;
-                    case 3: return MenuChoice::QUIT;
-                }
-            }
-            return MenuChoice::NONE;
+            return choice_for_index(selected_);
         case SDLK_ESCAPE:
             return MenuChoice::QUIT;
         default:
@@ -99,18 +129,21 @@ void MainMenu::render(SDL_Renderer* renderer, TTF_Font* body, TTF_Font* title,
     int line_h = menu_font ? TTF_FontLineSkip(menu_font) : 24;
     int menu_y = h * 64 / 100;
 
+    option_rects_.clear();
     for (int i = 0; i < count; i++) {
         bool is_sel = (i == selected_);
 
         // Load is dimmed (placeholder)
         bool is_load = can_continue_ ? (i == 2) : (i == 1);
 
+        int tw = 0, th = 0;
+        if (menu_font) TTF_SizeText(menu_font, options[i], &tw, &th);
+        SDL_Rect hit = {cx - tw / 2 - 12, menu_y - 4, tw + 24, line_h + 8};
+        option_rects_.push_back(hit);
+
         if (is_sel) {
-            int tw = 0, th = 0;
-            if (menu_font) TTF_SizeText(menu_font, options[i], &tw, &th);
-            SDL_Rect hl = {cx - tw / 2 - 12, menu_y - 4, tw + 24, line_h + 8};
             SDL_SetRenderDrawColor(renderer, 30, 25, 40, 255);
-            SDL_RenderFillRect(renderer, &hl);
+            SDL_RenderFillRect(renderer, &hit);
         }
 
         SDL_Color col = is_sel ? sel_col : (is_load ? dim_col : normal_col);

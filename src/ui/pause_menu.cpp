@@ -2,8 +2,42 @@
 #include "ui/pause_menu.h"
 #include "ui/ui_draw.h"
 
+static PauseChoice pause_choice_for(int idx) {
+    switch (idx) {
+        case 0: return PauseChoice::CONTINUE;
+        case 1: return PauseChoice::SAVE;
+        case 2: return PauseChoice::LOAD;
+        case 3: return PauseChoice::SETTINGS;
+        case 4: return PauseChoice::EXIT_TO_MENU;
+    }
+    return PauseChoice::NONE;
+}
+
 PauseChoice PauseMenu::handle_input(SDL_Event& event) {
     if (!open_) return PauseChoice::NONE;
+
+    if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
+        int mx = event.button.x, my = event.button.y;
+        for (int i = 0; i < static_cast<int>(option_rects_.size()); i++) {
+            auto& r = option_rects_[i];
+            if (mx >= r.x && mx < r.x + r.w && my >= r.y && my < r.y + r.h) {
+                selected_ = i;
+                return pause_choice_for(i);
+            }
+        }
+        return PauseChoice::NONE;
+    }
+    if (event.type == SDL_MOUSEMOTION) {
+        int mx = event.motion.x, my = event.motion.y;
+        for (int i = 0; i < static_cast<int>(option_rects_.size()); i++) {
+            auto& r = option_rects_[i];
+            if (mx >= r.x && mx < r.x + r.w && my >= r.y && my < r.y + r.h) {
+                selected_ = i; break;
+            }
+        }
+        return PauseChoice::NONE;
+    }
+
     if (event.type != SDL_KEYDOWN) return PauseChoice::NONE;
 
     switch (event.key.keysym.sym) {
@@ -19,14 +53,7 @@ PauseChoice PauseMenu::handle_input(SDL_Event& event) {
             return PauseChoice::NONE;
         case SDLK_RETURN:
         case SDLK_e:
-            switch (selected_) {
-                case 0: return PauseChoice::CONTINUE;
-                case 1: return PauseChoice::SAVE;
-                case 2: return PauseChoice::LOAD;
-                case 3: return PauseChoice::SETTINGS;
-                case 4: return PauseChoice::EXIT_TO_MENU;
-            }
-            return PauseChoice::NONE;
+            return pause_choice_for(selected_);
         case SDLK_ESCAPE:
             return PauseChoice::CONTINUE;
         default:
@@ -62,9 +89,11 @@ void PauseMenu::render(SDL_Renderer* renderer, TTF_Font* body, TTF_Font* title,
         "Continue", "Save", "Load", "Settings", "Exit to Menu"
     };
 
+    option_rects_.clear();
     for (int i = 0; i < OPTION_COUNT; i++) {
         bool is_sel = (i == selected_);
         auto row = panel.row(line_h + panel.gap);
+        option_rects_.push_back({row.x, row.y, row.w, row.h});
 
         if (is_sel && body) {
             int tw = 0, th = 0;

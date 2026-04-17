@@ -1,6 +1,7 @@
 #pragma once
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
+#include <vector>
 
 enum class PauseChoice {
     NONE,
@@ -28,4 +29,5 @@ private:
     bool open_ = false;
     int selected_ = 0;
     static constexpr int OPTION_COUNT = 5;
+    mutable std::vector<SDL_Rect> option_rects_;
 };

@@ -63,6 +63,8 @@ private:
     mutable int grid_x_ = 0, grid_y_ = 0;
     mutable int grid_cell_w_ = 0, grid_cell_h_ = 0;
     mutable int grid_cols_ = 6;
+    // God select list rects for mouse
+    mutable std::vector<SDL_Rect> god_rects_;
     std::string unlock_progress_[CLASS_COUNT]; // progress text for locked classes
 
     void randomize_name();

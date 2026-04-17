@@ -28,6 +28,8 @@
 #include "ui/help_screen.h"
 #include "ui/world_map.h"
 #include "systems/particles.h"
+#include "ui/floating_text.h"
+#include "ui/tutorial_popup.h"
 #include "ui/death_screen.h"
 #include "ui/passive_tree_screen.h"
 #include "components/trap.h"
@@ -111,6 +113,8 @@ private:
     RNG rng_;
     Audio audio_;
     ParticleSystem particles_;
+    FloatingTextSystem floating_text_;
+    TutorialPopup tutorial_popup_;
     std::vector<WeatherParticle> weather_particles_;
     float shake_intensity_ = 0.0f; // screen shake (pixels, decays per frame)
     float shake_dx_ = 0.0f, shake_dy_ = 0.0f; // current shake offset
@@ -281,6 +285,7 @@ private:
     void open_door(int x, int y);
     void process_turn();
     void try_pickup();
+    void try_interact(); // context-sensitive 'e': pickup, talk, open, stairs
     void handle_inventory_action(InvAction action);
     void render();
     void render_hud();

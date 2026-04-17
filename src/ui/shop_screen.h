@@ -47,6 +47,9 @@ private:
     int price_mult_ = 100; // percentage: 100 = normal, 200 = double
     bool buy_tab_ = true; // true = Buy, false = Sell
     std::vector<ShopItem> stock_;
+    mutable std::vector<SDL_Rect> item_rects_; // populated during render
+    mutable SDL_Rect tab_buy_rect_ = {};       // buy tab click area
+    mutable SDL_Rect tab_sell_rect_ = {};      // sell tab click area
 
     void generate_stock(RNG& rng, int difficulty = 0, GodId province_god = GodId::NONE);
 };

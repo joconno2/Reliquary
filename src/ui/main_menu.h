@@ -1,6 +1,7 @@
 #pragma once
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
+#include <vector>
 #include "core/spritesheet.h"
 
 enum class MenuChoice {
@@ -26,7 +27,10 @@ public:
 private:
     int selected_ = 0;
     bool can_continue_ = false;
+    mutable std::vector<SDL_Rect> option_rects_; // populated during render for mouse hit-testing
 
     // Options: New Game, [Continue], Load, Settings, Quit
     int option_count() const { return can_continue_ ? 5 : 4; }
+
+    MenuChoice choice_for_index(int idx) const;
 };

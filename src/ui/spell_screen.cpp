@@ -6,6 +6,50 @@
 
 SpellAction SpellScreen::handle_input(SDL_Event& event) {
     if (!open_) return SpellAction::NONE;
+
+    // Mouse click: select or cast
+    if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
+        int mx = event.button.x, my = event.button.y;
+        for (int i = 0; i < static_cast<int>(spell_rects_.size()); i++) {
+            auto& r = spell_rects_[i];
+            if (mx >= r.x && mx < r.x + r.w && my >= r.y && my < r.y + r.h) {
+                if (i == selected_) return SpellAction::CAST;
+                selected_ = i;
+                return SpellAction::NONE;
+            }
+        }
+        return SpellAction::NONE;
+    }
+    // Right-click: quickcast
+    if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT) {
+        int mx = event.button.x, my = event.button.y;
+        for (int i = 0; i < static_cast<int>(spell_rects_.size()); i++) {
+            auto& r = spell_rects_[i];
+            if (mx >= r.x && mx < r.x + r.w && my >= r.y && my < r.y + r.h) {
+                selected_ = i;
+                return SpellAction::QUICKCAST;
+            }
+        }
+        return SpellAction::NONE;
+    }
+    // Mouse hover
+    if (event.type == SDL_MOUSEMOTION) {
+        int mx = event.motion.x, my = event.motion.y;
+        for (int i = 0; i < static_cast<int>(spell_rects_.size()); i++) {
+            auto& r = spell_rects_[i];
+            if (mx >= r.x && mx < r.x + r.w && my >= r.y && my < r.y + r.h) {
+                selected_ = i; break;
+            }
+        }
+        return SpellAction::NONE;
+    }
+    // Mouse wheel scroll
+    if (event.type == SDL_MOUSEWHEEL) {
+        if (event.wheel.y > 0 && selected_ > 0) selected_--;
+        else if (event.wheel.y < 0) selected_++;
+        return SpellAction::NONE;
+    }
+
     if (event.type != SDL_KEYDOWN) return SpellAction::NONE;
 
     switch (event.key.keysym.sym) {
@@ -113,11 +157,13 @@ void SpellScreen::render(SDL_Renderer* renderer, TTF_Font* font,
         if (scroll > count - visible_spells) scroll = count - visible_spells;
     }
 
+    spell_rects_.clear();
     for (int i = scroll; i < count && i < scroll + visible_spells; i++) {
         auto& info = get_spell_info(book.known_spells[i]);
         bool is_sel = (i == sel);
 
         auto spell_row = panel.row(row_h);
+        spell_rects_.push_back(spell_row.sdl());
 
         if (is_sel) {
             ui::Rect hl = spell_row.inset(panel.gap / 2, 0);

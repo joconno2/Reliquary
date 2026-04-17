@@ -1,2 +1,4 @@
-Reliquary starting up.
-Working directory set.
+Reliquary v0.3.26
+Exe: .
+Logs: .
+---

@@ -1,6 +1,7 @@
 #pragma once
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
+#include <vector>
 #include "core/ecs.h"
 #include "components/spellbook.h"
 
@@ -29,4 +30,5 @@ private:
     bool open_ = false;
     int selected_ = 0;
     Entity player_ = 0;
+    mutable std::vector<SDL_Rect> spell_rects_;
 };
