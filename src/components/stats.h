@@ -52,6 +52,7 @@ struct Stats {
     int unyielding_turns = 0;  // Ossren: armor doubled
     int stone_skin_turns = 0;  // Gathruun: bonus armor, can't move
     int stone_skin_armor = 0;  // Gathruun: armor bonus while stone skin active
+    int haste_turns = 0;       // kill haste unique: bonus speed
 
     // Derived combat stats
     int melee_attack() const { return attr(Attr::STR) + level; }

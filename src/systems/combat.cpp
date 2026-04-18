@@ -65,32 +65,7 @@ static void get_equip_attr_bonuses(World& world, Entity e,
 }
 
 
-// Check if entity has a UniqueEffect equipped (any slot)
-static bool has_unique_effect(World& world, Entity e, UniqueEffect ue) {
-    if (!world.has<Inventory>(e)) return false;
-    auto& inv = world.get<Inventory>(e);
-    for (int s = 0; s < EQUIP_SLOT_COUNT; s++) {
-        Entity eq = inv.equipped[s];
-        if (eq == NULL_ENTITY || !world.has<Item>(eq)) continue;
-        if (world.get<Item>(eq).unique_effect == ue) return true;
-    }
-    return false;
-}
-
-// Get equipped weapon's unique effect (NONE if no weapon or no effect)
-static UniqueEffect get_weapon_unique(World& world, Entity e) {
-    if (!world.has<Inventory>(e)) return UniqueEffect::NONE;
-    Entity wpn = world.get<Inventory>(e).get_equipped(EquipSlot::MAIN_HAND);
-    if (wpn == NULL_ENTITY || !world.has<Item>(wpn)) return UniqueEffect::NONE;
-    return world.get<Item>(wpn).unique_effect;
-}
-
-// Apply unique XP bonus if equipped
-static int apply_xp_bonus(World& world, Entity e, int xp) {
-    if (has_unique_effect(world, e, UniqueEffect::XP_BONUS))
-        return xp * 125 / 100;
-    return xp;
-}
+// (get_weapon_unique and apply_xp_bonus moved inside namespace below)
 
 // Get equipped weapon name (for atmospheric messages)
 static const char* get_weapon_name(World& world, Entity e) {
@@ -109,6 +84,30 @@ static const char* random_body_part(RNG& rng) {
 }
 
 namespace combat {
+
+bool has_unique_effect(World& world, Entity e, UniqueEffect ue) {
+    if (!world.has<Inventory>(e)) return false;
+    auto& inv = world.get<Inventory>(e);
+    for (int s = 0; s < EQUIP_SLOT_COUNT; s++) {
+        Entity eq = inv.equipped[s];
+        if (eq == NULL_ENTITY || !world.has<Item>(eq)) continue;
+        if (world.get<Item>(eq).unique_effect == ue) return true;
+    }
+    return false;
+}
+
+static UniqueEffect get_weapon_unique(World& world, Entity e) {
+    if (!world.has<Inventory>(e)) return UniqueEffect::NONE;
+    Entity wpn = world.get<Inventory>(e).get_equipped(EquipSlot::MAIN_HAND);
+    if (wpn == NULL_ENTITY || !world.has<Item>(wpn)) return UniqueEffect::NONE;
+    return world.get<Item>(wpn).unique_effect;
+}
+
+static int apply_xp_bonus(World& world, Entity e, int xp) {
+    if (has_unique_effect(world, e, UniqueEffect::XP_BONUS))
+        return xp * 125 / 100;
+    return xp;
+}
 
 Entity entity_at(World& world, int x, int y, Entity ignore) {
     auto& positions = world.pool<Position>();
@@ -386,6 +385,48 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
             }
             if (exploded) {
                 log.add("The corpse detonates.", {200, 100, 80, 255});
+            }
+        }
+
+        // Crit bleed (unique ring): crits apply 3-turn bleed
+        if (result.critical && world.has<Player>(attacker) &&
+            has_unique_effect(world, attacker, UniqueEffect::CRIT_BLEED) &&
+            world.has<StatusEffects>(defender) && def.hp > 0) {
+            world.get<StatusEffects>(defender).add(StatusType::BLEED, 2, 3);
+            log.add("The wound bleeds freely.", {200, 80, 80, 255});
+        }
+
+        // Teleport strike (unique ring): 15% chance to blink behind target
+        if (world.has<Player>(attacker) &&
+            has_unique_effect(world, attacker, UniqueEffect::TELEPORT_STRIKE) &&
+            rng.range(1, 100) <= 15 && world.has<Position>(defender) && world.has<Position>(attacker)) {
+            auto& dpos2 = world.get<Position>(defender);
+            auto& apos = world.get<Position>(attacker);
+            // Move attacker to opposite side of defender
+            // Flag for engine.cpp to handle the actual position swap
+            // (combat.cpp doesn't have map access for bounds checking)
+            result.teleport_behind = true;
+            log.add("You blink through your target.", {180, 140, 255, 255});
+        }
+
+        // Kill haste (unique ring): +50 speed for 3 turns on kill
+        if (def.hp <= 0 && world.has<Player>(attacker) &&
+            has_unique_effect(world, attacker, UniqueEffect::KILL_HASTE) &&
+            world.has<Stats>(attacker)) {
+            world.get<Stats>(attacker).haste_turns = 3;
+            log.add("Adrenaline surges. You move faster.", {200, 220, 140, 255});
+        }
+
+        // MP shield (unique amulet): damage from MP first (50%)
+        if (def.hp < 0 && world.has<Player>(defender) &&
+            has_unique_effect(world, defender, UniqueEffect::MP_SHIELD) &&
+            def.mp > 0) {
+            // Recover some HP by spending MP instead
+            int absorbed = std::min(result.damage / 2, def.mp);
+            if (absorbed > 0) {
+                def.hp += absorbed;
+                def.mp -= absorbed;
+                log.add("Your ward absorbs the blow.", {140, 140, 220, 255});
             }
         }
 

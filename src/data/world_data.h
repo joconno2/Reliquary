@@ -10,30 +10,154 @@
 struct TownData {
     int x, y;
     const char* name;
-    bool is_quest_town; // has main quest NPCs
+    bool is_quest_town;
+    const char* description;     // shown when player enters town
+    const char* rumor1;          // NPC gossip about the town/region
+    const char* rumor2;
+    const char* rumor3;
+    const char* nearby_warning;  // what NPCs warn you about nearby
 };
 
 static constexpr TownData ALL_TOWNS[] = {
-    {1000,  750, "Thornwall",    true },
-    { 750,  650, "Ashford",      true },
-    {1300,  670, "Greywatch",    true },
-    { 850,  950, "Millhaven",    true },
-    {1200,  930, "Stonehollow",  false},
-    {1050,  450, "Frostmere",    true },
-    { 650,  800, "Bramblewood",  false},
-    {1400,  750, "Ironhearth",   true },
-    {1000, 1100, "Dustfall",     false},
-    { 800,  400, "Whitepeak",    false},
-    {1250, 1100, "Drywell",      false},
-    { 550,  550, "Hollowgate",   true },
-    {1450,  500, "Candlemere",   true },
-    { 900, 1200, "Sandmoor",     false},
-    {1100,  300, "Glacierveil",  false},
-    { 700, 1050, "Tanglewood",   false},
-    {1350, 1000, "Redrock",      false},
-    {1150,  550, "Ravenshold",   false},
-    { 600,  700, "Fenwatch",     false},
-    {1500,  850, "Endgate",      false},
+    {1000,  750, "Thornwall",    true,
+     "The crossroads of the Heartlands. Thornwall sits where every road meets.",
+     "The Barrow north of town has been making noises at night.",
+     "Traders from Ashford stopped coming last month. Nobody knows why.",
+     "Morreth's church stands at the center. The priests have been on edge.",
+     "The Barrow's seal broke. Whatever was inside is awake."},
+
+    { 750,  650, "Ashford",      true,
+     "A quiet town at the forest's edge. Smoke rises from old chimneys.",
+     "The ruins east of here are older than the town. People avoid them.",
+     "Wolves have been coming closer to the walls. Bigger ones than before.",
+     "A scholar came through asking about inscriptions in the ruins. Haven't seen him since.",
+     "The forest is deeper than it used to be. Trees where there weren't trees."},
+
+    {1300,  670, "Greywatch",    true,
+     "A fortress town on the eastern ridge. Grey stone walls, grey sky.",
+     "The garrison sends patrols south but they come back with fewer men.",
+     "Ironhearth's forges burn day and night. They're building for something.",
+     "There's a dungeon beneath the old watch tower. The guards won't talk about it.",
+     "Bandits on the coast road have gotten bolder."},
+
+    { 850,  950, "Millhaven",    true,
+     "Farmland stretches in every direction. Millhaven feeds the Heartlands.",
+     "The southern provinces are drying up. Refugees trickle in every week.",
+     "Old Stonehollow has the best smiths, but the road there is rough.",
+     "Something's been killing cattle in the fields. Not wolves. The wounds are wrong.",
+     "Don't go into the grain stores after dark. Rats the size of dogs."},
+
+    {1200,  930, "Stonehollow",  false,
+     "Built into the hillside. Half the town is underground.",
+     "The mines go deeper than anyone's mapped. Some shafts just keep going.",
+     "Redrock to the south is practically lawless. Avoid it if you can.",
+     "The dwarven tunnels connect to something older. We don't dig that direction.",
+     "Quakes have been getting stronger. The stone remembers."},
+
+    {1050,  450, "Frostmere",    true,
+     "Ice clings to the rooftops. Frostmere endures at the edge of the frozen north.",
+     "Gathruun's followers say the mountain is speaking. They won't say what it says.",
+     "Glacierveil is cut off. Snow blocked the pass two weeks ago.",
+     "The lake froze solid last winter. Something moved under the ice.",
+     "Fur traders from Whitepeak bring strange stories. Lights in the peaks."},
+
+    { 650,  800, "Bramblewood",  false,
+     "The forest presses in on every side. Bramblewood smells of moss and green things.",
+     "Khael's druids say the trees are angry. That's never good.",
+     "Fenwatch is close, but the path through the deep woods is treacherous.",
+     "The herbalists here know poisons and cures in equal measure.",
+     "Something old lives in the heart of the forest. The druids leave it offerings."},
+
+    {1400,  750, "Ironhearth",   true,
+     "The sound of hammers never stops. Ironhearth is forge and flame.",
+     "Ossren's church runs the town. The smiths pray before every pour.",
+     "The coast road to Endgate is dangerous. Slavers and worse.",
+     "Steel from Ironhearth arms half the continent. The rest use what they find.",
+     "The deep forge cracked last month. Something came up through the floor."},
+
+    {1000, 1100, "Dustfall",     false,
+     "Dry wind and empty wells. Dustfall clings to life in the dying south.",
+     "Sythara's followers are growing. The plague gave them converts.",
+     "Drywell earned its name. Three wells and not a drop.",
+     "The sick are taken to the temple. Some come back. Most don't.",
+     "The dust storms carry more than sand. Don't breathe deep."},
+
+    { 800,  400, "Whitepeak",    false,
+     "Perched on the mountainside. The air is thin and the people are hard.",
+     "The mines pay well but miners keep disappearing into the deep shafts.",
+     "Frostmere trades with us when the pass is open. That's half the year.",
+     "Whitepeak goats are tougher than the people. That's saying something.",
+     "Something howls in the peaks at night. Not wolves. Wolves don't echo like that."},
+
+    {1250, 1100, "Drywell",      false,
+     "Three wells, all dry. Drywell survives on rainwater and stubbornness.",
+     "Caravans from Stonehollow bring water. When they come.",
+     "The Dust Provinces are dying. Everyone knows it. Nobody says it.",
+     "Sandmoor still has water. They charge for it.",
+     "Bones in the sand. Not human, but not anything I recognize either."},
+
+    { 550,  550, "Hollowgate",   true,
+     "The town sits above a vast cavern. The gate below is older than memory.",
+     "The gate was sealed for centuries. Now it's open and things come up at night.",
+     "The scholars think the Reliquary's heart is down there. They're probably right.",
+     "Hollowgate was built to watch the gate. Now it watches us.",
+     "Don't look into the pit after sundown. Something looks back."},
+
+    {1450,  500, "Candlemere",   true,
+     "Every window holds a candle. Soleth's city of light against the dark.",
+     "The priests say the fire wards off the old things. They're not wrong.",
+     "Zealots patrol the streets. They mean well. Mostly.",
+     "Candlemere burns more oil than any three towns. They can afford it.",
+     "The undead avoid this place. The light hurts them. That should tell you something."},
+
+    { 900, 1200, "Sandmoor",     false,
+     "The last real settlement before the deep desert. Water is currency here.",
+     "Trade caravans stop here or they don't make it to the coast.",
+     "The old roads south lead nowhere anyone comes back from.",
+     "Scorpions the size of dogs. You get used to them.",
+     "The oasis is shrinking. Another decade and Sandmoor joins the sand."},
+
+    {1100,  300, "Glacierveil",  false,
+     "Half-buried in ice. Glacierveil persists where nothing should.",
+     "The glacier moves. Slowly, but it moves. Buildings shift every year.",
+     "The ice preserves things. Sometimes you find old things. Sometimes they're alive.",
+     "No one comes here by accident. What brought you?",
+     "The aurora speaks to those who listen. Don't listen."},
+
+    { 700, 1050, "Tanglewood",   false,
+     "The forest swallowed this town generations ago. The people stayed anyway.",
+     "Bramblewood thinks they're wild. They should see Tanglewood.",
+     "The trees move at night. Not the wind. The trees themselves.",
+     "A witch lives deeper in. She trades in secrets. The price is always too high.",
+     "Mushrooms grow on everything here. Some are edible. Good luck guessing which."},
+
+    {1350, 1000, "Redrock",      false,
+     "Red dust, red stone, red tempers. Redrock is where you go when nowhere else will have you.",
+     "No law here worth the name. Keep your hand on your purse.",
+     "The fighting pits run every night. Good money if you survive.",
+     "Stonehollow looks down on us. We don't care.",
+     "Bandits, smugglers, and the occasional honest person. Guess which is rarest."},
+
+    {1150,  550, "Ravenshold",   false,
+     "The ravens arrived before the people. They'll be here after.",
+     "Corvids circle the old tower day and night. Scholars say it means nothing.",
+     "Between Frostmere and Greywatch, Ravenshold gets forgotten. We prefer it that way.",
+     "The tower has a library. Most of the books are ruined. The ones that aren't are worse.",
+     "A raven followed me for three days once. It knew my name. I didn't ask how."},
+
+    { 600,  700, "Fenwatch",     false,
+     "Built on stilts above the marsh. The water rises every spring.",
+     "The fen holds bodies from a war nobody remembers.",
+     "Bramblewood is the nearest real town. An hour through the bog if you know the path.",
+     "The bog lights lead you in circles. Follow the raven posts instead.",
+     "Something lives in the deep fen. We don't name it."},
+
+    {1500,  850, "Endgate",      false,
+     "The last town before the eastern sea. Beyond here, there's nothing.",
+     "Ships used to come. The harbor is empty now.",
+     "Ironhearth sends steel. We send it across the water. To whom, I've stopped asking.",
+     "The lighthouse still burns. Nobody lights it. Nobody knows how to stop it.",
+     "Endgate is a good name. This is where the world ends."},
 };
 
 static constexpr int TOWN_COUNT = sizeof(ALL_TOWNS) / sizeof(ALL_TOWNS[0]);

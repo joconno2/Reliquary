@@ -270,6 +270,17 @@ enum class UniqueEffect : int {
     FAVOR_DOUBLED,      // double all favor gains
     CORPSE_EXPLODE,     // enemies explode on death, 3 damage in radius 2
     DREAM_WALK,         // 10% chance enemies skip their turn (Lethis)
+    // Rings/amulets — gameplay-changing
+    CRIT_BLEED,         // crits apply 3-turn bleed
+    PRAYER_HEAL,        // heal 5 HP when you pray
+    DODGE_COUNTER,      // 30% chance to counter-attack when dodging
+    KILL_HASTE,         // +50 speed for 3 turns after a kill
+    MP_SHIELD,          // damage taken from MP before HP (50% ratio)
+    POISON_IMMUNE,      // immune to poison
+    FIRE_IMMUNE,        // immune to burn
+    TELEPORT_STRIKE,    // 15% chance to blink behind target on hit
+    STEALTH_REGEN,      // regen 2 HP/turn while sneaking
+    FEAR_AURA,          // 10% chance nearby enemies flee on your turn
     COUNT
 };
 
@@ -293,6 +304,16 @@ inline const char* unique_effect_description(UniqueEffect ue) {
         case UniqueEffect::FAVOR_DOUBLED:      return "Double all favor gains";
         case UniqueEffect::CORPSE_EXPLODE:     return "Enemies explode on death (3 dmg, r2)";
         case UniqueEffect::DREAM_WALK:         return "10% chance: enemies skip turns";
+        case UniqueEffect::CRIT_BLEED:         return "Critical hits apply bleed (3 turns)";
+        case UniqueEffect::PRAYER_HEAL:        return "Heal 5 HP when you pray";
+        case UniqueEffect::DODGE_COUNTER:      return "30% chance: counter-attack on dodge";
+        case UniqueEffect::KILL_HASTE:         return "+50 speed for 3 turns after a kill";
+        case UniqueEffect::MP_SHIELD:          return "Damage taken from MP first (50%)";
+        case UniqueEffect::POISON_IMMUNE:      return "Immune to poison";
+        case UniqueEffect::FIRE_IMMUNE:        return "Immune to burn";
+        case UniqueEffect::TELEPORT_STRIKE:    return "15% chance: blink behind target on hit";
+        case UniqueEffect::STEALTH_REGEN:      return "Regenerate 2 HP/turn while sneaking";
+        case UniqueEffect::FEAR_AURA:          return "10% chance: nearby enemies flee";
         default: return "";
     }
 }

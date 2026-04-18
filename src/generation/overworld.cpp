@@ -500,6 +500,34 @@ void populate(World& world, TileMap& map, RNG& rng,
         }
     };
 
+    // Helper: place doodads inside buildings (stone floor, near interior walls)
+    auto place_interior = [&](int cx, int cy, int radius, int count,
+                               int sx, int sy, SDL_Color tint = {255,255,255,255}) {
+        int placed = 0;
+        for (int attempt = 0; attempt < count * 15 && placed < count; attempt++) {
+            int tx = cx + rng.range(-radius, radius);
+            int ty = cy + rng.range(-radius, radius);
+            if (!map.in_bounds(tx, ty)) continue;
+            auto tt = map.at(tx, ty).type;
+            if (tt != TileType::FLOOR_STONE && tt != TileType::FLOOR_COBBLE) continue;
+            // Must be near a wall (inside a building)
+            if (!adjacent_to_wall(tx, ty)) continue;
+            // Don't block doors
+            bool near_door = false;
+            for (int dy2 = -1; dy2 <= 1 && !near_door; dy2++)
+                for (int dx2 = -1; dx2 <= 1; dx2++)
+                    if (map.in_bounds(tx+dx2, ty+dy2) &&
+                        (map.at(tx+dx2, ty+dy2).type == TileType::DOOR_CLOSED ||
+                         map.at(tx+dx2, ty+dy2).type == TileType::DOOR_OPEN))
+                        near_door = true;
+            if (near_door) continue;
+            Entity e = world.create();
+            world.add<Position>(e, {tx, ty});
+            world.add<Renderable>(e, {SHEET_TILES, sx, sy, tint, 0});
+            placed++;
+        }
+    };
+
     // Helper: place animated light sources against walls
     auto place_lights = [&](int cx, int cy, int radius, int count, int anim_row) {
         int placed = 0;
@@ -562,6 +590,31 @@ void populate(World& world, TileMap& map, RNG& rng,
                 place_on_open_ground(tx, ty, 50, rng.range(4, 8), rng.range(0, 15), 19);
                 break;
         }
+    }
+
+    // =============================================
+    // BUILDING INTERIORS — furnish shops, smiths, inns, temples
+    // =============================================
+    for (int i = 0; i < TOWN_COUNT; i++) {
+        int tx = ALL_TOWNS[i].x, ty = ALL_TOWNS[i].y;
+
+        // Shop (northwest building): barrels, jars, sacks as "goods on display"
+        place_interior(tx - 8, ty - 7, 5, rng.range(2, 3), 4, 17);  // barrels
+        place_interior(tx - 8, ty - 7, 5, rng.range(1, 2), 2, 17);  // jars
+        place_interior(tx - 8, ty - 7, 5, rng.range(1, 2), 5, 17);  // ore sacks (goods)
+
+        // Blacksmith (northeast building): ore sacks, log piles, brazier
+        place_interior(tx + 8, ty - 7, 5, rng.range(2, 3), 5, 17);  // ore sacks
+        place_interior(tx + 8, ty - 7, 5, rng.range(1, 2), 6, 17);  // log piles
+        place_lights(tx + 8, ty - 7, 5, 1, 1);                       // forge fire
+
+        // Temple (southwest building): jars, braziers
+        place_interior(tx - 8, ty + 6, 5, rng.range(1, 2), 2, 17);  // offering jars
+        place_lights(tx - 8, ty + 6, 5, rng.range(1, 2), 1);        // altar braziers
+
+        // Inn (southeast building): barrels, jars
+        place_interior(tx + 8, ty + 6, 5, rng.range(2, 3), 4, 17);  // ale barrels
+        place_interior(tx + 8, ty + 6, 5, rng.range(1, 2), 2, 17);  // cups/jars
     }
 
     // =============================================
@@ -1022,6 +1075,22 @@ void populate(World& world, TileMap& map, RNG& rng,
         // Lizards (Dust Provinces, warm areas)
         {1100, 1200, 3, 0, 5, "lizard"},
         {900, 1150, 2, 0, 5, "lizard"},
+        // Wolves (Frozen Marches, Greenwood edges)
+        {1050, 350, 3, 4, 3, "wolf"},
+        {600, 650, 2, 4, 3, "wolf"},
+        {700, 900, 2, 4, 3, "wolf"},
+        // Bears (mountain/forest borders)
+        {650, 550, 1, 5, 7, "bear"},
+        {900, 300, 1, 5, 7, "bear"},
+        // Scorpions (deep Dust Provinces)
+        {1000, 1250, 3, 3, 5, "scorpion"},
+        {1200, 1150, 2, 3, 5, "scorpion"},
+        // Snowy owls (Frozen Marches)
+        {1050, 280, 2, 2, 8, "owl"},
+        {850, 350, 2, 2, 8, "owl"},
+        // Boars (Heartlands)
+        {900, 800, 2, 5, 7, "boar"},
+        {1100, 750, 2, 5, 7, "boar"},
     };
     for (auto& h : HERDS) {
         for (int i = 0; i < h.count; i++) {
@@ -1088,6 +1157,439 @@ void populate(World& world, TileMap& map, RNG& rng,
     spawn_ow_npc(850, 700, "Fisherman",
                  "The fish have been strange lately. Eyes where eyes shouldn't be.",
                  NPCRole::FARMER, 1, 6, 20);
+
+    // =============================================
+    // PROCEDURAL LANDMARKS — scatter across the overworld
+    // =============================================
+    // Each landmark type has: terrain painting, optional NPC/enemies, lore.
+    // Placed with minimum spacing (60 tiles apart), avoiding towns and dungeons.
+
+    enum class LandmarkType {
+        RUINS, GRAVEYARD, STANDING_STONES, BANDIT_CAMP, BATTLEFIELD,
+        HERMIT_HUT, ABANDONED_SHRINE, BRIDGE_CROSSING, COUNT
+    };
+
+    struct PlacedLandmark { int x, y; };
+    std::vector<PlacedLandmark> placed;
+
+    auto too_close_to_anything = [&](int x, int y) -> bool {
+        // Towns
+        for (int i = 0; i < TOWN_COUNT; i++) {
+            int dx = x - ALL_TOWNS[i].x, dy = y - ALL_TOWNS[i].y;
+            if (dx*dx + dy*dy < 50*50) return true;
+        }
+        // Dungeons
+        for (auto& de : dungeon_registry) {
+            int dx = x - de.x, dy = y - de.y;
+            if (dx*dx + dy*dy < 40*40) return true;
+        }
+        // Other landmarks
+        for (auto& lm : placed) {
+            int dx = x - lm.x, dy = y - lm.y;
+            if (dx*dx + dy*dy < 60*60) return true;
+        }
+        return false;
+    };
+
+    // Helper: spawn a hostile NPC at a landmark
+    auto spawn_hostile = [&](int x, int y, const char* name, int hp, int dmg, int arm,
+                              int spr_x, int spr_y, int xp_val = 20) {
+        for (int a = 0; a < 15; a++) {
+            int tx = x + rng.range(-3, 3);
+            int ty = y + rng.range(-3, 3);
+            if (!map.in_bounds(tx, ty) || !map.is_walkable(tx, ty)) continue;
+            if (combat::entity_at(world, tx, ty, 0) != NULL_ENTITY) continue;
+            Entity e = world.create();
+            world.add<Position>(e, {tx, ty});
+            world.add<Renderable>(e, {SHEET_ROGUES, spr_x, spr_y, {255,255,255,255}, 5});
+            Stats ms; ms.name = name; ms.hp = hp; ms.hp_max = hp;
+            ms.base_damage = dmg; ms.natural_armor = arm; ms.base_speed = 100; ms.xp_value = xp_val;
+            world.add<Stats>(e, std::move(ms));
+            AI ai; ai.state = AIState::IDLE;
+            world.add<AI>(e, ai);
+            world.add<Energy>(e, {0, 100});
+            world.add<StatusEffects>(e);
+            return;
+        }
+    };
+
+    // Helper: paint a graveyard (headstones + dirt)
+    auto paint_graveyard = [&](int cx, int cy) {
+        for (int dy = -3; dy <= 3; dy++) {
+            for (int dx = -4; dx <= 4; dx++) {
+                int tx = cx + dx, ty = cy + dy;
+                if (!map.in_bounds(tx, ty)) continue;
+                auto& t = map.at(tx, ty);
+                if (t.type != TileType::FLOOR_GRASS && t.type != TileType::FLOOR_DIRT
+                    && t.type != TileType::FLOOR_SAND) continue;
+                t.type = TileType::FLOOR_DIRT;
+            }
+        }
+    };
+
+    // Helper: paint standing stones (ring of rough walls)
+    auto paint_stone_circle = [&](int cx, int cy) {
+        for (int i = 0; i < 6; i++) {
+            float angle = static_cast<float>(i) * 6.2832f / 6.0f;
+            int sx = cx + static_cast<int>(std::cos(angle) * 3);
+            int sy = cy + static_cast<int>(std::sin(angle) * 2);
+            if (map.in_bounds(sx, sy)) {
+                auto& t = map.at(sx, sy);
+                if (t.type == TileType::FLOOR_GRASS || t.type == TileType::FLOOR_DIRT
+                    || t.type == TileType::FLOOR_SAND || t.type == TileType::FLOOR_SNOW)
+                    t.type = TileType::WALL_STONE_ROUGH;
+            }
+        }
+        // Center is stone floor
+        for (int dy = -1; dy <= 1; dy++)
+            for (int dx = -1; dx <= 1; dx++)
+                if (map.in_bounds(cx+dx, cy+dy))
+                    map.at(cx+dx, cy+dy).type = TileType::FLOOR_STONE;
+    };
+
+    // Helper: paint a small hut (3x3 wood walls, door, stone floor inside)
+    auto paint_hut = [&](int cx, int cy) {
+        for (int dy = -1; dy <= 1; dy++)
+            for (int dx = -1; dx <= 1; dx++)
+                if (map.in_bounds(cx+dx, cy+dy))
+                    map.at(cx+dx, cy+dy).type = TileType::FLOOR_STONE;
+        for (int dx = -2; dx <= 2; dx++) {
+            if (map.in_bounds(cx+dx, cy-2)) map.at(cx+dx, cy-2).type = TileType::WALL_WOOD;
+            if (map.in_bounds(cx+dx, cy+2)) map.at(cx+dx, cy+2).type = TileType::WALL_WOOD;
+        }
+        for (int dy = -1; dy <= 1; dy++) {
+            if (map.in_bounds(cx-2, cy+dy)) map.at(cx-2, cy+dy).type = TileType::WALL_WOOD;
+            if (map.in_bounds(cx+2, cy+dy)) map.at(cx+2, cy+dy).type = TileType::WALL_WOOD;
+        }
+        if (map.in_bounds(cx, cy+2)) map.at(cx, cy+2).type = TileType::DOOR_CLOSED;
+    };
+
+    // Helper: paint a battlefield (scattered stone, bone floor)
+    auto paint_battlefield = [&](int cx, int cy) {
+        for (int dy = -4; dy <= 4; dy++) {
+            for (int dx = -5; dx <= 5; dx++) {
+                int tx = cx + dx, ty = cy + dy;
+                if (!map.in_bounds(tx, ty)) continue;
+                auto& t = map.at(tx, ty);
+                if (t.type != TileType::FLOOR_GRASS && t.type != TileType::FLOOR_DIRT) continue;
+                if (rng.chance(30)) t.type = TileType::FLOOR_BONE;
+                else t.type = TileType::FLOOR_DIRT;
+            }
+        }
+    };
+
+    // Helper: paint a bridge crossing (stone path over water)
+    auto paint_bridge = [&](int cx, int cy) {
+        // Small water crossing with cobble path
+        for (int dx = -5; dx <= 5; dx++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                int tx = cx + dx, ty = cy + dy;
+                if (!map.in_bounds(tx, ty)) continue;
+                if (std::abs(dx) <= 1) {
+                    map.at(tx, ty).type = TileType::FLOOR_COBBLE;
+                } else if (std::abs(dy) == 0) {
+                    map.at(tx, ty).type = TileType::FLOOR_COBBLE;
+                } else {
+                    auto& t = map.at(tx, ty);
+                    if (t.type == TileType::FLOOR_GRASS || t.type == TileType::FLOOR_DIRT)
+                        t.type = TileType::WATER;
+                }
+            }
+        }
+    };
+
+    // Lore tables per landmark type
+    static const char* RUIN_LORE[][2] = {
+        {"crumbling journal", "The walls still stand but whoever lived here left in a hurry. The door was barred from outside."},
+        {"broken tablet", "Names are carved here. Dozens of them. The last few are scratched out."},
+        {"faded map fragment", "Roads marked in red. One leads to a place that isn't on any current map."},
+        {"scattered pages", "A merchant's ledger. The last entry reads: 'They came from the north. We couldn't hold.'"},
+    };
+    static const char* GRAVEYARD_LORE[][2] = {
+        {"gravestone", "The inscription is worn smooth. Only the date remains: 312 AR."},
+        {"epitaph", "HERE LIES ONE WHO SOUGHT THE RELIQUARY. THE BRAND CONSUMED THEM."},
+        {"burial marker", "A child's grave. Wildflowers grow here despite the dead soil."},
+        {"cracked headstone", "Seven graves in a row. Same date. Same cause: 'the sickness.'"},
+    };
+    static const char* STONES_LORE[][2] = {
+        {"rune-carved stone", "The symbols predate every language you know. They hum when touched."},
+        {"offering bowl", "Old coins and dried flowers fill the bowl. Someone still visits."},
+        {"etched pillar", "A star map carved into stone. Three constellations are circled."},
+    };
+    static const char* CAMP_LORE[][2] = {
+        {"threatening note", "Stay off the road after dark. We own this stretch."},
+        {"crude map", "Patrol routes and ambush points marked in charcoal. Fresh."},
+        {"stolen purse", "Empty except for a love letter. The handwriting is shaky."},
+    };
+    static const char* BATTLEFIELD_LORE[][2] = {
+        {"rusted sword", "The blade is notched beyond repair. The grip still has finger marks."},
+        {"torn banner", "Blue and gold. You don't recognize the sigil."},
+        {"soldier's last letter", "Tell my son I stood. Tell him I didn't run."},
+        {"cracked shield", "An arrow is still embedded in it. The shaft snapped at the entry."},
+    };
+    static const char* HERMIT_LORE[][2] = {
+        {"hermit's journal", "Day 412. Still no visitors. The birds are enough company."},
+        {"recipe notes", "Moonpetal, ground bone, river clay. Mix under a new moon. For what, it doesn't say."},
+        {"scrawled warning", "Do not follow the lights past the treeline. I learned this the hard way."},
+    };
+    static const char* SHRINE_LORE[][2] = {
+        {"broken idol", "The face has been chiseled off. Someone wanted this god forgotten."},
+        {"faded prayer", "Grant me passage through the dark. I have paid what was asked."},
+        {"offering pile", "Old bones, dried herbs, a lock of hair. Whatever god was here, the faithful were desperate."},
+    };
+    static const char* BRIDGE_LORE[][2] = {
+        {"milestone", "THORNWALL 8 LEAGUES. The distance is wrong by half."},
+        {"traveler's mark", "Safe crossing here. Watch the banks at night."},
+    };
+
+    // Hermit dialogues
+    static const char* HERMIT_DIALOGUE[] = {
+        "I came here to forget. Looks like you came here to remember something.",
+        "Don't mind the wards. They keep out the curious, not the desperate.",
+        "I was a scholar once. Now I'm just old. Ask your question and go.",
+        "The forest talks if you're quiet enough. Mostly it says 'leave.'",
+    };
+
+    // Attempt to place ~50 landmarks across the map
+    int attempts = 0;
+    int landmark_count = 0;
+    int target = 50;
+
+    while (landmark_count < target && attempts < 500) {
+        attempts++;
+        int lx = rng.range(100, map.width() - 100);
+        int ly = rng.range(100, map.height() - 100);
+
+        if (!map.in_bounds(lx, ly) || !map.is_walkable(lx, ly)) continue;
+        if (too_close_to_anything(lx, ly)) continue;
+
+        // Check terrain is natural (not water, not wall)
+        auto tt = map.at(lx, ly).type;
+        if (tt == TileType::WATER || tt == TileType::WALL_STONE_BRICK ||
+            tt == TileType::WALL_STONE_ROUGH || tt == TileType::WALL_WOOD) continue;
+
+        // Pick a type biased by region
+        auto type = static_cast<LandmarkType>(rng.range(0, static_cast<int>(LandmarkType::COUNT) - 1));
+
+        // Region biases: graveyards more common in north, battlefields in heartlands,
+        // bandit camps on roads (east/south), hermits in forests (west)
+        GodId region = get_town_god(lx, ly);
+        if (region == GodId::KHAEL && rng.chance(40)) type = LandmarkType::HERMIT_HUT;
+        if (region == GodId::GATHRUUN && rng.chance(30)) type = LandmarkType::STANDING_STONES;
+        if (region == GodId::SYTHARA && rng.chance(30)) type = LandmarkType::GRAVEYARD;
+        if (region == GodId::MORRETH && rng.chance(30)) type = LandmarkType::BATTLEFIELD;
+        if (region == GodId::OSSREN && rng.chance(30)) type = LandmarkType::BANDIT_CAMP;
+
+        placed.push_back({lx, ly});
+        landmark_count++;
+
+        switch (type) {
+            case LandmarkType::RUINS: {
+                paint_ruin(lx, ly);
+                int li = rng.range(0, 3);
+                place_lore(lx, ly, RUIN_LORE[li][0], RUIN_LORE[li][1]);
+                // 40% chance a scavenger or squatter
+                if (rng.chance(40)) {
+                    spawn_ow_npc(lx, ly, "Scavenger",
+                                 "I was here first. Pick through what's left if you want.",
+                                 NPCRole::FARMER, 5, 6, 25);
+                }
+                break;
+            }
+            case LandmarkType::GRAVEYARD: {
+                paint_graveyard(lx, ly);
+                int li = rng.range(0, 3);
+                place_lore(lx, ly, GRAVEYARD_LORE[li][0], GRAVEYARD_LORE[li][1]);
+                // Spawn 2-3 skeletons
+                int skel_count = rng.range(2, 3);
+                for (int i = 0; i < skel_count; i++)
+                    spawn_hostile(lx, ly, "skeleton", 12, 3, 0, 0, 4, 15);
+                break;
+            }
+            case LandmarkType::STANDING_STONES: {
+                paint_stone_circle(lx, ly);
+                int li = rng.range(0, 2);
+                place_lore(lx, ly, STONES_LORE[li][0], STONES_LORE[li][1]);
+                break;
+            }
+            case LandmarkType::BANDIT_CAMP: {
+                paint_ruin(lx, ly);
+                int li = rng.range(0, 2);
+                place_lore(lx, ly, CAMP_LORE[li][0], CAMP_LORE[li][1]);
+                // 2-3 bandits
+                int bandit_count = rng.range(2, 3);
+                for (int i = 0; i < bandit_count; i++)
+                    spawn_hostile(lx, ly, "bandit", 18, 5, 1, 4, 0, 20);
+                break;
+            }
+            case LandmarkType::BATTLEFIELD: {
+                paint_battlefield(lx, ly);
+                int li = rng.range(0, 3);
+                place_lore(lx, ly, BATTLEFIELD_LORE[li][0], BATTLEFIELD_LORE[li][1]);
+                // Scavengeable gear: drop a random weapon on the ground
+                {
+                    static const char* WPNS[] = {"rusted sword", "dented helm", "broken spear", "notched axe"};
+                    int wi = rng.range(0, 3);
+                    for (int a = 0; a < 10; a++) {
+                        int wx = lx + rng.range(-3, 3), wy = ly + rng.range(-3, 3);
+                        if (!map.in_bounds(wx, wy) || !map.is_walkable(wx, wy)) continue;
+                        Entity e = world.create();
+                        world.add<Position>(e, {wx, wy});
+                        world.add<Renderable>(e, {SHEET_ITEMS, 0, 0, {180,160,140,255}, 1});
+                        Item item; item.name = WPNS[wi];
+                        item.description = "Scavenged from an old battlefield. Barely functional.";
+                        item.type = ItemType::WEAPON; item.slot = EquipSlot::MAIN_HAND;
+                        item.damage_bonus = rng.range(1, 3); item.gold_value = rng.range(3, 10);
+                        item.identified = true;
+                        world.add<Item>(e, std::move(item));
+                        break;
+                    }
+                }
+                // Chance of undead
+                if (rng.chance(50)) {
+                    spawn_hostile(lx, ly, "ghoul", 20, 5, 1, 2, 4, 20);
+                }
+                break;
+            }
+            case LandmarkType::HERMIT_HUT: {
+                paint_hut(lx, ly);
+                int li = rng.range(0, 2);
+                place_lore(lx, ly, HERMIT_LORE[li][0], HERMIT_LORE[li][1]);
+                int di = rng.range(0, 3);
+                spawn_ow_npc(lx, ly, "Hermit", HERMIT_DIALOGUE[di],
+                             NPCRole::FARMER, 2, 5, 20);
+                break;
+            }
+            case LandmarkType::ABANDONED_SHRINE: {
+                paint_stone_circle(lx, ly);
+                int li = rng.range(0, 2);
+                place_lore(lx, ly, SHRINE_LORE[li][0], SHRINE_LORE[li][1]);
+                // Place an actual shrine tile at center
+                if (map.in_bounds(lx, ly)) {
+                    map.at(lx, ly).type = TileType::SHRINE;
+                    GodId shrine_god = static_cast<GodId>(rng.range(0, GOD_COUNT - 1));
+                    map.at(lx, ly).variant = static_cast<uint8_t>(shrine_god);
+                }
+                break;
+            }
+            case LandmarkType::BRIDGE_CROSSING: {
+                paint_bridge(lx, ly);
+                int li = rng.range(0, 1);
+                place_lore(lx, ly, BRIDGE_LORE[li][0], BRIDGE_LORE[li][1]);
+                break;
+            }
+            default: break;
+        }
+    }
+
+    // =============================================
+    // ROADSIDE CONTENT — campfires, wagons, mile markers along roads
+    // =============================================
+    {
+        // Scatter roadside content along road tiles (not near towns)
+        int roadside_placed = 0;
+        int roadside_target = 30;
+        for (int attempt = 0; attempt < 400 && roadside_placed < roadside_target; attempt++) {
+            int rx = rng.range(100, map.width() - 100);
+            int ry = rng.range(100, map.height() - 100);
+            if (!map.in_bounds(rx, ry)) continue;
+            auto rt = map.at(rx, ry).type;
+            // Must be on or adjacent to a road
+            if (rt != TileType::FLOOR_DIRT && rt != TileType::FLOOR_COBBLE &&
+                rt != TileType::FLOOR_SAND) continue;
+            // Not near towns
+            if (near_town(rx, ry, 35) >= 0) continue;
+            // Not near other roadside content or landmarks
+            bool too_close = false;
+            for (auto& lm : placed) {
+                int dx = rx - lm.x, dy = ry - lm.y;
+                if (dx*dx + dy*dy < 30*30) { too_close = true; break; }
+            }
+            if (too_close) continue;
+            // Find an adjacent walkable off-road tile for the doodad
+            int ox = rx, oy = ry;
+            for (int dy = -1; dy <= 1 && ox == rx; dy++) {
+                for (int dx = -1; dx <= 1; dx++) {
+                    if (dx == 0 && dy == 0) continue;
+                    int tx = rx + dx, ty = ry + dy;
+                    if (!map.in_bounds(tx, ty)) continue;
+                    auto tt = map.at(tx, ty).type;
+                    if (tt == TileType::FLOOR_GRASS || tt == TileType::FLOOR_SNOW ||
+                        tt == TileType::FLOOR_SAND || tt == TileType::FLOOR_DIRT) {
+                        ox = tx; oy = ty; break;
+                    }
+                }
+            }
+            if (ox == rx && oy == ry) continue; // no adjacent open tile
+
+            placed.push_back({rx, ry});
+            roadside_placed++;
+
+            unsigned h = static_cast<unsigned>(rx * 7919 + ry * 1301);
+            int type = h % 5;
+
+            switch (type) {
+                case 0: // Campfire remains (burnt-out fire pit)
+                    place_lore(ox, oy, "cold campfire",
+                               "Ashes and boot prints. Someone camped here recently.");
+                    break;
+                case 1: // Abandoned wagon
+                {
+                    // Barrel + log pile = wagon remains
+                    Entity e1 = world.create();
+                    world.add<Position>(e1, {ox, oy});
+                    world.add<Renderable>(e1, {SHEET_TILES, 4, 17, {180, 160, 140, 255}, 0}); // barrel
+                    if (map.in_bounds(ox+1, oy) && map.is_walkable(ox+1, oy)) {
+                        Entity e2 = world.create();
+                        world.add<Position>(e2, {ox+1, oy});
+                        world.add<Renderable>(e2, {SHEET_TILES, 6, 17, {160, 140, 120, 255}, 0}); // logs
+                    }
+                    break;
+                }
+                case 2: // Mile marker
+                {
+                    // Find nearest town for the sign text
+                    int best_ti = -1; int best_d = 9999;
+                    for (int ti = 0; ti < TOWN_COUNT; ti++) {
+                        int dx = rx - ALL_TOWNS[ti].x, dy = ry - ALL_TOWNS[ti].y;
+                        int d = dx*dx + dy*dy;
+                        if (d < best_d) { best_d = d; best_ti = ti; }
+                    }
+                    if (best_ti >= 0) {
+                        Entity e = world.create();
+                        world.add<Position>(e, {ox, oy});
+                        world.add<Renderable>(e, {SHEET_TILES, 7, 17, {255,255,255,255}, 3});
+                        char sbuf[128];
+                        int dist = static_cast<int>(std::sqrt(static_cast<float>(best_d)) / 20);
+                        snprintf(sbuf, sizeof(sbuf), "%s, %d leagues %s.",
+                                 ALL_TOWNS[best_ti].name, std::max(1, dist),
+                                 compass_dir(rx, ry, ALL_TOWNS[best_ti].x, ALL_TOWNS[best_ti].y));
+                        world.add<Sign>(e, {sbuf});
+                    }
+                    break;
+                }
+                case 3: // Supply cache
+                {
+                    Entity e = world.create();
+                    world.add<Position>(e, {ox, oy});
+                    world.add<Renderable>(e, {SHEET_TILES, 5, 17, {200, 190, 170, 255}, 0}); // sack
+                    break;
+                }
+                case 4: // Roadside shrine (small stone)
+                {
+                    Entity e = world.create();
+                    world.add<Position>(e, {ox, oy});
+                    world.add<Renderable>(e, {SHEET_TILES, rng.range(0, 1), 18, {200, 200, 210, 255}, 0}); // rock
+                    GodId road_god = get_town_god(rx, ry);
+                    auto& gi = get_god_info(road_god);
+                    char pbuf[128];
+                    snprintf(pbuf, sizeof(pbuf), "A small %s shrine. %s watches this road.", gi.name, gi.name);
+                    place_lore(ox, oy, "roadside prayer stone", pbuf);
+                    break;
+                }
+            }
+        }
+    }
 }
 
 // =============================================

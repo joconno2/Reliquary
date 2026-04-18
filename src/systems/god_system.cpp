@@ -695,6 +695,18 @@ bool execute_prayer(World& world, Entity player, TileMap& map, RNG& rng,
         default: break;
     }
 
+    // Prayer heal (unique amulet): heal 5 HP on successful prayer
+    if (acted && world.has<Stats>(player) && combat::has_unique_effect(world, player, UniqueEffect::PRAYER_HEAL)) {
+        auto& ps = world.get<Stats>(player);
+        int heal = std::min(5, ps.hp_max - ps.hp);
+        if (heal > 0) {
+            ps.hp += heal;
+            char hbuf[64];
+            snprintf(hbuf, sizeof(hbuf), "Your faith mends you. (+%d HP)", heal);
+            log.add(hbuf, {100, 200, 100, 255});
+        }
+    }
+
     // Prayer skill XP
     if (acted && world.has<Skills>(player)) {
         world.get<Skills>(player).grant_xp(SkillId::PRAYER, 3);

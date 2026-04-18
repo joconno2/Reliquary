@@ -2,6 +2,7 @@
 #include "core/ecs.h"
 #include "core/rng.h"
 #include "ui/message_log.h"
+#include "components/item.h"
 
 namespace combat {
 
@@ -11,6 +12,7 @@ struct AttackResult {
     bool critical = false;
     bool killed = false;
     int quest_target_id = -1; // QuestId if killed entity was a quest target, else -1
+    bool teleport_behind = false; // unique ring: blinked behind target
 };
 
 // Resolve a melee attack from attacker to defender
@@ -26,5 +28,8 @@ Entity entity_at(World& world, int x, int y, Entity ignore = 0);
 
 // Kill an entity — remove combat components, add corpse. Returns XP value.
 int kill(World& world, Entity e, MessageLog& log);
+
+// Check if an entity has any equipped item with the given unique effect
+bool has_unique_effect(World& world, Entity e, UniqueEffect ue);
 
 } // namespace combat

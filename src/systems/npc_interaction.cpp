@@ -106,6 +106,57 @@ bool interact(Context& ctx, Entity target, int target_x, int target_y) {
         }
     }
 
+    // World-reactive dialogue: NPCs comment on quest progress (30% chance per bump)
+    if (ctx.rng.chance(30)) {
+        const char* reaction = nullptr;
+        auto qs = [&](QuestId q) { return ctx.journal.get_state(q); };
+
+        // Late game: fragments and Sepulchre
+        if (qs(QuestId::MQ_17_CLAIM_RELIQUARY) == QuestState::FINISHED)
+            reaction = "You did it. I can feel the difference. The air is lighter.";
+        else if (qs(QuestId::MQ_15_THE_SEPULCHRE) == QuestState::ACTIVE)
+            reaction = "You're going into the Sepulchre? Gods help you.";
+        else if (qs(QuestId::MQ_14_HOLLOWGATE_SEAL) == QuestState::FINISHED)
+            reaction = "Word is the seal at Hollowgate broke open. People are scared.";
+        else if (qs(QuestId::MQ_13_SUNKEN_FRAGMENT) == QuestState::FINISHED)
+            reaction = "Three fragments. I can see it in your eyes. You're changing.";
+        else if (qs(QuestId::MQ_11_MOLTEN_TRIAL) == QuestState::FINISHED)
+            reaction = "Two fragments. The ground trembles less now. Or more. I can't tell.";
+        else if (qs(QuestId::MQ_09_OSSUARY_FRAGMENT) == QuestState::FINISHED)
+            reaction = "I heard you found something in the Catacombs. Something old.";
+        else if (qs(QuestId::MQ_08_CATACOMBS_GATE) == QuestState::FINISHED)
+            reaction = "The Catacombs gate is open? That's been sealed since before I was born.";
+        else if (qs(QuestId::MQ_07_FROZEN_KEY) == QuestState::FINISHED)
+            reaction = "A key from the ice? The old stories are true, then.";
+        else if (qs(QuestId::MQ_05_STONEKEEP_DEPTHS) == QuestState::FINISHED)
+            reaction = "Stonekeep. I heard the inscription drove the last person who read it mad.";
+        else if (qs(QuestId::MQ_04_GREYWATCH_WARNING) == QuestState::FINISHED)
+            reaction = "Captain Voss sent word. Whatever you told him has the garrison on alert.";
+        else if (qs(QuestId::MQ_03_ASHFORD_TABLET) == QuestState::FINISHED)
+            reaction = "You found the tablet? The scholars will want to hear about that.";
+        else if (qs(QuestId::MQ_01_BARROW_WIGHT) == QuestState::FINISHED)
+            reaction = "You cleared the Barrow? We've been hearing less noise from that direction.";
+
+        // God-aware reactions (if no quest reaction fired)
+        if (!reaction && ctx.world.has<GodAlignment>(ctx.player)) {
+            auto& ga = ctx.world.get<GodAlignment>(ctx.player);
+            if (ga.favor >= 75) {
+                auto& gi = get_god_info(ga.god);
+                static char gbuf[128];
+                snprintf(gbuf, sizeof(gbuf), "There's something about you. %s's mark is strong.", gi.name);
+                reaction = gbuf;
+            } else if (ga.favor <= -50 && ga.god != GodId::NONE) {
+                reaction = "Something's wrong with your brand. It's dimmer than it should be.";
+            }
+        }
+
+        if (reaction) {
+            char rbuf[256];
+            snprintf(rbuf, sizeof(rbuf), "%s: \"%s\"", npc.name.c_str(), reaction);
+            ctx.log.add(rbuf, {200, 190, 150, 255});
+        }
+    }
+
     // Show NPC dialogue — cycle through lines on repeat visits
     const std::string& line = npc.next_line();
     char buf[256];

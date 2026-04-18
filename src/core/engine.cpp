@@ -742,6 +742,113 @@ void Engine::generate_level() {
             return;
         }
         map_ = mresult.map; // copy (preserves cache, gets fresh explored state)
+
+        // Province-specific building materials: restyle walls near each town
+        for (int ti = 0; ti < TOWN_COUNT; ti++) {
+            GodId god = get_town_god(ALL_TOWNS[ti].x, ALL_TOWNS[ti].y);
+            TileType wall_type = TileType::WALL_STONE_BRICK; // default
+            TileType floor_type = TileType::FLOOR_STONE;
+            switch (god) {
+                case GodId::KHAEL:    wall_type = TileType::WALL_WOOD; break;
+                case GodId::GATHRUUN: wall_type = TileType::WALL_STONE_ROUGH; break;
+                case GodId::SYTHARA:  wall_type = TileType::WALL_SANDSTONE; break;
+                case GodId::OSSREN:   wall_type = TileType::WALL_STONE_ROUGH; break;
+                case GodId::SOLETH:   wall_type = TileType::WALL_STONE_BRICK; break;
+                default: break;
+            }
+            if (wall_type != TileType::WALL_STONE_BRICK) {
+                int cx = ALL_TOWNS[ti].x, cy = ALL_TOWNS[ti].y;
+                int r = 25; // town radius
+                for (int dy = -r; dy <= r; dy++) {
+                    for (int dx = -r; dx <= r; dx++) {
+                        int tx = cx + dx, ty = cy + dy;
+                        if (!map_.in_bounds(tx, ty)) continue;
+                        auto& t = map_.at(tx, ty);
+                        if (t.type == TileType::WALL_STONE_BRICK)
+                            t.type = wall_type;
+                    }
+                }
+            }
+            // Frozen Marches: snow ground around town
+            if (god == GodId::GATHRUUN) {
+                int cx = ALL_TOWNS[ti].x, cy = ALL_TOWNS[ti].y;
+                for (int dy = -20; dy <= 20; dy++) {
+                    for (int dx = -20; dx <= 20; dx++) {
+                        int tx = cx + dx, ty = cy + dy;
+                        if (!map_.in_bounds(tx, ty)) continue;
+                        auto& t = map_.at(tx, ty);
+                        if (t.type == TileType::FLOOR_GRASS)
+                            t.type = TileType::FLOOR_SNOW;
+                    }
+                }
+            }
+            // Dust Provinces: sand ground
+            if (god == GodId::SYTHARA) {
+                int cx = ALL_TOWNS[ti].x, cy = ALL_TOWNS[ti].y;
+                for (int dy = -20; dy <= 20; dy++) {
+                    for (int dx = -20; dx <= 20; dx++) {
+                        int tx = cx + dx, ty = cy + dy;
+                        if (!map_.in_bounds(tx, ty)) continue;
+                        auto& t = map_.at(tx, ty);
+                        if (t.type == TileType::FLOOR_GRASS)
+                            t.type = TileType::FLOOR_SAND;
+                    }
+                }
+            }
+        }
+
+        // Province road restyle: upgrade dirt roads by region
+        for (int y = 0; y < map_.height(); y++) {
+            for (int x = 0; x < map_.width(); x++) {
+                auto& t = map_.at(x, y);
+                if (t.type != TileType::FLOOR_DIRT) continue;
+                GodId region = get_town_god(x, y);
+                switch (region) {
+                    case GodId::MORRETH: // Heartlands: cobblestone trade roads
+                        t.type = TileType::FLOOR_COBBLE;
+                        break;
+                    case GodId::SYTHARA: // Dust Provinces: sand tracks
+                        t.type = TileType::FLOOR_SAND;
+                        break;
+                    case GodId::GATHRUUN: // Frozen Marches: dirt stays (visible against snow)
+                        break;
+                    default: break; // other regions keep dirt
+                }
+            }
+        }
+
+        // Province ground and vegetation pass: restyle terrain by region
+        for (int y = 0; y < map_.height(); y++) {
+            for (int x = 0; x < map_.width(); x++) {
+                auto& t = map_.at(x, y);
+                if (t.type != TileType::FLOOR_GRASS) continue;
+                GodId region = get_town_god(x, y);
+                // Position hash for deterministic variation
+                unsigned h = static_cast<unsigned>(x * 7919 + y * 1301);
+                switch (region) {
+                    case GodId::GATHRUUN: // Frozen Marches: snow, sparse trees
+                        if ((h % 100) < 70) t.type = TileType::FLOOR_SNOW;
+                        else if ((h % 100) < 80) t.type = TileType::FLOOR_ICE;
+                        break;
+                    case GodId::SYTHARA: // Dust Provinces: sand, dry dirt
+                        if ((h % 100) < 60) t.type = TileType::FLOOR_SAND;
+                        else if ((h % 100) < 80) t.type = TileType::FLOOR_DIRT;
+                        break;
+                    case GodId::KHAEL: // Greenwood: dense vegetation, extra trees
+                        if ((h % 100) < 8) t.type = TileType::TREE;
+                        else if ((h % 100) < 12) t.type = TileType::BRUSH;
+                        break;
+                    case GodId::OSSREN: // Iron Coast: rocky dirt, some cobble roads
+                        if ((h % 100) < 20) t.type = TileType::FLOOR_DIRT;
+                        break;
+                    case GodId::SOLETH: // Pale Reach: mix of grass and dirt, sparse
+                        if ((h % 100) < 15) t.type = TileType::FLOOR_DIRT;
+                        break;
+                    default: break; // Heartlands stays green
+                }
+            }
+        }
+
         start_x = mresult.start_x;
         start_y = mresult.start_y;
         rooms_.clear();
@@ -816,6 +923,36 @@ void Engine::generate_level() {
                 npc.idle_lines.push_back(pool[i]);
         };
 
+        // Append town-specific rumor lines based on NPC position
+        auto add_town_rumors = [](NPC& npc, int x, int y) {
+            int ti = near_town(x, y);
+            if (ti < 0 || ti >= TOWN_COUNT) return;
+            auto& td = ALL_TOWNS[ti];
+            npc.idle_lines.push_back(td.rumor1);
+            npc.idle_lines.push_back(td.rumor2);
+            npc.idle_lines.push_back(td.rumor3);
+            npc.idle_lines.push_back(td.nearby_warning);
+        };
+
+        // NPC name generator: deterministic from position hash
+        static const char* FIRST_NAMES[] = {
+            "Arden", "Bram", "Cora", "Dael", "Edrin", "Fenn", "Greta", "Holt",
+            "Iona", "Jace", "Kael", "Lira", "Maren", "Nils", "Orin", "Petra",
+            "Quinn", "Ren", "Sera", "Thom", "Una", "Voss", "Wynn", "Xara",
+            "Yara", "Zev", "Asta", "Brin", "Cael", "Dara", "Elka", "Falk",
+            "Gale", "Hanna", "Idra", "Jorr", "Kira", "Leif", "Mira", "Nara",
+            "Osmund", "Pell", "Rook", "Sable", "Tarn", "Ulric", "Vela", "Wren",
+        };
+        static constexpr int NAME_COUNT = sizeof(FIRST_NAMES) / sizeof(FIRST_NAMES[0]);
+
+        auto gen_npc_name = [](const char* role, int x, int y) -> std::string {
+            unsigned h = static_cast<unsigned>(x * 7919 + y * 1301 + x * y * 31);
+            std::string result = role;
+            result += " ";
+            result += FIRST_NAMES[h % NAME_COUNT];
+            return result;
+        };
+
         // Track which main quest slots have been assigned so each is assigned once
         bool mq_assigned[17] = {};
         // Side quest assignment tracking (for Thornwall side quests)
@@ -838,10 +975,13 @@ void Engine::generate_level() {
             switch (me.glyph) {
                 case 'S':
                     npc_comp.role = NPCRole::SHOPKEEPER;
-                    npc_comp.name = "Shopkeeper";
+                    npc_comp.name = gen_npc_name("Shopkeeper", me.x, me.y);
                     npc_comp.dialogue = "Browse, if you like. I don't haggle.";
                     set_idle(npc_comp, SHOPKEEPER_IDLE, 6);
-                    sx = 2; sy = 6; // shopkeep sprite (row 7)
+                    { int sv = (me.x * 11 + me.y * 7) % 3;
+                      if (sv == 0) { sx = 2; sy = 6; }      // robed merchant
+                      else if (sv == 1) { sx = 3; sy = 6; }  // hooded merchant
+                      else { sx = 1; sy = 6; } }             // cloaked merchant
                     // Side quest: Ashford shopkeeper — rats in the cellar
                     if (town_idx == 1 && !sq_ratcellar_assigned) {
                         npc_comp.quest_id = static_cast<int>(QuestId::SQ_RAT_CELLAR);
@@ -851,7 +991,7 @@ void Engine::generate_level() {
                     break;
                 case 'B':
                     npc_comp.role = NPCRole::BLACKSMITH;
-                    npc_comp.name = "Blacksmith";
+                    npc_comp.name = gen_npc_name("Blacksmith", me.x, me.y);
                     npc_comp.dialogue = pick_dialogue(BLACKSMITH_DIALOGUE, 3, me.x, me.y);
                     set_idle(npc_comp, BLACKSMITH_IDLE, 5);
                     sx = 4; sy = 5; // blacksmith sprite (row 6)
@@ -870,10 +1010,13 @@ void Engine::generate_level() {
                     break;
                 case 'P':
                     npc_comp.role = NPCRole::PRIEST;
-                    npc_comp.name = "Scholar";
+                    npc_comp.name = gen_npc_name("Scholar", me.x, me.y);
                     npc_comp.dialogue = pick_dialogue(SCHOLAR_DIALOGUE, 3, me.x, me.y);
                     set_idle(npc_comp, SCHOLAR_IDLE, 5);
-                    sx = 5; sy = 5; // scholar sprite (row 6)
+                    { int pv = (me.x * 17 + me.y * 5) % 3;
+                      if (pv == 0) { sx = 5; sy = 5; }      // robed scholar
+                      else if (pv == 1) { sx = 6; sy = 6; }  // hooded sage
+                      else { sx = 4; sy = 4; } }             // dark robed
                     // MQ_02: Thornwall scholar
                     if (town_idx == 0 && !mq_assigned[1]) {
                         npc_comp.quest_id = static_cast<int>(QuestId::MQ_02_SCHOLAR_CLUE);
@@ -920,10 +1063,14 @@ void Engine::generate_level() {
                     break;
                 case 'F':
                     npc_comp.role = NPCRole::FARMER;
-                    npc_comp.name = "Farmer";
+                    npc_comp.name = gen_npc_name("Farmer", me.x, me.y);
                     npc_comp.dialogue = pick_dialogue(FARMER_DIALOGUE, 3, me.x, me.y);
                     set_idle(npc_comp, FARMER_IDLE, 7);
-                    sx = 0; sy = 5; // farmer sprite (row 6)
+                    { int fv = (me.x * 13 + me.y * 3) % 4;
+                      if (fv == 0) { sx = 0; sy = 5; }      // peasant
+                      else if (fv == 1) { sx = 1; sy = 5; }  // worker
+                      else if (fv == 2) { sx = 6; sy = 5; }  // woman
+                      else { sx = 5; sy = 6; } }             // old man
                     // Side quest: Thornwall farmer
                     if (town_idx == 0 && !sq_farmer_assigned) {
                         npc_comp.quest_id = static_cast<int>(QuestId::SQ_MISSING_PERSON);
@@ -945,7 +1092,7 @@ void Engine::generate_level() {
                     break;
                 case 'G':
                     npc_comp.role = NPCRole::GUARD;
-                    npc_comp.name = "Guard";
+                    npc_comp.name = gen_npc_name("Guard", me.x, me.y);
                     npc_comp.dialogue = pick_dialogue(GUARD_DIALOGUE, 3, me.x, me.y);
                     set_idle(npc_comp, GUARD_IDLE, 7);
                     { // vary guard sprites: knight, female knight, female knight helmetless
@@ -999,20 +1146,26 @@ void Engine::generate_level() {
                     break;
                 case 'W':
                     npc_comp.role = NPCRole::FARMER;
-                    npc_comp.name = "Villager";
+                    npc_comp.name = gen_npc_name("Villager", me.x, me.y);
                     npc_comp.dialogue = pick_dialogue(FARMER_DIALOGUE, 3, me.x, me.y);
-                    sx = 1; sy = 6;
+                    set_idle(npc_comp, FARMER_IDLE, 7);
+                    { int wv = (me.x * 9 + me.y * 19) % 5;
+                      if (wv == 0) { sx = 1; sy = 6; }      // cloaked
+                      else if (wv == 1) { sx = 0; sy = 6; }  // hooded
+                      else if (wv == 2) { sx = 6; sy = 5; }  // woman
+                      else if (wv == 3) { sx = 0; sy = 5; }  // peasant
+                      else { sx = 5; sy = 6; } }             // elder
                     break;
                 case 'H':
                     npc_comp.role = NPCRole::PRIEST; // herbalist uses priest role
-                    npc_comp.name = "Herbalist";
+                    npc_comp.name = gen_npc_name("Herbalist", me.x, me.y);
                     npc_comp.dialogue = "The wilds hold remedies for every ill, if you know where to look.";
                     set_idle(npc_comp, HERBALIST_IDLE, 4);
                     sx = 3; sy = 6;
                     break;
                 case 'M':
                     npc_comp.role = NPCRole::SHOPKEEPER;
-                    npc_comp.name = "Merchant";
+                    npc_comp.name = gen_npc_name("Merchant", me.x, me.y);
                     npc_comp.dialogue = "I trade in what the road provides. Take a look.";
                     set_idle(npc_comp, SHOPKEEPER_IDLE, 6);
                     sx = 2; sy = 6;
@@ -1031,8 +1184,20 @@ void Engine::generate_level() {
             npc_comp.home_x = me.x;
             npc_comp.home_y = me.y;
             npc_comp.god_affiliation = get_town_god(me.x, me.y);
+            add_town_rumors(npc_comp, me.x, me.y);
             world_.add<NPC>(npc, std::move(npc_comp));
-            world_.add<Renderable>(npc, {SHEET_ROGUES, sx, sy, {255, 255, 255, 255}, 5});
+            // Province tint: subtle color shift per region
+            SDL_Color npc_tint = {255, 255, 255, 255};
+            GodId npc_god = get_town_god(me.x, me.y);
+            switch (npc_god) {
+                case GodId::GATHRUUN: npc_tint = {210, 220, 240, 255}; break; // cold blue
+                case GodId::SYTHARA:  npc_tint = {230, 210, 180, 255}; break; // dusty yellow
+                case GodId::KHAEL:    npc_tint = {210, 230, 200, 255}; break; // forest green
+                case GodId::OSSREN:   npc_tint = {220, 210, 200, 255}; break; // soot grey
+                case GodId::SOLETH:   npc_tint = {240, 230, 210, 255}; break; // warm gold
+                default: break;
+            }
+            world_.add<Renderable>(npc, {SHEET_ROGUES, sx, sy, npc_tint, 5});
 
             // NPCs have stats but aren't killable (no AI component = won't fight)
             Stats npc_stats;
@@ -1070,6 +1235,7 @@ void Engine::generate_level() {
                     set_idle(nc, HERBALIST_IDLE, 4);
                 else if (role == NPCRole::SHOPKEEPER)
                     set_idle(nc, SHOPKEEPER_IDLE, 6);
+                add_town_rumors(nc, cx, cy);
                 world_.add<NPC>(e, std::move(nc));
                 world_.add<Renderable>(e, {SHEET_ROGUES, spr_x, spr_y, {255, 255, 255, 255}, 5});
                 Stats ns;
@@ -1092,9 +1258,11 @@ void Engine::generate_level() {
             "The roads are getting worse. Good for business, bad for living.",
         };
         for (int i = 0; i < TOWN_COUNT; i++) {
-            spawn_extra_npc(ALL_TOWNS[i].x, ALL_TOWNS[i].y, "Herbalist", NPCRole::PRIEST,
+            auto herb_name = gen_npc_name("Herbalist", ALL_TOWNS[i].x + 1, ALL_TOWNS[i].y);
+            auto merch_name = gen_npc_name("Merchant", ALL_TOWNS[i].x, ALL_TOWNS[i].y + 1);
+            spawn_extra_npc(ALL_TOWNS[i].x, ALL_TOWNS[i].y, herb_name.c_str(), NPCRole::PRIEST,
                             HERBALIST_LINES[rng_.range(0, 2)], 3, 6);
-            spawn_extra_npc(ALL_TOWNS[i].x, ALL_TOWNS[i].y, "Merchant", NPCRole::SHOPKEEPER,
+            spawn_extra_npc(ALL_TOWNS[i].x, ALL_TOWNS[i].y, merch_name.c_str(), NPCRole::SHOPKEEPER,
                             MERCHANT_LINES[rng_.range(0, 2)], 2, 6);
         }
 
@@ -2741,11 +2909,7 @@ void Engine::try_move_player(int dx, int dy) {
             char tbuf[128];
             snprintf(tbuf, sizeof(tbuf), "You arrive at %s.", ALL_TOWNS[ti].name);
             log_.add(tbuf, {200, 190, 160, 255});
-            // Province flavor
-            const char* province = get_province_name(nx, ny);
-            char pbuf[128];
-            snprintf(pbuf, sizeof(pbuf), "A settlement in the %s.", province);
-            log_.add(pbuf, {160, 155, 140, 255});
+            log_.add(ALL_TOWNS[ti].description, {160, 155, 140, 255});
         }
     }
 
@@ -3374,6 +3538,18 @@ void Engine::process_turn() {
                 // Monster missed: grant dodge skill XP
                 if (world_.has<Skills>(player_))
                     grant_skill_xp(SkillId::DODGE, 2);
+                // Dodge counter (unique ring): 30% chance to counter-attack
+                if (combat::has_unique_effect(world_, player_, UniqueEffect::DODGE_COUNTER) &&
+                    rng_.chance(30) && world_.has<Stats>(e) && world_.get<Stats>(e).hp > 0) {
+                    int counter_dmg = 3 + (world_.has<Stats>(player_) ? world_.get<Stats>(player_).attr(Attr::DEX) / 2 : 0);
+                    world_.get<Stats>(e).hp -= counter_dmg;
+                    char cbuf[64];
+                    snprintf(cbuf, sizeof(cbuf), "You counter-attack! (%d)", counter_dmg);
+                    log_.add(cbuf, {220, 200, 140, 255});
+                    audio_.play_hit();
+                    if (world_.get<Stats>(e).hp <= 0)
+                        combat::kill(world_, e, log_);
+                }
             }
 
             // Heavy armor XP: gain when hit while wearing heavy armor
@@ -3390,8 +3566,10 @@ void Engine::process_turn() {
                 auto& fx = world_.get<StatusEffects>(player_);
                 bool inflicted = false;
                 SfxId inflict_sfx = SfxId::POISON;
+                bool poison_immune = combat::has_unique_effect(world_, player_, UniqueEffect::POISON_IMMUNE);
+                bool fire_immune = combat::has_unique_effect(world_, player_, UniqueEffect::FIRE_IMMUNE);
                 // Poison: spiders, naga, snakes
-                if ((mname == "giant spider" || mname == "naga" || mname == "snake") && rng_.chance(25)) {
+                if (!poison_immune && (mname == "giant spider" || mname == "naga" || mname == "snake") && rng_.chance(25)) {
                     fx.add(StatusType::POISON, 2, 5); inflicted = true; inflict_sfx = SfxId::POISON;
                 }
                 // Bleed: ghouls, wolves, bears
@@ -3399,7 +3577,7 @@ void Engine::process_turn() {
                     fx.add(StatusType::BLEED, 1, 8); inflicted = true; inflict_sfx = SfxId::CRIT;
                 }
                 // Burn: dragons
-                else if (mname == "dragon" && rng_.chance(30)) {
+                else if (!fire_immune && mname == "dragon" && rng_.chance(30)) {
                     fx.add(StatusType::BURN, 3, 4); inflicted = true; inflict_sfx = SfxId::BURN;
                 }
                 // Stun: trolls, orc warchief (heavy hit)
@@ -3438,6 +3616,43 @@ void Engine::process_turn() {
                 auto& ps = world_.get<Stats>(player_);
                 if (ps.hp > 0 && ps.hp < ps.hp_max)
                     ps.hp = std::min(ps.hp_max, ps.hp + 1);
+            }
+            // Unique item regen: 1 HP every 5 turns
+            if (e == player_ && game_turn_ % 5 == 0 &&
+                combat::has_unique_effect(world_, player_, UniqueEffect::REGEN) &&
+                world_.has<Stats>(player_)) {
+                auto& ps = world_.get<Stats>(player_);
+                if (ps.hp > 0 && ps.hp < ps.hp_max)
+                    ps.hp = std::min(ps.hp_max, ps.hp + 1);
+            }
+            // Stealth regen (unique amulet): 2 HP/turn while sneaking
+            if (e == player_ && sneaking_ &&
+                combat::has_unique_effect(world_, player_, UniqueEffect::STEALTH_REGEN) &&
+                world_.has<Stats>(player_)) {
+                auto& ps = world_.get<Stats>(player_);
+                if (ps.hp > 0 && ps.hp < ps.hp_max)
+                    ps.hp = std::min(ps.hp_max, ps.hp + 2);
+            }
+            // Fear aura (unique amulet): 10% chance nearby enemies flee
+            if (e == player_ && game_turn_ % 3 == 0 &&
+                combat::has_unique_effect(world_, player_, UniqueEffect::FEAR_AURA) &&
+                world_.has<Position>(player_)) {
+                auto& pp = world_.get<Position>(player_);
+                auto& ai_fear = world_.pool<AI>();
+                for (size_t fi = 0; fi < ai_fear.size(); fi++) {
+                    Entity fe = ai_fear.entity_at(fi);
+                    if (!world_.has<Position>(fe)) continue;
+                    auto& fp = world_.get<Position>(fe);
+                    if (std::abs(fp.x - pp.x) <= 2 && std::abs(fp.y - pp.y) <= 2 &&
+                        ai_fear.at_index(fi).state == AIState::HUNTING && rng_.chance(10)) {
+                        ai_fear.at_index(fi).state = AIState::FLEEING;
+                    }
+                }
+            }
+            // Haste turns: tick down
+            if (e == player_ && world_.has<Stats>(player_)) {
+                auto& ps = world_.get<Stats>(player_);
+                if (ps.haste_turns > 0) ps.haste_turns--;
             }
             // Skeleton shield — 25% chance to block melee attacks entirely
             // (already handled implicitly by high natural_armor, but add message)

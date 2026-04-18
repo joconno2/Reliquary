@@ -481,6 +481,68 @@ static const UniqueDef UNIQUE_TABLE[] = {
      ItemType::ARMOR_FEET, EquipSlot::FEET, 3, 14,
      0, 2, 0, 3,  0, 2, 0,
      UniqueEffect::TRAP_IMMUNITY, "", 4},
+
+    // --- UNIQUE RINGS ---
+    {"Bloodthorn Ring",
+     "Thorns grow inward. Every critical hit opens a wound that won't close.",
+     ItemType::RING, EquipSlot::RING_1, 3, 18,
+     1, 0, 1, 0,  0, 1, 0,
+     UniqueEffect::CRIT_BLEED, "", 3},
+
+    {"Coward's Loop",
+     "Worn by a duelist who never lost. He fought dirty.",
+     ItemType::RING, EquipSlot::RING_1, 4, 18,
+     0, 0, 0, 3,  0, 2, 0,
+     UniqueEffect::DODGE_COUNTER, "stonekeep", 3},
+
+    {"Slayer's Band",
+     "Warm to the touch after a kill. You move faster. You want another.",
+     ItemType::RING, EquipSlot::RING_1, 5, 18,
+     2, 0, 1, 0,  1, 0, 0,
+     UniqueEffect::KILL_HASTE, "deep_halls", 4},
+
+    {"Wychwood Ring",
+     "Carved from a tree that grew in a graveyard. No venom touches you.",
+     ItemType::RING, EquipSlot::RING_1, 0, 18,
+     0, 1, 0, 0,  0, 0, 2,
+     UniqueEffect::POISON_IMMUNE, "warrens", 2},
+
+    {"Charred Signet",
+     "The seal of a fire cult. The brand is permanent. So is the protection.",
+     ItemType::RING, EquipSlot::RING_1, 1, 18,
+     0, 1, 0, 0,  0, 0, 1,
+     UniqueEffect::FIRE_IMMUNE, "molten", 3},
+
+    {"Phasing Band",
+     "The metal shifts when you aren't looking. Sometimes you shift with it.",
+     ItemType::RING, EquipSlot::RING_1, 2, 18,
+     1, 0, 2, 0,  0, 1, 0,
+     UniqueEffect::TELEPORT_STRIKE, "sepulchre", 4},
+
+    // --- UNIQUE AMULETS ---
+    {"Medallion of Devotion",
+     "Prayer heals the body when the faith is strong enough.",
+     ItemType::AMULET, EquipSlot::AMULET, 4, 16,
+     0, 1, 0, 0,  0, 0, 1,
+     UniqueEffect::PRAYER_HEAL, "", 3},
+
+    {"Mana Phylactery",
+     "A lich's failed experiment. It drinks damage and turns it to power.",
+     ItemType::AMULET, EquipSlot::AMULET, 5, 16,
+     0, 0, 0, 0,  0, 0, 0,
+     UniqueEffect::MP_SHIELD, "catacombs", 4},
+
+    {"Shadow Pendant",
+     "Cold to the touch. Wounds close when no one is watching.",
+     ItemType::AMULET, EquipSlot::AMULET, 1, 16,
+     0, 0, 0, 1,  0, 1, 0,
+     UniqueEffect::STEALTH_REGEN, "", 3},
+
+    {"Dread Gorget",
+     "Something in the metal screams. Enemies hear it too.",
+     ItemType::AMULET, EquipSlot::AMULET, 0, 16,
+     1, 2, 0, 0,  1, 0, 0,
+     UniqueEffect::FEAR_AURA, "deep_halls", 4},
 };
 static constexpr int UNIQUE_COUNT = sizeof(UNIQUE_TABLE) / sizeof(UNIQUE_TABLE[0]);
 
