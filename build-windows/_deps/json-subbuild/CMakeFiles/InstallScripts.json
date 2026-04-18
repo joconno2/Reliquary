@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/jim/projects/Reliquary/build-windows/_deps/json-subbuild/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

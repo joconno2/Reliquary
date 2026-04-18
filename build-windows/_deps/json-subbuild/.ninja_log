@@ -1,0 +1,21 @@
+# ninja log v7
+1	8	1776469341065028743	json-populate-prefix/src/json-populate-stamp/json-populate-mkdir	dd80b36d087e618f
+1	8	1776469341065028743	/home/jim/projects/Reliquary/build-windows/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/json-populate-mkdir	dd80b36d087e618f
+8	3202	1776469344260091280	json-populate-prefix/src/json-populate-stamp/json-populate-download	f1734fdae73728b6
+8	3202	1776469344260091280	/home/jim/projects/Reliquary/build-windows/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/json-populate-download	f1734fdae73728b6
+3202	3208	1776469344260091280	json-populate-prefix/src/json-populate-stamp/json-populate-update	544da36ef138f1a7
+3202	3208	1776469344260091280	/home/jim/projects/Reliquary/build-windows/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/json-populate-update	544da36ef138f1a7
+3208	3215	1776469344272091515	json-populate-prefix/src/json-populate-stamp/json-populate-patch	a0e6d733b80a9ae0
+3208	3215	1776469344272091515	/home/jim/projects/Reliquary/build-windows/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/json-populate-patch	a0e6d733b80a9ae0
+3215	3221	1776469344279091652	json-populate-prefix/src/json-populate-stamp/json-populate-configure	ea6c1dfc9cf16b86
+3215	3221	1776469344279091652	/home/jim/projects/Reliquary/build-windows/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/json-populate-configure	ea6c1dfc9cf16b86
+3221	3227	1776469344285091769	json-populate-prefix/src/json-populate-stamp/json-populate-build	692120898c717946
+3221	3227	1776469344285091769	/home/jim/projects/Reliquary/build-windows/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/json-populate-build	692120898c717946
+3227	3233	1776469344291091887	json-populate-prefix/src/json-populate-stamp/json-populate-install	f925d8bdc331efa6
+3227	3233	1776469344291091887	/home/jim/projects/Reliquary/build-windows/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/json-populate-install	f925d8bdc331efa6
+3233	3239	1776469344297092005	json-populate-prefix/src/json-populate-stamp/json-populate-test	dfc756109f2ae205
+3233	3239	1776469344297092005	/home/jim/projects/Reliquary/build-windows/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/json-populate-test	dfc756109f2ae205
+3239	3248	1776469344306092181	CMakeFiles/json-populate-complete	5d4e9aa86032e21f
+3239	3248	1776469344306092181	json-populate-prefix/src/json-populate-stamp/json-populate-done	5d4e9aa86032e21f
+3239	3248	1776469344306092181	/home/jim/projects/Reliquary/build-windows/_deps/json-subbuild/CMakeFiles/json-populate-complete	5d4e9aa86032e21f
+3239	3248	1776469344306092181	/home/jim/projects/Reliquary/build-windows/_deps/json-subbuild/json-populate-prefix/src/json-populate-stamp/json-populate-done	5d4e9aa86032e21f
