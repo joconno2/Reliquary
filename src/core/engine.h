@@ -47,6 +47,7 @@
 #include "components/container.h"
 #include "components/spellbook.h"
 #include "core/audio.h"
+#include "core/keybinds.h"
 #include <vector>
 #include <string>
 #include <map>
@@ -112,6 +113,7 @@ private:
     SpriteManager sprites_;
     RNG rng_;
     Audio audio_;
+    Keybinds keybinds_;
     ParticleSystem particles_;
     FloatingTextSystem floating_text_;
     TutorialPopup tutorial_popup_;

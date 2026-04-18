@@ -1,6 +1,7 @@
 #pragma once
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
+#include "core/keybinds.h"
 
 class Audio;
 
@@ -9,13 +10,14 @@ public:
     SettingsScreen() = default;
 
     void set_audio(Audio* audio) { audio_ = audio; }
+    void set_keybinds(Keybinds* kb) { keybinds_ = kb; }
 
     bool handle_input(SDL_Event& event, SDL_Window* window);
 
     void render(SDL_Renderer* renderer, TTF_Font* font, int w, int h) const;
 
     bool should_close() const { return should_close_; }
-    void reset() { should_close_ = false; keybinds_open_ = false; }
+    void reset() { should_close_ = false; keybinds_open_ = false; rebind_action_ = Action::COUNT; }
 
     // UI scale
     float get_ui_scale() const { return SCALES[scale_index_]; }
@@ -28,10 +30,14 @@ private:
     int sfx_volume_ = 50;
     int music_volume_ = 35;
     Audio* audio_ = nullptr;
+    Keybinds* keybinds_ = nullptr;
     int scale_index_ = 0;
     bool should_close_ = false;
     bool scale_changed_ = false;
-    bool keybinds_open_ = false; // sub-screen showing keybind reference
+    bool keybinds_open_ = false;
+    int kb_selected_ = 0;        // selected action in keybind screen
+    int kb_scroll_ = 0;          // scroll offset in keybind screen
+    Action rebind_action_ = Action::COUNT; // if not COUNT, waiting for key press
 
     static constexpr int OPTION_COUNT = 6; // Resolution, SFX Vol, Music Vol, UI Scale, Keybinds, Back
 

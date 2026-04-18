@@ -189,7 +189,9 @@ bool Engine::init() {
     }
 
     audio_.init();
+    keybinds_.load("save/keybinds.json");
     settings_.set_audio(&audio_);
+    settings_.set_keybinds(&keybinds_);
     meta_ = meta::load();
 
     // Title screen music + ambients — slow fade in
@@ -5811,21 +5813,23 @@ void Engine::handle_input() {
             if (look_mode_) {
                 if (event.type == SDL_KEYDOWN) {
                     int dx = 0, dy = 0;
-                    auto sym = event.key.keysym.sym;
-                    switch (sym) {
-                        case SDLK_LEFT:  case SDLK_KP_4: case SDLK_a: dx = -1; break;
-                        case SDLK_RIGHT: case SDLK_KP_6: case SDLK_d: dx =  1; break;
-                        case SDLK_UP:    case SDLK_KP_8: case SDLK_w: dy = -1; break;
-                        case SDLK_DOWN:  case SDLK_KP_2: case SDLK_s: dy =  1; break;
-                        case SDLK_KP_7: dx = -1; dy = -1; break;
-                        case SDLK_KP_9: dx =  1; dy = -1; break;
-                        case SDLK_KP_1: dx = -1; dy =  1; break;
-                        case SDLK_KP_3: dx =  1; dy =  1; break;
-                        case SDLK_ESCAPE: case SDLK_x:
-                            look_mode_ = false;
-                            log_.add("Look mode off.", {140, 140, 140, 255});
+                    auto lsym = event.key.keysym.sym;
+                    auto lact = keybinds_.translate(lsym);
+                    switch (lact) {
+                        case Action::MOVE_LEFT:  dx = -1; break;
+                        case Action::MOVE_RIGHT: dx =  1; break;
+                        case Action::MOVE_UP:    dy = -1; break;
+                        case Action::MOVE_DOWN:  dy =  1; break;
+                        case Action::MOVE_NW: dx = -1; dy = -1; break;
+                        case Action::MOVE_NE: dx =  1; dy = -1; break;
+                        case Action::MOVE_SW: dx = -1; dy =  1; break;
+                        case Action::MOVE_SE: dx =  1; dy =  1; break;
+                        default:
+                            if (lsym == SDLK_ESCAPE || lact == Action::EXAMINE) {
+                                look_mode_ = false;
+                                log_.add("Look mode off.", {140, 140, 140, 255});
+                            }
                             break;
-                        default: break;
                     }
                     if (dx != 0 || dy != 0) {
                         int nx = look_x_ + dx;
@@ -6442,54 +6446,48 @@ void Engine::handle_input() {
                 return;
             }
 
-            switch (event.key.keysym.sym) {
-                case SDLK_UP:    case SDLK_KP_8: case SDLK_w: try_move_player(0, -1); break;
-                case SDLK_DOWN:  case SDLK_KP_2: case SDLK_s: try_move_player(0, 1);  break;
-                case SDLK_LEFT:  case SDLK_KP_4: case SDLK_a: try_move_player(-1, 0); break;
-                case SDLK_RIGHT: case SDLK_KP_6: case SDLK_d: try_move_player(1, 0);  break;
-                // hjkl unbound — freed for future use
-                case SDLK_KP_7: try_move_player(-1, -1); break;
-                case SDLK_KP_9: try_move_player(1, -1);  break;
-                case SDLK_KP_1: try_move_player(-1, 1);  break;
-                case SDLK_KP_3: try_move_player(1, 1);   break;
+            {
+            auto sym = event.key.keysym.sym;
+            auto act = keybinds_.translate(sym);
+            switch (act) {
+                case Action::MOVE_UP:    try_move_player(0, -1);  break;
+                case Action::MOVE_DOWN:  try_move_player(0, 1);   break;
+                case Action::MOVE_LEFT:  try_move_player(-1, 0);  break;
+                case Action::MOVE_RIGHT: try_move_player(1, 0);   break;
+                case Action::MOVE_NW:    try_move_player(-1, -1); break;
+                case Action::MOVE_NE:    try_move_player(1, -1);  break;
+                case Action::MOVE_SW:    try_move_player(-1, 1);  break;
+                case Action::MOVE_SE:    try_move_player(1, 1);   break;
 
-                case SDLK_PERIOD: case SDLK_KP_5:
+                case Action::WAIT:
                     player_acted_ = true;
                     break;
 
-                // Interact (context-sensitive: pickup, talk, open)
-                case SDLK_e:
+                case Action::INTERACT:
                     try_interact();
                     break;
 
-                // Pickup (legacy keys, pickup-only)
-                case SDLK_g:
-                case SDLK_COMMA:
+                case Action::PICKUP:
                     try_pickup();
                     break;
 
-                // Inventory
-                case SDLK_i:
+                case Action::INVENTORY:
                     inventory_screen_.open(player_);
                     break;
 
-                // Spells
-                case SDLK_z:
+                case Action::SPELLBOOK:
                     spell_screen_.open(player_);
                     break;
 
-                // Character sheet
-                case SDLK_c:
+                case Action::CHARACTER:
                     char_sheet_.open(player_);
                     break;
 
-                // Passive tree
-                case SDLK_t:
+                case Action::PASSIVE_TREE:
                     passive_tree_screen_.open(player_, &world_, width_, height_);
                     break;
 
-                // Sneak toggle
-                case SDLK_o:
+                case Action::SNEAK_TOGGLE:
                     sneaking_ = !sneaking_;
                     if (sneaking_) {
                         audio_.play(SfxId::SELECT);
@@ -6517,12 +6515,13 @@ void Engine::handle_input() {
                     break;
 
                 // Active abilities (1-4 keys)
-                case SDLK_1: case SDLK_2: case SDLK_3: case SDLK_4: {
+                case Action::ABILITY_1: case Action::ABILITY_2:
+                case Action::ABILITY_3: case Action::ABILITY_4: {
                     if (!world_.has<PassiveTreeState>(player_)) break;
                     auto& tree = world_.get<PassiveTreeState>(player_);
                     auto bonuses = passive_tree::compute_bonuses(tree);
                     auto& pos = world_.get<Position>(player_);
-                    int slot = event.key.keysym.sym - SDLK_1;
+                    int slot = static_cast<int>(act) - static_cast<int>(Action::ABILITY_1);
 
                     // Map slot to capstone ability
                     struct AbilityInfo { EffectType type; int cd; const char* name; };
@@ -6680,8 +6679,7 @@ void Engine::handle_input() {
                     break;
                 }
 
-                // Bestiary (B key is shared with diagonal — use K for "Kills")
-                case SDLK_TAB:
+                case Action::BESTIARY:
                     if (bestiary_.empty()) {
                         log_.add("Your bestiary is empty. Kill something first.", {150, 140, 130, 255});
                     } else {
@@ -6696,8 +6694,7 @@ void Engine::handle_input() {
                     }
                     break;
 
-                // Examine / look mode
-                case SDLK_x: {
+                case Action::EXAMINE: {
                     auto& pp = world_.get<Position>(player_);
                     look_x_ = pp.x;
                     look_y_ = pp.y;
@@ -6707,8 +6704,7 @@ void Engine::handle_input() {
                     break;
                 }
 
-                // Pray
-                case SDLK_p: {
+                case Action::PRAY: {
                     if (!world_.has<GodAlignment>(player_)) break;
                     auto& align = world_.get<GodAlignment>(player_);
                     if (align.god == GodId::NONE) {
@@ -6748,13 +6744,11 @@ void Engine::handle_input() {
                     break;
                 }
 
-                // Fire ranged weapon
-                case SDLK_f:
+                case Action::FIRE_RANGED:
                     fire_ranged();
                     break;
 
-                // Quick-cast spell (v key)
-                case SDLK_v:
+                case Action::QUICK_CAST:
                     if (quick_cast_ != SpellId::COUNT && world_.has<Spellbook>(player_)) {
                         auto& qbook = world_.get<Spellbook>(player_);
                         bool known = false;
@@ -6806,18 +6800,15 @@ void Engine::handle_input() {
                     }
                     break;
 
-                // Rest
-                case SDLK_r:
+                case Action::REST:
                     try_rest();
                     break;
 
-                // Quest log
-                case SDLK_q:
+                case Action::QUEST_LOG:
                     quest_log_.open();
                     break;
 
-                // World map (overworld only)
-                case SDLK_m:
+                case Action::WORLD_MAP:
                     if (dungeon_level_ <= 0) {
                         world_map_.toggle();
                     } else {
@@ -6825,22 +6816,18 @@ void Engine::handle_input() {
                     }
                     break;
 
-                // Help / keybinds
-                case SDLK_QUESTION:
-                case SDLK_SLASH:
-                    if (event.key.keysym.mod & KMOD_SHIFT || event.key.keysym.sym == SDLK_QUESTION) {
-                        help_screen_.open();
-                    }
+                case Action::HELP:
+                    help_screen_.open();
                     break;
 
-                // Stairs — Enter on any stairs, > to descend, < to ascend
-                case SDLK_GREATER:
-                case SDLK_LESS:
-                case SDLK_RETURN: {
+                // Stairs
+                case Action::STAIRS_DOWN:
+                case Action::STAIRS_UP:
+                case Action::STAIRS_ENTER: {
                     auto& pos = world_.get<Position>(player_);
                     auto tile_type = map_.at(pos.x, pos.y).type;
                     if (tile_type == TileType::STAIRS_DOWN &&
-                        event.key.keysym.sym != SDLK_LESS) {
+                        act != Action::STAIRS_UP) {
                         // Save overworld position before first descent
                         if (dungeon_level_ == 0) {
                             overworld_return_x_ = pos.x;
@@ -6949,7 +6936,7 @@ void Engine::handle_input() {
                             }
                         }
                     } else if (tile_type == TileType::STAIRS_UP &&
-                               event.key.keysym.sym != SDLK_GREATER) {
+                               act != Action::STAIRS_DOWN) {
                         if (dungeon_level_ > 1) {
                             // Go up one dungeon level: -2 because generate_level increments by 1
                             cache_current_floor(); // persist current floor before leaving
@@ -6977,22 +6964,21 @@ void Engine::handle_input() {
                         } else {
                             log_.add("You're already on the surface.", {150, 140, 130, 255});
                         }
-                    } else if (event.key.keysym.sym != SDLK_RETURN) {
+                    } else if (act != Action::STAIRS_ENTER) {
                         log_.add("There are no stairs here.", {150, 100, 100, 255});
                     }
                     break;
                 }
 
-                // Screenshot
-                case SDLK_F5:
+                case Action::QUICKSAVE:
                     do_save();
                     log_.add("Quick save.", {100, 200, 100, 255});
                     break;
-                case SDLK_F6:
+                case Action::QUICKLOAD:
                     do_load();
                     log_.add("Quick load.", {100, 200, 100, 255});
                     break;
-                case SDLK_F12: {
+                case Action::SCREENSHOT: {
                     SDL_Surface* sshot = SDL_CreateRGBSurface(0, width_, height_, 32,
                         0x00ff0000, 0x0000ff00, 0x000000ff, 0xff000000);
                     SDL_RenderReadPixels(renderer_, nullptr, SDL_PIXELFORMAT_ARGB8888,
@@ -7005,6 +6991,7 @@ void Engine::handle_input() {
 
                 default: break;
             }
+            } // end scope for sym/act
         }
     }
 }

@@ -7,10 +7,61 @@
 bool SettingsScreen::handle_input(SDL_Event& event, SDL_Window* window) {
     if (event.type != SDL_KEYDOWN) return false;
 
-    // Keybinds sub-screen — any key closes it
-    if (keybinds_open_) {
-        keybinds_open_ = false;
+    // Keybind rebinding: waiting for a key press
+    if (keybinds_open_ && rebind_action_ != Action::COUNT) {
+        auto sym = event.key.keysym.sym;
+        if (sym == SDLK_ESCAPE) {
+            // Cancel rebind
+            rebind_action_ = Action::COUNT;
+        } else if (sym == SDLK_BACKSPACE || sym == SDLK_DELETE) {
+            // Clear all bindings for this action
+            if (keybinds_) keybinds_->get(rebind_action_).clear();
+            rebind_action_ = Action::COUNT;
+        } else {
+            // Bind the pressed key
+            if (keybinds_) {
+                keybinds_->rebind(rebind_action_, sym);
+                keybinds_->save("save/keybinds.json");
+            }
+            rebind_action_ = Action::COUNT;
+        }
         return true;
+    }
+
+    // Keybinds sub-screen: interactive list
+    if (keybinds_open_) {
+        switch (event.key.keysym.sym) {
+            case SDLK_ESCAPE:
+            case SDLK_BACKSPACE:
+                keybinds_open_ = false;
+                return true;
+            case SDLK_UP: case SDLK_w: case SDLK_k:
+                if (kb_selected_ > 0) kb_selected_--;
+                return true;
+            case SDLK_DOWN: case SDLK_s: case SDLK_j:
+                if (kb_selected_ < ACTION_COUNT - 1) kb_selected_++;
+                return true;
+            case SDLK_RETURN: case SDLK_e:
+                // Start rebinding
+                rebind_action_ = static_cast<Action>(kb_selected_);
+                return true;
+            case SDLK_r:
+                // Reset selected action to defaults
+                if (keybinds_) {
+                    keybinds_->reset_action(static_cast<Action>(kb_selected_));
+                    keybinds_->save("save/keybinds.json");
+                }
+                return true;
+            case SDLK_F1:
+                // Reset ALL to defaults
+                if (keybinds_) {
+                    keybinds_->reset_all();
+                    keybinds_->save("save/keybinds.json");
+                }
+                return true;
+            default:
+                return true;
+        }
     }
 
     switch (event.key.keysym.sym) {
@@ -73,6 +124,8 @@ bool SettingsScreen::handle_input(SDL_Event& event, SDL_Window* window) {
                 return true;
             } else if (selected_ == 4) {
                 keybinds_open_ = true;
+                kb_selected_ = 0;
+                kb_scroll_ = 0;
                 return true;
             } else if (selected_ == 5) {
                 should_close_ = true;
@@ -226,7 +279,7 @@ void SettingsScreen::render(SDL_Renderer* renderer, TTF_Font* font,
         auto cols = ui::Layout::from_rect(row, line_h).split_cols_ratio(2, 3);
         ui::draw_text_in(renderer, font, "Keybinds", sel_or(4, normal_col),
                          cols[0], ui::Align::LEFT);
-        ui::draw_text_in(renderer, font, "View >", sel_or(4, dim_col),
+        ui::draw_text_in(renderer, font, "Edit >", sel_or(4, dim_col),
                          cols[1], ui::Align::RIGHT);
     }
 
@@ -251,7 +304,9 @@ void SettingsScreen::render_keybinds(SDL_Renderer* renderer, TTF_Font* font,
     SDL_Color title_col = {200, 180, 160, 255};
     SDL_Color key_col = {200, 190, 170, 255};
     SDL_Color desc_col = {140, 135, 130, 255};
+    SDL_Color sel_col = {255, 220, 140, 255};
     SDL_Color dim_col = {100, 95, 90, 255};
+    SDL_Color rebind_col = {255, 100, 100, 255};
 
     // Title above the panel
     auto title_row = screen.row(line_h + screen.gap);
@@ -261,79 +316,80 @@ void SettingsScreen::render_keybinds(SDL_Renderer* renderer, TTF_Font* font,
     // Reserve hint row at bottom
     auto hint_area = screen.row_bottom(line_h + screen.gap * 2);
 
-    // Panel: 2/3 width, remaining height
-    auto outer = screen.panel_outer(2, 3, 1, 1);
+    // Panel: 4/5 width, remaining height
+    auto outer = screen.panel_outer(4, 5, 1, 1);
     outer.y = screen.cursor.y;
     outer.h = screen.cursor.h;
     auto panel = ui::draw_panel_in(renderer, outer, line_h);
 
-    // Two-column layout inside panel: key | description
-    auto cols = panel.split_cols_ratio(2, 3);
-    auto col1 = ui::Layout::from_rect(cols[0], line_h);
-    auto col2 = ui::Layout::from_rect(cols[1], line_h);
+    // Clip to panel
+    SDL_Rect clip = panel.cursor.sdl();
+    SDL_RenderSetClipRect(renderer, &clip);
 
-    struct Bind { const char* key; const char* desc; };
+    int row_h = line_h + 3;
 
-    auto draw_section = [&](const char* heading) {
-        auto r1 = col1.row(line_h + col1.gap);
-        col2.row(line_h + col2.gap); // advance col2 cursor in sync
-        ui::draw_text_in(renderer, font, heading, dim_col, r1, ui::Align::LEFT);
-    };
+    // Calculate visible rows and scrolling
+    int visible_rows = panel.cursor.h / row_h;
+    // Keep selected item visible
+    int scroll = kb_scroll_;
+    if (kb_selected_ < scroll) scroll = kb_selected_;
+    if (kb_selected_ >= scroll + visible_rows) scroll = kb_selected_ - visible_rows + 1;
+    // Update mutable scroll through const_cast (scroll is a display hint, not logical state)
+    const_cast<SettingsScreen*>(this)->kb_scroll_ = scroll;
 
-    auto draw_bind = [&](const Bind& b) {
-        auto r1 = col1.row(line_h + 2);
-        auto r2 = col2.row(line_h + 2);
-        ui::draw_text_in(renderer, font, b.key, key_col, r1, ui::Align::LEFT);
-        ui::draw_text_in(renderer, font, b.desc, desc_col, r2, ui::Align::LEFT);
-    };
+    int y = panel.cursor.y;
 
-    auto draw_gap = [&]() {
-        col1.skip(col1.gap);
-        col2.skip(col2.gap);
-    };
+    for (int i = scroll; i < ACTION_COUNT && y + row_h <= panel.cursor.y2(); i++) {
+        Action a = static_cast<Action>(i);
+        bool selected = (i == kb_selected_);
+        bool rebinding = (rebind_action_ == a);
 
-    // Movement
-    draw_section("-- Movement --");
-    Bind movement[] = {
-        {"Arrow keys / hjkl",   "Move (cardinal)"},
-        {"yubn / Numpad",       "Move (diagonal)"},
-        {". / Numpad 5",        "Wait one turn"},
-    };
-    for (auto& b : movement) draw_bind(b);
+        // Highlight bar
+        if (selected) {
+            SDL_Rect hl = {panel.cursor.x, y - 1, panel.cursor.w, row_h};
+            SDL_SetRenderDrawColor(renderer, 30, 25, 40, 255);
+            SDL_RenderFillRect(renderer, &hl);
+        }
 
-    draw_gap();
-    draw_section("-- Actions --");
-    Bind actions[] = {
-        {"g / ,",        "Pick up item"},
-        {"Enter / >",    "Descend stairs"},
-        {"i",            "Inventory"},
-        {"z",            "Spellbook"},
-        {"c",            "Character sheet"},
-        {"F11",          "Toggle fullscreen"},
-        {"F12",          "Screenshot"},
-    };
-    for (auto& b : actions) draw_bind(b);
+        // Action name (left side)
+        SDL_Color name_col = rebinding ? rebind_col : (selected ? sel_col : desc_col);
+        ui::draw_text(renderer, font, action_name(a), name_col,
+                      panel.cursor.x + 4, y);
 
-    draw_gap();
-    draw_section("-- Inventory --");
-    Bind inv[] = {
-        {"e / Enter",    "Equip / unequip"},
-        {"u",            "Use (eat/drink)"},
-        {"d",            "Drop item"},
-        {"a-z",          "Quick select"},
-    };
-    for (auto& b : inv) draw_bind(b);
+        // Key binding string (right side)
+        const char* binding_str;
+        char buf[128];
+        if (rebinding) {
+            binding_str = "[ press a key ]";
+        } else if (keybinds_) {
+            auto s = keybinds_->binding_string(a);
+            snprintf(buf, sizeof(buf), "%s", s.c_str());
+            binding_str = buf;
+        } else {
+            binding_str = "???";
+        }
 
-    draw_gap();
-    draw_section("-- Menus --");
-    Bind menus[] = {
-        {"Esc",          "Pause / back"},
-        {"Enter",        "Confirm"},
-        {"PageUp/Down",  "Scroll message log"},
-    };
-    for (auto& b : menus) draw_bind(b);
+        SDL_Color val_col = rebinding ? rebind_col : (selected ? sel_col : key_col);
+        // Right-align the binding string
+        int tw = 0;
+        TTF_SizeText(font, binding_str, &tw, nullptr);
+        ui::draw_text(renderer, font, binding_str, val_col,
+                      panel.cursor.x2() - tw - 4, y);
+
+        y += row_h;
+    }
+
+    SDL_RenderSetClipRect(renderer, nullptr);
+
+    // Scroll indicators
+    if (scroll > 0)
+        ui::draw_text_centered(renderer, font, "^ more ^", dim_col, outer.cx(), outer.y + 4);
+    if (scroll + visible_rows < ACTION_COUNT)
+        ui::draw_text_centered(renderer, font, "v more v", dim_col, outer.cx(), outer.y2() - line_h - 4);
 
     // Hint at bottom
-    ui::draw_text_in(renderer, font, "Press any key to return.",
-                     dim_col, hint_area, ui::Align::CENTER);
+    const char* hint = rebind_action_ != Action::COUNT
+        ? "[Press key to bind]  [Backspace] clear  [Esc] cancel"
+        : "[Enter] rebind  [R] reset  [F1] reset all  [Esc] back";
+    ui::draw_text_in(renderer, font, hint, dim_col, hint_area, ui::Align::CENTER);
 }

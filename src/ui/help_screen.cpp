@@ -70,10 +70,10 @@ void HelpScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_t
     ui::draw_text(renderer, font, "MOVEMENT", section_col, key_x, y);
     y += line_h + 4;
     Bind movement[] = {
-        {"Arrows / WASD", "Move (cardinal)"},
-        {"Numpad 1-9",    "Move (diagonal)"},
-        {". / Numpad 5",  "Wait one turn"},
-        {"o",             "Toggle sneak mode"},
+        {"Arrows / WASD / hjkl", "Move (cardinal)"},
+        {"yubn / Numpad",        "Move (diagonal)"},
+        {". / Numpad 5",         "Wait one turn"},
+        {"o",                    "Toggle sneak mode"},
     };
     draw_binds(key_x, desc_x, movement, 4, y);
 

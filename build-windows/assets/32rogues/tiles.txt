@@ -136,9 +136,17 @@
 18.f. ore sack
 18.g. log pile
 18.h. sign
+18.i. bed (top half / pillow and headboard)
 
 19.a. large rock 1
 19.b. large rock 2
+19.c. anvil
+19.d. stool
+19.e. table left half
+19.f. table right half
+19.g. pile of equipment
+19.h.
+19.i. bed (bottom half / blanket and footboard)
 
 20.a. buckwheet
 20.b. flax
