@@ -178,6 +178,20 @@ private:
     int npc_bump_count_ = 0;
     int game_turn_ = 0;
     int gold_ = 0;
+
+    // Day/night cycle (200 turns per full day)
+    static constexpr int DAY_LENGTH = 200;
+    bool is_night() const { return (game_turn_ % DAY_LENGTH) >= 140; }
+    bool is_dusk() const { int t = game_turn_ % DAY_LENGTH; return t >= 120 && t < 140; }
+    bool is_dawn() const { int t = game_turn_ % DAY_LENGTH; return t >= 0 && t < 20; }
+    // 0.0 = full day, 1.0 = full night
+    float night_darkness() const {
+        int t = game_turn_ % DAY_LENGTH;
+        if (t < 120) return 0.0f;
+        if (t < 140) return static_cast<float>(t - 120) / 20.0f; // dusk
+        if (t < 180) return 1.0f; // full night
+        return static_cast<float>(200 - t) / 20.0f; // dawn
+    }
     bool player_acted_ = false;
     MetaSave meta_; // persistent cross-run progression
     int run_kills_ = 0; // kills this run (for tracking)

@@ -597,24 +597,75 @@ void populate(World& world, TileMap& map, RNG& rng,
     // =============================================
     for (int i = 0; i < TOWN_COUNT; i++) {
         int tx = ALL_TOWNS[i].x, ty = ALL_TOWNS[i].y;
+        int r = 20; // search within town radius for building interiors
 
-        // Shop (northwest building): barrels, jars, sacks as "goods on display"
-        place_interior(tx - 8, ty - 7, 5, rng.range(2, 3), 4, 17);  // barrels
-        place_interior(tx - 8, ty - 7, 5, rng.range(1, 2), 2, 17);  // jars
-        place_interior(tx - 8, ty - 7, 5, rng.range(1, 2), 5, 17);  // ore sacks (goods)
+        // General furnishings across all buildings
+        place_interior(tx, ty, r, rng.range(2, 4), 4, 17);  // barrels
+        place_interior(tx, ty, r, rng.range(1, 3), 2, 17);  // jars
+        place_interior(tx, ty, r, rng.range(1, 2), 5, 17);  // ore sacks
 
-        // Blacksmith (northeast building): ore sacks, log piles, brazier
-        place_interior(tx + 8, ty - 7, 5, rng.range(2, 3), 5, 17);  // ore sacks
-        place_interior(tx + 8, ty - 7, 5, rng.range(1, 2), 6, 17);  // log piles
-        place_lights(tx + 8, ty - 7, 5, 1, 1);                       // forge fire
+        // Beds: top half (8,17) + bottom half (8,18) placed as vertical pairs
+        for (int b = 0; b < rng.range(1, 2); b++) {
+            for (int attempt = 0; attempt < 20; attempt++) {
+                int bx = tx + rng.range(-r, r);
+                int by = ty + rng.range(-r, r);
+                if (!map.in_bounds(bx, by) || !map.in_bounds(bx, by+1)) continue;
+                if (map.at(bx, by).type != TileType::FLOOR_STONE) continue;
+                if (map.at(bx, by+1).type != TileType::FLOOR_STONE) continue;
+                if (!adjacent_to_wall(bx, by)) continue;
+                bool door_near = false;
+                for (int dy = -1; dy <= 2 && !door_near; dy++)
+                    for (int dx = -1; dx <= 1; dx++)
+                        if (map.in_bounds(bx+dx, by+dy) &&
+                            (map.at(bx+dx, by+dy).type == TileType::DOOR_CLOSED ||
+                             map.at(bx+dx, by+dy).type == TileType::DOOR_OPEN))
+                            door_near = true;
+                if (door_near) continue;
+                Entity bed_top = world.create();
+                world.add<Position>(bed_top, {bx, by});
+                world.add<Renderable>(bed_top, {SHEET_TILES, 8, 17, {255,255,255,255}, 0});
+                Entity bed_bot = world.create();
+                world.add<Position>(bed_bot, {bx, by+1});
+                world.add<Renderable>(bed_bot, {SHEET_TILES, 8, 18, {255,255,255,255}, 0});
+                break;
+            }
+        }
+        // Anvil (2,18): one per town
+        place_interior(tx, ty, r, 1, 2, 18);
+        // Equipment piles (6,18): 1-2 per town (blacksmith/guard area)
+        place_interior(tx, ty, r, rng.range(1, 2), 6, 18);
 
-        // Temple (southwest building): jars, braziers
-        place_interior(tx - 8, ty + 6, 5, rng.range(1, 2), 2, 17);  // offering jars
-        place_lights(tx - 8, ty + 6, 5, rng.range(1, 2), 1);        // altar braziers
-
-        // Inn (southeast building): barrels, jars
-        place_interior(tx + 8, ty + 6, 5, rng.range(2, 3), 4, 17);  // ale barrels
-        place_interior(tx + 8, ty + 6, 5, rng.range(1, 2), 2, 17);  // cups/jars
+        // Tables: left half (4,18) + right half (5,18) placed as horizontal pairs with stools
+        for (int t = 0; t < rng.range(1, 3); t++) {
+            for (int attempt = 0; attempt < 20; attempt++) {
+                int tbx = tx + rng.range(-r, r);
+                int tby = ty + rng.range(-r, r);
+                if (!map.in_bounds(tbx, tby) || !map.in_bounds(tbx+1, tby)) continue;
+                if (map.at(tbx, tby).type != TileType::FLOOR_STONE) continue;
+                if (map.at(tbx+1, tby).type != TileType::FLOOR_STONE) continue;
+                bool door_near = false;
+                for (int dy = -1; dy <= 1 && !door_near; dy++)
+                    for (int dx = -1; dx <= 2; dx++)
+                        if (map.in_bounds(tbx+dx, tby+dy) &&
+                            (map.at(tbx+dx, tby+dy).type == TileType::DOOR_CLOSED ||
+                             map.at(tbx+dx, tby+dy).type == TileType::DOOR_OPEN))
+                            door_near = true;
+                if (door_near) continue;
+                Entity tl = world.create();
+                world.add<Position>(tl, {tbx, tby});
+                world.add<Renderable>(tl, {SHEET_TILES, 4, 18, {255,255,255,255}, 0});
+                Entity tr = world.create();
+                world.add<Position>(tr, {tbx+1, tby});
+                world.add<Renderable>(tr, {SHEET_TILES, 5, 18, {255,255,255,255}, 0});
+                // Place a stool (3,18) next to the table
+                if (map.in_bounds(tbx, tby+1) && map.is_walkable(tbx, tby+1)) {
+                    Entity st = world.create();
+                    world.add<Position>(st, {tbx, tby+1});
+                    world.add<Renderable>(st, {SHEET_TILES, 3, 18, {255,255,255,255}, 0});
+                }
+                break;
+            }
+        }
     }
 
     // =============================================
@@ -1426,6 +1477,15 @@ void populate(World& world, TileMap& map, RNG& rng,
                 paint_battlefield(lx, ly);
                 int li = rng.range(0, 3);
                 place_lore(lx, ly, BATTLEFIELD_LORE[li][0], BATTLEFIELD_LORE[li][1]);
+                // Scattered equipment piles
+                for (int ep = 0; ep < rng.range(1, 3); ep++) {
+                    int ex = lx + rng.range(-3, 3), ey = ly + rng.range(-3, 3);
+                    if (map.in_bounds(ex, ey) && map.is_walkable(ex, ey)) {
+                        Entity pile = world.create();
+                        world.add<Position>(pile, {ex, ey});
+                        world.add<Renderable>(pile, {SHEET_TILES, 6, 18, {180,160,140,255}, 0});
+                    }
+                }
                 // Scavengeable gear: drop a random weapon on the ground
                 {
                     static const char* WPNS[] = {"rusted sword", "dented helm", "broken spear", "notched axe"};
@@ -1615,8 +1675,8 @@ void process_npc_wander(World& world, TileMap& map, RNG& rng) {
         Entity e = npc_pool.entity_at(i);
         auto& npc = npc_pool.at_index(i);
 
-        // Shopkeepers stay put (need to be findable for shops)
-        if (npc.role == NPCRole::SHOPKEEPER) continue;
+        // Shopkeepers and innkeepers stay put (need to be findable)
+        if (npc.role == NPCRole::SHOPKEEPER || npc.role == NPCRole::INNKEEPER) continue;
 
         if (!world.has<Position>(e) || !world.has<Energy>(e)) continue;
 

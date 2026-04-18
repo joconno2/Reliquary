@@ -797,11 +797,12 @@ void Engine::generate_level() {
             }
         }
 
-        // Province road restyle: upgrade dirt roads by region
+        // Province road restyle: upgrade dirt roads by region (outside towns only)
         for (int y = 0; y < map_.height(); y++) {
             for (int x = 0; x < map_.width(); x++) {
                 auto& t = map_.at(x, y);
                 if (t.type != TileType::FLOOR_DIRT) continue;
+                if (near_town(x, y, 25) >= 0) continue; // skip inside towns
                 GodId region = get_town_god(x, y);
                 switch (region) {
                     case GodId::MORRETH: // Heartlands: cobblestone trade roads
@@ -835,6 +836,7 @@ void Engine::generate_level() {
                         else if ((h % 100) < 80) t.type = TileType::FLOOR_DIRT;
                         break;
                     case GodId::KHAEL: // Greenwood: dense vegetation, extra trees
+                        if (near_town(x, y, 30) >= 0) break; // don't plant trees in towns
                         if ((h % 100) < 8) t.type = TileType::TREE;
                         else if ((h % 100) < 12) t.type = TileType::BRUSH;
                         break;
@@ -910,6 +912,12 @@ void Engine::generate_level() {
             "Antidotes don't grow on trees. Well, some do.",
             "These poultices take days to prepare.", "Mind the red mushrooms. Those aren't for eating.",
         };
+        static const char* INNKEEPER_IDLE[] = {
+            "10 gold for a room. Best deal you'll find.",
+            "The ale's fresh. The beds are... acceptable.",
+            "Travelers bring news. Mostly bad news, these days.",
+            "Rest up. The road doesn't get easier from here.",
+        };
 
         // Helper: deterministic dialogue pick from position hash
         auto pick_dialogue = [](const char* pool[], int pool_size, int x, int y) -> const char* {
@@ -978,10 +986,9 @@ void Engine::generate_level() {
                     npc_comp.name = gen_npc_name("Shopkeeper", me.x, me.y);
                     npc_comp.dialogue = "Browse, if you like. I don't haggle.";
                     set_idle(npc_comp, SHOPKEEPER_IDLE, 6);
-                    { int sv = (me.x * 11 + me.y * 7) % 3;
-                      if (sv == 0) { sx = 2; sy = 6; }      // robed merchant
-                      else if (sv == 1) { sx = 3; sy = 6; }  // hooded merchant
-                      else { sx = 1; sy = 6; } }             // cloaked merchant
+                    { int sv = (me.x * 11 + me.y * 7) % 2;
+                      if (sv == 0) { sx = 2; sy = 6; }      // shopkeep
+                      else { sx = 3; sy = 6; } }             // elderly woman (merchant)
                     // Side quest: Ashford shopkeeper — rats in the cellar
                     if (town_idx == 1 && !sq_ratcellar_assigned) {
                         npc_comp.quest_id = static_cast<int>(QuestId::SQ_RAT_CELLAR);
@@ -1014,9 +1021,9 @@ void Engine::generate_level() {
                     npc_comp.dialogue = pick_dialogue(SCHOLAR_DIALOGUE, 3, me.x, me.y);
                     set_idle(npc_comp, SCHOLAR_IDLE, 5);
                     { int pv = (me.x * 17 + me.y * 5) % 3;
-                      if (pv == 0) { sx = 5; sy = 5; }      // robed scholar
-                      else if (pv == 1) { sx = 6; sy = 6; }  // hooded sage
-                      else { sx = 4; sy = 4; } }             // dark robed
+                      if (pv == 0) { sx = 5; sy = 5; }      // scholar
+                      else if (pv == 1) { sx = 3; sy = 4; }  // desert sage
+                      else { sx = 4; sy = 4; } }             // dwarf mage
                     // MQ_02: Thornwall scholar
                     if (town_idx == 0 && !mq_assigned[1]) {
                         npc_comp.quest_id = static_cast<int>(QuestId::MQ_02_SCHOLAR_CLUE);
@@ -1066,11 +1073,10 @@ void Engine::generate_level() {
                     npc_comp.name = gen_npc_name("Farmer", me.x, me.y);
                     npc_comp.dialogue = pick_dialogue(FARMER_DIALOGUE, 3, me.x, me.y);
                     set_idle(npc_comp, FARMER_IDLE, 7);
-                    { int fv = (me.x * 13 + me.y * 3) % 4;
-                      if (fv == 0) { sx = 0; sy = 5; }      // peasant
-                      else if (fv == 1) { sx = 1; sy = 5; }  // worker
-                      else if (fv == 2) { sx = 6; sy = 5; }  // woman
-                      else { sx = 5; sy = 6; } }             // old man
+                    { int fv = (me.x * 13 + me.y * 3) % 3;
+                      if (fv == 0) { sx = 0; sy = 5; }      // farmer (wheat)
+                      else if (fv == 1) { sx = 1; sy = 5; }  // farmer (scythe)
+                      else { sx = 2; sy = 5; } }             // farmer (pitchfork)
                     // Side quest: Thornwall farmer
                     if (town_idx == 0 && !sq_farmer_assigned) {
                         npc_comp.quest_id = static_cast<int>(QuestId::SQ_MISSING_PERSON);
@@ -1150,11 +1156,11 @@ void Engine::generate_level() {
                     npc_comp.dialogue = pick_dialogue(FARMER_DIALOGUE, 3, me.x, me.y);
                     set_idle(npc_comp, FARMER_IDLE, 7);
                     { int wv = (me.x * 9 + me.y * 19) % 5;
-                      if (wv == 0) { sx = 1; sy = 6; }      // cloaked
-                      else if (wv == 1) { sx = 0; sy = 6; }  // hooded
-                      else if (wv == 2) { sx = 6; sy = 5; }  // woman
-                      else if (wv == 3) { sx = 0; sy = 5; }  // peasant
-                      else { sx = 5; sy = 6; } }             // elder
+                      if (wv == 0) { sx = 0; sy = 6; }      // peasant/coalburner
+                      else if (wv == 1) { sx = 3; sy = 6; }  // elderly woman
+                      else if (wv == 2) { sx = 4; sy = 6; }  // elderly man
+                      else if (wv == 3) { sx = 3; sy = 5; }  // baker
+                      else { sx = 0; sy = 5; } }             // farmer (wheat)
                     break;
                 case 'H':
                     npc_comp.role = NPCRole::PRIEST; // herbalist uses priest role
@@ -1235,6 +1241,8 @@ void Engine::generate_level() {
                     set_idle(nc, HERBALIST_IDLE, 4);
                 else if (role == NPCRole::SHOPKEEPER)
                     set_idle(nc, SHOPKEEPER_IDLE, 6);
+                else if (role == NPCRole::INNKEEPER)
+                    set_idle(nc, INNKEEPER_IDLE, 4);
                 add_town_rumors(nc, cx, cy);
                 world_.add<NPC>(e, std::move(nc));
                 world_.add<Renderable>(e, {SHEET_ROGUES, spr_x, spr_y, {255, 255, 255, 255}, 5});
@@ -1260,10 +1268,13 @@ void Engine::generate_level() {
         for (int i = 0; i < TOWN_COUNT; i++) {
             auto herb_name = gen_npc_name("Herbalist", ALL_TOWNS[i].x + 1, ALL_TOWNS[i].y);
             auto merch_name = gen_npc_name("Merchant", ALL_TOWNS[i].x, ALL_TOWNS[i].y + 1);
+            auto inn_name = gen_npc_name("Innkeeper", ALL_TOWNS[i].x + 2, ALL_TOWNS[i].y + 2);
             spawn_extra_npc(ALL_TOWNS[i].x, ALL_TOWNS[i].y, herb_name.c_str(), NPCRole::PRIEST,
                             HERBALIST_LINES[rng_.range(0, 2)], 3, 6);
             spawn_extra_npc(ALL_TOWNS[i].x, ALL_TOWNS[i].y, merch_name.c_str(), NPCRole::SHOPKEEPER,
                             MERCHANT_LINES[rng_.range(0, 2)], 2, 6);
+            spawn_extra_npc(ALL_TOWNS[i].x, ALL_TOWNS[i].y, inn_name.c_str(), NPCRole::INNKEEPER,
+                            INNKEEPER_IDLE[rng_.range(0, 3)], 1, 6);
         }
 
         // Populate overworld with wilderness content
@@ -4958,6 +4969,8 @@ void Engine::try_rest() {
     rested_this_floor_ = true;
     if (dungeon_level_ <= 0) turn_actions_.rested_on_surface = true;
 
+    // (Rest-until-morning handled by innkeeper interaction)
+
     // Spend the rest charge
     rest_count_this_floor_++;
 
@@ -7468,10 +7481,7 @@ void Engine::render_hud() {
     char info[256];
     if (dungeon_level_ <= 0) {
         const char* location = cached_location_;
-        int phase = game_turn_ % 100;
-        const char* time_icon = (phase >= 50 && phase < 90) ? "Night" :
-                                (phase >= 40 && phase < 50) ? "Dusk" :
-                                (phase >= 90) ? "Dawn" : "Day";
+        const char* time_icon = is_night() ? "Night" : is_dusk() ? "Dusk" : is_dawn() ? "Dawn" : "Day";
         snprintf(info, sizeof(info), "%s  %s  %s  Gold:%d  T:%d",
                  god_name, location, time_icon, gold_, game_turn_);
     } else {
@@ -7857,6 +7867,19 @@ void Engine::render() {
 
     // Floating damage/heal numbers
     floating_text_.render(renderer_, font_, font_title_, camera_.x, camera_.y, camera_.tile_size, y_off);
+
+    // Day/night darkness overlay (overworld only)
+    if (dungeon_level_ == 0) {
+        float dark = night_darkness();
+        if (dark > 0.01f) {
+            SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+            uint8_t alpha = static_cast<uint8_t>(dark * 120); // max 120 alpha, not full black
+            // Blue-tinted darkness
+            SDL_SetRenderDrawColor(renderer_, 8, 8, 30, alpha);
+            SDL_Rect dark_rect = {0, 0, width_, height_};
+            SDL_RenderFillRect(renderer_, &dark_rect);
+        }
+    }
 
     // Pet naming overlay
     if (pet_naming_ && font_) {

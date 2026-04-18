@@ -40,7 +40,7 @@
 6.f. scholar
 
 7.a. peasant / coalburner
-7.b. peasant
+7.b. innkeeper
 7.c. shopkeep
 7.d. elderly woman
 7.e. elderly man

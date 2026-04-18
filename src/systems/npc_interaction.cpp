@@ -16,6 +16,8 @@
 #include "components/passive_tree.h"
 #include "data/world_data.h"
 #include "components/quest.h"
+#include "components/status_effect.h"
+#include "core/audio.h"
 #include "save/meta.h"
 #include <cstdio>
 #include <cmath>
@@ -78,8 +80,68 @@ bool interact(Context& ctx, Entity target, int target_x, int target_y) {
         return mult;
     };
 
+    // Innkeeper — rest and heal for gold
+    if (npc.role == NPCRole::INNKEEPER && ctx.world.has<Stats>(ctx.player)) {
+        int cost = 10;
+        auto& ps = ctx.world.get<Stats>(ctx.player);
+        bool full_hp = (ps.hp >= ps.hp_max && ps.mp >= ps.mp_max);
+        bool night = ctx.dungeon_level == 0 && (ctx.game_turn % 200) >= 140;
+
+        if (full_hp && !night) {
+            char buf[128];
+            snprintf(buf, sizeof(buf), "%s: \"You look well enough. Come back when you need a bed.\"",
+                     npc.name.c_str());
+            ctx.log.add(buf, {180, 170, 140, 255});
+            return true;
+        }
+        if (ctx.gold < cost) {
+            char buf[128];
+            snprintf(buf, sizeof(buf), "%s: \"A room costs %d gold. You don't have it.\"",
+                     npc.name.c_str(), cost);
+            ctx.log.add(buf, {180, 120, 120, 255});
+            return true;
+        }
+        // Pay and rest
+        ctx.gold -= cost;
+        int healed = ps.hp_max - ps.hp;
+        int mp_restored = ps.mp_max - ps.mp;
+        ps.hp = ps.hp_max;
+        ps.mp = ps.mp_max;
+        // Clear status effects
+        if (ctx.world.has<StatusEffects>(ctx.player))
+            ctx.world.get<StatusEffects>(ctx.player).effects.clear();
+
+        // Advance to morning if night
+        if (night) {
+            int turns_left = 200 - (ctx.game_turn % 200);
+            ctx.game_turn += turns_left;
+        }
+
+        char buf[128];
+        if (night)
+            snprintf(buf, sizeof(buf),
+                     "%s: \"Sleep well.\" (-%dg, +%d HP, +%d MP, rested until morning)",
+                     npc.name.c_str(), cost, healed, mp_restored);
+        else
+            snprintf(buf, sizeof(buf),
+                     "%s: \"Take your time.\" (-%dg, +%d HP, +%d MP)",
+                     npc.name.c_str(), cost, healed, mp_restored);
+        ctx.log.add(buf, {140, 200, 160, 255});
+        ctx.audio.play(SfxId::REST);
+        ctx.meta.total_hp_healed += healed;
+        return true;
+    }
+
     // Shopkeeper — open shop screen (unless they have a dynamic quest to offer)
     if (npc.role == NPCRole::SHOPKEEPER && !ctx.world.has<DynamicQuest>(target)) {
+        // Shops closed at night (overworld only)
+        bool night = ctx.dungeon_level == 0 && (ctx.game_turn % 200) >= 140;
+        if (night) {
+            char nbuf[128];
+            snprintf(nbuf, sizeof(nbuf), "%s: \"Shop's closed. Come back in the morning.\"", npc.name.c_str());
+            ctx.log.add(nbuf, {160, 150, 130, 255});
+            return true;
+        }
         int pm = calc_shop_price_mult();
         if (pm >= 200)
             ctx.log.add("The merchant eyes you with suspicion and doubles the prices.", {200, 160, 80, 255});

@@ -9,7 +9,8 @@ enum class NPCRole : int {
     PRIEST,
     FARMER,
     GUARD,
-    ELDER,  // quest giver
+    ELDER,     // quest giver
+    INNKEEPER, // rest and heal for gold
 };
 
 struct NPC {
