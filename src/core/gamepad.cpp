@@ -79,6 +79,17 @@ Action Gamepad::translate(const SDL_Event& event) {
         event.cbutton.button == SDL_CONTROLLER_BUTTON_LEFTSHOULDER)
         lb_held_ = false;
 
+    // Track D-pad releases for diagonal combination
+    if (event.type == SDL_CONTROLLERBUTTONUP) {
+        switch (event.cbutton.button) {
+            case SDL_CONTROLLER_BUTTON_DPAD_UP:    dpad_up_ = false; break;
+            case SDL_CONTROLLER_BUTTON_DPAD_DOWN:  dpad_down_ = false; break;
+            case SDL_CONTROLLER_BUTTON_DPAD_LEFT:  dpad_left_ = false; break;
+            case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: dpad_right_ = false; break;
+            default: break;
+        }
+    }
+
     // Button presses
     if (event.type == SDL_CONTROLLERBUTTONDOWN) {
         auto btn = event.cbutton.button;
@@ -102,21 +113,25 @@ Action Gamepad::translate(const SDL_Event& event) {
             }
         }
 
-        // D-pad movement
+        // D-pad movement (track held state for diagonals)
         switch (btn) {
-            case SDL_CONTROLLER_BUTTON_DPAD_UP:
-                last_up_ = true;
-                return Action::MOVE_UP;
-            case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
-                last_down_ = true;
-                return Action::MOVE_DOWN;
-            case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
-                last_left_ = true;
-                return Action::MOVE_LEFT;
-            case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
-                last_right_ = true;
-                return Action::MOVE_RIGHT;
+            case SDL_CONTROLLER_BUTTON_DPAD_UP:    dpad_up_ = true; break;
+            case SDL_CONTROLLER_BUTTON_DPAD_DOWN:  dpad_down_ = true; break;
+            case SDL_CONTROLLER_BUTTON_DPAD_LEFT:  dpad_left_ = true; break;
+            case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: dpad_right_ = true; break;
             default: break;
+        }
+        if (btn >= SDL_CONTROLLER_BUTTON_DPAD_UP &&
+            btn <= SDL_CONTROLLER_BUTTON_DPAD_RIGHT) {
+            int dx = (dpad_right_ ? 1 : 0) - (dpad_left_ ? 1 : 0);
+            int dy = (dpad_down_ ? 1 : 0) - (dpad_up_ ? 1 : 0);
+            if (dx != 0 || dy != 0) {
+                if (dy < 0) last_up_ = true;
+                if (dy > 0) last_down_ = true;
+                if (dx < 0) last_left_ = true;
+                if (dx > 0) last_right_ = true;
+                return dpad_to_movement(dx, dy);
+            }
         }
 
         // Face buttons
@@ -147,14 +162,17 @@ Action Gamepad::translate(const SDL_Event& event) {
         }
     }
 
-    // Trigger axes (LT = pray, RT = rest)
+    // Trigger axes (LT = pray, RT = rest) with edge detection
     if (event.type == SDL_CONTROLLERAXISMOTION) {
-        // Triggers go 0-32767
         if (event.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT) {
-            if (event.caxis.value > 16000) return Action::PRAY;
+            bool pressed = event.caxis.value > 16000;
+            if (pressed && !lt_held_) { lt_held_ = true; return Action::PRAY; }
+            if (!pressed) lt_held_ = false;
         }
         if (event.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERRIGHT) {
-            if (event.caxis.value > 16000) return Action::REST;
+            bool pressed = event.caxis.value > 16000;
+            if (pressed && !rt_held_) { rt_held_ = true; return Action::REST; }
+            if (!pressed) rt_held_ = false;
         }
 
         // Left stick to movement

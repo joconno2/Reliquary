@@ -613,6 +613,13 @@ void populate(World& world, TileMap& map, RNG& rng,
                 if (map.at(bx, by).type != TileType::FLOOR_STONE) continue;
                 if (map.at(bx, by+1).type != TileType::FLOOR_STONE) continue;
                 if (!adjacent_to_wall(bx, by)) continue;
+                // Must be enclosed (walls on at least 2 sides) to ensure inside a building
+                int wall_sides = 0;
+                if (map.in_bounds(bx-1, by) && !map.is_walkable(bx-1, by)) wall_sides++;
+                if (map.in_bounds(bx+1, by) && !map.is_walkable(bx+1, by)) wall_sides++;
+                if (map.in_bounds(bx, by-1) && !map.is_walkable(bx, by-1)) wall_sides++;
+                if (map.in_bounds(bx, by+2) && !map.is_walkable(bx, by+2)) wall_sides++;
+                if (wall_sides < 2) continue;
                 bool door_near = false;
                 for (int dy = -1; dy <= 2 && !door_near; dy++)
                     for (int dx = -1; dx <= 1; dx++)

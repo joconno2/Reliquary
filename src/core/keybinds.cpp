@@ -91,7 +91,7 @@ void Keybinds::set_defaults() {
     def(Action::QUEST_LOG,    {SDLK_q});
     def(Action::WORLD_MAP,    {SDLK_m});
     def(Action::BESTIARY,     {SDLK_TAB});
-    def(Action::HELP,         {SDLK_QUESTION});
+    def(Action::HELP,         {SDLK_SLASH, SDLK_QUESTION});
 
     // Abilities (1-4)
     def(Action::ABILITY_1, {SDLK_1});

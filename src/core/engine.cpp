@@ -5451,7 +5451,8 @@ static SDL_Keycode gamepad_action_to_key(Action act) {
         case Action::QUEST_LOG:   return SDLK_q;
         case Action::WORLD_MAP:   return SDLK_m;
         case Action::BESTIARY:    return SDLK_TAB;
-        case Action::HELP:        return SDLK_QUESTION;
+        case Action::HELP:        return SDLK_SLASH;
+        case Action::QUICK_CAST:  return SDLK_v;
         case Action::QUICKSAVE:   return SDLK_F5;
         case Action::QUICKLOAD:   return SDLK_F6;
         default: return SDLK_UNKNOWN;

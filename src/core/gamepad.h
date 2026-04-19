@@ -41,6 +41,13 @@ private:
     SDL_GameController* controller_ = nullptr;
     bool lb_held_ = false;
 
+    // D-pad held state (for diagonal combinations)
+    bool dpad_up_ = false, dpad_down_ = false;
+    bool dpad_left_ = false, dpad_right_ = false;
+
+    // Trigger edge detection (fire once on press, not continuously)
+    bool lt_held_ = false, rt_held_ = false;
+
     // Stick-to-dpad state (prevents repeated movement)
     int stick_dx_ = 0, stick_dy_ = 0;
     Uint32 stick_repeat_time_ = 0;
