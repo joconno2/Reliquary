@@ -1514,7 +1514,8 @@ void Engine::generate_level() {
         // ─── Room shape modifications (zone-specific) ───
         if (zone_key == "warrens") {
             // Nibble corners: remove 1-2 tiles from room corners to make irregular shapes
-            for (size_t ri = 1; ri < rooms_.size(); ri++) {
+            // Skip last room (stairs_down) to prevent blocking stair access
+            for (size_t ri = 1; ri + 1 < rooms_.size(); ri++) {
                 if (!rng_.chance(60)) continue;
                 auto& rm = rooms_[ri];
                 // Each corner: randomly fill 1-3 tiles back to wall
@@ -1535,7 +1536,8 @@ void Engine::generate_level() {
             }
         } else if (zone_key == "sunken") {
             // Round rooms: carve off corners to make oval-ish shapes
-            for (size_t ri = 0; ri < rooms_.size(); ri++) {
+            // Skip last room (stairs_down) to prevent blocking stair access
+            for (size_t ri = 0; ri + 1 < rooms_.size(); ri++) {
                 if (!rng_.chance(50)) continue;
                 auto& rm = rooms_[ri];
                 int hw = rm.w / 2, hh = rm.h / 2;
@@ -1803,6 +1805,38 @@ void Engine::generate_level() {
     // Re-position pet to player after level transition
     if (pet_entity_ != NULL_ENTITY && world_.has<Position>(pet_entity_)) {
         world_.get<Position>(pet_entity_) = {start_x, start_y};
+    }
+
+    // Ensure stairs are accessible (room shape mods can block them)
+    for (int sy = 0; sy < map_.height(); sy++) {
+        for (int sx = 0; sx < map_.width(); sx++) {
+            auto tt = map_.at(sx, sy).type;
+            if (tt != TileType::STAIRS_DOWN && tt != TileType::STAIRS_UP) continue;
+            // Ensure at least one walkable cardinal neighbor
+            bool has_access = false;
+            const int dirs[][2] = {{0,-1},{0,1},{-1,0},{1,0}};
+            for (auto& [ddx, ddy] : dirs) {
+                int nx = sx + ddx, ny = sy + ddy;
+                if (map_.in_bounds(nx, ny) && map_.is_walkable(nx, ny))
+                    has_access = true;
+            }
+            if (!has_access) {
+                // Find what floor type is nearby to match the zone
+                TileType ft = TileType::FLOOR_STONE;
+                for (int fy = std::max(0, sy-3); fy <= std::min(map_.height()-1, sy+3) && ft == TileType::FLOOR_STONE; fy++) {
+                    for (int fx = std::max(0, sx-3); fx <= std::min(map_.width()-1, sx+3); fx++) {
+                        auto nt = map_.at(fx, fy).type;
+                        if (nt != tt && map_.is_walkable(fx, fy)) { ft = nt; break; }
+                    }
+                }
+                // Clear cardinal neighbors back to floor
+                for (auto& [ddx, ddy] : dirs) {
+                    int nx = sx + ddx, ny = sy + ddy;
+                    if (map_.in_bounds(nx, ny) && !map_.is_walkable(nx, ny))
+                        map_.at(nx, ny).type = ft;
+                }
+            }
+        }
     }
 
     // Spawn monsters and items (not in village)
