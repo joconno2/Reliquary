@@ -216,15 +216,17 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
         doll.skip(sprite_sz + 8);
     }
 
-    // Equipment slots: scale slot size to panel width
+    // Equipment slots: scale slot size to panel width, ensure no overlap
     slot_rects_.clear();
-    int slot_size = std::max(32, doll.cursor.w / 5);
-    int slot_gap = slot_size / 4;
+    int slot_gap = 4;
+    // 3 columns need: 3*slot_size + 2*slot_gap <= panel width
+    int slot_size = std::min(std::max(28, (doll.cursor.w - 2 * slot_gap) / 3), 48);
     int dcx = doll.cursor.cx();
+    int total_w = slot_size * 3 + slot_gap * 2;
 
-    int col_l = dcx - slot_size - slot_gap / 2;
-    int col_c = dcx - slot_size / 2;
-    int col_r = dcx + slot_gap / 2;
+    int col_l = dcx - total_w / 2;
+    int col_c = col_l + slot_size + slot_gap;
+    int col_r = col_c + slot_size + slot_gap;
 
     int row_step = slot_size + slot_gap + line_h + 4;
     int r0 = doll.cursor.y;

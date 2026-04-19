@@ -343,8 +343,10 @@ bool ShopScreen::execute(World& world, int* gold) {
 
         *gold -= si.item.gold_value;
 
-        // Create item entity
+        // Create item entity with sprite
         Entity e = world.create();
+        world.add<Renderable>(e, {SHEET_ITEMS, si.sprite_x, si.sprite_y,
+                                   {255, 255, 255, 255}, 1});
         Item item = si.item; // copy
         world.add<Item>(e, std::move(item));
         inv.add(e);

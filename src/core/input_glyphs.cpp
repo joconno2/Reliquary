@@ -151,10 +151,7 @@ void InputGlyphs::action_to_kb_cell(Action action, int& row, int& col) const {
         case Action::MOVE_RIGHT:   row = 5; col = 5; return;
 
         // Diagonals (no icon, fall back to text)
-        case Action::MOVE_NW:
-        case Action::MOVE_NE:
-        case Action::MOVE_SW:
-        case Action::MOVE_SE:      row = -1; col = -1; return;
+        // No diagonal movement
 
         case Action::BESTIARY:     row = 4; col = 14; return; // Tab
         case Action::QUICKSAVE:    row = 5; col = 8; return;  // F5
@@ -245,10 +242,7 @@ std::string InputGlyphs::label(Action action) const {
         case Action::MOVE_DOWN:    return "Down";
         case Action::MOVE_LEFT:    return "Left";
         case Action::MOVE_RIGHT:   return "Right";
-        case Action::MOVE_NW:      return "Y";
-        case Action::MOVE_NE:      return "U";
-        case Action::MOVE_SW:      return "B";
-        case Action::MOVE_SE:      return "N";
+        // No diagonal movement
         case Action::WAIT:         return ".";
         case Action::INTERACT:     return "Enter";
         case Action::PICKUP:       return "G";

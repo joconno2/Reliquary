@@ -61,17 +61,13 @@ void Keybinds::set_defaults() {
     def(Action::MOVE_LEFT,  {SDLK_LEFT,  SDLK_a, SDLK_h, SDLK_KP_4});
     def(Action::MOVE_RIGHT, {SDLK_RIGHT, SDLK_d, SDLK_l, SDLK_KP_6});
 
-    // Movement (diagonal): yubn + numpad
-    def(Action::MOVE_NW, {SDLK_y, SDLK_KP_7});
-    def(Action::MOVE_NE, {SDLK_u, SDLK_KP_9});
-    def(Action::MOVE_SW, {SDLK_b, SDLK_KP_1});
-    def(Action::MOVE_SE, {SDLK_n, SDLK_KP_3});
+    // Diagonal movement removed (cardinal only)
 
     // Wait
     def(Action::WAIT, {SDLK_PERIOD, SDLK_KP_5});
 
     // Actions
-    def(Action::INTERACT,     {SDLK_e});
+    def(Action::INTERACT,     {SDLK_e, SDLK_SPACE});
     def(Action::PICKUP,       {SDLK_g, SDLK_COMMA});
     def(Action::STAIRS_DOWN,  {SDLK_GREATER});
     def(Action::STAIRS_UP,    {SDLK_LESS});

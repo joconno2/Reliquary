@@ -1809,34 +1809,113 @@ void Engine::generate_level() {
         world_.get<Position>(pet_entity_) = {start_x, start_y};
     }
 
-    // Ensure stairs are accessible (room shape mods can block them)
-    for (int sy = 0; sy < map_.height(); sy++) {
-        for (int sx = 0; sx < map_.width(); sx++) {
-            auto tt = map_.at(sx, sy).type;
-            if (tt != TileType::STAIRS_DOWN && tt != TileType::STAIRS_UP) continue;
-            // Ensure at least one walkable cardinal neighbor
-            bool has_access = false;
+    // Reachability check: flood fill from player start, verify all stairs
+    // and doors are reachable. If stairs_down is unreachable, carve a path.
+    {
+        int mw = map_.width(), mh = map_.height();
+        std::vector<bool> visited(mw * mh, false);
+        std::vector<std::pair<int,int>> queue;
+
+        // Find stairs_up position (player start)
+        int sup_x = start_x, sup_y = start_y;
+
+        // Also find stairs_down position
+        int sdn_x = -1, sdn_y = -1;
+        for (int fy = 0; fy < mh; fy++)
+            for (int fx = 0; fx < mw; fx++) {
+                auto tt = map_.at(fx, fy).type;
+                if (tt == TileType::STAIRS_DOWN) { sdn_x = fx; sdn_y = fy; }
+            }
+
+        // Flood fill from start (walkable tiles + doors)
+        auto passable = [&](int x, int y) -> bool {
+            if (!map_.in_bounds(x, y)) return false;
+            auto t = map_.at(x, y).type;
+            return map_.is_walkable(x, y) || t == TileType::DOOR_CLOSED ||
+                   t == TileType::STAIRS_UP || t == TileType::STAIRS_DOWN;
+        };
+
+        queue.push_back({sup_x, sup_y});
+        visited[sup_y * mw + sup_x] = true;
+        size_t head = 0;
+        while (head < queue.size()) {
+            auto [cx, cy] = queue[head++];
             const int dirs[][2] = {{0,-1},{0,1},{-1,0},{1,0}};
             for (auto& [ddx, ddy] : dirs) {
-                int nx = sx + ddx, ny = sy + ddy;
-                if (map_.in_bounds(nx, ny) && map_.is_walkable(nx, ny))
-                    has_access = true;
+                int nx = cx + ddx, ny = cy + ddy;
+                if (nx < 0 || nx >= mw || ny < 0 || ny >= mh) continue;
+                if (visited[ny * mw + nx]) continue;
+                if (!passable(nx, ny)) continue;
+                visited[ny * mw + nx] = true;
+                queue.push_back({nx, ny});
             }
-            if (!has_access) {
-                // Find what floor type is nearby to match the zone
-                TileType ft = TileType::FLOOR_STONE;
-                for (int fy = std::max(0, sy-3); fy <= std::min(map_.height()-1, sy+3) && ft == TileType::FLOOR_STONE; fy++) {
-                    for (int fx = std::max(0, sx-3); fx <= std::min(map_.width()-1, sx+3); fx++) {
-                        auto nt = map_.at(fx, fy).type;
-                        if (nt != tt && map_.is_walkable(fx, fy)) { ft = nt; break; }
-                    }
+        }
+
+        // If stairs_down exists and is unreachable, carve a cardinal path to it
+        if (sdn_x >= 0 && !visited[sdn_y * mw + sdn_x]) {
+            // Find the nearest visited tile to stairs_down
+            int best_x = sup_x, best_y = sup_y;
+            int best_dist = std::abs(sup_x - sdn_x) + std::abs(sup_y - sdn_y);
+            for (auto& [vx, vy] : queue) {
+                int d = std::abs(vx - sdn_x) + std::abs(vy - sdn_y);
+                if (d < best_dist) { best_dist = d; best_x = vx; best_y = vy; }
+            }
+
+            // Determine zone floor type
+            TileType ft = TileType::FLOOR_STONE;
+            for (auto& [vx, vy] : queue) {
+                auto t = map_.at(vx, vy).type;
+                if (t != TileType::STAIRS_UP && t != TileType::DOOR_CLOSED && map_.is_walkable(vx, vy)) {
+                    ft = t; break;
                 }
-                // Clear cardinal neighbors back to floor
-                for (auto& [ddx, ddy] : dirs) {
-                    int nx = sx + ddx, ny = sy + ddy;
-                    if (map_.in_bounds(nx, ny) && !map_.is_walkable(nx, ny))
-                        map_.at(nx, ny).type = ft;
+            }
+
+            // Carve L-shaped cardinal corridor from nearest reachable tile to stairs
+            int cx = best_x, cy = best_y;
+            while (cx != sdn_x) {
+                cx += (sdn_x > cx) ? 1 : -1;
+                if (map_.in_bounds(cx, cy) && !passable(cx, cy))
+                    map_.at(cx, cy).type = ft;
+            }
+            while (cy != sdn_y) {
+                cy += (sdn_y > cy) ? 1 : -1;
+                if (map_.in_bounds(cx, cy) && !passable(cx, cy))
+                    map_.at(cx, cy).type = ft;
+            }
+        }
+    }
+
+    // Ensure doors are accessible (room shape mods can wall off entry points)
+    for (int sy = 0; sy < map_.height(); sy++) {
+        for (int sx = 0; sx < map_.width(); sx++) {
+            if (map_.at(sx, sy).type != TileType::DOOR_CLOSED) continue;
+            // A door is a chokepoint: walls on opposite sides, open on the other two.
+            // Check which axis the door opens on and ensure both sides are walkable.
+            bool wall_n = map_.in_bounds(sx, sy-1) && !map_.is_walkable(sx, sy-1);
+            bool wall_s = map_.in_bounds(sx, sy+1) && !map_.is_walkable(sx, sy+1);
+            bool wall_e = map_.in_bounds(sx+1, sy) && !map_.is_walkable(sx+1, sy);
+            bool wall_w = map_.in_bounds(sx-1, sy) && !map_.is_walkable(sx-1, sy);
+
+            // Find nearby floor type for patching
+            TileType ft = TileType::FLOOR_STONE;
+            for (int fy = std::max(0, sy-3); fy <= std::min(map_.height()-1, sy+3) && ft == TileType::FLOOR_STONE; fy++)
+                for (int fx = std::max(0, sx-3); fx <= std::min(map_.width()-1, sx+3); fx++) {
+                    auto nt = map_.at(fx, fy).type;
+                    if (nt != TileType::DOOR_CLOSED && map_.is_walkable(fx, fy)) { ft = nt; break; }
                 }
+
+            if (wall_n && wall_s) {
+                // East-west door: ensure east and west are walkable
+                if (wall_e) map_.at(sx+1, sy).type = ft;
+                if (wall_w) map_.at(sx-1, sy).type = ft;
+            } else if (wall_e && wall_w) {
+                // North-south door: ensure north and south are walkable
+                if (wall_n) map_.at(sx, sy-1).type = ft;
+                if (wall_s) map_.at(sx, sy+1).type = ft;
+            } else {
+                // Door lost its chokepoint structure (both axes blocked)
+                // Remove it, it's no longer a valid door
+                map_.at(sx, sy).type = ft;
             }
         }
     }
@@ -4751,20 +4830,14 @@ void Engine::try_interact() {
         }
     }
 
-    // 3. Stairs underfoot -> hint
+    // 3. Stairs underfoot -> use them
     auto tile_type = map_.at(pos.x, pos.y).type;
-    if (tile_type == TileType::STAIRS_DOWN) {
-        if (input_glyphs_.using_gamepad())
-            log_.add("Press (A) to descend.", {150, 140, 130, 255});
-        else
-            log_.add("Press Enter or > to descend.", {150, 140, 130, 255});
-        return;
-    }
-    if (tile_type == TileType::STAIRS_UP) {
-        if (input_glyphs_.using_gamepad())
-            log_.add("Press (A) to ascend.", {150, 140, 130, 255});
-        else
-            log_.add("Press Enter or < to ascend.", {150, 140, 130, 255});
+    if (tile_type == TileType::STAIRS_DOWN || tile_type == TileType::STAIRS_UP) {
+        // Reuse the stair handling by synthesizing a STAIRS_ENTER key event
+        SDL_Event synth = {};
+        synth.type = SDL_KEYDOWN;
+        synth.key.keysym.sym = SDLK_RETURN;
+        SDL_PushEvent(&synth);
         return;
     }
 
@@ -5429,10 +5502,7 @@ static SDL_Keycode gamepad_action_to_key(Action act) {
         case Action::MOVE_DOWN:   return SDLK_DOWN;
         case Action::MOVE_LEFT:   return SDLK_LEFT;
         case Action::MOVE_RIGHT:  return SDLK_RIGHT;
-        case Action::MOVE_NW:     return SDLK_y;
-        case Action::MOVE_NE:     return SDLK_u;
-        case Action::MOVE_SW:     return SDLK_b;
-        case Action::MOVE_SE:     return SDLK_n;
+        // No diagonal movement
         case Action::INTERACT:    return SDLK_RETURN;
         case Action::WAIT:        return SDLK_PERIOD;
         case Action::PICKUP:      return SDLK_g;
@@ -5959,10 +6029,7 @@ void Engine::handle_input() {
                         case Action::MOVE_RIGHT: dx =  1; break;
                         case Action::MOVE_UP:    dy = -1; break;
                         case Action::MOVE_DOWN:  dy =  1; break;
-                        case Action::MOVE_NW: dx = -1; dy = -1; break;
-                        case Action::MOVE_NE: dx =  1; dy = -1; break;
-                        case Action::MOVE_SW: dx = -1; dy =  1; break;
-                        case Action::MOVE_SE: dx =  1; dy =  1; break;
+                        // Diagonal movement removed (cardinal only)
                         default:
                             if (lsym == SDLK_ESCAPE || lact == Action::EXAMINE) {
                                 look_mode_ = false;
@@ -6593,10 +6660,7 @@ void Engine::handle_input() {
                 case Action::MOVE_DOWN:  try_move_player(0, 1);   break;
                 case Action::MOVE_LEFT:  try_move_player(-1, 0);  break;
                 case Action::MOVE_RIGHT: try_move_player(1, 0);   break;
-                case Action::MOVE_NW:    try_move_player(-1, -1); break;
-                case Action::MOVE_NE:    try_move_player(1, -1);  break;
-                case Action::MOVE_SW:    try_move_player(-1, 1);  break;
-                case Action::MOVE_SE:    try_move_player(1, 1);   break;
+                // Diagonal movement removed (cardinal only)
 
                 case Action::WAIT:
                     player_acted_ = true;

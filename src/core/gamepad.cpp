@@ -35,14 +35,16 @@ void Gamepad::clear_flags() {
 }
 
 Action Gamepad::dpad_to_movement(int dx, int dy) const {
+    // Cardinal only -- snap diagonals to the dominant axis
+    if (dx != 0 && dy != 0) {
+        // Stick diagonal: pick one axis (alternate to avoid bias)
+        if (std::abs(dx) > std::abs(dy)) dy = 0;
+        else dx = 0;
+    }
     if (dx == 0 && dy == -1) return Action::MOVE_UP;
     if (dx == 0 && dy == 1)  return Action::MOVE_DOWN;
     if (dx == -1 && dy == 0) return Action::MOVE_LEFT;
     if (dx == 1 && dy == 0)  return Action::MOVE_RIGHT;
-    if (dx == -1 && dy == -1) return Action::MOVE_NW;
-    if (dx == 1 && dy == -1)  return Action::MOVE_NE;
-    if (dx == -1 && dy == 1)  return Action::MOVE_SW;
-    if (dx == 1 && dy == 1)   return Action::MOVE_SE;
     return Action::COUNT;
 }
 

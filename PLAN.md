@@ -182,7 +182,7 @@ The game is fully playable from character creation through a 17-step main quest 
 - **Dynamic HUD**: overworld shows nearest town name or province, dungeon shows dungeon name + depth, day/night time indicator
 
 ### Keybinds
-Movement: arrows/hjkl/numpad (+ diagonals yubn) | Wait: ./numpad5
+Movement: arrows/WASD/hjkl/numpad (cardinal only) | Wait: ./numpad5
 Actions: g/, pickup | Enter/>/< stairs | r rest | f fire ranged | p pray | x examine | ? help
 Screens: i inventory | c character | z spells | q quests | M world map | Tab bestiary | Esc pause
 F11 fullscreen | F12 screenshot

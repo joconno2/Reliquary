@@ -77,7 +77,7 @@ void HelpScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_t
         ui::draw_text(renderer, font, "MOVEMENT", section_col, key_x, y);
         y += line_h + 4;
         Bind gp_movement[] = {
-            {"D-Pad / L-Stick",     "Move (cardinal + diagonal)"},
+            {"D-Pad / L-Stick",     "Move"},
             {"(A)",                  "Interact / confirm / use stairs"},
             {"(B)",                  "Cancel / close menus"},
         };
@@ -144,12 +144,11 @@ void HelpScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_t
         ui::draw_text(renderer, font, "MOVEMENT", section_col, key_x, y);
         y += line_h + 4;
         Bind movement[] = {
-            {"Arrows / WASD / hjkl", "Move (cardinal)"},
-            {"yubn / Numpad",        "Move (diagonal)"},
+            {"Arrows / WASD / hjkl", "Move"},
             {". / Numpad 5",         "Wait one turn"},
             {"o",                    "Toggle sneak mode"},
         };
-        draw_binds(key_x, desc_x, movement, 4, y);
+        draw_binds(key_x, desc_x, movement, 3, y);
 
         // ACTIONS
         y += 8;

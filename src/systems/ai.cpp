@@ -65,23 +65,25 @@ static void update_facing(World& world, Entity e, int old_x, int new_x) {
     }
 }
 
-// Move toward a target position
+// Move toward a target position (cardinal only)
 static void move_toward(World& world, TileMap& map, Entity e,
                          int tx, int ty, [[maybe_unused]] RNG& rng) {
     auto& pos = world.get<Position>(e);
     int dx = 0, dy = 0;
 
-    if (tx > pos.x) dx = 1;
-    else if (tx < pos.x) dx = -1;
-    if (ty > pos.y) dy = 1;
-    else if (ty < pos.y) dy = -1;
+    // Pick the axis with the larger distance, or random if equal
+    int adx = std::abs(tx - pos.x);
+    int ady = std::abs(ty - pos.y);
+    if (adx > ady || (adx == ady && rng.chance(50))) {
+        dx = (tx > pos.x) ? 1 : (tx < pos.x) ? -1 : 0;
+    } else {
+        dy = (ty > pos.y) ? 1 : (ty < pos.y) ? -1 : 0;
+    }
 
+    int old_x = pos.x;
     int nx = pos.x + dx;
     int ny = pos.y + dy;
 
-    int old_x = pos.x;
-
-    // Try direct path first
     if (map.is_walkable(nx, ny) && !tile_blocked_by_entity(world, nx, ny, e)) {
         pos.x = nx;
         pos.y = ny;
@@ -89,30 +91,38 @@ static void move_toward(World& world, TileMap& map, Entity e,
         return;
     }
 
-    // Try cardinal alternatives if diagonal blocked
-    if (dx != 0 && dy != 0) {
-        if (map.is_walkable(pos.x + dx, pos.y) &&
+    // Blocked on primary axis, try the other
+    if (dx != 0) {
+        dy = (ty > pos.y) ? 1 : (ty < pos.y) ? -1 : 0;
+        if (dy != 0 && map.is_walkable(pos.x, pos.y + dy) &&
+            !tile_blocked_by_entity(world, pos.x, pos.y + dy, e)) {
+            pos.y += dy;
+            return;
+        }
+    } else if (dy != 0) {
+        dx = (tx > pos.x) ? 1 : (tx < pos.x) ? -1 : 0;
+        if (dx != 0 && map.is_walkable(pos.x + dx, pos.y) &&
             !tile_blocked_by_entity(world, pos.x + dx, pos.y, e)) {
             pos.x += dx;
             update_facing(world, e, old_x, pos.x);
             return;
         }
-        if (map.is_walkable(pos.x, pos.y + dy) &&
-            !tile_blocked_by_entity(world, pos.x, pos.y + dy, e)) {
-            pos.y += dy;
-            return;
-        }
     }
 }
 
-// Wander randomly
+// Wander randomly (cardinal only)
 static void wander(World& world, TileMap& map, Entity e, RNG& rng) {
     auto& pos = world.get<Position>(e);
     // 50% chance to just stand still
     if (rng.chance(50)) return;
 
-    int dx = rng.range(-1, 1);
-    int dy = rng.range(-1, 1);
+    int dx = 0, dy = 0;
+    switch (rng.range(0, 3)) {
+        case 0: dx = -1; break;
+        case 1: dx =  1; break;
+        case 2: dy = -1; break;
+        case 3: dy =  1; break;
+    }
     if (dx == 0 && dy == 0) return;
 
     int old_x = pos.x;
@@ -394,14 +404,12 @@ void process(World& world, TileMap& map, Entity player, RNG& rng,
                     }
 
                     case BehaviorType::CHARGER:
-                        // Charge when 2-4 tiles away in a line
+                        // Charge when 2-4 tiles away in a cardinal line
                         if (can_see && ai_comp.ability_cooldown == 0 && dist >= 2 && dist <= 4) {
-                            // Check if in a straight line (cardinal or diagonal)
                             int cdx = player_pos.x - pos.x;
                             int cdy = player_pos.y - pos.y;
-                            bool in_line = (cdx == 0 || cdy == 0 || std::abs(cdx) == std::abs(cdy));
+                            bool in_line = (cdx == 0 || cdy == 0);
                             if (in_line) {
-                                // Charge: move to adjacent tile and mark for double damage
                                 int sdx = (cdx > 0) ? 1 : (cdx < 0) ? -1 : 0;
                                 int sdy = (cdy > 0) ? 1 : (cdy < 0) ? -1 : 0;
                                 // Move up to (dist-1) tiles toward player

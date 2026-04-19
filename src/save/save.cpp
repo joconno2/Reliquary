@@ -13,6 +13,7 @@
 #include "components/buff.h"
 #include "components/ai.h"
 #include "components/container.h"
+#include "components/npc.h"
 #include "components/corpse.h"
 #include "components/passive_tree.h"
 #include "components/skills.h"
@@ -392,6 +393,19 @@ bool save_game(const std::string& path, const SaveData& data,
                 fxj.push_back({{"t", static_cast<int>(eff.type)}, {"d", eff.damage}, {"r", eff.turns_remaining}});
             if (!fxj.empty()) ej["sfx"] = fxj;
         }
+        if (world.has<NPC>(e)) {
+            auto& npc = world.get<NPC>(e);
+            ej["npc_role"] = static_cast<int>(npc.role);
+            ej["npc_name"] = npc.name;
+            ej["npc_dialogue"] = npc.dialogue;
+            ej["npc_quest"] = npc.quest_id;
+            ej["npc_hx"] = npc.home_x;
+            ej["npc_hy"] = npc.home_y;
+            ej["npc_god"] = static_cast<int>(npc.god_affiliation);
+            json idle = json::array();
+            for (auto& line : npc.idle_lines) idle.push_back(line);
+            if (!idle.empty()) ej["npc_idle"] = idle;
+        }
 
         floor_entities.push_back(ej);
     }
@@ -667,6 +681,20 @@ SaveData load_game(const std::string& path, World& world, TileMap& map) {
                 for (auto& f : ej["sfx"])
                     fx.add(static_cast<StatusType>(f.value("t", 0)), f.value("d", 0), f.value("r", 0));
                 world.add<StatusEffects>(e, std::move(fx));
+            }
+            if (ej.contains("npc_role")) {
+                NPC npc;
+                npc.role = static_cast<NPCRole>(ej.value("npc_role", 0));
+                npc.name = ej.value("npc_name", "someone");
+                npc.dialogue = ej.value("npc_dialogue", "...");
+                npc.quest_id = ej.value("npc_quest", -1);
+                npc.home_x = ej.value("npc_hx", 0);
+                npc.home_y = ej.value("npc_hy", 0);
+                npc.god_affiliation = static_cast<GodId>(ej.value("npc_god", 0));
+                if (ej.contains("npc_idle"))
+                    for (auto& line : ej["npc_idle"])
+                        npc.idle_lines.push_back(line.get<std::string>());
+                world.add<NPC>(e, std::move(npc));
             }
         }
     }
