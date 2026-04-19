@@ -1,5 +1,6 @@
 #include "ui/quest_offer.h"
 #include "ui/ui_draw.h"
+#include "core/input_glyphs.h"
 #include <cstdio>
 #include <algorithm>
 
@@ -139,6 +140,12 @@ void QuestOffer::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_t
     draw_btn(decline_btn_, "Decline", selected_ == 1);
 
     // Hint below panel
-    ui::draw_text_centered(renderer, font, "[Y] accept  [Esc] decline  [Left/Right] select  [Enter] confirm",
-                            dim_col, w / 2, outer.y2() + 8);
+    { auto* ig = InputGlyphs::get();
+      char hbuf[256];
+      if (ig && ig->using_gamepad())
+          snprintf(hbuf, sizeof(hbuf), "%s confirm   %s decline   D-Pad select",
+                   ig->confirm().c_str(), ig->cancel().c_str());
+      else
+          snprintf(hbuf, sizeof(hbuf), "[Y] accept  [Esc] decline  [Left/Right] select  [Enter] confirm");
+      ui::draw_text_centered(renderer, font, hbuf, dim_col, w / 2, outer.y2() + 8); }
 }

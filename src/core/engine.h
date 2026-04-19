@@ -48,6 +48,8 @@
 #include "components/spellbook.h"
 #include "core/audio.h"
 #include "core/keybinds.h"
+#include "core/gamepad.h"
+#include "core/input_glyphs.h"
 #include <vector>
 #include <string>
 #include <map>
@@ -114,6 +116,8 @@ private:
     RNG rng_;
     Audio audio_;
     Keybinds keybinds_;
+    Gamepad gamepad_;
+    InputGlyphs input_glyphs_;
     ParticleSystem particles_;
     FloatingTextSystem floating_text_;
     TutorialPopup tutorial_popup_;

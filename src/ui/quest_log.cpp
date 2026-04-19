@@ -2,6 +2,7 @@
 #include "ui/quest_log.h"
 #include "ui/ui_draw.h"
 #include "ui/ui_layout.h"
+#include "core/input_glyphs.h"
 #include "components/dynamic_quest.h"
 #include <cstdio>
 
@@ -69,7 +70,13 @@ void QuestLog::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_tit
     // Actually need a gap between content and footer. Cut a small spacer from bottom.
     panel.row_bottom(8);
 
-    ui::draw_text_in(renderer, font, "[q / Esc] close", dim_col, footer, ui::Align::CENTER);
+    { auto* ig = InputGlyphs::get();
+      char hbuf[128];
+      if (ig && ig->using_gamepad())
+          snprintf(hbuf, sizeof(hbuf), "%s close", ig->cancel().c_str());
+      else
+          snprintf(hbuf, sizeof(hbuf), "[q / Esc] close");
+      ui::draw_text_in(renderer, font, hbuf, dim_col, footer, ui::Align::CENTER); }
 
     if (journal.entries.empty()) {
         ui::Rect empty_row = panel.row();

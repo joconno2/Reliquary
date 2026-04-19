@@ -1,5 +1,6 @@
 #include "ui/levelup_screen.h"
 #include "ui/ui_draw.h"
+#include "core/input_glyphs.h"
 #include "components/stats.h"
 #include <cstdio>
 #include <algorithm>
@@ -315,6 +316,11 @@ void LevelUpScreen::render(SDL_Renderer* renderer, TTF_Font* font,
 
     // Hint at bottom
     layout.skip(layout.gap / 2);
-    ui::draw_text_in(renderer, font, "[1-3] or Up/Down + Enter",
-                     hint_col, layout.row(), ui::Align::CENTER);
+    { auto* ig = InputGlyphs::get();
+      char hbuf[128];
+      if (ig && ig->using_gamepad())
+          snprintf(hbuf, sizeof(hbuf), "D-Pad + %s to choose", ig->confirm().c_str());
+      else
+          snprintf(hbuf, sizeof(hbuf), "[1-3] or Up/Down + Enter");
+      ui::draw_text_in(renderer, font, hbuf, hint_col, layout.row(), ui::Align::CENTER); }
 }

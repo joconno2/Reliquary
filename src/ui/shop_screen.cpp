@@ -1,5 +1,6 @@
 #include "ui/shop_screen.h"
 #include "ui/ui_draw.h"
+#include "core/input_glyphs.h"
 #include "components/inventory.h"
 #include "components/renderable.h"
 #include "core/spritesheet.h"
@@ -599,6 +600,12 @@ void ShopScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     }
 
     // Hints at bottom
-    ui::draw_text_in(renderer, font, "[Tab] switch  [Enter] buy/sell  [Esc/s] close",
-                     hint_col, hint_row, ui::Align::LEFT);
+    { auto* ig = InputGlyphs::get();
+      char hbuf[256];
+      if (ig && ig->using_gamepad())
+          snprintf(hbuf, sizeof(hbuf), "(Y) switch  %s buy/sell  %s close",
+                   ig->confirm().c_str(), ig->cancel().c_str());
+      else
+          snprintf(hbuf, sizeof(hbuf), "[Tab] switch  [Enter] buy/sell  [Esc/s] close");
+      ui::draw_text_in(renderer, font, hbuf, hint_col, hint_row, ui::Align::LEFT); }
 }

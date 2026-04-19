@@ -1,5 +1,6 @@
 #include "ui/main_menu.h"
 #include "ui/ui_draw.h"
+#include "core/input_glyphs.h"
 #include <cmath>
 
 // Option order: New Game, [Continue], Load, Settings, Quit
@@ -179,7 +180,14 @@ void MainMenu::render(SDL_Renderer* renderer, TTF_Font* body, TTF_Font* title,
 
     // Hint
     SDL_Color hint_col = {90, 85, 75, 255};
-    ui::draw_text_centered(renderer, body, "[Up/Down] select   [Enter] confirm", hint_col, cx, h - 50);
+    { auto* ig = InputGlyphs::get();
+      char hbuf[256];
+      if (ig && ig->using_gamepad())
+          snprintf(hbuf, sizeof(hbuf), "%s select   %s confirm",
+                   ig->label(Action::MOVE_UP).c_str(), ig->confirm().c_str());
+      else
+          snprintf(hbuf, sizeof(hbuf), "[Up/Down] select   [Enter] confirm");
+      ui::draw_text_centered(renderer, body, hbuf, hint_col, cx, h - 50); }
 
     // Version
 #ifdef RELIQUARY_VERSION

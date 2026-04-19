@@ -68,7 +68,7 @@ Engine::~Engine() {
 
 bool Engine::init() {
     fprintf(stderr, "[init] SDL_Init...\n"); fflush(stderr);
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) < 0) {
         fprintf(stderr, "SDL_Init error: %s\n", SDL_GetError());
         fflush(stderr);
         return false;
@@ -190,6 +190,8 @@ bool Engine::init() {
 
     audio_.init();
     keybinds_.load("save/keybinds.json");
+    gamepad_.init();
+    input_glyphs_.load(renderer_);
     settings_.set_audio(&audio_);
     settings_.set_keybinds(&keybinds_);
     meta_ = meta::load();
@@ -2040,10 +2042,13 @@ void Engine::grant_skill_xp(SkillId skill, int amount) {
         log_.add(buf, {140, 200, 160, 255});
         if (!tips_shown_.first_skill_levelup) {
             tips_shown_.first_skill_levelup = true;
-            tutorial_popup_.show("Skill Up",
+            { char tb[256];
+              snprintf(tb, sizeof(tb),
                 "Skills improve through use and unlock\n"
                 "bonuses at levels 25, 50, and 75.\n\n"
-                "C - View character sheet and skills");
+                "%s - View character sheet and skills",
+                input_glyphs_.label(Action::CHARACTER).c_str());
+              tutorial_popup_.show("Skill Up", tb); }
         }
         // Milestone notifications
         if (new_lv == 25 || new_lv == 50 || new_lv == 75) {
@@ -2224,11 +2229,14 @@ void Engine::try_move_player(int dx, int dy) {
             };
             if (!tips_shown_.first_npc) {
                 tips_shown_.first_npc = true;
-                tutorial_popup_.show("NPCs",
+                { char tb[256];
+                  snprintf(tb, sizeof(tb),
                     "NPCs offer quests, shops, and healing.\n\n"
-                    "E - Interact with a nearby NPC\n"
+                    "%s - Interact with a nearby NPC\n"
                     "Bump - Walk into an NPC to talk\n"
-                    "Sneak + Bump - Pickpocket");
+                    "Sneak + Bump - Pickpocket",
+                    input_glyphs_.label(Action::INTERACT).c_str());
+                  tutorial_popup_.show("NPCs", tb); }
             }
             // Church high priest: open church screen
             if (world_.has<Church>(target) && world_.has<GodAlignment>(player_)) {
@@ -2293,11 +2301,16 @@ void Engine::try_move_player(int dx, int dy) {
         // Tutorial: first combat
         if (!tips_shown_.first_combat) {
             tips_shown_.first_combat = true;
-            tutorial_popup_.show("Combat",
+            { char tb[256];
+              snprintf(tb, sizeof(tb),
                 "Weapon skills improve through use.\n\n"
-                "Z - Cast spells\n"
-                "F - Fire ranged weapon\n"
-                "O - Toggle sneak (backstab for 2-4x damage)");
+                "%s - Cast spells\n"
+                "%s - Fire ranged weapon\n"
+                "%s - Toggle sneak (backstab for 2-4x damage)",
+                input_glyphs_.label(Action::SPELLBOOK).c_str(),
+                input_glyphs_.label(Action::FIRE_RANGED).c_str(),
+                input_glyphs_.label(Action::SNEAK_TOGGLE).c_str());
+              tutorial_popup_.show("Combat", tb); }
         }
 
         // Backstab: bonus damage from sneak attack
@@ -2709,11 +2722,16 @@ void Engine::try_move_player(int dx, int dy) {
             start_transition(TransitionType::FLASH, 250, {255, 255, 200, 255});
             if (!tips_shown_.first_levelup) {
                 tips_shown_.first_levelup = true;
-                tutorial_popup_.show("Level Up",
+                { char tb[256];
+                  snprintf(tb, sizeof(tb),
                     "You earned a passive tree point!\n\n"
-                    "T - Open the passive tree to spend it\n"
-                    "I - Check inventory and equipment\n"
-                    "C - View character sheet");
+                    "%s - Open the passive tree to spend it\n"
+                    "%s - Check inventory and equipment\n"
+                    "%s - View character sheet",
+                    input_glyphs_.label(Action::PASSIVE_TREE).c_str(),
+                    input_glyphs_.label(Action::INVENTORY).c_str(),
+                    input_glyphs_.label(Action::CHARACTER).c_str());
+                  tutorial_popup_.show("Level Up", tb); }
             }
         }
         return;
@@ -4241,7 +4259,13 @@ void Engine::describe_tile(int x, int y) {
             if (cont.opened) {
                 log_.add("An opened container.", {140, 130, 120, 255});
             } else {
-                log_.add("A closed container. Press g to open.", {180, 170, 140, 255});
+                { char cbuf[128];
+                  if (input_glyphs_.using_gamepad())
+                      snprintf(cbuf, sizeof(cbuf), "A closed container. Press %s to open.",
+                               input_glyphs_.label(Action::PICKUP).c_str());
+                  else
+                      snprintf(cbuf, sizeof(cbuf), "A closed container. Press g to open.");
+                  log_.add(cbuf, {180, 170, 140, 255}); }
             }
             found_entity = true;
         } else if (world_.has<Corpse>(e)) {
@@ -4730,11 +4754,17 @@ void Engine::try_interact() {
     // 3. Stairs underfoot -> hint
     auto tile_type = map_.at(pos.x, pos.y).type;
     if (tile_type == TileType::STAIRS_DOWN) {
-        log_.add("Press Enter or > to descend.", {150, 140, 130, 255});
+        if (input_glyphs_.using_gamepad())
+            log_.add("Press (A) to descend.", {150, 140, 130, 255});
+        else
+            log_.add("Press Enter or > to descend.", {150, 140, 130, 255});
         return;
     }
     if (tile_type == TileType::STAIRS_UP) {
-        log_.add("Press Enter or < to ascend.", {150, 140, 130, 255});
+        if (input_glyphs_.using_gamepad())
+            log_.add("Press (A) to ascend.", {150, 140, 130, 255});
+        else
+            log_.add("Press Enter or < to ascend.", {150, 140, 130, 255});
         return;
     }
 
@@ -5392,12 +5422,92 @@ void Engine::handle_inventory_action(InvAction action) {
     }
 }
 
+// Map a gamepad Action to a synthetic SDL keycode for UI screens
+static SDL_Keycode gamepad_action_to_key(Action act) {
+    switch (act) {
+        case Action::MOVE_UP:     return SDLK_UP;
+        case Action::MOVE_DOWN:   return SDLK_DOWN;
+        case Action::MOVE_LEFT:   return SDLK_LEFT;
+        case Action::MOVE_RIGHT:  return SDLK_RIGHT;
+        case Action::MOVE_NW:     return SDLK_y;
+        case Action::MOVE_NE:     return SDLK_u;
+        case Action::MOVE_SW:     return SDLK_b;
+        case Action::MOVE_SE:     return SDLK_n;
+        case Action::INTERACT:    return SDLK_RETURN;
+        case Action::WAIT:        return SDLK_PERIOD;
+        case Action::PICKUP:      return SDLK_g;
+        case Action::STAIRS_DOWN: return SDLK_GREATER;
+        case Action::STAIRS_UP:   return SDLK_LESS;
+        case Action::STAIRS_ENTER:return SDLK_RETURN;
+        case Action::FIRE_RANGED: return SDLK_f;
+        case Action::REST:        return SDLK_r;
+        case Action::PRAY:        return SDLK_p;
+        case Action::EXAMINE:     return SDLK_x;
+        case Action::SNEAK_TOGGLE:return SDLK_o;
+        case Action::INVENTORY:   return SDLK_i;
+        case Action::SPELLBOOK:   return SDLK_z;
+        case Action::CHARACTER:   return SDLK_c;
+        case Action::PASSIVE_TREE:return SDLK_t;
+        case Action::QUEST_LOG:   return SDLK_q;
+        case Action::WORLD_MAP:   return SDLK_m;
+        case Action::BESTIARY:    return SDLK_TAB;
+        case Action::HELP:        return SDLK_QUESTION;
+        case Action::QUICKSAVE:   return SDLK_F5;
+        case Action::QUICKLOAD:   return SDLK_F6;
+        default: return SDLK_UNKNOWN;
+    }
+}
+
 void Engine::handle_input() {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
         if (event.type == SDL_QUIT) {
             state_ = GameState::QUIT;
             return;
+        }
+
+        // Track input mode (keyboard vs gamepad) for UI glyph display
+        input_glyphs_.update(event);
+
+        // Gamepad: translate controller events into synthetic key events
+        // so all existing screen handlers work without modification
+        if (event.type == SDL_CONTROLLERBUTTONDOWN ||
+            event.type == SDL_CONTROLLERBUTTONUP ||
+            event.type == SDL_CONTROLLERAXISMOTION ||
+            event.type == SDL_CONTROLLERDEVICEADDED ||
+            event.type == SDL_CONTROLLERDEVICEREMOVED) {
+            Action gp_act = gamepad_.translate(event);
+
+            // B button = Escape (cancel/back) in all contexts
+            if (event.type == SDL_CONTROLLERBUTTONDOWN &&
+                event.cbutton.button == SDL_CONTROLLER_BUTTON_B) {
+                SDL_Event synth = {};
+                synth.type = SDL_KEYDOWN;
+                synth.key.keysym.sym = SDLK_ESCAPE;
+                SDL_PushEvent(&synth);
+                continue;
+            }
+
+            // Start = Escape (pause)
+            if (event.type == SDL_CONTROLLERBUTTONDOWN &&
+                event.cbutton.button == SDL_CONTROLLER_BUTTON_START) {
+                SDL_Event synth = {};
+                synth.type = SDL_KEYDOWN;
+                synth.key.keysym.sym = SDLK_ESCAPE;
+                SDL_PushEvent(&synth);
+                continue;
+            }
+
+            if (gp_act != Action::COUNT) {
+                SDL_Keycode key = gamepad_action_to_key(gp_act);
+                if (key != SDLK_UNKNOWN) {
+                    SDL_Event synth = {};
+                    synth.type = SDL_KEYDOWN;
+                    synth.key.keysym.sym = key;
+                    SDL_PushEvent(&synth);
+                }
+            }
+            continue;
         }
 
         // Handle window resize
@@ -6526,7 +6636,7 @@ void Engine::handle_input() {
                                 "Sneaking halves your speed but enemies\n"
                                 "detect you from much closer.\n\n"
                                 "Attack from sneak for a backstab (2-4x damage).\n"
-                                "Bump NPCs while sneaking to pickpocket.");
+                                "Walk into NPCs while sneaking to pickpocket.");
                         }
                         // Dim player sprite
                         if (world_.has<Renderable>(player_)) {
@@ -6824,7 +6934,13 @@ void Engine::handle_input() {
                             quick_cast_ = SpellId::COUNT;
                         }
                     } else if (quick_cast_ == SpellId::COUNT) {
-                        log_.add("No quick-cast spell set. Press z then q on a spell.", {140, 135, 130, 255});
+                        { char qbuf[128];
+                          if (input_glyphs_.using_gamepad())
+                              snprintf(qbuf, sizeof(qbuf), "No quick-cast spell set. Open %s and set one.",
+                                       input_glyphs_.label(Action::SPELLBOOK).c_str());
+                          else
+                              snprintf(qbuf, sizeof(qbuf), "No quick-cast spell set. Press z then q on a spell.");
+                          log_.add(qbuf, {140, 135, 130, 255}); }
                     }
                     break;
 
@@ -6892,12 +7008,18 @@ void Engine::handle_input() {
                             log_.add(ebuf, {180, 170, 150, 255});
                             if (!tips_shown_.first_dungeon) {
                                 tips_shown_.first_dungeon = true;
-                                tutorial_popup_.show("Entering a Dungeon",
-                                    "Watch for traps. High PER helps detect them.\n\n"
-                                    "R - Rest (heals fully, limited uses per floor)\n"
-                                    "O - Toggle sneak\n"
-                                    "E - Interact with items, NPCs, containers\n"
-                                    "< - Return to the surface");
+                                { char tb[256];
+                              snprintf(tb, sizeof(tb),
+                                "Watch for traps. High PER helps detect them.\n\n"
+                                "%s - Rest (heals fully, limited uses per floor)\n"
+                                "%s - Toggle sneak\n"
+                                "%s - Interact with items, NPCs, containers\n"
+                                "%s - Return to the surface",
+                                input_glyphs_.label(Action::REST).c_str(),
+                                input_glyphs_.label(Action::SNEAK_TOGGLE).c_str(),
+                                input_glyphs_.label(Action::INTERACT).c_str(),
+                                input_glyphs_.label(Action::STAIRS_UP).c_str());
+                              tutorial_popup_.show("Entering a Dungeon", tb); }
                             }
                             // Zone-flavored entrance line
                             if (de.zone == "warrens")

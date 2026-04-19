@@ -1,5 +1,6 @@
 #include "ui/spell_screen.h"
 #include "ui/ui_draw.h"
+#include "core/input_glyphs.h"
 #include "components/stats.h"
 #include <cstdio>
 #include <algorithm>
@@ -226,6 +227,12 @@ void SpellScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     }
 
     // Hint at bottom
-    ui::draw_text_in(renderer, font, "[enter]cast [q]quick-cast [esc]close", dim_col,
-                     hint_row, ui::Align::LEFT);
+    { auto* ig = InputGlyphs::get();
+      char hbuf[256];
+      if (ig && ig->using_gamepad())
+          snprintf(hbuf, sizeof(hbuf), "%s cast  (X) quick-cast  %s close",
+                   ig->confirm().c_str(), ig->cancel().c_str());
+      else
+          snprintf(hbuf, sizeof(hbuf), "[enter]cast [q]quick-cast [esc]close");
+      ui::draw_text_in(renderer, font, hbuf, dim_col, hint_row, ui::Align::LEFT); }
 }

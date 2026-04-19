@@ -1,5 +1,6 @@
 #include "ui/character_sheet.h"
 #include "ui/ui_draw.h"
+#include "core/input_glyphs.h"
 #include "components/stats.h"
 #include "components/renderable.h"
 #include "components/player.h"
@@ -461,8 +462,14 @@ void CharacterSheet::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* fo
         ui::draw_text_clipped(renderer, font, tbuf, tree_col, th.x, th.y, th.w);
         if (tree.points_available > 0) {
             auto tp = right.row();
-            ui::draw_text(renderer, font, "  Press T to open and spend points.",
-                          {220, 200, 80, 255}, tp.x, tp.y);
+            auto* ig = InputGlyphs::get();
+            char tbuf[128];
+            if (ig && ig->using_gamepad())
+                snprintf(tbuf, sizeof(tbuf), "  Press %s to open and spend points.",
+                         ig->label(Action::PASSIVE_TREE).c_str());
+            else
+                snprintf(tbuf, sizeof(tbuf), "  Press T to open and spend points.");
+            ui::draw_text(renderer, font, tbuf, {220, 200, 80, 255}, tp.x, tp.y);
         }
     }
 
@@ -486,11 +493,18 @@ void CharacterSheet::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* fo
 
     // Scroll hint
     auto hint_rect = ui::Rect{outer.x, outer.y2() - line_h - 8, outer.w, line_h};
-    if (scroll_ > 0 || right.cursor.y > right_rect.y2()) {
-        ui::draw_text_in(renderer, font, "[Up/Down/Scroll] navigate  |  [c / Esc] close",
-                         dim_col, hint_rect, ui::Align::CENTER);
-    } else {
-        ui::draw_text_in(renderer, font, "[c / Esc] close",
-                         dim_col, hint_rect, ui::Align::CENTER);
-    }
+    { auto* ig = InputGlyphs::get();
+      char hbuf[256];
+      if (scroll_ > 0 || right.cursor.y > right_rect.y2()) {
+          if (ig && ig->using_gamepad())
+              snprintf(hbuf, sizeof(hbuf), "D-Pad navigate  |  %s close", ig->cancel().c_str());
+          else
+              snprintf(hbuf, sizeof(hbuf), "[Up/Down/Scroll] navigate  |  [c / Esc] close");
+      } else {
+          if (ig && ig->using_gamepad())
+              snprintf(hbuf, sizeof(hbuf), "%s close", ig->cancel().c_str());
+          else
+              snprintf(hbuf, sizeof(hbuf), "[c / Esc] close");
+      }
+      ui::draw_text_in(renderer, font, hbuf, dim_col, hint_rect, ui::Align::CENTER); }
 }

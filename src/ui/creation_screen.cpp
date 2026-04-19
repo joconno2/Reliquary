@@ -1,5 +1,6 @@
 #include "ui/creation_screen.h"
 #include "ui/ui_draw.h"
+#include "core/input_glyphs.h"
 #include "components/prayer.h"
 #include "components/tenet.h"
 #include <cstdio>
@@ -320,8 +321,13 @@ void CreationScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* fo
         }
 
         auto hint_rect = ui::Rect{0, h - line_h - 4, cw, line_h};
-        ui::draw_text_in(renderer, font, "[Left/Right] toggle   [Enter] begin",
-                         dim_col, hint_rect, ui::Align::CENTER);
+        { auto* ig = InputGlyphs::get();
+          char hbuf[256];
+          if (ig && ig->using_gamepad())
+              snprintf(hbuf, sizeof(hbuf), "D-Pad toggle   %s begin", ig->confirm().c_str());
+          else
+              snprintf(hbuf, sizeof(hbuf), "[Left/Right] toggle   [Enter] begin");
+          ui::draw_text_in(renderer, font, hbuf, dim_col, hint_rect, ui::Align::CENTER); }
     }
 
     if (phase_ != CreationPhase::CLASS_SELECT) {
@@ -444,8 +450,14 @@ void CreationScreen::render_class_select(SDL_Renderer* renderer, TTF_Font* font,
         }
     }
 
-    ui::draw_text_in(renderer, font, "[Arrows] browse   [Enter] select   [R] random character",
-                     dim_col, hint_row, ui::Align::CENTER);
+    { auto* ig = InputGlyphs::get();
+      char hbuf[256];
+      if (ig && ig->using_gamepad())
+          snprintf(hbuf, sizeof(hbuf), "D-Pad browse   %s select   %s random",
+                   ig->confirm().c_str(), ig->label(Action::REST).c_str());
+      else
+          snprintf(hbuf, sizeof(hbuf), "[Arrows] browse   [Enter] select   [R] random character");
+      ui::draw_text_in(renderer, font, hbuf, dim_col, hint_row, ui::Align::CENTER); }
 }
 
 void CreationScreen::render_name_entry(SDL_Renderer* renderer, TTF_Font* font,
@@ -492,8 +504,14 @@ void CreationScreen::render_name_entry(SDL_Renderer* renderer, TTF_Font* font,
     if ((SDL_GetTicks() / 500) % 2 == 0) display += "_";
     ui::draw_text(renderer, font, display.c_str(), name_col, field_x + 12, field_y + 8);
 
-    ui::draw_text_in(renderer, font, "[Tab] random name   [Enter] confirm   [Esc] back",
-                     dim_col, hint_row, ui::Align::CENTER);
+    { auto* ig = InputGlyphs::get();
+      char hbuf[256];
+      if (ig && ig->using_gamepad())
+          snprintf(hbuf, sizeof(hbuf), "(Y) random name   %s confirm   %s back",
+                   ig->confirm().c_str(), ig->cancel().c_str());
+      else
+          snprintf(hbuf, sizeof(hbuf), "[Tab] random name   [Enter] confirm   [Esc] back");
+      ui::draw_text_in(renderer, font, hbuf, dim_col, hint_row, ui::Align::CENTER); }
 }
 
 void CreationScreen::render_god_select(SDL_Renderer* renderer, TTF_Font* font,
@@ -643,8 +661,14 @@ void CreationScreen::render_god_select(SDL_Renderer* renderer, TTF_Font* font,
         }
     }
 
-    ui::draw_text_in(renderer, font, "[Enter] select   [Up/Down] browse   [Esc] back",
-                     dim_col, hint_row, ui::Align::CENTER);
+    { auto* ig = InputGlyphs::get();
+      char hbuf[256];
+      if (ig && ig->using_gamepad())
+          snprintf(hbuf, sizeof(hbuf), "%s select   D-Pad browse   %s back",
+                   ig->confirm().c_str(), ig->cancel().c_str());
+      else
+          snprintf(hbuf, sizeof(hbuf), "[Enter] select   [Up/Down] browse   [Esc] back");
+      ui::draw_text_in(renderer, font, hbuf, dim_col, hint_row, ui::Align::CENTER); }
 }
 
 void CreationScreen::render_character_preview(SDL_Renderer* renderer, TTF_Font* font,

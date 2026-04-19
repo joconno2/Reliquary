@@ -1,5 +1,6 @@
 #include "ui/help_screen.h"
 #include "ui/ui_draw.h"
+#include "core/input_glyphs.h"
 #include <algorithm>
 #include <cstdio>
 
@@ -61,90 +62,185 @@ void HelpScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_t
 
     int y = panel.cursor.y - scroll_;
 
+    auto* ig = InputGlyphs::get();
+    bool gamepad = ig && ig->using_gamepad();
+
     // Title
     ui::draw_text_centered(renderer, font_title ? font_title : font,
                             "Guide to Reliquary", title_col, panel.cursor.cx(), y);
     y += title_h + 12;
 
-    // MOVEMENT
-    ui::draw_text(renderer, font, "MOVEMENT", section_col, key_x, y);
-    y += line_h + 4;
-    Bind movement[] = {
-        {"Arrows / WASD / hjkl", "Move (cardinal)"},
-        {"yubn / Numpad",        "Move (diagonal)"},
-        {". / Numpad 5",         "Wait one turn"},
-        {"o",                    "Toggle sneak mode"},
-    };
-    draw_binds(key_x, desc_x, movement, 4, y);
+    if (gamepad) {
+        // === GAMEPAD CONTROLS REFERENCE ===
 
-    // ACTIONS
-    y += 8;
-    ui::draw_text(renderer, font, "ACTIONS", section_col, key_x, y);
-    y += line_h + 4;
-    Bind actions[] = {
-        {"g / ,",          "Pick up / forage (Nature 25)"},
-        {"Enter / > / <",  "Use stairs"},
-        {"f",              "Fire ranged weapon"},
-        {"r",              "Rest (limited per floor)"},
-        {"p",              "Pray (1-2 prayers + mastery at 75 favor)"},
-        {"x",              "Examine tile / creature"},
-        {"Bump NPC",       "Talk / trade (or pickpocket while sneaking)"},
-        {"Bump enemy",     "Melee attack (backstab from sneak)"},
-    };
-    draw_binds(key_x, desc_x, actions, 8, y);
+        // MOVEMENT
+        ui::draw_text(renderer, font, "MOVEMENT", section_col, key_x, y);
+        y += line_h + 4;
+        Bind gp_movement[] = {
+            {"D-Pad / L-Stick",     "Move (cardinal + diagonal)"},
+            {"(A)",                  "Interact / confirm / use stairs"},
+            {"(B)",                  "Cancel / close menus"},
+        };
+        draw_binds(key_x, desc_x, gp_movement, 3, y);
 
-    // SCREENS
-    y += 8;
-    ui::draw_text(renderer, font, "SCREENS", section_col, key_x, y);
-    y += line_h + 4;
-    Bind screens[] = {
-        {"i",   "Inventory"},
-        {"c",   "Character sheet (stats, skills, spells)"},
-        {"z",   "Spellbook (cast spells)"},
-        {"t",   "Passive tree (spend points)"},
-        {"q",   "Quest journal"},
-        {"M",   "World map"},
-        {"Tab", "Bestiary"},
-        {"?",   "This help screen"},
-        {"Esc", "Pause (save/load/settings)"},
-    };
-    draw_binds(key_x, desc_x, screens, 9, y);
+        y += 8;
+        ui::draw_text(renderer, font, "FACE BUTTONS", section_col, key_x, y);
+        y += line_h + 4;
+        char ab[6][128];
+        snprintf(ab[0], sizeof(ab[0]), "%s", ig->confirm().c_str());
+        snprintf(ab[1], sizeof(ab[1]), "%s", ig->cancel().c_str());
+        snprintf(ab[2], sizeof(ab[2]), "%s", ig->label(Action::SPELLBOOK).c_str());
+        snprintf(ab[3], sizeof(ab[3]), "%s", ig->label(Action::INVENTORY).c_str());
+        Bind gp_face[] = {
+            {ab[0], "Confirm / interact / pick up / stairs"},
+            {ab[1], "Cancel / close / back"},
+            {ab[2], "Spellbook"},
+            {ab[3], "Inventory"},
+        };
+        draw_binds(key_x, desc_x, gp_face, 4, y);
 
-    // COMBAT
-    y += 8;
-    ui::draw_text(renderer, font, "COMBAT", section_col, key_x, y);
-    y += line_h + 4;
-    Bind combat[] = {
-        {"Bump",     "Melee attack"},
-        {"f",        "Ranged attack (bow/crossbow)"},
-        {"z",        "Open spellbook, pick a spell"},
-        {"v",        "Quick-cast last spell"},
-        {"p",        "God prayers (2 + mastery)"},
-        {"1-4",      "Use passive tree active abilities"},
-    };
-    draw_binds(key_x, desc_x, combat, 6, y);
+        y += 8;
+        ui::draw_text(renderer, font, "SHOULDERS & TRIGGERS", section_col, key_x, y);
+        y += line_h + 4;
+        char sb[6][128];
+        snprintf(sb[0], sizeof(sb[0]), "%s", ig->label(Action::FIRE_RANGED).c_str());
+        snprintf(sb[1], sizeof(sb[1]), "%s", ig->label(Action::REST).c_str());
+        snprintf(sb[2], sizeof(sb[2]), "%s", ig->label(Action::QUICK_CAST).c_str());
+        snprintf(sb[3], sizeof(sb[3]), "%s", ig->label(Action::SNEAK_TOGGLE).c_str());
+        Bind gp_shoulder[] = {
+            {sb[0], "Fire ranged weapon"},
+            {sb[1], "Rest"},
+            {sb[2], "Quick-cast last spell"},
+            {sb[3], "Toggle sneak"},
+        };
+        draw_binds(key_x, desc_x, gp_shoulder, 4, y);
+
+        y += 8;
+        ui::draw_text(renderer, font, "SPECIAL", section_col, key_x, y);
+        y += line_h + 4;
+        char sp[8][128];
+        snprintf(sp[0], sizeof(sp[0]), "%s", ig->label(Action::CHARACTER).c_str());
+        snprintf(sp[1], sizeof(sp[1]), "%s", ig->label(Action::PASSIVE_TREE).c_str());
+        snprintf(sp[2], sizeof(sp[2]), "%s", ig->label(Action::QUEST_LOG).c_str());
+        snprintf(sp[3], sizeof(sp[3]), "%s", ig->label(Action::EXAMINE).c_str());
+        snprintf(sp[4], sizeof(sp[4]), "%s", ig->label(Action::PRAY).c_str());
+        snprintf(sp[5], sizeof(sp[5]), "%s", ig->label(Action::WAIT).c_str());
+        Bind gp_special[] = {
+            {sp[0], "Character sheet"},
+            {sp[1], "Passive tree"},
+            {sp[2], "Quest journal"},
+            {sp[3], "Examine"},
+            {sp[4], "Pray"},
+            {sp[5], "Wait one turn"},
+            {"Start", "Pause menu"},
+            {"Select", "World map"},
+        };
+        draw_binds(key_x, desc_x, gp_special, 8, y);
+
+    } else {
+        // === KEYBOARD CONTROLS REFERENCE (original) ===
+
+        // MOVEMENT
+        ui::draw_text(renderer, font, "MOVEMENT", section_col, key_x, y);
+        y += line_h + 4;
+        Bind movement[] = {
+            {"Arrows / WASD / hjkl", "Move (cardinal)"},
+            {"yubn / Numpad",        "Move (diagonal)"},
+            {". / Numpad 5",         "Wait one turn"},
+            {"o",                    "Toggle sneak mode"},
+        };
+        draw_binds(key_x, desc_x, movement, 4, y);
+
+        // ACTIONS
+        y += 8;
+        ui::draw_text(renderer, font, "ACTIONS", section_col, key_x, y);
+        y += line_h + 4;
+        Bind actions[] = {
+            {"g / ,",          "Pick up / forage (Nature 25)"},
+            {"Enter / > / <",  "Use stairs"},
+            {"f",              "Fire ranged weapon"},
+            {"r",              "Rest (limited per floor)"},
+            {"p",              "Pray (1-2 prayers + mastery at 75 favor)"},
+            {"x",              "Examine tile / creature"},
+            {"Bump NPC",       "Talk / trade (or pickpocket while sneaking)"},
+            {"Bump enemy",     "Melee attack (backstab from sneak)"},
+        };
+        draw_binds(key_x, desc_x, actions, 8, y);
+
+        // SCREENS
+        y += 8;
+        ui::draw_text(renderer, font, "SCREENS", section_col, key_x, y);
+        y += line_h + 4;
+        Bind screens[] = {
+            {"i",   "Inventory"},
+            {"c",   "Character sheet (stats, skills, spells)"},
+            {"z",   "Spellbook (cast spells)"},
+            {"t",   "Passive tree (spend points)"},
+            {"q",   "Quest journal"},
+            {"M",   "World map"},
+            {"Tab", "Bestiary"},
+            {"?",   "This help screen"},
+            {"Esc", "Pause (save/load/settings)"},
+        };
+        draw_binds(key_x, desc_x, screens, 9, y);
+
+        // COMBAT
+        y += 8;
+        ui::draw_text(renderer, font, "COMBAT", section_col, key_x, y);
+        y += line_h + 4;
+        Bind combat[] = {
+            {"Bump",     "Melee attack"},
+            {"f",        "Ranged attack (bow/crossbow)"},
+            {"z",        "Open spellbook, pick a spell"},
+            {"v",        "Quick-cast last spell"},
+            {"p",        "God prayers (2 + mastery)"},
+            {"1-4",      "Use passive tree active abilities"},
+        };
+        draw_binds(key_x, desc_x, combat, 6, y);
+    }
+
+    // === Common sections (shown for both input modes) ===
 
     // STEALTH
     y += 8;
     ui::draw_text(renderer, font, "STEALTH", section_col, key_x, y);
     y += line_h + 4;
-    const char* stealth_tips[] = {
-        "Press O to toggle sneak. You move at half speed.",
-        "Enemies have reduced detection range (shown as red circles).",
-        "First attack from sneak is a backstab (2-4x damage by skill).",
-        "Bump an NPC while sneaking to attempt pickpocket.",
-        "Failed pickpockets summon town guards.",
-        "Stealth 25: sleeping monsters don't wake when you pass.",
-        "Stealth 50: detection range drops to 1 tile.",
-    };
-    for (auto& t : stealth_tips) {
-        ui::draw_text_clipped(renderer, font, t, tip_col, key_x, y, panel.cursor.w);
-        y += line_h + 1;
+    if (gamepad) {
+        const char* stealth_gp[] = {
+            "Use the sneak toggle button to enter stealth. You move at half speed.",
+            "Enemies have reduced detection range (shown as red circles).",
+            "First attack from sneak is a backstab (2-4x damage by skill).",
+            "Walk into an NPC while sneaking to attempt pickpocket.",
+            "Failed pickpockets summon town guards.",
+            "Stealth 25: sleeping monsters don't wake when you pass.",
+            "Stealth 50: detection range drops to 1 tile.",
+        };
+        for (auto& t : stealth_gp) {
+            ui::draw_text_clipped(renderer, font, t, tip_col, key_x, y, panel.cursor.w);
+            y += line_h + 1;
+        }
+    } else {
+        const char* stealth_tips[] = {
+            "Press O to toggle sneak. You move at half speed.",
+            "Enemies have reduced detection range (shown as red circles).",
+            "First attack from sneak is a backstab (2-4x damage by skill).",
+            "Bump an NPC while sneaking to attempt pickpocket.",
+            "Failed pickpockets summon town guards.",
+            "Stealth 25: sleeping monsters don't wake when you pass.",
+            "Stealth 50: detection range drops to 1 tile.",
+        };
+        for (auto& t : stealth_tips) {
+            ui::draw_text_clipped(renderer, font, t, tip_col, key_x, y, panel.cursor.w);
+            y += line_h + 1;
+        }
     }
 
     // PASSIVE TREE
     y += 8;
-    ui::draw_text(renderer, font, "PASSIVE TREE (T key)", section_col, key_x, y);
+    if (gamepad)
+        ui::draw_text(renderer, font, "PASSIVE TREE", section_col, key_x, y);
+    else
+        ui::draw_text(renderer, font, "PASSIVE TREE (T key)", section_col, key_x, y);
     y += line_h + 4;
     const char* tree_tips[] = {
         "Earn 1 point per level. Spend on the shared passive tree.",
@@ -226,13 +322,21 @@ void HelpScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_t
     y += 8;
     ui::draw_text(renderer, font, "SYSTEM", section_col, key_x, y);
     y += line_h + 4;
-    Bind sys[] = {
-        {"F5",  "Quicksave"},
-        {"F6",  "Quickload"},
-        {"F11", "Toggle fullscreen"},
-        {"F12", "Screenshot"},
-    };
-    draw_binds(key_x, desc_x, sys, 4, y);
+    if (gamepad) {
+        Bind gp_sys[] = {
+            {"Start + (A)", "Quicksave"},
+            {"Start + (B)", "Quickload"},
+        };
+        draw_binds(key_x, desc_x, gp_sys, 2, y);
+    } else {
+        Bind sys[] = {
+            {"F5",  "Quicksave"},
+            {"F6",  "Quickload"},
+            {"F11", "Toggle fullscreen"},
+            {"F12", "Screenshot"},
+        };
+        draw_binds(key_x, desc_x, sys, 4, y);
+    }
 
     y += 12;
     max_scroll_ = std::max(0, y - panel.cursor.y - panel.cursor.h + scroll_ + 20);
@@ -245,6 +349,8 @@ void HelpScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_t
     if (scroll_ < max_scroll_)
         ui::draw_text_centered(renderer, font, "v scroll down v", dim_col, outer.cx(), outer.y2() - line_h - 4);
 
-    ui::draw_text_centered(renderer, font, "Any other key to close  |  Up/Down/Scroll to navigate",
-                            dim_col, outer.cx(), outer.y2() - 4);
+    { const char* close_hint = gamepad
+          ? "Any button to close  |  D-Pad/Scroll to navigate"
+          : "Any other key to close  |  Up/Down/Scroll to navigate";
+      ui::draw_text_centered(renderer, font, close_hint, dim_col, outer.cx(), outer.y2() - 4); }
 }

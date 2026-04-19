@@ -1,5 +1,6 @@
 #include "ui/trait_select.h"
 #include "ui/ui_draw.h"
+#include "core/input_glyphs.h"
 #include <algorithm>
 #include <cstdio>
 
@@ -266,12 +267,20 @@ void TraitSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     }
 
     // Confirm hint
-    if (can_confirm()) {
-        ui::draw_text_in(renderer, font, "[Enter/Space] CONFIRM SELECTION",
-                         sel_col, hint_row, ui::Align::LEFT);
-    } else {
-        ui::draw_text_in(renderer, font,
-                         "[Enter] toggle   [Up/Down] browse   [Esc] back",
-                         dim_col, hint_row, ui::Align::LEFT);
-    }
+    { auto* ig = InputGlyphs::get();
+      char hbuf[256];
+      if (can_confirm()) {
+          if (ig && ig->using_gamepad())
+              snprintf(hbuf, sizeof(hbuf), "%s CONFIRM SELECTION", ig->confirm().c_str());
+          else
+              snprintf(hbuf, sizeof(hbuf), "[Enter/Space] CONFIRM SELECTION");
+          ui::draw_text_in(renderer, font, hbuf, sel_col, hint_row, ui::Align::LEFT);
+      } else {
+          if (ig && ig->using_gamepad())
+              snprintf(hbuf, sizeof(hbuf), "%s toggle   D-Pad browse   %s back",
+                       ig->confirm().c_str(), ig->cancel().c_str());
+          else
+              snprintf(hbuf, sizeof(hbuf), "[Enter] toggle   [Up/Down] browse   [Esc] back");
+          ui::draw_text_in(renderer, font, hbuf, dim_col, hint_row, ui::Align::LEFT);
+      } }
 }

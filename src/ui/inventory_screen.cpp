@@ -1,5 +1,6 @@
 #include "ui/inventory_screen.h"
 #include "ui/ui_draw.h"
+#include "core/input_glyphs.h"
 #include "components/inventory.h"
 #include "components/item.h"
 #include "components/renderable.h"
@@ -522,6 +523,12 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
 
     // Close hint
     auto hint_rect = ui::Rect{outer.x, outer.y2() - line_h - 8, outer.w, line_h};
-    ui::draw_text_in(renderer, font, "[i/Esc] close   [Tab] sort   Right-click to equip",
-                     hint_col, hint_rect, ui::Align::LEFT);
+    { auto* ig = InputGlyphs::get();
+      char hbuf[256];
+      if (ig && ig->using_gamepad())
+          snprintf(hbuf, sizeof(hbuf), "%s close   (Y) sort   %s equip",
+                   ig->cancel().c_str(), ig->confirm().c_str());
+      else
+          snprintf(hbuf, sizeof(hbuf), "[i/Esc] close   [Tab] sort   Right-click to equip");
+      ui::draw_text_in(renderer, font, hbuf, hint_col, hint_rect, ui::Align::LEFT); }
 }

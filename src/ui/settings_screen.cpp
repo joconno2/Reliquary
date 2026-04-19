@@ -1,6 +1,7 @@
 #include <algorithm>
 #include "ui/settings_screen.h"
 #include "ui/ui_draw.h"
+#include "core/input_glyphs.h"
 #include "core/audio.h"
 #include <cstdio>
 
@@ -291,9 +292,14 @@ void SettingsScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     }
 
     // Hints
-    ui::draw_text_in(renderer, font,
-        "[Up/Down] select  [Left/Right] adjust  [Enter] apply  [Esc] back",
-        dim_col, hint_area, ui::Align::CENTER);
+    { auto* ig = InputGlyphs::get();
+      char hbuf[256];
+      if (ig && ig->using_gamepad())
+          snprintf(hbuf, sizeof(hbuf), "D-Pad select/adjust  %s apply  %s back",
+                   ig->confirm().c_str(), ig->cancel().c_str());
+      else
+          snprintf(hbuf, sizeof(hbuf), "[Up/Down] select  [Left/Right] adjust  [Enter] apply  [Esc] back");
+      ui::draw_text_in(renderer, font, hbuf, dim_col, hint_area, ui::Align::CENTER); }
 }
 
 void SettingsScreen::render_keybinds(SDL_Renderer* renderer, TTF_Font* font,
@@ -388,8 +394,19 @@ void SettingsScreen::render_keybinds(SDL_Renderer* renderer, TTF_Font* font,
         ui::draw_text_centered(renderer, font, "v more v", dim_col, outer.cx(), outer.y2() - line_h - 4);
 
     // Hint at bottom
-    const char* hint = rebind_action_ != Action::COUNT
-        ? "[Press key to bind]  [Backspace] clear  [Esc] cancel"
-        : "[Enter] rebind  [R] reset  [F1] reset all  [Esc] back";
-    ui::draw_text_in(renderer, font, hint, dim_col, hint_area, ui::Align::CENTER);
+    { auto* ig = InputGlyphs::get();
+      char hbuf[256];
+      if (ig && ig->using_gamepad()) {
+          if (rebind_action_ != Action::COUNT)
+              snprintf(hbuf, sizeof(hbuf), "[Press button to bind]  %s cancel", ig->cancel().c_str());
+          else
+              snprintf(hbuf, sizeof(hbuf), "%s rebind  %s back",
+                       ig->confirm().c_str(), ig->cancel().c_str());
+      } else {
+          if (rebind_action_ != Action::COUNT)
+              snprintf(hbuf, sizeof(hbuf), "[Press key to bind]  [Backspace] clear  [Esc] cancel");
+          else
+              snprintf(hbuf, sizeof(hbuf), "[Enter] rebind  [R] reset  [F1] reset all  [Esc] back");
+      }
+      ui::draw_text_in(renderer, font, hbuf, dim_col, hint_area, ui::Align::CENTER); }
 }

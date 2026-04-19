@@ -1,5 +1,6 @@
 #include "ui/world_map.h"
 #include "ui/ui_draw.h"
+#include "core/input_glyphs.h"
 #include <cstdio>
 #include <cmath>
 #include <algorithm>
@@ -189,6 +190,7 @@ void WorldMap::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_tit
 
     // Hint
     SDL_Color hint_col = {120, 110, 100, 255};
-    ui::draw_text_centered(renderer, font, "[any key] close",
-                            hint_col, screen_w / 2, py + panel_h - line_h - 10);
+    { auto* ig = InputGlyphs::get();
+      const char* hint = (ig && ig->using_gamepad()) ? "any button to close" : "[any key] close";
+      ui::draw_text_centered(renderer, font, hint, hint_col, screen_w / 2, py + panel_h - line_h - 10); }
 }

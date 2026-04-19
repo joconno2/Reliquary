@@ -1,5 +1,6 @@
 #include "ui/passive_tree_screen.h"
 #include "ui/ui_draw.h"
+#include "core/input_glyphs.h"
 #include <cstdio>
 #include <cmath>
 #include <algorithm>
@@ -546,8 +547,14 @@ void PassiveTreeScreen::draw_hud(SDL_Renderer* renderer, TTF_Font* font,
 
     // Bottom: controls hint
     SDL_Color hint_col = {120, 115, 110, 255};
-    ui::draw_text(renderer, font, "WASD/Arrows: pan  |  Scroll: zoom  |  Click: allocate  |  RMB drag: pan  |  Home: center  |  T/Esc: close",
-                  hint_col, 12, sh - line_h - 8);
+    { auto* ig = InputGlyphs::get();
+      char hbuf[256];
+      if (ig && ig->using_gamepad())
+          snprintf(hbuf, sizeof(hbuf), "L-Stick: pan  |  %s allocate  |  %s close",
+                   ig->confirm().c_str(), ig->cancel().c_str());
+      else
+          snprintf(hbuf, sizeof(hbuf), "WASD/Arrows: pan  |  Click: allocate  |  T/Esc: close");
+      ui::draw_text(renderer, font, hbuf, hint_col, 12, sh - line_h - 8); }
 }
 
 void PassiveTreeScreen::render(SDL_Renderer* renderer, TTF_Font* font,

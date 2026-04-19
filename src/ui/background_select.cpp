@@ -1,6 +1,7 @@
 #include <algorithm>
 #include "ui/background_select.h"
 #include "ui/ui_draw.h"
+#include "core/input_glyphs.h"
 #include <cstdio>
 
 bool BackgroundSelectScreen::handle_input(SDL_Event& event) {
@@ -145,9 +146,14 @@ void BackgroundSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     }
 
     // Controls hint
-    ui::draw_text_in(renderer, font,
-                     "[Enter] select   [Up/Down] browse   [Esc] back",
-                     dim_col, hint_row, ui::Align::LEFT);
+    { auto* ig = InputGlyphs::get();
+      char hbuf[256];
+      if (ig && ig->using_gamepad())
+          snprintf(hbuf, sizeof(hbuf), "%s select   D-Pad browse   %s back",
+                   ig->confirm().c_str(), ig->cancel().c_str());
+      else
+          snprintf(hbuf, sizeof(hbuf), "[Enter] select   [Up/Down] browse   [Esc] back");
+      ui::draw_text_in(renderer, font, hbuf, dim_col, hint_row, ui::Align::LEFT); }
 
     (void)green_col;
 }

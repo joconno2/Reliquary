@@ -1,6 +1,7 @@
 #include <algorithm>
 #include "ui/pause_menu.h"
 #include "ui/ui_draw.h"
+#include "core/input_glyphs.h"
 
 static PauseChoice pause_choice_for(int idx) {
     switch (idx) {
@@ -110,6 +111,11 @@ void PauseMenu::render(SDL_Renderer* renderer, TTF_Font* body, TTF_Font* title,
     // Controls hint at bottom
     SDL_Color hint_col = {70, 65, 60, 255};
     auto hint_row = ui::Rect{outer.x, outer.y2() - line_h - 8, outer.w, line_h};
-    ui::draw_text_in(renderer, body, "[Esc] resume   [Enter] select",
-                     hint_col, hint_row, ui::Align::CENTER);
+    auto* ig = InputGlyphs::get();
+    char hbuf[128];
+    if (ig && ig->using_gamepad())
+        snprintf(hbuf, sizeof(hbuf), "%s resume   %s select", ig->cancel().c_str(), ig->confirm().c_str());
+    else
+        snprintf(hbuf, sizeof(hbuf), "[Esc] resume   [Enter] select");
+    ui::draw_text_in(renderer, body, hbuf, hint_col, hint_row, ui::Align::CENTER);
 }

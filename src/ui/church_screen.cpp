@@ -1,5 +1,6 @@
 #include "ui/church_screen.h"
 #include "ui/ui_draw.h"
+#include "core/input_glyphs.h"
 #include "components/stats.h"
 #include "components/god.h"
 #include <cstdio>
@@ -211,6 +212,12 @@ void ChurchScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font
 
     // Bottom hint
     auto hint_rect = ui::Rect{outer.x, outer.y2() - line_h - 8, outer.w, line_h};
-    ui::draw_text_in(renderer, font, "[Up/Down] select  |  [Enter] choose  |  [Esc] leave",
-                     dim_col, hint_rect, ui::Align::CENTER);
+    { auto* ig = InputGlyphs::get();
+      char hbuf[256];
+      if (ig && ig->using_gamepad())
+          snprintf(hbuf, sizeof(hbuf), "D-Pad select  |  %s choose  |  %s leave",
+                   ig->confirm().c_str(), ig->cancel().c_str());
+      else
+          snprintf(hbuf, sizeof(hbuf), "[Up/Down] select  |  [Enter] choose  |  [Esc] leave");
+      ui::draw_text_in(renderer, font, hbuf, dim_col, hint_rect, ui::Align::CENTER); }
 }
