@@ -415,7 +415,9 @@ void draw_entities(SDL_Renderer* renderer, const SpriteManager& sprites,
     for (auto& cmd : cmds) {
         int sx = cmd.sx, sy = cmd.sy;
         // Animated sprites: cycle columns as frames (offset by position for desync)
-        if (cmd.sheet == SHEET_ANIMATED) {
+        // Only animate rows that have animation frames (1=brazier, 5=torch, 8=crystal)
+        // Static rows (2=dead campfire, 4=unlit torch) keep their original sprite
+        if (cmd.sheet == SHEET_ANIMATED && (sy == 1 || sy == 5 || sy == 8)) {
             int offset = (cmd.dx * 7 + cmd.dy * 13) & 0xFF; // spatial hash for per-entity offset
             sx = static_cast<int>(((ticks + offset * 40) / 150) % 6);
         }

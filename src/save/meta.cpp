@@ -40,6 +40,9 @@ MetaSave load(const std::string& path) {
     m.killed_unarmed = root.value("killed_unarmed", false);
     m.died_deep = root.value("died_deep", false);
     m.killed_paragon = root.value("killed_paragon", false);
+    m.total_deaths = root.value("total_deaths", 0);
+    m.killed_dragon = root.value("killed_dragon", false);
+    m.max_diseases = root.value("max_diseases", 0);
 
     // Persistent bestiary
     if (root.contains("bestiary")) {
@@ -87,6 +90,9 @@ bool save(const MetaSave& m, const std::string& path) {
     root["killed_unarmed"] = m.killed_unarmed;
     root["died_deep"] = m.died_deep;
     root["killed_paragon"] = m.killed_paragon;
+    root["total_deaths"] = m.total_deaths;
+    root["killed_dragon"] = m.killed_dragon;
+    root["max_diseases"] = m.max_diseases;
 
     // Bestiary
     json bestiary_j;

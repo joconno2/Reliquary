@@ -2488,31 +2488,6 @@ void Engine::try_move_player(int dx, int dy) {
             trigger_screen_shake(3.0f);
         }
 
-        // Quest target killed?
-        if (atk_result.quest_target_id >= 0) {
-            auto qid = static_cast<QuestId>(atk_result.quest_target_id);
-            if (journal_.has_quest(qid) && journal_.get_state(qid) == QuestState::ACTIVE) {
-                journal_.set_state(qid, QuestState::COMPLETE);
-                auto& qinfo = get_quest_info(qid);
-                // Flavor text based on quest type
-                bool is_main = (static_cast<int>(qid) < 20); // main quests are low IDs
-                if (is_main) {
-                    log_.add("The threat is ended. The path forward opens.", {140, 220, 140, 255});
-                } else {
-                    static const char* DONE[] = {
-                        "It's done. Time to collect your reward.",
-                        "Another problem solved. Head back to town.",
-                        "The deed is done.",
-                    };
-                    log_.add(DONE[rng_.range(0, 2)], {120, 200, 120, 255});
-                }
-                char qbuf[128];
-                snprintf(qbuf, sizeof(qbuf), "Quest complete: %s", qinfo.name);
-                log_.add(qbuf, {120, 220, 120, 255});
-                audio_.play(SfxId::QUEST);
-            }
-        }
-
         // Tenet action tracking for kills
         if (atk_result.killed) {
             turn_actions_.killed_anything = true;
@@ -3149,6 +3124,31 @@ void Engine::process_turn() {
     player_acted_ = false;
     game_turn_++;
 
+    // Drain pending quest kills (from combat::kill, covers melee/ranged/spell/prayer)
+    for (int qid_raw : world_.pending_quest_kills) {
+        auto qid = static_cast<QuestId>(qid_raw);
+        if (journal_.has_quest(qid) && journal_.get_state(qid) == QuestState::ACTIVE) {
+            journal_.set_state(qid, QuestState::COMPLETE);
+            auto& qinfo = get_quest_info(qid);
+            bool is_main = (static_cast<int>(qid) < 20);
+            if (is_main) {
+                log_.add("The threat is ended. The path forward opens.", {140, 220, 140, 255});
+            } else {
+                static const char* DONE[] = {
+                    "It's done. Time to collect your reward.",
+                    "Another problem solved. Head back to town.",
+                    "The deed is done.",
+                };
+                log_.add(DONE[rng_.range(0, 2)], {120, 200, 120, 255});
+            }
+            char qbuf[128];
+            snprintf(qbuf, sizeof(qbuf), "Quest complete: %s", qinfo.name);
+            log_.add(qbuf, {120, 220, 120, 255});
+            audio_.play(SfxId::QUEST);
+        }
+    }
+    world_.pending_quest_kills.clear();
+
     // Recalculate equipment-derived stats (unique effects)
     if (world_.has<Stats>(player_) && world_.has<Inventory>(player_)) {
         auto& pstats = world_.get<Stats>(player_);
@@ -3460,6 +3460,12 @@ void Engine::process_turn() {
         if (dist <= 1 && dist > 0) {
             // Melee attack
             auto mresult = combat::melee_attack(world_, e, player_, rng_, log_);
+            // Riposte killed the attacker
+            if (mresult.attacker_killed) {
+                audio_.play(SfxId::DEATH);
+                particles_.death_burst(mpos.x, mpos.y);
+                continue; // monster is dead, skip rest of its turn
+            }
             // Audio feedback for enemy attacks
             if (mresult.critical) audio_.play(SfxId::CRIT);
             else if (mresult.hit) audio_.play_hit();
@@ -4011,18 +4017,6 @@ void Engine::fire_ranged() {
     }
     if (result.critical) { trigger_screen_shake(4.0f); }
     if (result.killed) { audio_.play(SfxId::DEATH); particles_.death_burst(tgt_x, tgt_y); trigger_screen_shake(3.0f); }
-
-    // Quest target killed?
-    if (result.quest_target_id >= 0) {
-        auto qid = static_cast<QuestId>(result.quest_target_id);
-        if (journal_.has_quest(qid) && journal_.get_state(qid) == QuestState::ACTIVE) {
-            journal_.set_state(qid, QuestState::COMPLETE);
-            auto& qinfo = get_quest_info(qid);
-            char qbuf[128];
-            snprintf(qbuf, sizeof(qbuf), "Quest objective complete: %s", qinfo.name);
-            log_.add(qbuf, {120, 220, 120, 255});
-        }
-    }
 
     // Bestiary entry
     if (result.killed && !victim_name.empty()) {

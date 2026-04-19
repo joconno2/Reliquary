@@ -568,12 +568,6 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
                 snprintf(buf, sizeof(buf), death_msgs[rng.range(0, 3)], def.name.c_str());
                 log.add(buf, {180, 160, 140, 255});
 
-                // Check quest target before kill removes components
-                if (world.has<QuestTarget>(defender)) {
-                    result.quest_target_id = static_cast<int>(
-                        world.get<QuestTarget>(defender).quest_id);
-                }
-
                 int xp = kill(world, defender, log);
                 // Grant XP to attacker if they're the player
                 if (attacker_is_player && world.has<Stats>(attacker) && xp > 0) {
@@ -671,8 +665,12 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
                 snprintf(rbuf, sizeof(rbuf), "You riposte the %s! (%d)", atk.name.c_str(), riposte_dmg);
                 log.add(rbuf, {200, 220, 140, 255});
                 if (atk.hp <= 0) {
-                    result.killed = false; // attacker died, not defender
-                    // Let the caller handle the kill on next check
+                    int xp = kill(world, attacker, log);
+                    if (world.has<Player>(defender) && xp > 0) {
+                        xp = apply_xp_bonus(world, defender, xp);
+                        def.grant_xp(xp);
+                    }
+                    result.attacker_killed = true;
                 }
             }
         }
@@ -819,11 +817,6 @@ AttackResult ranged_attack(World& world, Entity attacker, Entity defender,
                 snprintf(buf, sizeof(buf), death_msgs[rng.range(0, 2)], def.name.c_str());
                 log.add(buf, {180, 160, 140, 255});
 
-                if (world.has<QuestTarget>(defender)) {
-                    result.quest_target_id = static_cast<int>(
-                        world.get<QuestTarget>(defender).quest_id);
-                }
-
                 int xp = kill(world, defender, log);
                 if (attacker_is_player && world.has<Stats>(attacker) && xp > 0) {
                     xp = apply_xp_bonus(world, attacker, xp);
@@ -886,6 +879,12 @@ int kill(World& world, Entity e, [[maybe_unused]] MessageLog& log) {
     if (world.has<Stats>(e)) {
         name = world.get<Stats>(e).name;
         xp = world.get<Stats>(e).xp_value;
+    }
+
+    // Check quest target before removing components
+    if (world.has<QuestTarget>(e)) {
+        world.pending_quest_kills.push_back(
+            static_cast<int>(world.get<QuestTarget>(e).quest_id));
     }
 
     if (world.has<AI>(e)) world.remove<AI>(e);

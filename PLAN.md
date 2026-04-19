@@ -1,12 +1,20 @@
 # Reliquary — Project Plan
 
-> Last updated: 2026-04-15
+> Last updated: 2026-04-19
 
-## Current Status: Post-Tier 7, UI Rearchitecture + Rest Redesign
+## Current Status: Post-Tier 7, Bug Fix Pass
 
 **Tier 6 complete.** Passive tree, skills, stealth, churches, monster behaviors, traps, hazards all built. Now adding item depth and overworld density.
 
-The game is fully playable from character creation through a 17-step main quest chain. 17 classes (4 base + 13 unlockable), **13 gods** with deep tenet system, sacred/profane items, **13 god relics** (bound legendary items), god shrines (patron-god-linked), excommunication/conversion, **NPC god factions** (province-based pricing/healing/hostility, 7 wandering priests). 15 backgrounds, 22 traits, 7 permanent diseases, 8 pets, **13 rival paragons**, **50 spells** across 6 schools with **per-school particles**. 8 status effects. Full audio with 19 music + 12 ambient + 24 SFX. **Zone-specific dungeon generation** (cramped warrens, cavernous deep halls, narrow catacombs). **Zone-specific ambient sounds** (cave/fire/dripping/river). **Overworld weather** (snow, rain, dust by latitude). **Day/night cycle** (visual overlay + HUD indicator + ambient switching). **Death dissolve animation** (flash-then-fade with dissolve particles). **Regional building materials**. **Dynamic HUD**. 6 provinces with capital cities, 20 towns + 4 hamlets + 6 cabins + 3 outposts, 27 dungeons, wilderness POIs, wandering NPCs. Signpost navigation (~80+ signs). Meta-save progression, hardcore mode, persistent bestiary/potion IDs. Dungeon floor persistence + quicksave. Resolution scaling for ultrawide/4K. CI/CD for Linux + Windows + macOS.
+### Bug Fixes (2026-04-19)
+- **Prayer/spell kills now complete quests.** QuestTarget check moved into `combat::kill()` so all kill paths (melee, ranged, spells, prayers, chain lightning, corpse explode, riposte) trigger quest progression.
+- **Riposte kills fully handled.** Riposte counter-kill now calls `kill()`, grants XP, plays death effects. Previously left zombie entities with negative HP.
+- **Meta save fields fixed.** `total_deaths`, `killed_dragon`, `max_diseases` now serialized. Revenant/Wyrmkin/Serpentine unlocks persist across sessions.
+- **Status resistance clamp.** Flat equipment resistance clamped before percentage reduction (prevents negative damage math).
+- **Flickering doodads fixed.** Animation system now only cycles animated rows (torch/brazier/crystal), skips static rows (dead campfire/unlit torch).
+- **CI removed.** GitHub Actions workflow deleted. Local builds for Steam, GitHub is backup only.
+
+The game is fully playable from character creation through a 17-step main quest chain. 17 classes (4 base + 13 unlockable), **13 gods** with deep tenet system, sacred/profane items, **13 god relics** (bound legendary items), god shrines (patron-god-linked), excommunication/conversion, **NPC god factions** (province-based pricing/healing/hostility, 7 wandering priests). 15 backgrounds, 22 traits, 7 permanent diseases, 8 pets, **13 rival paragons**, **50 spells** across 6 schools with **per-school particles**. 8 status effects. Full audio with 19 music + 12 ambient + 24 SFX. **Zone-specific dungeon generation** (cramped warrens, cavernous deep halls, narrow catacombs). **Zone-specific ambient sounds** (cave/fire/dripping/river). **Overworld weather** (snow, rain, dust by latitude). **Day/night cycle** (visual overlay + HUD indicator + ambient switching). **Death dissolve animation** (flash-then-fade with dissolve particles). **Regional building materials**. **Dynamic HUD**. 6 provinces with capital cities, 20 towns + 4 hamlets + 6 cabins + 3 outposts, 27 dungeons, wilderness POIs, wandering NPCs. Signpost navigation (~80+ signs). Meta-save progression, hardcore mode, persistent bestiary/potion IDs. Dungeon floor persistence + quicksave. Resolution scaling for ultrawide/4K. Local builds for Steam (Linux + Windows).
 
 ### New: Item Affix System (2026-04-15)
 - **Rarity tiers**: Common (grey), Magic (blue, 1 affix), Rare (yellow, 2 affixes), Legendary (orange), Relic (purple)
@@ -35,7 +43,7 @@ The game is fully playable from character creation through a 17-step main quest 
 **Build:** `cd ~/Reliquary && cmake -B build -DCMAKE_BUILD_TYPE=Debug && cmake --build build`
 **Run:** `cd ~/Reliquary/build && ./reliquary`
 **Design doc:** ~/Documents/Work/Games/Development/Roguelike Project.md
-**Steam:** App 4627800, depots 4627801 (Linux) + 4627802 (Windows). macOS depot 4627803 removed Apr 16. Release via `./release.sh` (idempotent, safe to re-run after partial failure). Logs in `logs/`. **Known issue:** `SetLive "default"` fails on commit. Likely because Steamworks packages still reference deleted depot 4627803. Fix: remove 4627803 from all packages on Steamworks, publish, then SetLive should work. Until then, set builds live manually on the builds page.
+**Steam:** App 4627800, depots 4627801 (Linux) + 4627802 (Windows). Release via `./release.sh` (idempotent, safe to re-run after partial failure). Logs in `logs/`. GitHub is backup only (no CI). **Known issue:** `SetLive "default"` fails on commit. Likely because Steamworks packages still reference deleted macOS depot 4627803. Fix: remove 4627803 from all packages on Steamworks, publish, then SetLive should work. Until then, set builds live manually on the builds page.
 
 ---
 

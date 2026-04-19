@@ -64,6 +64,7 @@ EffectResult process(World& world, Entity player, TileMap& map, RNG& rng,
                 dmg -= world.get<Item>(eq).get_resist(AffixEffect::RESIST_FIRE);
             }
         }
+        if (dmg < 0) dmg = 0;
         // Apply percentage resistance reduction
         if (eff.type == StatusType::POISON && stats.poison_resist > 0) {
             dmg = dmg * (100 - stats.poison_resist) / 100;

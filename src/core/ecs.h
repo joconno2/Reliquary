@@ -142,6 +142,9 @@ public:
 
     Entity entity_count() const { return next_entity_ - 1; }
 
+    // Quest kills pending completion (filled by combat::kill, drained by engine)
+    std::vector<int> pending_quest_kills;
+
 private:
     Entity next_entity_;
     std::unordered_map<std::type_index, std::unique_ptr<IComponentPool>> pools_;

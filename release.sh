@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# release.sh — stage, bump, commit, tag, push, upload to Steam
+# release.sh — stage, bump, commit, tag, push, build locally, upload to Steam
 #
 # Idempotent: if the tag already exists at HEAD, skips git steps
 # and retries the Steam upload. Safe to re-run after a partial failure.
+#
+# GitHub is backup only (no CI). Steam gets the local build.
 #
 # Usage:
 #   ./release.sh           — auto-increments patch (0.1.0 → 0.1.1)
@@ -27,13 +29,11 @@ else
 fi
 
 TAG="v${NEW}"
-REPO=$(git remote get-url origin | sed 's|.*github.com[:/]||;s|\.git$||')
 
 # ---------------------------------------------------------------------------
 # Safety checks
 # ---------------------------------------------------------------------------
 
-command -v gh &>/dev/null || { echo "Error: gh CLI not installed." >&2; exit 1; }
 command -v steamcmd &>/dev/null || { echo "Error: steamcmd not installed." >&2; exit 1; }
 
 # ---------------------------------------------------------------------------
@@ -51,8 +51,7 @@ if git rev-parse "$TAG" &>/dev/null; then
         ./tools/steam-upload.sh
         echo ""
         echo "=== Release ${TAG} complete ==="
-        echo "  Steam:  app 4627800, uploaded (set live manually on Steamworks)"
-        echo "  GitHub: CI runs in background, release created when done"
+        echo "  Steam: app 4627800, uploaded (set live manually on Steamworks)"
         exit 0
     else
         echo "Error: tag $TAG exists but does not point to HEAD." >&2
@@ -94,18 +93,17 @@ git push origin main
 git push origin "${TAG}"
 
 echo ""
-echo "Pushed tag ${TAG}. CI will run in background for GitHub releases."
-echo "  https://github.com/${REPO}/actions"
+echo "Pushed ${TAG} to GitHub (backup)."
 echo ""
 
 # ---------------------------------------------------------------------------
 # Build locally and upload to Steam
 # ---------------------------------------------------------------------------
 
-echo "Building and uploading to Steam locally..."
+echo "Building and uploading to Steam..."
 ./tools/steam-upload.sh
 
 echo ""
 echo "=== Release ${TAG} complete ==="
-echo "  Steam:  app 4627800, uploaded (set live manually on Steamworks)"
-echo "  GitHub: CI runs in background, release created when done"
+echo "  Steam: app 4627800, uploaded (set live manually on Steamworks)"
+echo "  GitHub: pushed (backup only)"
