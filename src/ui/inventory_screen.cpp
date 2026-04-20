@@ -143,6 +143,13 @@ InvAction InventoryScreen::handle_input(SDL_Event& event) {
         return InvAction::NONE;
     }
 
+    // Mouse wheel scroll
+    if (event.type == SDL_MOUSEWHEEL) {
+        if (event.wheel.y > 0 && selected_ > 0) selected_--;
+        else if (event.wheel.y < 0) selected_++;
+        return InvAction::NONE;
+    }
+
     if (event.type != SDL_KEYDOWN) return InvAction::NONE;
 
     switch (event.key.keysym.sym) {
@@ -295,7 +302,27 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     auto detail_area = list.row_bottom(list.remaining_h() / 2);
     // Remaining space is item list
 
-    for (int di = 0; di < count; di++) {
+    // Calculate visible count and scroll
+    int row_h = std::max(line_h + 8, 36);
+    int visible_count = std::max(1, list.remaining_h() / row_h);
+    if (sel >= count && count > 0) sel = count - 1;
+    // Auto-scroll to keep selection visible
+    if (sel < scroll_) scroll_ = sel;
+    if (sel >= scroll_ + visible_count) scroll_ = sel - visible_count + 1;
+    if (scroll_ > count - visible_count) scroll_ = std::max(0, count - visible_count);
+
+    // Scroll indicator (top)
+    if (scroll_ > 0) {
+        auto ind_row = list.row(line_h);
+        char sbuf[32];
+        snprintf(sbuf, sizeof(sbuf), "-- %d more above --", scroll_);
+        ui::draw_text_centered(renderer, font, sbuf, hint_col,
+                               ind_row.cx(), ind_row.y);
+        visible_count--;
+    }
+
+    for (int vi = 0; vi < visible_count && scroll_ + vi < count; vi++) {
+        int di = scroll_ + vi;
         int i = sorted[di];
         Entity item_e = inv.items[i];
         if (!world.has<Item>(item_e)) continue;
@@ -304,7 +331,6 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
         bool is_equipped = inv.is_equipped(item_e);
         bool is_sel = (di == sel);
 
-        int row_h = std::max(line_h + 8, 36);
         if (!list.fits(row_h)) break;
         auto row = list.row(row_h);
         SDL_Rect row_rect = row.sdl();
@@ -336,6 +362,16 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
         int sprite_offset = 36;
         ui::draw_text_clipped(renderer, font, buf, col,
                               row.x + sprite_offset, row.y + 8, row.w - sprite_offset);
+    }
+
+    // Scroll indicator (bottom)
+    int below = count - (scroll_ + visible_count + (scroll_ > 0 ? 1 : 0));
+    if (below > 0 && list.fits(line_h)) {
+        auto ind_row = list.row(line_h);
+        char sbuf[32];
+        snprintf(sbuf, sizeof(sbuf), "-- %d more below --", below);
+        ui::draw_text_centered(renderer, font, sbuf, hint_col,
+                               ind_row.cx(), ind_row.y);
     }
 
     // Action buttons
