@@ -305,6 +305,8 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     // Calculate visible count and scroll
     int row_h = std::max(line_h + 8, 36);
     int visible_count = std::max(1, list.remaining_h() / row_h);
+    // Reserve space for scroll indicators (top and bottom take a row each)
+    if (count > visible_count) visible_count = std::max(1, visible_count - 2);
     if (sel >= count && count > 0) sel = count - 1;
     // Auto-scroll to keep selection visible
     if (sel < scroll_) scroll_ = sel;

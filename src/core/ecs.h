@@ -144,6 +144,8 @@ public:
 
     // Quest kills pending completion (filled by combat::kill, drained by engine)
     std::vector<int> pending_quest_kills;
+    // Names of killed entities (for meta/bestiary tracking from spell/prayer kills)
+    std::vector<std::string> pending_kill_names;
 
 private:
     Entity next_entity_;

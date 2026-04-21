@@ -1,4 +1,4 @@
-Reliquary v0.3.26
+Reliquary v0.3.39
 Exe: .
 Logs: .
 ---

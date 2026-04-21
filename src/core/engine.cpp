@@ -1223,11 +1223,17 @@ void Engine::generate_level() {
         // Spawn Herbalist and Merchant NPCs at each town (not in map file)
         auto spawn_extra_npc = [&](int cx, int cy, const char* name, NPCRole role,
                                     const char* dialogue, int spr_x, int spr_y) {
-            // Find a walkable tile near town center
-            for (int attempt = 0; attempt < 40; attempt++) {
-                int tx = cx + rng_.range(-8, 8);
-                int ty = cy + rng_.range(-8, 8);
+            // Find a tile near town center. Shopkeepers/innkeepers go inside
+            // buildings (stone floor); herbalists can be outdoor.
+            bool needs_indoor = (role == NPCRole::SHOPKEEPER || role == NPCRole::INNKEEPER);
+            for (int attempt = 0; attempt < 60; attempt++) {
+                int tx = cx + rng_.range(-12, 12);
+                int ty = cy + rng_.range(-12, 12);
                 if (!map_.in_bounds(tx, ty) || !map_.is_walkable(tx, ty)) continue;
+                if (needs_indoor) {
+                    auto tt = map_.at(tx, ty).type;
+                    if (tt != TileType::FLOOR_STONE && tt != TileType::FLOOR_COBBLE) continue;
+                }
                 // Check no entity already there
                 if (combat::entity_at(world_, tx, ty, player_) != NULL_ENTITY) continue;
 
@@ -2625,26 +2631,15 @@ void Engine::try_move_player(int dx, int dy) {
                 turn_actions_.used_stealth_attack = true;
         }
 
-        // Bestiary entry
+        // Bestiary stats (melee has access to victim stats before combat::kill removes them)
         if (atk_result.killed && !victim_name.empty()) {
             auto& entry = bestiary_[victim_name];
-            if (entry.kills == 0) {
+            if (entry.hp == 0) {
                 entry.name = victim_name;
                 entry.hp = victim_hp; entry.damage = victim_dmg;
                 entry.armor = victim_arm; entry.speed = victim_spd;
             }
-            entry.kills++;
-            // Meta tracking
-            meta_.total_kills++;
-            run_kills_++;
-            if (victim_name == "dragon") meta_.killed_dragon = true;
-            if (is_undead(victim_name.c_str())) {
-                meta_.total_undead_kills++;
-                journal_.add_progress(QuestId::SQ_UNDEAD_PATROL);
-            }
-            if (victim_name == "giant rat")
-                journal_.add_progress(QuestId::SQ_RAT_CELLAR);
-            // Unarmed kill check
+            // Unarmed kill check (only melee)
             if (world_.has<Inventory>(player_)) {
                 Entity wpn = world_.get<Inventory>(player_).get_equipped(EquipSlot::MAIN_HAND);
                 if (wpn == NULL_ENTITY) meta_.killed_unarmed = true;
@@ -3279,6 +3274,22 @@ void Engine::process_turn() {
         }
     }
     world_.pending_quest_kills.clear();
+
+    // Drain pending kill names for meta/bestiary (covers spell, prayer, chain lightning, etc.)
+    for (auto& kname : world_.pending_kill_names) {
+        if (kname.empty()) continue;
+        // Bestiary
+        auto& entry = bestiary_[kname];
+        if (entry.name.empty()) entry.name = kname;
+        entry.kills++;
+        // Meta
+        meta_.total_kills++;
+        run_kills_++;
+        if (kname == "dragon") meta_.killed_dragon = true;
+        if (is_undead(kname.c_str())) meta_.total_undead_kills++;
+        if (kname == "giant rat") journal_.add_progress(QuestId::SQ_RAT_CELLAR);
+    }
+    world_.pending_kill_names.clear();
 
     // Recalculate equipment-derived stats (unique effects)
     if (world_.has<Stats>(player_) && world_.has<Inventory>(player_)) {
@@ -4149,24 +4160,14 @@ void Engine::fire_ranged() {
     if (result.critical) { trigger_screen_shake(4.0f); }
     if (result.killed) { audio_.play(SfxId::DEATH); particles_.death_burst(tgt_x, tgt_y); trigger_screen_shake(3.0f); }
 
-    // Bestiary entry
+    // Bestiary stats (ranged has access to victim stats before combat::kill removes them)
     if (result.killed && !victim_name.empty()) {
         auto& entry = bestiary_[victim_name];
-        if (entry.kills == 0) {
+        if (entry.hp == 0) {
             entry.name = victim_name;
             entry.hp = victim_hp; entry.damage = victim_dmg;
             entry.armor = victim_arm; entry.speed = victim_spd;
         }
-        entry.kills++;
-        // Meta tracking
-        meta_.total_kills++;
-        run_kills_++;
-        if (is_undead(victim_name.c_str())) {
-            meta_.total_undead_kills++;
-            journal_.add_progress(QuestId::SQ_UNDEAD_PATROL);
-        }
-        if (victim_name == "giant rat")
-            journal_.add_progress(QuestId::SQ_RAT_CELLAR);
     }
 
     // God favor on ranged kill
@@ -4579,7 +4580,7 @@ void Engine::update_meta_on_end() {
 }
 
 void Engine::populate_overworld() {
-    overworld::populate(world_, map_, rng_, dungeon_registry_);
+    overworld::populate(world_, map_, rng_, dungeon_registry_, overworld_cache_.entities);
 }
 
 void Engine::spawn_pet_visual(int pet_id) {
@@ -6023,7 +6024,7 @@ void Engine::handle_input() {
                 if (event.type == SDL_KEYDOWN) {
                     int dx = 0, dy = 0;
                     auto lsym = event.key.keysym.sym;
-                    auto lact = keybinds_.translate(lsym);
+                    auto lact = keybinds_.translate(lsym, event.key.keysym.mod);
                     switch (lact) {
                         case Action::MOVE_LEFT:  dx = -1; break;
                         case Action::MOVE_RIGHT: dx =  1; break;
@@ -6654,7 +6655,7 @@ void Engine::handle_input() {
 
             {
             auto sym = event.key.keysym.sym;
-            auto act = keybinds_.translate(sym);
+            auto act = keybinds_.translate(sym, event.key.keysym.mod);
             switch (act) {
                 case Action::MOVE_UP:    try_move_player(0, -1);  break;
                 case Action::MOVE_DOWN:  try_move_player(0, 1);   break;

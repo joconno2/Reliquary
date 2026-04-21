@@ -703,12 +703,24 @@ AttackResult ranged_attack(World& world, Entity attacker, Entity defender,
 
         // Wraith: immune to non-silver ranged attacks
         if (world.has<AI>(defender) && world.get<AI>(defender).behavior == BehaviorType::WRAITH) {
-            // Ranged attacks can't hit wraiths (only magic/silver melee)
-            result.hit = false;
-            result.damage = 0;
-            if (world.has<Player>(attacker))
-                log.add("Your arrow passes through the wraith.", {140, 120, 160, 255});
-            return result;
+            bool can_harm = false;
+            // Check ranged weapon material (silver/mithril/adamantine can harm)
+            if (world.has<Inventory>(attacker)) {
+                Entity wpn = world.get<Inventory>(attacker).get_equipped(EquipSlot::MAIN_HAND);
+                if (wpn != NULL_ENTITY && world.has<Item>(wpn)) {
+                    auto mat = world.get<Item>(wpn).material;
+                    if (mat == MaterialType::SILVER || mat == MaterialType::MITHRIL
+                        || mat == MaterialType::ADAMANTINE)
+                        can_harm = true;
+                }
+            }
+            if (!can_harm) {
+                result.hit = false;
+                result.damage = 0;
+                if (world.has<Player>(attacker))
+                    log.add("Your arrow passes through the wraith.", {140, 120, 160, 255});
+                return result;
+            }
         }
 
         int dmg = weapon_damage + atk.attr(Attr::DEX) / 3;
@@ -880,6 +892,9 @@ int kill(World& world, Entity e, [[maybe_unused]] MessageLog& log) {
         name = world.get<Stats>(e).name;
         xp = world.get<Stats>(e).xp_value;
     }
+
+    // Track kill name for meta/bestiary (drained by engine in process_turn)
+    world.pending_kill_names.push_back(name);
 
     // Check quest target before removing components
     if (world.has<QuestTarget>(e)) {

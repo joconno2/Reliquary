@@ -37,10 +37,15 @@ bool SettingsScreen::handle_input(SDL_Event& event, SDL_Window* window) {
                 keybinds_open_ = false;
                 return true;
             case SDLK_UP: case SDLK_w: case SDLK_k:
-                if (kb_selected_ > 0) kb_selected_--;
+                // Skip unavailable actions when navigating
+                { int prev = kb_selected_ - 1;
+                  while (prev >= 0 && !action_available(static_cast<Action>(prev))) prev--;
+                  if (prev >= 0) kb_selected_ = prev; }
                 return true;
             case SDLK_DOWN: case SDLK_s: case SDLK_j:
-                if (kb_selected_ < ACTION_COUNT - 1) kb_selected_++;
+                { int next = kb_selected_ + 1;
+                  while (next < ACTION_COUNT && !action_available(static_cast<Action>(next))) next++;
+                  if (next < ACTION_COUNT) kb_selected_ = next; }
                 return true;
             case SDLK_RETURN: case SDLK_e:
                 // Start rebinding
@@ -126,6 +131,9 @@ bool SettingsScreen::handle_input(SDL_Event& event, SDL_Window* window) {
             } else if (selected_ == 4) {
                 keybinds_open_ = true;
                 kb_selected_ = 0;
+                // Skip to first available action
+                while (kb_selected_ < ACTION_COUNT && !action_available(static_cast<Action>(kb_selected_)))
+                    kb_selected_++;
                 kb_scroll_ = 0;
                 return true;
             } else if (selected_ == 5) {
@@ -347,6 +355,7 @@ void SettingsScreen::render_keybinds(SDL_Renderer* renderer, TTF_Font* font,
 
     for (int i = scroll; i < ACTION_COUNT && y + row_h <= panel.cursor.y2(); i++) {
         Action a = static_cast<Action>(i);
+        if (!action_available(a)) continue;
         bool selected = (i == kb_selected_);
         bool rebinding = (rebind_action_ == a);
 

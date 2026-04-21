@@ -31,6 +31,18 @@ static constexpr int ACTION_COUNT = static_cast<int>(Action::COUNT);
 // Human-readable name for each action (for the rebinding UI)
 const char* action_name(Action a);
 
+// Whether an action is active and should appear in the keybinds UI
+// (removed features like diagonal movement return false)
+inline bool action_available(Action a) {
+    switch (a) {
+        case Action::MOVE_NW: case Action::MOVE_NE:
+        case Action::MOVE_SW: case Action::MOVE_SE:
+            return false;
+        default:
+            return true;
+    }
+}
+
 // Max keys per action (primary + alternates)
 static constexpr int MAX_KEYS_PER_ACTION = 4;
 
@@ -82,6 +94,9 @@ public:
 
     // Translate a keycode to an action (returns Action::COUNT if no match)
     Action translate(SDL_Keycode sym) const;
+
+    // Translate with modifier awareness (handles sdl2-compat shifted key issues)
+    Action translate(SDL_Keycode sym, Uint16 mod) const;
 
     // Access binding for an action
     const KeyBinding& get(Action a) const { return bindings_[static_cast<int>(a)]; }

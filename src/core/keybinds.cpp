@@ -122,18 +122,39 @@ Action Keybinds::translate(SDL_Keycode sym) const {
     return Action::COUNT;
 }
 
+Action Keybinds::translate(SDL_Keycode sym, Uint16 mod) const {
+    // Try direct match first
+    Action direct = translate(sym);
+    if (direct != Action::COUNT) return direct;
+
+    // sdl2-compat (SDL3 backend) sometimes reports the unshifted physical key
+    // even when shift is held. Map common shifted characters manually.
+    if (mod & KMOD_SHIFT) {
+        SDL_Keycode shifted = SDLK_UNKNOWN;
+        switch (sym) {
+            case SDLK_PERIOD:    shifted = SDLK_GREATER;  break; // . -> >
+            case SDLK_COMMA:     shifted = SDLK_LESS;     break; // , -> <
+            case SDLK_SLASH:     shifted = SDLK_QUESTION; break; // / -> ?
+            case SDLK_1:         shifted = SDLK_EXCLAIM;  break; // 1 -> !
+            case SDLK_SEMICOLON: shifted = SDLK_COLON;    break; // ; -> :
+            default: break;
+        }
+        if (shifted != SDLK_UNKNOWN)
+            return translate(shifted);
+    }
+
+    return Action::COUNT;
+}
+
 void Keybinds::rebind(Action action, SDL_Keycode key) {
     // Remove this key from any other action first
     for (int i = 0; i < ACTION_COUNT; i++) {
         bindings_[i].remove(key);
     }
-    // Add to target action
+    // Replace all existing bindings for this action with the single new key
     auto& b = bindings_[static_cast<int>(action)];
-    // If already at max, replace the last one
-    if (b.count >= MAX_KEYS_PER_ACTION)
-        b.keys[b.count - 1] = key;
-    else
-        b.add(key);
+    b.clear();
+    b.add(key);
 }
 
 // ── Key name display ──

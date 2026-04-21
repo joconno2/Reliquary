@@ -11,6 +11,7 @@
 #include "core/spritesheet.h"
 #include "core/engine.h" // DungeonEntry
 #include "data/world_data.h"
+#include "generation/mapfile.h"
 #include "systems/combat.h"
 #include <algorithm>
 #include <cmath>
@@ -23,7 +24,8 @@ namespace overworld {
 // =============================================
 
 void populate(World& world, TileMap& map, RNG& rng,
-              const std::vector<DungeonEntry>& dungeon_registry) {
+              const std::vector<DungeonEntry>& dungeon_registry,
+              const std::vector<MapEntity>& map_entities) {
     // Helper: spawn a wilderness NPC
     auto spawn_ow_npc = [&](int x, int y, const char* name, const char* dialogue,
                              NPCRole role, int spr_x, int spr_y,
@@ -500,7 +502,7 @@ void populate(World& world, TileMap& map, RNG& rng,
         }
     };
 
-    // Helper: place doodads inside buildings (stone floor, near interior walls)
+    // Helper: place doodads inside buildings (stone/cobble/dirt floor, near interior walls)
     auto place_interior = [&](int cx, int cy, int radius, int count,
                                int sx, int sy, SDL_Color tint = {255,255,255,255}) {
         int placed = 0;
@@ -509,7 +511,8 @@ void populate(World& world, TileMap& map, RNG& rng,
             int ty = cy + rng.range(-radius, radius);
             if (!map.in_bounds(tx, ty)) continue;
             auto tt = map.at(tx, ty).type;
-            if (tt != TileType::FLOOR_STONE && tt != TileType::FLOOR_COBBLE) continue;
+            if (tt != TileType::FLOOR_STONE && tt != TileType::FLOOR_COBBLE &&
+                tt != TileType::FLOOR_DIRT) continue;
             // Must be near a wall (inside a building)
             if (!adjacent_to_wall(tx, ty)) continue;
             // Don't block doors
@@ -593,69 +596,98 @@ void populate(World& world, TileMap& map, RNG& rng,
     }
 
     // =============================================
-    // BUILDING INTERIORS — furnish shops, smiths, inns, temples
+    // BUILDING INTERIORS — furnish based on NPC type in each building
     // =============================================
+    // Place furniture near NPC positions from map entities so items match the building:
+    //   B (blacksmith) -> anvil, equipment piles, barrels
+    //   S (shopkeeper) -> barrels, jars, shelves
+    //   P (priest/scholar) -> jars, barrels
+    //   W/F (villager/farmer residential) -> beds, tables, stools
+    //   Buildings with no NPC or innkeeper nearby -> beds, tables (inn/residential)
     for (int i = 0; i < TOWN_COUNT; i++) {
         int tx = ALL_TOWNS[i].x, ty = ALL_TOWNS[i].y;
-        int r = 20; // search within town radius for building interiors
+        int r = 20;
 
-        // General furnishings across all buildings
-        place_interior(tx, ty, r, rng.range(2, 4), 4, 17);  // barrels
-        place_interior(tx, ty, r, rng.range(1, 3), 2, 17);  // jars
-        place_interior(tx, ty, r, rng.range(1, 2), 5, 17);  // ore sacks
+        // Find NPC glyphs within this town's radius
+        std::vector<std::pair<int,int>> blacksmith_pos, shopkeeper_pos, residential_pos, priest_pos;
+        for (auto& me : map_entities) {
+            int dx = me.x - tx, dy = me.y - ty;
+            if (std::abs(dx) > r || std::abs(dy) > r) continue;
+            if (me.glyph == 'B') blacksmith_pos.push_back({me.x, me.y});
+            else if (me.glyph == 'S' || me.glyph == 'M') shopkeeper_pos.push_back({me.x, me.y});
+            else if (me.glyph == 'P') priest_pos.push_back({me.x, me.y});
+            else if (me.glyph == 'F' || me.glyph == 'W') residential_pos.push_back({me.x, me.y});
+        }
 
-        // Beds: top half (8,17) + bottom half (8,18) placed as vertical pairs
-        for (int b = 0; b < rng.range(1, 2); b++) {
-            for (int attempt = 0; attempt < 20; attempt++) {
-                int bx = tx + rng.range(-r, r);
-                int by = ty + rng.range(-r, r);
-                if (!map.in_bounds(bx, by) || !map.in_bounds(bx, by+1)) continue;
-                if (map.at(bx, by).type != TileType::FLOOR_STONE) continue;
-                if (map.at(bx, by+1).type != TileType::FLOOR_STONE) continue;
-                if (!adjacent_to_wall(bx, by)) continue;
-                // Must be enclosed (walls on at least 2 sides) to ensure inside a building
-                int wall_sides = 0;
-                if (map.in_bounds(bx-1, by) && !map.is_walkable(bx-1, by)) wall_sides++;
-                if (map.in_bounds(bx+1, by) && !map.is_walkable(bx+1, by)) wall_sides++;
-                if (map.in_bounds(bx, by-1) && !map.is_walkable(bx, by-1)) wall_sides++;
-                if (map.in_bounds(bx, by+2) && !map.is_walkable(bx, by+2)) wall_sides++;
-                if (wall_sides < 2) continue;
+        // Blacksmith buildings: anvil + equipment near the B glyph
+        for (auto& [bx, by] : blacksmith_pos) {
+            place_interior(bx, by, 4, 1, 2, 18);           // anvil
+            place_interior(bx, by, 4, rng.range(1, 2), 6, 18); // equipment piles
+            place_interior(bx, by, 4, rng.range(1, 2), 4, 17); // barrels
+        }
+
+        // Shop buildings: barrels + jars near the S glyph
+        for (auto& [sx, sy] : shopkeeper_pos) {
+            place_interior(sx, sy, 4, rng.range(2, 3), 4, 17); // barrels
+            place_interior(sx, sy, 4, rng.range(1, 2), 2, 17); // jars
+            place_interior(sx, sy, 4, rng.range(0, 1), 5, 17); // ore sacks
+        }
+
+        // Priest/scholar buildings: jars + barrels (study/temple feel)
+        for (auto& [px, py] : priest_pos) {
+            place_interior(px, py, 4, rng.range(1, 2), 2, 17); // jars (scrolls/potions)
+            place_interior(px, py, 4, rng.range(1, 2), 4, 17); // barrels
+        }
+
+        // Residential buildings: beds + tables near F/W glyphs
+        for (auto& [fx, fy] : residential_pos) {
+            // Bed (vertical pair)
+            for (int attempt = 0; attempt < 15; attempt++) {
+                int bx2 = fx + rng.range(-3, 3);
+                int by2 = fy + rng.range(-3, 3);
+                if (!map.in_bounds(bx2, by2) || !map.in_bounds(bx2, by2+1)) continue;
+                if (map.at(bx2, by2).type != TileType::FLOOR_STONE) continue;
+                if (map.at(bx2, by2+1).type != TileType::FLOOR_STONE) continue;
+                if (!adjacent_to_wall(bx2, by2)) continue;
                 bool door_near = false;
-                for (int dy = -1; dy <= 2 && !door_near; dy++)
-                    for (int dx = -1; dx <= 1; dx++)
-                        if (map.in_bounds(bx+dx, by+dy) &&
-                            (map.at(bx+dx, by+dy).type == TileType::DOOR_CLOSED ||
-                             map.at(bx+dx, by+dy).type == TileType::DOOR_OPEN))
+                for (int dy2 = -1; dy2 <= 2 && !door_near; dy2++)
+                    for (int dx2 = -1; dx2 <= 1; dx2++)
+                        if (map.in_bounds(bx2+dx2, by2+dy2) &&
+                            (map.at(bx2+dx2, by2+dy2).type == TileType::DOOR_CLOSED ||
+                             map.at(bx2+dx2, by2+dy2).type == TileType::DOOR_OPEN))
                             door_near = true;
                 if (door_near) continue;
                 Entity bed_top = world.create();
-                world.add<Position>(bed_top, {bx, by});
+                world.add<Position>(bed_top, {bx2, by2});
                 world.add<Renderable>(bed_top, {SHEET_TILES, 8, 17, {255,255,255,255}, 0});
                 Entity bed_bot = world.create();
-                world.add<Position>(bed_bot, {bx, by+1});
+                world.add<Position>(bed_bot, {bx2, by2+1});
                 world.add<Renderable>(bed_bot, {SHEET_TILES, 8, 18, {255,255,255,255}, 0});
                 break;
             }
         }
-        // Anvil (2,18): one per town
-        place_interior(tx, ty, r, 1, 2, 18);
-        // Equipment piles (6,18): 1-2 per town (blacksmith/guard area)
-        place_interior(tx, ty, r, rng.range(1, 2), 6, 18);
 
-        // Tables: left half (4,18) + right half (5,18) placed as horizontal pairs with stools
-        for (int t = 0; t < rng.range(1, 3); t++) {
+        // Tables in residential/inn buildings (near residential NPCs or town center if no residential)
+        int table_count = rng.range(1, 3);
+        for (int t = 0; t < table_count; t++) {
+            // Place near a residential NPC if any, otherwise town center
+            int tcx = tx, tcy = ty;
+            if (!residential_pos.empty()) {
+                auto& rp = residential_pos[rng.range(0, static_cast<int>(residential_pos.size()) - 1)];
+                tcx = rp.first; tcy = rp.second;
+            }
             for (int attempt = 0; attempt < 20; attempt++) {
-                int tbx = tx + rng.range(-r, r);
-                int tby = ty + rng.range(-r, r);
+                int tbx = tcx + rng.range(-5, 5);
+                int tby = tcy + rng.range(-5, 5);
                 if (!map.in_bounds(tbx, tby) || !map.in_bounds(tbx+1, tby)) continue;
                 if (map.at(tbx, tby).type != TileType::FLOOR_STONE) continue;
                 if (map.at(tbx+1, tby).type != TileType::FLOOR_STONE) continue;
                 bool door_near = false;
-                for (int dy = -1; dy <= 1 && !door_near; dy++)
-                    for (int dx = -1; dx <= 2; dx++)
-                        if (map.in_bounds(tbx+dx, tby+dy) &&
-                            (map.at(tbx+dx, tby+dy).type == TileType::DOOR_CLOSED ||
-                             map.at(tbx+dx, tby+dy).type == TileType::DOOR_OPEN))
+                for (int dy2 = -1; dy2 <= 1 && !door_near; dy2++)
+                    for (int dx2 = -1; dx2 <= 2; dx2++)
+                        if (map.in_bounds(tbx+dx2, tby+dy2) &&
+                            (map.at(tbx+dx2, tby+dy2).type == TileType::DOOR_CLOSED ||
+                             map.at(tbx+dx2, tby+dy2).type == TileType::DOOR_OPEN))
                             door_near = true;
                 if (door_near) continue;
                 Entity tl = world.create();
@@ -664,7 +696,6 @@ void populate(World& world, TileMap& map, RNG& rng,
                 Entity tr = world.create();
                 world.add<Position>(tr, {tbx+1, tby});
                 world.add<Renderable>(tr, {SHEET_TILES, 5, 18, {255,255,255,255}, 0});
-                // Place a stool (3,18) next to the table
                 if (map.in_bounds(tbx, tby+1) && map.is_walkable(tbx, tby+1)) {
                     Entity st = world.create();
                     world.add<Position>(st, {tbx, tby+1});
@@ -673,6 +704,9 @@ void populate(World& world, TileMap& map, RNG& rng,
                 break;
             }
         }
+
+        // General town barrels (outdoor, against walls)
+        place_interior(tx, ty, r, rng.range(1, 2), 4, 17);
     }
 
     // =============================================
@@ -724,6 +758,10 @@ void populate(World& world, TileMap& map, RNG& rng,
         // Spawn NPC inside the cabin
         spawn_ow_npc(cd.x + cd.w/2, cd.y + cd.h/2, cd.npc_name, cd.dialogue,
                       NPCRole::FARMER, 4, 6); // elderly man sprite
+        // Interior furnishing: bed + barrel
+        int icx = cd.x + cd.w/2, icy = cd.y + cd.h/2;
+        place_interior(icx, icy, 2, 1, 4, 17); // barrel
+        place_interior(icx, icy, 2, 1, 3, 18); // stool
         // Barrel or log pile against the outside wall
         place_against_walls(cd.x - 1, cd.y, cd.w + 2, 1, 4, 17); // barrel
         place_against_walls(cd.x - 1, cd.y, cd.w + 2, 1, 6, 17); // log pile
@@ -753,6 +791,11 @@ void populate(World& world, TileMap& map, RNG& rng,
         spawn_ow_npc(hm.x + 9, hm.y + 3, "Villager",
             "Trade comes through once a season. If we're lucky.", NPCRole::FARMER, 0, 6);
 
+        // Interior furnishing for hamlet cabins
+        place_interior(hm.x + 2, hm.y + 2, 2, 1, 4, 17);  // barrel in cabin 1
+        place_interior(hm.x + 2, hm.y + 2, 2, 1, 3, 18);  // stool in cabin 1
+        place_interior(hm.x + 9, hm.y + 3, 2, 1, 4, 17);  // barrel in cabin 2
+
         // Doodads around hamlet
         place_against_walls(hm.x - 1, hm.y - 1, 14, rng.range(2, 4), 4, 17); // barrels
         place_against_walls(hm.x - 1, hm.y - 1, 14, rng.range(1, 2), 6, 17); // log piles
@@ -769,6 +812,10 @@ void populate(World& world, TileMap& map, RNG& rng,
     for (auto& op : OUTPOSTS) {
         build_cabin(op.x, op.y, 6, 5);
         spawn_ow_npc(op.x + 3, op.y + 2, "Road Guard", op.dialogue, NPCRole::GUARD, 3, 1);
+        // Interior: equipment pile + barrel
+        place_interior(op.x + 3, op.y + 2, 2, 1, 6, 18); // equipment pile
+        place_interior(op.x + 3, op.y + 2, 2, 1, 4, 17); // barrel
+        // Exterior
         place_against_walls(op.x - 1, op.y - 1, 8, 2, 4, 17); // barrels
         place_lights(op.x + 3, op.y + 5, 3, 1, 5); // torch at entrance
     }
@@ -1682,8 +1729,10 @@ void process_npc_wander(World& world, TileMap& map, RNG& rng) {
         Entity e = npc_pool.entity_at(i);
         auto& npc = npc_pool.at_index(i);
 
-        // Shopkeepers and innkeepers stay put (need to be findable)
-        if (npc.role == NPCRole::SHOPKEEPER || npc.role == NPCRole::INNKEEPER) continue;
+        // Stationary NPCs: shopkeepers, innkeepers, blacksmiths, guards, elders, priests
+        if (npc.role == NPCRole::SHOPKEEPER || npc.role == NPCRole::INNKEEPER ||
+            npc.role == NPCRole::BLACKSMITH || npc.role == NPCRole::GUARD ||
+            npc.role == NPCRole::ELDER || npc.role == NPCRole::PRIEST) continue;
 
         if (!world.has<Position>(e) || !world.has<Energy>(e)) continue;
 
@@ -1710,6 +1759,14 @@ void process_npc_wander(World& world, TileMap& map, RNG& rng) {
         if (home_dist > 4) continue;
 
         if (!map.is_walkable(nx, ny)) continue;
+
+        // Don't cross indoor/outdoor boundaries (prevents farmers entering buildings,
+        // villagers wandering out of houses through doors)
+        auto home_type = map.at(npc.home_x, npc.home_y).type;
+        auto target_type = map.at(nx, ny).type;
+        bool home_indoor = (home_type == TileType::FLOOR_STONE || home_type == TileType::FLOOR_COBBLE);
+        bool target_indoor = (target_type == TileType::FLOOR_STONE || target_type == TileType::FLOOR_COBBLE);
+        if (home_indoor != target_indoor) continue;
 
         // Don't walk into other entities (use fast check)
         if (combat::entity_at(world, nx, ny, e) != NULL_ENTITY) continue;

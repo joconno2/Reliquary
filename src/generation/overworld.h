@@ -6,14 +6,17 @@
 #include <string>
 
 struct DungeonEntry;
+struct MapEntity;
 
 namespace overworld {
 
 // Populate the overworld with wilderness NPCs, cabins, hamlets, vegetation,
 // water features, signposts, wandering priests, and decorations.
 // Called once when the overworld map is first generated.
+// map_entities: NPC glyphs from the map file (used for building-aware furniture placement)
 void populate(World& world, TileMap& map, RNG& rng,
-              const std::vector<DungeonEntry>& dungeon_registry);
+              const std::vector<DungeonEntry>& dungeon_registry,
+              const std::vector<MapEntity>& map_entities = {});
 
 // Process NPC wandering movement on the overworld (shopkeepers stay put).
 void process_npc_wander(World& world, TileMap& map, RNG& rng);
