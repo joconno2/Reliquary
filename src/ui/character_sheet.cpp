@@ -91,15 +91,15 @@ void CharacterSheet::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* fo
 
     // === LEFT COLUMN: portrait + identity + attributes ===
 
-    // Character sprite
+    // Character sprite + name/level beside it
     if (world.has<Renderable>(player_)) {
         auto& rend = world.get<Renderable>(player_);
-        int sprite_sz = std::min(96, left.cursor.w / 2);
+        int sprite_sz = std::min(64, left.cursor.w / 3);
         auto sprite_row = left.row(sprite_sz);
         sprites.draw_sprite_sized(renderer, rend.sprite_sheet, rend.sprite_x, rend.sprite_y,
                                    sprite_row.x, sprite_row.y, sprite_sz);
 
-        // Name + level next to sprite
+        // Name + level next to sprite (only 2 lines, fits easily)
         int info_x = sprite_row.x + sprite_sz + 8;
         int info_w = sprite_row.w - sprite_sz - 8;
         ui::draw_text_clipped(renderer, font_title, stats.name.c_str(), title_col,
@@ -108,26 +108,21 @@ void CharacterSheet::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* fo
         char lvl_buf[32];
         snprintf(lvl_buf, sizeof(lvl_buf), "Level %d", stats.level);
         ui::draw_text(renderer, font, lvl_buf, label_col, info_x, sprite_row.y + title_h + 2);
+    }
+    left.skip(4);
 
-        if (world.has<GodAlignment>(player_)) {
-            auto& ga = world.get<GodAlignment>(player_);
-            auto& god = get_god_info(ga.god);
+    // God + Favor (own rows, no overlap)
+    if (world.has<GodAlignment>(player_)) {
+        auto& ga = world.get<GodAlignment>(player_);
+        auto& god = get_god_info(ga.god);
+        if (ga.god != GodId::NONE) {
             char god_buf[64];
-            if (ga.god != GodId::NONE)
-                snprintf(god_buf, sizeof(god_buf), "Branded by %s", god.name);
-            else
-                snprintf(god_buf, sizeof(god_buf), "Branded (godless)");
+            snprintf(god_buf, sizeof(god_buf), "Branded by %s (Favor: %d)", god.name, ga.favor);
             SDL_Color brand_col = {god.color.r, god.color.g, god.color.b, 255};
-            ui::draw_text_clipped(renderer, font, god_buf, brand_col, info_x,
-                                  sprite_row.y + title_h + line_h + 6, info_w);
-
-            char favor_buf[32];
-            snprintf(favor_buf, sizeof(favor_buf), "Favor: %d", ga.favor);
-            ui::draw_text(renderer, font, favor_buf, label_col, info_x,
-                          sprite_row.y + title_h + line_h * 2 + 10);
+            auto god_row = left.row();
+            ui::draw_text_clipped(renderer, font, god_buf, brand_col, god_row.x, god_row.y, god_row.w);
         }
     }
-    left.skip(8);
 
     // XP
     char xp_buf[48];

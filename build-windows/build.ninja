@@ -51,7 +51,7 @@ build cmake_object_order_depends_target_reliquary: phony || .
 
 build CMakeFiles/reliquary.dir/src/core/audio.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/core/audio.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/core/audio.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -61,7 +61,7 @@ build CMakeFiles/reliquary.dir/src/core/audio.cpp.obj: CXX_COMPILER__reliquary_u
 
 build CMakeFiles/reliquary.dir/src/core/engine.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/core/engine.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/core/engine.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -71,7 +71,7 @@ build CMakeFiles/reliquary.dir/src/core/engine.cpp.obj: CXX_COMPILER__reliquary_
 
 build CMakeFiles/reliquary.dir/src/core/gamepad.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/core/gamepad.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/core/gamepad.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -81,7 +81,7 @@ build CMakeFiles/reliquary.dir/src/core/gamepad.cpp.obj: CXX_COMPILER__reliquary
 
 build CMakeFiles/reliquary.dir/src/core/input_glyphs.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/core/input_glyphs.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/core/input_glyphs.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -91,7 +91,7 @@ build CMakeFiles/reliquary.dir/src/core/input_glyphs.cpp.obj: CXX_COMPILER__reli
 
 build CMakeFiles/reliquary.dir/src/core/keybinds.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/core/keybinds.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/core/keybinds.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -101,7 +101,7 @@ build CMakeFiles/reliquary.dir/src/core/keybinds.cpp.obj: CXX_COMPILER__reliquar
 
 build CMakeFiles/reliquary.dir/src/core/rng.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/core/rng.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/core/rng.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -111,7 +111,7 @@ build CMakeFiles/reliquary.dir/src/core/rng.cpp.obj: CXX_COMPILER__reliquary_uns
 
 build CMakeFiles/reliquary.dir/src/core/spritesheet.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/core/spritesheet.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/core/spritesheet.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -121,7 +121,7 @@ build CMakeFiles/reliquary.dir/src/core/spritesheet.cpp.obj: CXX_COMPILER__reliq
 
 build CMakeFiles/reliquary.dir/src/core/tilemap.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/core/tilemap.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/core/tilemap.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -131,7 +131,7 @@ build CMakeFiles/reliquary.dir/src/core/tilemap.cpp.obj: CXX_COMPILER__reliquary
 
 build CMakeFiles/reliquary.dir/src/generation/dungeon.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/generation/dungeon.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/generation/dungeon.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -141,7 +141,7 @@ build CMakeFiles/reliquary.dir/src/generation/dungeon.cpp.obj: CXX_COMPILER__rel
 
 build CMakeFiles/reliquary.dir/src/generation/mapfile.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/generation/mapfile.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/generation/mapfile.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -151,7 +151,7 @@ build CMakeFiles/reliquary.dir/src/generation/mapfile.cpp.obj: CXX_COMPILER__rel
 
 build CMakeFiles/reliquary.dir/src/generation/overworld.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/generation/overworld.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/generation/overworld.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -161,7 +161,7 @@ build CMakeFiles/reliquary.dir/src/generation/overworld.cpp.obj: CXX_COMPILER__r
 
 build CMakeFiles/reliquary.dir/src/generation/player_setup.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/generation/player_setup.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/generation/player_setup.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -171,7 +171,7 @@ build CMakeFiles/reliquary.dir/src/generation/player_setup.cpp.obj: CXX_COMPILER
 
 build CMakeFiles/reliquary.dir/src/generation/populate.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/generation/populate.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/generation/populate.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -181,7 +181,7 @@ build CMakeFiles/reliquary.dir/src/generation/populate.cpp.obj: CXX_COMPILER__re
 
 build CMakeFiles/reliquary.dir/src/generation/quest_gen.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/generation/quest_gen.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/generation/quest_gen.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -191,7 +191,7 @@ build CMakeFiles/reliquary.dir/src/generation/quest_gen.cpp.obj: CXX_COMPILER__r
 
 build CMakeFiles/reliquary.dir/src/generation/village.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/generation/village.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/generation/village.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -201,7 +201,7 @@ build CMakeFiles/reliquary.dir/src/generation/village.cpp.obj: CXX_COMPILER__rel
 
 build CMakeFiles/reliquary.dir/src/main.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/main.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/main.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -211,7 +211,7 @@ build CMakeFiles/reliquary.dir/src/main.cpp.obj: CXX_COMPILER__reliquary_unscann
 
 build CMakeFiles/reliquary.dir/src/save/meta.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/save/meta.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/save/meta.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -221,7 +221,7 @@ build CMakeFiles/reliquary.dir/src/save/meta.cpp.obj: CXX_COMPILER__reliquary_un
 
 build CMakeFiles/reliquary.dir/src/save/save.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/save/save.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/save/save.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -231,7 +231,7 @@ build CMakeFiles/reliquary.dir/src/save/save.cpp.obj: CXX_COMPILER__reliquary_un
 
 build CMakeFiles/reliquary.dir/src/systems/ai.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/systems/ai.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/systems/ai.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -241,7 +241,7 @@ build CMakeFiles/reliquary.dir/src/systems/ai.cpp.obj: CXX_COMPILER__reliquary_u
 
 build CMakeFiles/reliquary.dir/src/systems/combat.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/systems/combat.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/systems/combat.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -251,7 +251,7 @@ build CMakeFiles/reliquary.dir/src/systems/combat.cpp.obj: CXX_COMPILER__reliqua
 
 build CMakeFiles/reliquary.dir/src/systems/fov.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/systems/fov.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/systems/fov.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -261,7 +261,7 @@ build CMakeFiles/reliquary.dir/src/systems/fov.cpp.obj: CXX_COMPILER__reliquary_
 
 build CMakeFiles/reliquary.dir/src/systems/god_system.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/systems/god_system.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/systems/god_system.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -271,7 +271,7 @@ build CMakeFiles/reliquary.dir/src/systems/god_system.cpp.obj: CXX_COMPILER__rel
 
 build CMakeFiles/reliquary.dir/src/systems/magic.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/systems/magic.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/systems/magic.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -281,7 +281,7 @@ build CMakeFiles/reliquary.dir/src/systems/magic.cpp.obj: CXX_COMPILER__reliquar
 
 build CMakeFiles/reliquary.dir/src/systems/npc_interaction.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/systems/npc_interaction.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/systems/npc_interaction.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -291,7 +291,7 @@ build CMakeFiles/reliquary.dir/src/systems/npc_interaction.cpp.obj: CXX_COMPILER
 
 build CMakeFiles/reliquary.dir/src/systems/particles.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/systems/particles.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/systems/particles.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -301,7 +301,7 @@ build CMakeFiles/reliquary.dir/src/systems/particles.cpp.obj: CXX_COMPILER__reli
 
 build CMakeFiles/reliquary.dir/src/systems/passive_tree.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/systems/passive_tree.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/systems/passive_tree.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -311,7 +311,7 @@ build CMakeFiles/reliquary.dir/src/systems/passive_tree.cpp.obj: CXX_COMPILER__r
 
 build CMakeFiles/reliquary.dir/src/systems/render.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/systems/render.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/systems/render.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -321,7 +321,7 @@ build CMakeFiles/reliquary.dir/src/systems/render.cpp.obj: CXX_COMPILER__reliqua
 
 build CMakeFiles/reliquary.dir/src/systems/status.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/systems/status.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/systems/status.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -331,7 +331,7 @@ build CMakeFiles/reliquary.dir/src/systems/status.cpp.obj: CXX_COMPILER__reliqua
 
 build CMakeFiles/reliquary.dir/src/ui/background_select.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/ui/background_select.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/ui/background_select.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -341,7 +341,7 @@ build CMakeFiles/reliquary.dir/src/ui/background_select.cpp.obj: CXX_COMPILER__r
 
 build CMakeFiles/reliquary.dir/src/ui/character_sheet.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/ui/character_sheet.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/ui/character_sheet.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -351,7 +351,7 @@ build CMakeFiles/reliquary.dir/src/ui/character_sheet.cpp.obj: CXX_COMPILER__rel
 
 build CMakeFiles/reliquary.dir/src/ui/church_screen.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/ui/church_screen.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/ui/church_screen.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -361,7 +361,7 @@ build CMakeFiles/reliquary.dir/src/ui/church_screen.cpp.obj: CXX_COMPILER__reliq
 
 build CMakeFiles/reliquary.dir/src/ui/creation_screen.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/ui/creation_screen.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/ui/creation_screen.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -371,7 +371,7 @@ build CMakeFiles/reliquary.dir/src/ui/creation_screen.cpp.obj: CXX_COMPILER__rel
 
 build CMakeFiles/reliquary.dir/src/ui/death_screen.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/ui/death_screen.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/ui/death_screen.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -381,7 +381,7 @@ build CMakeFiles/reliquary.dir/src/ui/death_screen.cpp.obj: CXX_COMPILER__reliqu
 
 build CMakeFiles/reliquary.dir/src/ui/floating_text.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/ui/floating_text.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/ui/floating_text.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -391,7 +391,7 @@ build CMakeFiles/reliquary.dir/src/ui/floating_text.cpp.obj: CXX_COMPILER__reliq
 
 build CMakeFiles/reliquary.dir/src/ui/help_screen.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/ui/help_screen.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/ui/help_screen.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -401,7 +401,7 @@ build CMakeFiles/reliquary.dir/src/ui/help_screen.cpp.obj: CXX_COMPILER__reliqua
 
 build CMakeFiles/reliquary.dir/src/ui/intro_screen.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/ui/intro_screen.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/ui/intro_screen.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -411,7 +411,7 @@ build CMakeFiles/reliquary.dir/src/ui/intro_screen.cpp.obj: CXX_COMPILER__reliqu
 
 build CMakeFiles/reliquary.dir/src/ui/inventory_screen.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/ui/inventory_screen.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/ui/inventory_screen.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -421,7 +421,7 @@ build CMakeFiles/reliquary.dir/src/ui/inventory_screen.cpp.obj: CXX_COMPILER__re
 
 build CMakeFiles/reliquary.dir/src/ui/levelup_screen.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/ui/levelup_screen.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/ui/levelup_screen.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -431,7 +431,7 @@ build CMakeFiles/reliquary.dir/src/ui/levelup_screen.cpp.obj: CXX_COMPILER__reli
 
 build CMakeFiles/reliquary.dir/src/ui/main_menu.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/ui/main_menu.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/ui/main_menu.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -441,7 +441,7 @@ build CMakeFiles/reliquary.dir/src/ui/main_menu.cpp.obj: CXX_COMPILER__reliquary
 
 build CMakeFiles/reliquary.dir/src/ui/message_log.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/ui/message_log.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/ui/message_log.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -451,7 +451,7 @@ build CMakeFiles/reliquary.dir/src/ui/message_log.cpp.obj: CXX_COMPILER__reliqua
 
 build CMakeFiles/reliquary.dir/src/ui/passive_tree_screen.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/ui/passive_tree_screen.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/ui/passive_tree_screen.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -461,7 +461,7 @@ build CMakeFiles/reliquary.dir/src/ui/passive_tree_screen.cpp.obj: CXX_COMPILER_
 
 build CMakeFiles/reliquary.dir/src/ui/pause_menu.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/ui/pause_menu.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/ui/pause_menu.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -471,7 +471,7 @@ build CMakeFiles/reliquary.dir/src/ui/pause_menu.cpp.obj: CXX_COMPILER__reliquar
 
 build CMakeFiles/reliquary.dir/src/ui/quest_log.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/ui/quest_log.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/ui/quest_log.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -481,7 +481,7 @@ build CMakeFiles/reliquary.dir/src/ui/quest_log.cpp.obj: CXX_COMPILER__reliquary
 
 build CMakeFiles/reliquary.dir/src/ui/quest_offer.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/ui/quest_offer.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/ui/quest_offer.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -491,7 +491,7 @@ build CMakeFiles/reliquary.dir/src/ui/quest_offer.cpp.obj: CXX_COMPILER__reliqua
 
 build CMakeFiles/reliquary.dir/src/ui/settings_screen.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/ui/settings_screen.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/ui/settings_screen.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -501,7 +501,7 @@ build CMakeFiles/reliquary.dir/src/ui/settings_screen.cpp.obj: CXX_COMPILER__rel
 
 build CMakeFiles/reliquary.dir/src/ui/shop_screen.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/ui/shop_screen.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/ui/shop_screen.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -511,7 +511,7 @@ build CMakeFiles/reliquary.dir/src/ui/shop_screen.cpp.obj: CXX_COMPILER__reliqua
 
 build CMakeFiles/reliquary.dir/src/ui/spell_screen.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/ui/spell_screen.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/ui/spell_screen.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -521,7 +521,7 @@ build CMakeFiles/reliquary.dir/src/ui/spell_screen.cpp.obj: CXX_COMPILER__reliqu
 
 build CMakeFiles/reliquary.dir/src/ui/trait_select.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/ui/trait_select.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/ui/trait_select.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -531,7 +531,7 @@ build CMakeFiles/reliquary.dir/src/ui/trait_select.cpp.obj: CXX_COMPILER__reliqu
 
 build CMakeFiles/reliquary.dir/src/ui/tutorial_popup.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/ui/tutorial_popup.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/ui/tutorial_popup.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -541,7 +541,7 @@ build CMakeFiles/reliquary.dir/src/ui/tutorial_popup.cpp.obj: CXX_COMPILER__reli
 
 build CMakeFiles/reliquary.dir/src/ui/ui_draw.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/ui/ui_draw.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/ui/ui_draw.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
@@ -551,7 +551,7 @@ build CMakeFiles/reliquary.dir/src/ui/ui_draw.cpp.obj: CXX_COMPILER__reliquary_u
 
 build CMakeFiles/reliquary.dir/src/ui/world_map.cpp.obj: CXX_COMPILER__reliquary_unscanned_Release /home/jim/projects/Reliquary/src/ui/world_map.cpp || cmake_object_order_depends_target_reliquary
   CONFIG = Release
-  DEFINES = -DRELIQUARY_VERSION=\"v0.3.41\"
+  DEFINES = -DRELIQUARY_VERSION=\"v0.3.42\"
   DEP_FILE = CMakeFiles/reliquary.dir/src/ui/world_map.cpp.obj.d
   FLAGS = -O3 -DNDEBUG -std=gnu++20 -Wall -Wextra -Wpedantic
   INCLUDES = -I/home/jim/projects/Reliquary/src -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2-2.32.4/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_image-2.8.8/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_ttf-2.24.0/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include -I/home/jim/projects/Reliquary/deps/windows/SDL2_mixer-2.8.1/x86_64-w64-mingw32/include/SDL2 -I/home/jim/projects/Reliquary/build-windows/_deps/json-src/include
