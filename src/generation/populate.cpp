@@ -24,7 +24,7 @@ static const MonsterDef MONSTER_TABLE[] = {
     {"giant rat",       SHEET_MONSTERS, 11, 6,  6,   6, 14,  6,  2, 0, 130, 40,  10},
     {"bat",             SHEET_MONSTERS,  6, 6,  4,   4, 16,  4,  1, 0, 150, 70,   5},
     {"kobold",          SHEET_MONSTERS,  0, 9,  6,   6, 12,  6,  1, 0, 120, 35,  10},
-    {"slime",           SHEET_MONSTERS,  9, 6, 16,   6,  4, 14,  2, 0,  60,  0,  15},
+    {"slime",           SHEET_MONSTERS,  1, 2, 16,   6,  4, 14,  2, 0,  60,  0,  15}, // 3.b big slime
     {"goblin",          SHEET_MONSTERS,  2, 0,  8,   8, 12,  8,  2, 0, 110, 30,  15},
     {"giant spider",    SHEET_MONSTERS,  8, 6, 12,  10, 12,  8,  3, 1, 120, 20,  20},
     {"goblin archer",   SHEET_MONSTERS,  5, 0, 10,   8, 14,  8,  3, 0, 110, 25,  20},
@@ -50,12 +50,12 @@ static const MonsterDef MONSTER_TABLE[] = {
     // New monsters from unused sprites
     {"myconid",         SHEET_MONSTERS,  0,10, 20,   8,  6, 14,  4, 2,  60, 10,  30}, // mushroom creature (warrens)
     {"ogre",            SHEET_MONSTERS,  0, 1, 40,  20,  6, 16,  8, 2,  70,  5,  55}, // big brute
-    {"golem",           SHEET_MONSTERS,  4, 1, 55,  16,  4, 22, 10, 5,  50,  0,  70}, // stone construct
-    {"basilisk",        SHEET_MONSTERS,  6, 7, 30,  12, 10, 14,  5, 2,  90, 10,  55}, // reptile, stun gaze
-    {"yeti",            SHEET_MONSTERS,  2, 7, 42,  18, 10, 16,  8, 2,  85, 10,  65}, // cold zones
-    {"centaur",         SHEET_MONSTERS,  5, 7, 28,  14, 16, 12,  5, 1, 130, 15,  45}, // fast, ranged
-    {"imp",             SHEET_MONSTERS,  0,11, 12,   6, 18,  6,  3, 0, 140, 50,  20}, // small demon
-    {"gargoyle",        SHEET_MONSTERS,  3,11, 35,  14, 12, 18,  6, 4,  80,  0,  60}, // stone flyer
+    {"golem",           SHEET_MONSTERS,  2, 7, 55,  16,  4, 22, 10, 5,  50,  0,  70}, // stone construct (8.c rock golem)
+    {"basilisk",        SHEET_MONSTERS,  4, 8, 30,  12, 10, 14,  5, 2,  90, 10,  55}, // reptile, stun gaze (9.e)
+    {"yeti",            SHEET_MONSTERS,  1, 7, 42,  18, 10, 16,  8, 2,  85, 10,  65}, // cold zones (8.b wendigo)
+    {"centaur",         SHEET_MONSTERS,  3, 7, 28,  14, 16, 12,  5, 1, 130, 15,  45}, // fast, ranged (8.d centaur)
+    {"imp",             SHEET_MONSTERS,  1,11, 12,   6, 18,  6,  3, 0, 140, 50,  20}, // small demon (12.b imp/devil)
+    {"gargoyle",        SHEET_MONSTERS,  8, 7, 35,  14, 12, 18,  6, 4,  80,  0,  60}, // stone flyer (8.i harpy)
     {"lizardfolk",      SHEET_MONSTERS,  1, 9, 18,  12, 14, 10,  4, 1, 110, 20,  30}, // swamp dweller
 };
 
@@ -139,8 +139,12 @@ void spawn_monsters(World& world, const TileMap& map,
                 ai_comp.behavior = BehaviorType::WRAITH;
             } else if (mname == "death knight") {
                 ai_comp.behavior = BehaviorType::NECROMANCER;
+                ai_comp.ranged_range = 4;
+                ai_comp.ranged_damage = static_cast<int>(10 * dmg_scale);
             } else if (mname == "goblin shaman") {
                 ai_comp.behavior = BehaviorType::SHAMAN;
+                ai_comp.ranged_range = 5;
+                ai_comp.ranged_damage = static_cast<int>(6 * dmg_scale);
             } else if (mname == "bandit") {
                 ai_comp.behavior = BehaviorType::THIEF;
             } else if (mname == "centaur") {
