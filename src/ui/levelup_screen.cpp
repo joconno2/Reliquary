@@ -226,12 +226,15 @@ void LevelUpScreen::apply_choice(World& world) const {
         // WIL bonus also adds WIL to the secondary attr if present
     }
     if (choice.hp_bonus != 0) {
+        stats.base_hp_max += choice.hp_bonus;
         stats.hp_max += choice.hp_bonus;
         stats.hp += choice.hp_bonus;
+        if (stats.base_hp_max < 1) stats.base_hp_max = 1;
         if (stats.hp_max < 1) stats.hp_max = 1;
         if (stats.hp < 1) stats.hp = 1;
     }
     if (choice.mp_bonus > 0) {
+        stats.base_mp_max += choice.mp_bonus;
         stats.mp_max += choice.mp_bonus;
         stats.mp += choice.mp_bonus;
     }

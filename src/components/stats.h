@@ -19,13 +19,23 @@ struct Stats {
     // Vitals
     int hp = 20;
     int hp_max = 20;
+    int base_hp_max = 20;    // hp_max before equipment bonuses
     int mp = 0;
     int mp_max = 0;
+    int base_mp_max = 0;     // mp_max before equipment bonuses
 
     // Combat
     int base_damage = 1;     // unarmed / natural weapon damage
     int natural_armor = 0;   // innate protection (monsters, traits)
     int base_speed = 100;    // energy gained per tick (100 = normal)
+
+    // Equipment attribute bonuses (recalculated each turn from equipped items)
+    int equip_str = 0;
+    int equip_dex = 0;
+    int equip_con = 0;
+    int equip_hp = 0;
+    int equip_mp = 0;
+    int equip_speed = 0;
 
     // Level
     int level = 1;
@@ -54,12 +64,25 @@ struct Stats {
     int stone_skin_armor = 0;  // Gathruun: armor bonus while stone skin active
     int haste_turns = 0;       // kill haste unique: bonus speed
 
-    // Derived combat stats
-    int melee_attack() const { return attr(Attr::STR) + level; }
-    int melee_damage() const { return base_damage + attr(Attr::STR) / 3; }
-    int dodge_value() const { return attr(Attr::DEX) / 2; }
+    // Effective attribute (base + equipment)
+    int eff_attr(Attr a) const {
+        int val = attr(a);
+        switch (a) {
+            case Attr::STR: val += equip_str; break;
+            case Attr::DEX: val += equip_dex; break;
+            case Attr::CON: val += equip_con; break;
+            default: break;
+        }
+        return val;
+    }
+
+    // Derived combat stats (use effective attributes)
+    int melee_attack() const { return eff_attr(Attr::STR) + level; }
+    int melee_damage() const { return base_damage + eff_attr(Attr::STR) / 3; }
+    int dodge_value() const { return eff_attr(Attr::DEX) / 2; }
     int protection() const { return natural_armor; }
-    int fov_radius() const { return 8 + attr(Attr::PER) / 3 + fov_bonus; }
+    int fov_radius() const { return 8 + eff_attr(Attr::PER) / 3 + fov_bonus; }
+    int effective_speed() const { return base_speed + equip_speed; }
 
     // Equipment FOV bonus (from unique items)
     int fov_bonus = 0;

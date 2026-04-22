@@ -304,23 +304,38 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
 
     // Calculate visible count and scroll
     int row_h = std::max(line_h + 8, 36);
-    int visible_count = std::max(1, list.remaining_h() / row_h);
-    // Reserve space for scroll indicators (top and bottom take a row each)
-    if (count > visible_count) visible_count = std::max(1, visible_count - 2);
+    int avail_h = list.remaining_h();
+    bool needs_top_ind = false;
+    bool needs_bot_ind = false;
+
+    // First pass: how many items fit without indicators
+    int visible_count = std::max(1, avail_h / row_h);
     if (sel >= count && count > 0) sel = count - 1;
+
+    // Determine if we need scroll indicators
+    if (count > visible_count) {
+        // We need to scroll. Reserve one row for each indicator that'll show.
+        // Recalculate with reduced space.
+        int ind_rows = 2;  // worst case: both top and bottom
+        visible_count = std::max(1, (avail_h - ind_rows * line_h) / row_h);
+    }
+
     // Auto-scroll to keep selection visible
     if (sel < scroll_) scroll_ = sel;
     if (sel >= scroll_ + visible_count) scroll_ = sel - visible_count + 1;
     if (scroll_ > count - visible_count) scroll_ = std::max(0, count - visible_count);
+    if (scroll_ < 0) scroll_ = 0;
+
+    needs_top_ind = scroll_ > 0;
+    needs_bot_ind = (scroll_ + visible_count) < count;
 
     // Scroll indicator (top)
-    if (scroll_ > 0) {
+    if (needs_top_ind) {
         auto ind_row = list.row(line_h);
         char sbuf[32];
         snprintf(sbuf, sizeof(sbuf), "-- %d more above --", scroll_);
         ui::draw_text_centered(renderer, font, sbuf, hint_col,
                                ind_row.cx(), ind_row.y);
-        visible_count--;
     }
 
     for (int vi = 0; vi < visible_count && scroll_ + vi < count; vi++) {
@@ -367,7 +382,7 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     }
 
     // Scroll indicator (bottom)
-    int below = count - (scroll_ + visible_count + (scroll_ > 0 ? 1 : 0));
+    int below = count - (scroll_ + visible_count);
     if (below > 0 && list.fits(line_h)) {
         auto ind_row = list.row(line_h);
         char sbuf[32];

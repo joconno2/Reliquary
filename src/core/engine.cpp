@@ -500,6 +500,7 @@ void Engine::save_floor_cache(const std::string& path) {
             ej["z"] = ce.z_order; ej["flip"] = ce.flip_h;
             if (ce.has_stats) {
                 ej["sname"] = ce.stats.name; ej["shp"] = ce.stats.hp; ej["shpm"] = ce.stats.hp_max;
+                ej["sbhpm"] = ce.stats.base_hp_max; ej["sbmpm"] = ce.stats.base_mp_max;
                 ej["sdmg"] = ce.stats.base_damage; ej["sarm"] = ce.stats.natural_armor;
                 ej["sspd"] = ce.stats.base_speed; ej["sxp"] = ce.stats.xp_value;
                 nlohmann::json attrs = nlohmann::json::array();
@@ -584,7 +585,10 @@ void Engine::load_floor_cache(const std::string& path) {
                 if (ej.contains("sname")) {
                     ce.has_stats = true;
                     ce.stats.name = ej.value("sname", ""); ce.stats.hp = ej.value("shp", 1);
-                    ce.stats.hp_max = ej.value("shpm", 1); ce.stats.base_damage = ej.value("sdmg", 1);
+                    ce.stats.hp_max = ej.value("shpm", 1);
+                    ce.stats.base_hp_max = ej.value("sbhpm", ce.stats.hp_max);
+                    ce.stats.base_mp_max = ej.value("sbmpm", ce.stats.mp_max);
+                    ce.stats.base_damage = ej.value("sdmg", 1);
                     ce.stats.natural_armor = ej.value("sarm", 0); ce.stats.base_speed = ej.value("sspd", 100);
                     ce.stats.xp_value = ej.value("sxp", 0);
                     if (ej.contains("sattr")) {
@@ -3186,8 +3190,8 @@ void Engine::try_move_player(int dx, int dy) {
                                     case EffectType::BONUS_INT: rs.set_attr(Attr::INT, rs.attr(Attr::INT) - eff.value); break;
                                     case EffectType::BONUS_WIL: rs.set_attr(Attr::WIL, rs.attr(Attr::WIL) - eff.value); break;
                                     case EffectType::BONUS_PER: rs.set_attr(Attr::PER, rs.attr(Attr::PER) - eff.value); break;
-                                    case EffectType::BONUS_HP: rs.hp_max -= eff.value; rs.hp = std::min(rs.hp, rs.hp_max); break;
-                                    case EffectType::BONUS_MP: rs.mp_max -= eff.value; rs.mp = std::min(rs.mp, rs.mp_max); break;
+                                    case EffectType::BONUS_HP: rs.base_hp_max -= eff.value; rs.hp_max -= eff.value; rs.hp = std::min(rs.hp, rs.hp_max); break;
+                                    case EffectType::BONUS_MP: rs.base_mp_max -= eff.value; rs.mp_max -= eff.value; rs.mp = std::min(rs.mp, rs.mp_max); break;
                                     case EffectType::BONUS_SPEED: rs.base_speed -= eff.value; break;
                                     case EffectType::BONUS_ARMOR: rs.natural_armor -= eff.value; break;
                                     default: break;
@@ -3291,17 +3295,47 @@ void Engine::process_turn() {
     }
     world_.pending_kill_names.clear();
 
-    // Recalculate equipment-derived stats (unique effects)
+    // Recalculate equipment-derived stats
     if (world_.has<Stats>(player_) && world_.has<Inventory>(player_)) {
         auto& pstats = world_.get<Stats>(player_);
         auto& pinv = world_.get<Inventory>(player_);
+
+        // Reset equipment bonuses
         pstats.fov_bonus = 0;
+        pstats.equip_str = 0;
+        pstats.equip_dex = 0;
+        pstats.equip_con = 0;
+        pstats.equip_hp = 0;
+        pstats.equip_mp = 0;
+        pstats.equip_speed = 0;
+
         for (int s = 0; s < EQUIP_SLOT_COUNT; s++) {
             Entity eq = pinv.equipped[s];
             if (eq == NULL_ENTITY || !world_.has<Item>(eq)) continue;
-            if (world_.get<Item>(eq).unique_effect == UniqueEffect::LIGHT_RADIUS)
+            auto& item = world_.get<Item>(eq);
+
+            // Unique effects
+            if (item.unique_effect == UniqueEffect::LIGHT_RADIUS)
                 pstats.fov_bonus += 2;
+
+            // Attribute bonuses from equipment
+            pstats.equip_str += item.str_bonus;
+            pstats.equip_dex += item.dex_bonus;
+            pstats.equip_con += item.con_bonus;
+            pstats.equip_hp += item.affix_hp;
+            pstats.equip_mp += item.affix_mp;
+            pstats.equip_speed += item.affix_speed;
         }
+
+        // Apply HP/MP bonuses to max values
+        // hp_max = base_hp_max + equip_hp + CON bonus from equipment
+        // (CON bonus: each point of CON gives +2 hp_max)
+        pstats.hp_max = pstats.base_hp_max + pstats.equip_hp + pstats.equip_con * 2;
+        pstats.mp_max = pstats.base_mp_max + pstats.equip_mp;
+
+        // Clamp current values
+        if (pstats.hp > pstats.hp_max) pstats.hp = pstats.hp_max;
+        if (pstats.mp > pstats.mp_max) pstats.mp = pstats.mp_max;
     }
 
     // Check tenet violations for this turn's actions
@@ -5914,8 +5948,8 @@ void Engine::handle_input() {
                     ps.set_attr(Attr::INT, ps.attr(Attr::INT) + rewards.blessing_int);
                     ps.set_attr(Attr::WIL, ps.attr(Attr::WIL) + rewards.blessing_wil);
                     ps.set_attr(Attr::PER, ps.attr(Attr::PER) + rewards.blessing_per);
-                    ps.hp_max += rewards.blessing_hp; ps.hp += rewards.blessing_hp;
-                    ps.mp_max += rewards.blessing_mp; ps.mp += rewards.blessing_mp;
+                    ps.base_hp_max += rewards.blessing_hp; ps.hp_max += rewards.blessing_hp; ps.hp += rewards.blessing_hp;
+                    ps.base_mp_max += rewards.blessing_mp; ps.mp_max += rewards.blessing_mp; ps.mp += rewards.blessing_mp;
                     char buf[128];
                     snprintf(buf, sizeof(buf), "You receive %s: %s",
                              rewards.blessing_name, rewards.blessing_desc);
@@ -5958,8 +5992,8 @@ void Engine::handle_input() {
                                     case EffectType::BONUS_WIL: stats.set_attr(Attr::WIL, stats.attr(Attr::WIL) + eff.value); break;
                                     case EffectType::BONUS_PER: stats.set_attr(Attr::PER, stats.attr(Attr::PER) + eff.value); break;
                                     case EffectType::BONUS_CHA: stats.set_attr(Attr::CHA, stats.attr(Attr::CHA) + eff.value); break;
-                                    case EffectType::BONUS_HP: stats.hp_max += eff.value; stats.hp += eff.value; break;
-                                    case EffectType::BONUS_MP: stats.mp_max += eff.value; stats.mp += eff.value; break;
+                                    case EffectType::BONUS_HP: stats.base_hp_max += eff.value; stats.hp_max += eff.value; stats.hp += eff.value; break;
+                                    case EffectType::BONUS_MP: stats.base_mp_max += eff.value; stats.mp_max += eff.value; stats.mp += eff.value; break;
                                     case EffectType::BONUS_SPEED: stats.base_speed += eff.value; break;
                                     case EffectType::BONUS_ARMOR: stats.natural_armor += eff.value; break;
                                     case EffectType::XP_GAIN_BONUS: stats.xp_bonus_pct += eff.value; break;
@@ -6087,6 +6121,7 @@ void Engine::handle_input() {
                                     int cd = std::max(std::abs(cp.x - pp.x), std::abs(cp.y - pp.y));
                                     if (cd <= 2) {
                                         world_.destroy(ce);
+                                        ps.base_hp_max += 1;
                                         ps.hp_max += 1;
                                         ps.hp += 1;
                                         log_.add("You consume the corpse. Your body strengthens.", {200, 60, 60, 255});

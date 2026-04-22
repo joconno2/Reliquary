@@ -135,25 +135,42 @@ void CharacterSheet::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* fo
     auto xp_row = left.row(line_h + 4);
     ui::draw_text(renderer, font, xp_buf, label_col, xp_row.x, xp_row.y);
 
-    // Vitals
-    char hp_buf[32], mp_buf[32];
-    snprintf(hp_buf, sizeof(hp_buf), "HP: %d / %d", stats.hp, stats.hp_max);
-    snprintf(mp_buf, sizeof(mp_buf), "MP: %d / %d", stats.mp, stats.mp_max);
+    // Vitals (show equipment bonus)
+    char hp_buf[64], mp_buf[64];
+    int hp_bonus = stats.hp_max - stats.base_hp_max;
+    int mp_bonus = stats.mp_max - stats.base_mp_max;
+    if (hp_bonus > 0)
+        snprintf(hp_buf, sizeof(hp_buf), "HP: %d / %d (+%d from gear)", stats.hp, stats.hp_max, hp_bonus);
+    else
+        snprintf(hp_buf, sizeof(hp_buf), "HP: %d / %d", stats.hp, stats.hp_max);
+    if (mp_bonus > 0)
+        snprintf(mp_buf, sizeof(mp_buf), "MP: %d / %d (+%d from gear)", stats.mp, stats.mp_max, mp_bonus);
+    else
+        snprintf(mp_buf, sizeof(mp_buf), "MP: %d / %d", stats.mp, stats.mp_max);
     auto hp_row = left.row();
     ui::draw_text(renderer, font, hp_buf, hp_col, hp_row.x, hp_row.y);
     auto mp_row = left.row(line_h + 8);
     ui::draw_text(renderer, font, mp_buf, mp_col, mp_row.x, mp_row.y);
 
-    // Attributes
+    // Attributes (show base + equipment bonus)
     auto attr_hdr = left.row(line_h + 2);
     ui::draw_text(renderer, font, "-- Attributes --", section_col, attr_hdr.x, attr_hdr.y);
 
     const char* attr_names[] = {"STR", "DEX", "CON", "INT", "WIL", "PER", "CHA"};
     for (int i = 0; i < ATTR_COUNT; i++) {
-        int val = stats.attr(static_cast<Attr>(i));
-        char buf[32];
-        snprintf(buf, sizeof(buf), "  %s: %d", attr_names[i], val);
-        SDL_Color col = val >= 14 ? good_col : val <= 8 ? bad_col : val_col;
+        Attr a = static_cast<Attr>(i);
+        int base_val = stats.attr(a);
+        int eff_val = stats.eff_attr(a);
+        int bonus = eff_val - base_val;
+        char buf[48];
+        if (bonus > 0)
+            snprintf(buf, sizeof(buf), "  %s: %d (+%d)", attr_names[i], eff_val, bonus);
+        else if (bonus < 0)
+            snprintf(buf, sizeof(buf), "  %s: %d (%d)", attr_names[i], eff_val, bonus);
+        else
+            snprintf(buf, sizeof(buf), "  %s: %d", attr_names[i], eff_val);
+        SDL_Color col = eff_val >= 14 ? good_col : eff_val <= 8 ? bad_col : val_col;
+        if (bonus > 0) col = good_col;
         auto row = left.row();
         ui::draw_text(renderer, font, buf, col, row.x, row.y);
     }
@@ -167,15 +184,15 @@ void CharacterSheet::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* fo
 
     int total_atk = stats.melee_attack() + eq_atk;
     int total_dmg = stats.melee_damage() + eq_dmg;
-    int crit_chance = stats.attr(Attr::PER);
-    int spell_power = stats.attr(Attr::INT) + stats.attr(Attr::INT) / 3;
-    int spell_fail = std::max(0, 100 - stats.attr(Attr::INT) * 2);
+    int crit_chance = stats.eff_attr(Attr::PER);
+    int spell_power = stats.eff_attr(Attr::INT) + stats.eff_attr(Attr::INT) / 3;
+    int spell_fail = std::max(0, 100 - stats.eff_attr(Attr::INT) * 2);
 
     StatEntry offense[] = {
         {"Melee Attack",    total_atk,    nullptr},
         {"Melee Damage",    total_dmg,    nullptr},
         {"Crit Chance",     crit_chance,  "%d%%"},
-        {"Attack Speed",    stats.base_speed, nullptr},
+        {"Attack Speed",    stats.effective_speed(), nullptr},
         {"Spell Power",     spell_power,  nullptr},
         {"Spell Fail",      spell_fail,   "%d%%"},
     };
@@ -203,8 +220,8 @@ void CharacterSheet::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* fo
     StatEntry defense[] = {
         {"Dodge",           total_dodge,  nullptr},
         {"Protection",      total_prot,   nullptr},
-        {"HP Regen/turn",   stats.attr(Attr::CON) / 10, nullptr},
-        {"MP Regen/turn",   stats.attr(Attr::WIL) / 8,  nullptr},
+        {"HP Regen/turn",   stats.eff_attr(Attr::CON) / 10, nullptr},
+        {"MP Regen/turn",   stats.eff_attr(Attr::WIL) / 8,  nullptr},
     };
 
     for (auto& s : defense) {
@@ -221,8 +238,8 @@ void CharacterSheet::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* fo
     struct ResEntry { const char* name; int val; };
     ResEntry resists[] = {
         {"Fire", 0}, {"Cold", 0}, {"Lightning", 0},
-        {"Poison", stats.attr(Attr::CON) / 2}, {"Disease", stats.attr(Attr::CON) / 3},
-        {"Magic", stats.attr(Attr::WIL) / 3}, {"Holy", 0}, {"Dark", 0},
+        {"Poison", stats.eff_attr(Attr::CON) / 2}, {"Disease", stats.eff_attr(Attr::CON) / 3},
+        {"Magic", stats.eff_attr(Attr::WIL) / 3}, {"Holy", 0}, {"Dark", 0},
     };
 
     for (auto& r : resists) {
@@ -245,10 +262,10 @@ void CharacterSheet::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* fo
     ui::draw_text(renderer, font, "-- Mental --", section_col, mental_hdr.x, mental_hdr.y);
 
     StatEntry mental[] = {
-        {"Fear Resist",     stats.attr(Attr::WIL) + stats.level, nullptr},
-        {"Charm Resist",    stats.attr(Attr::WIL) + stats.attr(Attr::CHA) / 2, nullptr},
-        {"Confuse Resist",  stats.attr(Attr::INT) + stats.attr(Attr::WIL) / 2, nullptr},
-        {"Stun Resist",     stats.attr(Attr::CON), nullptr},
+        {"Fear Resist",     stats.eff_attr(Attr::WIL) + stats.level, nullptr},
+        {"Charm Resist",    stats.eff_attr(Attr::WIL) + stats.eff_attr(Attr::CHA) / 2, nullptr},
+        {"Confuse Resist",  stats.eff_attr(Attr::INT) + stats.eff_attr(Attr::WIL) / 2, nullptr},
+        {"Stun Resist",     stats.eff_attr(Attr::CON), nullptr},
     };
 
     for (auto& s : mental) {
@@ -264,12 +281,12 @@ void CharacterSheet::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* fo
 
     StatEntry utility[] = {
         {"FOV Radius",      stats.fov_radius(), nullptr},
-        {"Trap Detection",  stats.attr(Attr::PER) / 2, nullptr},
-        {"Secret Detection",stats.attr(Attr::PER) / 3, nullptr},
-        {"Carry Capacity",  stats.attr(Attr::STR) * 10 + stats.attr(Attr::CON) * 2, nullptr},
-        {"Move Speed",      100 + stats.attr(Attr::DEX) * 2, nullptr},
-        {"Stealth",         stats.attr(Attr::DEX) / 2, nullptr},
-        {"Shop Modifier",   stats.attr(Attr::CHA) * 2, "%+d%%"},
+        {"Trap Detection",  stats.eff_attr(Attr::PER) / 2, nullptr},
+        {"Secret Detection",stats.eff_attr(Attr::PER) / 3, nullptr},
+        {"Carry Capacity",  stats.eff_attr(Attr::STR) * 10 + stats.eff_attr(Attr::CON) * 2, nullptr},
+        {"Move Speed",      stats.effective_speed() + stats.eff_attr(Attr::DEX) * 2, nullptr},
+        {"Stealth",         stats.eff_attr(Attr::DEX) / 2, nullptr},
+        {"Shop Modifier",   stats.eff_attr(Attr::CHA) * 2, "%+d%%"},
     };
 
     for (auto& s : utility) {

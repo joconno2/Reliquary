@@ -54,8 +54,10 @@ PlayerResult create_player(World& world, const CharacterBuild& build,
     player_stats.name = build.name;
     player_stats.hp = cls.hp + god.bonus_hp + bg.bonus_hp;
     player_stats.hp_max = cls.hp + god.bonus_hp + bg.bonus_hp;
+    player_stats.base_hp_max = player_stats.hp_max;
     player_stats.mp = cls.mp + god.bonus_mp;
     player_stats.mp_max = cls.mp + god.bonus_mp;
+    player_stats.base_mp_max = player_stats.mp_max;
     player_stats.set_attr(Attr::STR, cls.str   + god.str_bonus + bg.str_bonus);
     player_stats.set_attr(Attr::DEX, cls.dex   + god.dex_bonus + bg.dex_bonus);
     player_stats.set_attr(Attr::CON, cls.con   + god.con_bonus + bg.con_bonus);

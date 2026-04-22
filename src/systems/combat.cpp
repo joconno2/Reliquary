@@ -148,15 +148,17 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
     auto def_tree = get_tree_bonuses(world, defender);
 
     // Ghost Blade: melee scales with INT instead of STR
+    // Note: melee_attack() and melee_damage() already include equip_str via eff_attr()
     int atk_melee = atk_tree.ghost_blade
-        ? (atk.attr(Attr::INT) + atk.level)
-        : (atk.melee_attack() + atk_eq_str / 2);
+        ? (atk.eff_attr(Attr::INT) + atk.level)
+        : atk.melee_attack();
     int atk_melee_dmg = atk_tree.ghost_blade
-        ? (atk.base_damage + atk.attr(Attr::INT) / 3)
-        : (atk.melee_damage() + atk_eq_str / 3);
+        ? (atk.base_damage + atk.eff_attr(Attr::INT) / 3)
+        : atk.melee_damage();
 
     // Iron Reflexes: defender converts dodge to armor
-    int def_dodge = def.dodge_value() + def_eq_dodge + def_eq_dex / 2;
+    // Note: dodge_value() already includes equip_dex via eff_attr()
+    int def_dodge = def.dodge_value() + def_eq_dodge;
     // Dodge skill bonus
     if (world.has<Player>(defender) && world.has<Skills>(defender))
         def_dodge += skill_bonus::dodge_bonus(world.get<Skills>(defender).get_level(SkillId::DODGE));
@@ -225,7 +227,7 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
         int dmg = atk_melee_dmg + atk_eq_dmg + atk_tree.damage;
 
         // Crit: natural 20, PER, tree crit, skill crit, or Death Mark
-        int effective_crit = atk.attr(Attr::PER) + atk_tree.crit_chance;
+        int effective_crit = atk.eff_attr(Attr::PER) + atk_tree.crit_chance;
         // Blades/Archery skill crit bonus
         if (world.has<Player>(attacker) && world.has<Skills>(attacker)) {
             auto& skills = world.get<Skills>(attacker);
@@ -693,7 +695,7 @@ AttackResult ranged_attack(World& world, Entity attacker, Entity defender,
 
     // Attack roll: d20 + DEX + level vs 10 + dodge + equip
     int raw_roll = rng.range(1, 20);
-    int attack_roll = raw_roll + atk.attr(Attr::DEX) + atk.level;
+    int attack_roll = raw_roll + atk.eff_attr(Attr::DEX) + atk.level;
     int defense_roll = 10 + def.dodge_value() + def_eq_dodge;
 
     bool natural_20 = (raw_roll == 20);
@@ -723,7 +725,7 @@ AttackResult ranged_attack(World& world, Entity attacker, Entity defender,
             }
         }
 
-        int dmg = weapon_damage + atk.attr(Attr::DEX) / 3;
+        int dmg = weapon_damage + atk.eff_attr(Attr::DEX) / 3;
 
         // Point Blank keystone: +50% at range 1, -50% at range 5+
         if (world.has<Player>(attacker) && world.has<PassiveTreeState>(attacker)) {
@@ -737,7 +739,7 @@ AttackResult ranged_attack(World& world, Entity attacker, Entity defender,
             }
         }
 
-        int ranged_crit = atk.attr(Attr::PER);
+        int ranged_crit = atk.eff_attr(Attr::PER);
         if (world.has<Player>(attacker) && world.has<Skills>(attacker))
             ranged_crit += skill_bonus::archery_crit(world.get<Skills>(attacker).get_level(SkillId::ARCHERY));
         if (natural_20 || rng.range(1, 100) <= ranged_crit) {
