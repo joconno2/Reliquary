@@ -353,6 +353,16 @@ void draw_map(SDL_Renderer* renderer, const SpriteManager& sprites,
                     sprites.draw_sprite_sized(renderer, SHEET_ANIMATED, wf, 10,
                                               screen_x, screen_y, TS, {b, b, b, wa});
                 }
+                // Magma glow: pulsating orange overlay on lava tiles
+                if (tile.type == TileType::LAVA) {
+                    float pulse = 0.6f + 0.4f * sinf((SDL_GetTicks() / 400.0f + x * 1.3f + y * 2.1f));
+                    Uint8 glow = static_cast<Uint8>(pulse * std::min(180, static_cast<int>(b) * 180 / 255));
+                    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_ADD);
+                    SDL_SetRenderDrawColor(renderer, 200, 80, 10, glow);
+                    SDL_Rect fill = {screen_x, screen_y, TS, TS};
+                    SDL_RenderFillRect(renderer, &fill);
+                    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+                }
             } else if (tile.explored) {
                 draw_tile({65, 63, 72, 255}); // dark, barely visible memory
             }

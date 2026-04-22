@@ -301,7 +301,7 @@ EffectResult process(World& world, Entity player, TileMap& map, RNG& rng,
                 int lava_dmg = 5 + dungeon_level;
                 stats.hp -= lava_dmg;
                 if (game_turn % 3 == 0)
-                    log.add("The lava sears your flesh!", {255, 100, 40, 255});
+                    log.add("The magma sears your flesh!", {255, 100, 40, 255});
                 // Also apply burn
                 if (world.has<StatusEffects>(player))
                     world.get<StatusEffects>(player).add(StatusType::BURN, 3, 3);

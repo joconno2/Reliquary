@@ -32,7 +32,7 @@ enum class TileType : uint8_t {
     WALL_SANDSTONE,  // sandstone wall (Dust Provinces region)
     WALL_ICE,        // ice wall (Frozen Marches dungeons)
     SHRINE,          // god shrine — interactive altar
-    LAVA,            // hazard: damage per turn, walkable
+    LAVA,            // hazard: magma, damage per turn, walkable
     DEEP_WATER,      // hazard: slow, heavy armor = drowning damage, walkable
     COUNT
 };

@@ -647,6 +647,14 @@ void Engine::clear_entities_except_player() {
 }
 
 void Engine::generate_level() {
+    // Save overworld explored state before leaving it
+    if (dungeon_level_ == 0 && map_.width() > 0) {
+        int sz = map_.width() * map_.height();
+        overworld_explored_.resize(sz);
+        for (int i = 0; i < sz; i++)
+            overworld_explored_[i] = map_.at(i % map_.width(), i / map_.width()).explored;
+    }
+
     dungeon_level_++;
     if (dungeon_level_ > run_deepest_) run_deepest_ = dungeon_level_;
 
@@ -749,7 +757,16 @@ void Engine::generate_level() {
             state_ = GameState::MAIN_MENU;
             return;
         }
-        map_ = mresult.map; // copy (preserves cache, gets fresh explored state)
+        map_ = mresult.map; // copy from cache (base map without explored state)
+
+        // Restore explored tiles from previous overworld visit
+        if (!overworld_explored_.empty()) {
+            int sz = map_.width() * map_.height();
+            for (int i = 0; i < sz && i < static_cast<int>(overworld_explored_.size()); i++) {
+                if (overworld_explored_[i])
+                    map_.at(i % map_.width(), i / map_.width()).explored = true;
+            }
+        }
 
         // Province-specific building materials: restyle walls near each town
         for (int ti = 0; ti < TOWN_COUNT; ti++) {
@@ -4720,7 +4737,7 @@ void Engine::sepulchre_ambient() {
             log_.add(C[rng_.range(0, 9)], {140, 120, 130, 255});
         } else if (zone == "molten") {
             static const char* M[] = {
-                "The heat is almost unbearable.", "Lava glows in the cracks between stones.",
+                "The heat is almost unbearable.", "Magma glows in the cracks between stones.",
                 "The rock walls radiate warmth.", "Sulphur stings your nostrils.",
                 "The ground trembles slightly.",
                 "Smoke curls from vents in the floor.", "The metal of your gear is warm to the touch.",

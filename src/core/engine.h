@@ -139,6 +139,7 @@ private:
     // Overworld cache — loaded once, reused on return from dungeons
     bool overworld_loaded_ = false;
     MapFileResult overworld_cache_;
+    std::vector<bool> overworld_explored_; // persists explored state across dungeon visits
 
     // Floor persistence — cache floor state when changing levels
     struct CachedEntity {
