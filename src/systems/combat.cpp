@@ -390,6 +390,42 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
             }
         }
 
+        // Schema Monk elemental strikes: cycle fire/ice/lightning on unarmed hits
+        if (world.has<Player>(attacker) && def.hp > 0 &&
+            world.get<Player>(attacker).class_id == ClassId::SCHEMA_MONK) {
+            // Only when unarmed
+            bool unarmed = true;
+            if (world.has<Inventory>(attacker)) {
+                Entity wpn = world.get<Inventory>(attacker).get_equipped(EquipSlot::MAIN_HAND);
+                if (wpn != NULL_ENTITY) unarmed = false;
+            }
+            if (unarmed && world.has<StatusEffects>(defender)) {
+                // Cycle based on total kills (persistent counter)
+                static int elem_cycle = 0;
+                int elem = elem_cycle % 3;
+                elem_cycle++;
+                int bonus = 2 + atk.eff_attr(Attr::INT) / 5;
+                def.hp -= bonus;
+                switch (elem) {
+                    case 0: // Fire
+                        world.get<StatusEffects>(defender).add(StatusType::BURN, 2, 2);
+                        { char eb[80]; snprintf(eb, sizeof(eb), "Your fist ignites! +%d fire.", bonus);
+                          log.add(eb, {255, 140, 40, 255}); }
+                        break;
+                    case 1: // Ice
+                        world.get<StatusEffects>(defender).add(StatusType::FROZEN, 0, 1);
+                        { char eb[80]; snprintf(eb, sizeof(eb), "Your fist freezes! +%d cold.", bonus);
+                          log.add(eb, {140, 200, 255, 255}); }
+                        break;
+                    case 2: // Lightning
+                        world.get<StatusEffects>(defender).add(StatusType::STUNNED, 0, 1);
+                        { char eb[80]; snprintf(eb, sizeof(eb), "Your fist crackles! +%d shock.", bonus);
+                          log.add(eb, {200, 200, 255, 255}); }
+                        break;
+                }
+            }
+        }
+
         // Crit bleed (unique ring): crits apply 3-turn bleed
         if (result.critical && world.has<Player>(attacker) &&
             has_unique_effect(world, attacker, UniqueEffect::CRIT_BLEED) &&
@@ -674,6 +710,42 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
                     }
                     result.attacker_killed = true;
                 }
+            }
+        }
+    }
+
+    // Dual wield: off-hand weapon gets a bonus attack at reduced damage
+    if (result.hit && !result.killed && world.has<Player>(attacker) &&
+        world.has<Inventory>(attacker) && world.has<Stats>(defender)) {
+        Entity oh = world.get<Inventory>(attacker).get_equipped(EquipSlot::OFF_HAND);
+        if (oh != NULL_ENTITY && world.has<Item>(oh) &&
+            world.get<Item>(oh).type == ItemType::WEAPON) {
+            auto& oh_item = world.get<Item>(oh);
+            auto& def2 = world.get<Stats>(defender);
+            int oh_roll = rng.range(1, 20);
+            int oh_atk_roll = oh_roll + atk.eff_attr(Attr::DEX) + atk.level;
+            if (oh_atk_roll >= 10 + def2.dodge_value() + def_eq_dodge || oh_roll == 20) {
+                int oh_dmg = oh_item.damage_bonus / 2 + atk.eff_attr(Attr::DEX) / 4;
+                oh_dmg -= (def2.protection() + def_eq_arm);
+                if (oh_dmg < 1) oh_dmg = 1;
+                def2.hp -= oh_dmg;
+                char ob[128];
+                snprintf(ob, sizeof(ob), "Off-hand %s strikes the %s. (%d)",
+                         oh_item.name.c_str(), def2.name.c_str(), oh_dmg);
+                log.add(ob, {200, 190, 160, 255});
+                result.damage += oh_dmg;
+                if (def2.hp <= 0) {
+                    result.killed = true;
+                    int xp = kill(world, defender, log);
+                    if (xp > 0) {
+                        xp = apply_xp_bonus(world, attacker, xp);
+                        world.get<Stats>(attacker).grant_xp(xp);
+                    }
+                }
+            } else {
+                char ob[64];
+                snprintf(ob, sizeof(ob), "Off-hand swing misses the %s.", def.name.c_str());
+                log.add(ob, {140, 130, 120, 255});
             }
         }
     }

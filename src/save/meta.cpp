@@ -23,6 +23,11 @@ MetaSave load(const std::string& path) {
     m.total_dark_arts_casts = root.value("total_dark_arts_casts", 0);
     m.total_quests_completed = root.value("total_quests_completed", 0);
     m.total_creatures_examined = root.value("total_creatures_examined", 0);
+    if (root.contains("examined_creature_names")) {
+        for (auto& n : root["examined_creature_names"])
+            m.examined_creature_names.insert(n.get<std::string>());
+        m.total_creatures_examined = static_cast<int>(m.examined_creature_names.size());
+    }
     m.max_dungeon_depth = root.value("max_dungeon_depth", 0);
     m.max_gold_single_run = root.value("max_gold_single_run", 0);
 
@@ -76,6 +81,7 @@ bool save(const MetaSave& m, const std::string& path) {
     root["total_dark_arts_casts"] = m.total_dark_arts_casts;
     root["total_quests_completed"] = m.total_quests_completed;
     root["total_creatures_examined"] = m.total_creatures_examined;
+    root["examined_creature_names"] = json(m.examined_creature_names);
     root["max_dungeon_depth"] = m.max_dungeon_depth;
     root["max_gold_single_run"] = m.max_gold_single_run;
 

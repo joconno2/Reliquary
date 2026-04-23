@@ -13,6 +13,7 @@
 #include "components/skills.h"
 #include <cmath>
 #include <cstdlib>
+#include <cstdio>
 
 namespace ai {
 
@@ -159,7 +160,7 @@ static void flee_from(World& world, TileMap& map, Entity e,
 }
 
 void process(World& world, TileMap& map, Entity player, RNG& rng,
-             bool player_sneaking) {
+             MessageLog& log, bool player_sneaking) {
     if (!world.has<Position>(player)) return;
     auto& player_pos = world.get<Position>(player);
 
@@ -223,12 +224,16 @@ void process(World& world, TileMap& map, Entity player, RNG& rng,
             if (nearest_hostile != 0 && world.has<Position>(nearest_hostile)) {
                 auto& hp = world.get<Position>(nearest_hostile);
                 if (nearest_dist <= 1) {
-                    // Adjacent: simple melee damage (no message log needed)
+                    // Adjacent: simple melee damage
                     if (world.has<Stats>(nearest_hostile) && world.has<Stats>(e)) {
                         auto& ts = world.get<Stats>(nearest_hostile);
                         auto& ms = world.get<Stats>(e);
                         int dmg = std::max(1, ms.base_damage - ts.natural_armor);
                         ts.hp -= dmg;
+                        char sbuf[128];
+                        snprintf(sbuf, sizeof(sbuf), "Your %s strikes the %s. (%d)",
+                                 ms.name.c_str(), ts.name.c_str(), dmg);
+                        log.add(sbuf, {160, 160, 140, 255});
                         // Death handled by engine's death sweep
                     }
                 } else {

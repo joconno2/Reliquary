@@ -21,6 +21,7 @@ struct MetaSave {
     int total_dark_arts_casts = 0;
     int total_quests_completed = 0;
     int total_creatures_examined = 0;
+    std::set<std::string> examined_creature_names; // unique creatures examined
     int max_dungeon_depth = 0;
     int max_gold_single_run = 0;
 

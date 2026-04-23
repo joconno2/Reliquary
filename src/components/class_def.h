@@ -78,7 +78,7 @@ inline const ClassInfo& get_class_info(ClassId id) {
          0, 4, 0, 12, 16, 10, 8, 8, 12, 10, 28, 0, 4, "Earn 500 gold in one run."},
         {"Necromancer", "The dead serve willingly. Feared by all. Corpse manipulation.",
          0, 3, 4, 7, 8, 8, 18, 14, 10, 4, 18, 28, 2, "Cast 30 Dark Arts spells."},
-        {"Schema Monk", "Elemental strikes. Ki mastery. The perfected form.",
+        {"Schema Monk", "Cycling fire, ice, lightning fists. The perfected form.",
          0, 5, 2, 12, 18, 14, 12, 16, 16, 8, 30, 15, 6, "Reach level 12 as Monk."},
         {"Heretic",     "Godless. No divine aid. No tenets. No mercy.",
          0, 0, 6, 10, 10, 10, 10, 10, 10, 10, 25, 10, 3, "Win with all 13 gods."},

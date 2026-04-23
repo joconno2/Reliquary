@@ -438,7 +438,8 @@ void spawn_quest_content(World& world, const TileMap& map,
                           const DungeonContext* dungeon_ctx,
                           QuestJournal& journal, MessageLog& log) {
     // Spawn quest bosses at specific depths
-    if (dungeon_level == 3) {
+    bool in_warrens = dungeon_ctx && dungeon_ctx->zone == "warrens";
+    if (dungeon_level == 3 && in_warrens) {
         // Barrow Wight — bottom of The Warrens (first dungeon)
         // Uses death knight sprite (row 4 col 3) for a menacing undead look
         Entity wight = populate::spawn_boss(world, map, rooms,

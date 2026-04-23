@@ -200,6 +200,9 @@ bool save_game(const std::string& path, const SaveData& data,
         auto& r = world.get<Renderable>(player);
         root["player_sprite"] = {r.sprite_sheet, r.sprite_x, r.sprite_y};
     }
+    if (world.has<Player>(player)) {
+        root["player_class_id"] = static_cast<int>(world.get<Player>(player).class_id);
+    }
     if (world.has<GodAlignment>(player)) {
         auto& g = world.get<GodAlignment>(player);
         root["god"] = static_cast<int>(g.god);
@@ -496,7 +499,9 @@ SaveData load_game(const std::string& path, World& world, TileMap& map) {
 
     // Player
     Entity player = world.create();
-    world.add<Player>(player);
+    Player pc;
+    pc.class_id = static_cast<ClassId>(root.value("player_class_id", 0));
+    world.add<Player>(player, std::move(pc));
     world.add<Position>(player, {root.value("player_x", 0), root.value("player_y", 0)});
 
     if (root.contains("player_stats")) {

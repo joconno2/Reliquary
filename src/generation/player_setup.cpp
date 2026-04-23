@@ -28,7 +28,8 @@ PlayerResult create_player(World& world, const CharacterBuild& build,
     auto& bg  = get_background_info(build.background);
 
     Entity player = world.create();
-    world.add<Player>(player);
+    Player pc; pc.class_id = build.class_id;
+    world.add<Player>(player, std::move(pc));
     world.add<Position>(player, {start_x, start_y});
 
     // Subtle god-colored sprite tint
@@ -218,6 +219,7 @@ PlayerResult create_player(World& world, const CharacterBuild& build,
             break;
         case ClassId::BANDIT:
             give_item("dagger", "A short, sharp blade.", ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 0, 2, 0, 1, 1, 0);
+            give_item("dagger", "A short, sharp blade.", ItemType::WEAPON, EquipSlot::OFF_HAND, 0, 0, 2, 0, 1, 1, 0);
             give_item("leather armor", "Supple hide.", ItemType::ARMOR_CHEST, EquipSlot::CHEST, 1, 12, 0, 2, 0, 0, 0);
             break;
         case ClassId::HERETIC:

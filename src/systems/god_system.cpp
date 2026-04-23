@@ -248,7 +248,7 @@ bool execute_prayer(World& world, Entity player, TileMap& map, RNG& rng,
                              tgt.name.c_str(), dmg);
                     log.add(buf, {200, 180, 255, 255});
                     if (tgt.hp <= 0) {
-                        combat::kill(world, target, log);
+                        { int xp = combat::kill(world, target, log); if (xp > 0) stats.grant_xp(xp); }
                     }
                 } else {
                     log.add("There is nothing nearby to grasp.", {150, 140, 130, 255});
@@ -299,7 +299,7 @@ bool execute_prayer(World& world, Entity player, TileMap& map, RNG& rng,
                             world.get<Stats>(target).hp -= dmg;
                             hit_count++;
                             if (world.get<Stats>(target).hp <= 0) {
-                                combat::kill(world, target, log);
+                                { int xp = combat::kill(world, target, log); if (xp > 0) stats.grant_xp(xp); }
                             }
                         }
                     }
@@ -350,7 +350,7 @@ bool execute_prayer(World& world, Entity player, TileMap& map, RNG& rng,
                         "Your blood erupts outward, striking the %s. (%d damage)", tgt.name.c_str(), dmg);
                     log.add(buf, {200, 80, 80, 255});
                     if (tgt.hp <= 0) {
-                        combat::kill(world, target, log);
+                        { int xp = combat::kill(world, target, log); if (xp > 0) stats.grant_xp(xp); }
                     }
                 } else {
                     log.add("There is nothing nearby to strike.", {150, 140, 130, 255});
@@ -381,7 +381,7 @@ bool execute_prayer(World& world, Entity player, TileMap& map, RNG& rng,
                         "Thorns erupt from the ground beneath the %s. (%d damage)", tgt.name.c_str(), dmg);
                     log.add(buf, {100, 200, 100, 255});
                     if (tgt.hp <= 0) {
-                        combat::kill(world, target, log);
+                        { int xp = combat::kill(world, target, log); if (xp > 0) stats.grant_xp(xp); }
                     }
                 } else {
                     log.add("The wilderness is quiet.", {150, 140, 130, 255});
@@ -405,7 +405,7 @@ bool execute_prayer(World& world, Entity player, TileMap& map, RNG& rng,
                             world.get<Stats>(target).hp -= dmg;
                             hit_count++;
                             if (world.get<Stats>(target).hp <= 0) {
-                                combat::kill(world, target, log);
+                                { int xp = combat::kill(world, target, log); if (xp > 0) stats.grant_xp(xp); }
                             }
                         }
                     }
@@ -466,7 +466,7 @@ bool execute_prayer(World& world, Entity player, TileMap& map, RNG& rng,
                         "Chaos lashes at the %s. (%d damage)", tgt.name.c_str(), dmg);
                     log.add(buf, {200, 100, 255, 255});
                     if (tgt.hp <= 0) {
-                        combat::kill(world, target, log);
+                        { int xp = combat::kill(world, target, log); if (xp > 0) stats.grant_xp(xp); }
                     }
                 } else {
                     log.add("The void has nothing to consume.", {150, 140, 130, 255});
@@ -636,7 +636,7 @@ bool execute_prayer(World& world, Entity player, TileMap& map, RNG& rng,
                             es.sleep_turns = 2;
                         }
                     }
-                    if (es.hp <= 0) combat::kill(world, e, log);
+                    if (es.hp <= 0) { int xp = combat::kill(world, e, log); if (xp > 0) stats.grant_xp(xp); }
                 }
                 char buf8[128];
                 snprintf(buf8, sizeof(buf8),

@@ -346,22 +346,19 @@ void draw_map(SDL_Renderer* renderer, const SpriteManager& sprites,
                     b = static_cast<Uint8>(std::max(40, static_cast<int>(b) - static_cast<int>(t * 60)));
                 }
                 draw_tile({b, b, b, 255});
-                // Animated water overlay
-                if (tile.type == TileType::WATER) {
+                // Animated water overlay (overworld + dungeon deep water)
+                if (tile.type == TileType::WATER || tile.type == TileType::DEEP_WATER) {
                     int wf = static_cast<int>((SDL_GetTicks() / 200 + x * 3 + y * 7) % 6);
                     Uint8 wa = static_cast<Uint8>(std::min(120, static_cast<int>(b) * 120 / 255));
                     sprites.draw_sprite_sized(renderer, SHEET_ANIMATED, wf, 10,
                                               screen_x, screen_y, TS, {b, b, b, wa});
                 }
-                // Magma glow: pulsating orange overlay on lava tiles
+                // Magma: poison bubbles overlay (row 11) on red stone base, swap to red version later
                 if (tile.type == TileType::LAVA) {
-                    float pulse = 0.6f + 0.4f * sinf((SDL_GetTicks() / 400.0f + x * 1.3f + y * 2.1f));
-                    Uint8 glow = static_cast<Uint8>(pulse * std::min(180, static_cast<int>(b) * 180 / 255));
-                    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_ADD);
-                    SDL_SetRenderDrawColor(renderer, 200, 80, 10, glow);
-                    SDL_Rect fill = {screen_x, screen_y, TS, TS};
-                    SDL_RenderFillRect(renderer, &fill);
-                    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+                    int lf = static_cast<int>((SDL_GetTicks() / 200 + x * 5 + y * 3) % 6);
+                    Uint8 la = static_cast<Uint8>(std::min(140, static_cast<int>(b) * 140 / 255));
+                    sprites.draw_sprite_sized(renderer, SHEET_ANIMATED, lf, 11,
+                                              screen_x, screen_y, TS, {255, 120, 40, la});
                 }
             } else if (tile.explored) {
                 draw_tile({65, 63, 72, 255}); // dark, barely visible memory

@@ -6,6 +6,17 @@
 
 **Tier 6 complete.** Passive tree, skills, stealth, churches, monster behaviors, traps, hazards all built. Now adding item depth and overworld density.
 
+### Bug Fixes (2026-04-23)
+- **Schema Monk elemental strikes implemented.** Unarmed hits cycle fire/ice/lightning, applying burn/freeze/stun + INT-scaled bonus damage. Class description updated.
+- **Bandit dual wield implemented.** Off-hand weapon gets a bonus attack at half damage (DEX-based) after main hand hits. Bandit starts with two daggers. Any class can dual wield by equipping a weapon in off-hand instead of a shield.
+- **Elf unlock fixed.** Examine now tracks unique creature names in a set. Examining the same creature repeatedly no longer counts.
+- **Spell kills now grant XP.** All spell damage paths (Fireball, Ice Shard, Lightning, Meteor, Acid Splash, Frost Nova, Chain Lightning, Earthquake, Lightning Storm, Wither, Drain Life, Doom, Disintegrate) capture kill XP and grant it to the caster.
+- **Prayer kills now grant XP.** All god prayer damage paths (Death's Grasp, War Cry, Blood Eruption, Thornwall, Consecrate, Chaos Lash, Earthquake) capture kill XP.
+- **Raise Dead skeletons show combat messages.** Friendly summon attacks now log "Your risen X strikes the Y. (N)" so the player can see them fighting.
+- **Lava visual overhaul.** Lava tiles now use animated water frames tinted orange/red for a flowing magma effect, plus a subtler pulsating glow on top.
+- **Deep Water animated.** Dungeon deep water tiles now show the same animated wave overlay as overworld water.
+- **Player class_id persisted.** ClassId stored on Player component and serialized in save/load for class-specific combat mechanics.
+
 ### Bug Fixes (2026-04-19)
 - **Prayer/spell kills now complete quests.** QuestTarget check moved into `combat::kill()` so all kill paths (melee, ranged, spells, prayers, chain lightning, corpse explode, riposte) trigger quest progression.
 - **Riposte kills fully handled.** Riposte counter-kill now calls `kill()`, grants XP, plays death effects. Previously left zombie entities with negative HP.
@@ -46,7 +57,7 @@ The game is fully playable from character creation through a 17-step main quest 
 **Build:** `cd ~/Reliquary && cmake -B build -DCMAKE_BUILD_TYPE=Debug && cmake --build build`
 **Run:** `cd ~/Reliquary/build && ./reliquary`
 **Design doc:** ~/Documents/Work/Games/Development/Roguelike Project.md
-**Steam:** App 4627800, depots 4627801 (Linux) + 4627802 (Windows). Release via `./release.sh` (idempotent, safe to re-run after partial failure). Logs in `logs/`. GitHub is backup only (no CI). **Known issue:** `SetLive "default"` fails on commit. Likely because Steamworks packages still reference deleted macOS depot 4627803. Fix: remove 4627803 from all packages on Steamworks, publish, then SetLive should work. Until then, set builds live manually on the builds page.
+**Steam:** App 4627800, depots 4627801 (Linux) + 4627802 (Windows). Release via `./release.sh` (idempotent, safe to re-run after partial failure). Logs in `logs/`. GitHub is backup only (no CI).
 
 ---
 

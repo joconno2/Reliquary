@@ -221,6 +221,12 @@ CastResult cast(World& world, Entity caster, SpellId spell,
     }
     bool is_player = world.has<Player>(caster);
 
+    // Helper: handle spell kill XP grant
+    auto spell_kill_xp = [&](Entity target) {
+        int xp = combat::kill(world, target, log);
+        if (is_player && xp > 0) stats.grant_xp(xp);
+    };
+
     // Helper: single-target damage spell with optional status effect
     auto do_single_target_dmg = [&](StatusType status_type = StatusType::POISON,
                                      int status_dmg = 0, int status_turns = 0) -> bool {
@@ -314,7 +320,7 @@ CastResult cast(World& world, Entity caster, SpellId spell,
                 if (map.in_bounds(tp.x, tp.y) && map.is_walkable(tp.x, tp.y))
                     map.at(tp.x, tp.y).type = TileType::LAVA; // burning ground
             }
-            if (tgt.hp <= 0 && !world.has<Player>(target)) combat::kill(world, target, log);
+            if (tgt.hp <= 0 && !world.has<Player>(target)) spell_kill_xp(target);
             result.success = true;
             break;
         }
@@ -357,7 +363,7 @@ CastResult cast(World& world, Entity caster, SpellId spell,
                 snprintf(buf, sizeof(buf), "Ice pierces the %s. %d dmg, frozen.", tgt.name.c_str(), dmg);
                 log.add(buf, {140, 200, 255, 255});
             }
-            if (tgt.hp <= 0 && !world.has<Player>(target)) combat::kill(world, target, log);
+            if (tgt.hp <= 0 && !world.has<Player>(target)) spell_kill_xp(target);
             result.success = true;
             break;
         }
@@ -401,7 +407,7 @@ CastResult cast(World& world, Entity caster, SpellId spell,
                     snprintf(buf, sizeof(buf), "Lightning strikes the %s. %d dmg, stunned.", tgt.name.c_str(), dmg);
                 log.add(buf, {200, 200, 255, 255});
             }
-            if (tgt.hp <= 0 && !world.has<Player>(target)) combat::kill(world, target, log);
+            if (tgt.hp <= 0 && !world.has<Player>(target)) spell_kill_xp(target);
             result.success = true;
             break;
         }
@@ -441,7 +447,7 @@ CastResult cast(World& world, Entity caster, SpellId spell,
                          splash > 0 ? ", splash burns nearby" : "");
                 log.add(buf, {255, 200, 60, 255});
             }
-            if (tgt.hp <= 0 && !world.has<Player>(target)) combat::kill(world, target, log);
+            if (tgt.hp <= 0 && !world.has<Player>(target)) spell_kill_xp(target);
             result.success = true;
             break;
         }
@@ -462,6 +468,8 @@ CastResult cast(World& world, Entity caster, SpellId spell,
                 log.add(buf, {255, 255, 200, 255});
             }
             if (tgt.hp <= 0 && !world.has<Player>(target)) {
+                // Grant XP before destroying
+                if (is_player && tgt.xp_value > 0) stats.grant_xp(tgt.xp_value);
                 // Destroy completely, no corpse
                 world.destroy(target);
                 if (is_player) log.add("Nothing remains.", {200, 200, 180, 255});
@@ -482,7 +490,7 @@ CastResult cast(World& world, Entity caster, SpellId spell,
             tgt.hp -= dmg;
             tgt.natural_armor = std::max(0, tgt.natural_armor - 2);
             if (is_player) { char buf[128]; snprintf(buf, sizeof(buf), "Acid corrodes the %s. %d dmg, -2 armor.", tgt.name.c_str(), dmg); log.add(buf, {160, 200, 80, 255}); }
-            if (tgt.hp <= 0 && !world.has<Player>(target)) combat::kill(world, target, log);
+            if (tgt.hp <= 0 && !world.has<Player>(target)) spell_kill_xp(target);
             result.success = true;
             break;
         }
@@ -493,7 +501,7 @@ CastResult cast(World& world, Entity caster, SpellId spell,
                 tgt.hp -= dmg;
                 if (!world.has<StatusEffects>(e)) world.add<StatusEffects>(e, {});
                 world.get<StatusEffects>(e).add(StatusType::FROZEN, 0, 1);
-                if (tgt.hp <= 0 && !world.has<Player>(e)) combat::kill(world, e, log);
+                if (tgt.hp <= 0 && !world.has<Player>(e)) spell_kill_xp(e);
             });
             if (is_player) { char buf[64]; snprintf(buf, sizeof(buf), "Frost explodes outward. %d frozen.", count); log.add(buf, {140, 200, 255, 255}); }
             result.success = count > 0;
@@ -514,7 +522,7 @@ CastResult cast(World& world, Entity caster, SpellId spell,
                     int dmg = power + rng.range(0, power / 3);
                     auto& tgt = world.get<Stats>(e);
                     tgt.hp -= dmg;
-                    if (tgt.hp <= 0 && !world.has<Player>(e)) combat::kill(world, e, log);
+                    if (tgt.hp <= 0 && !world.has<Player>(e)) spell_kill_xp(e);
                     hits++;
                 }
             }
@@ -900,7 +908,7 @@ CastResult cast(World& world, Entity caster, SpellId spell,
                         world.get<StatusEffects>(e).add(StatusType::STUNNED, 0, 2);
                     }
                 }
-                if (es.hp <= 0 && !world.has<Player>(e)) combat::kill(world, e, log);
+                if (es.hp <= 0 && !world.has<Player>(e)) spell_kill_xp(e);
                 count++;
             }
             // Create rubble: 3-5 random walkable tiles near caster become ROCK (impassable)
@@ -937,7 +945,7 @@ CastResult cast(World& world, Entity caster, SpellId spell,
                     int dmg = power + rng.range(0, power / 3);
                     auto& tgt = world.get<Stats>(e);
                     tgt.hp -= dmg;
-                    if (tgt.hp <= 0 && !world.has<Player>(e)) combat::kill(world, e, log);
+                    if (tgt.hp <= 0 && !world.has<Player>(e)) spell_kill_xp(e);
                     hits++;
                 }
             }
@@ -997,7 +1005,7 @@ CastResult cast(World& world, Entity caster, SpellId spell,
             int healed = std::min(dmg / 2, stats.hp_max - stats.hp);
             stats.hp += healed;
             if (is_player) { char buf[128]; snprintf(buf, sizeof(buf), "Drain %s. %d dmg, +%d HP.", tgt.name.c_str(), dmg, healed); log.add(buf, {140, 80, 160, 255}); }
-            if (tgt.hp <= 0 && !world.has<Player>(target)) { combat::kill(world, target, log); }
+            if (tgt.hp <= 0 && !world.has<Player>(target)) { spell_kill_xp(target); }
             result.success = true;
             break;
         }
@@ -1106,7 +1114,7 @@ CastResult cast(World& world, Entity caster, SpellId spell,
             tgt.hp -= dmg;
             tgt.hp_max = std::max(1, tgt.hp_max - 5); // permanent max HP reduction
             if (is_player) { char buf[128]; snprintf(buf, sizeof(buf), "The %s withers. %d dmg, -5 max HP.", tgt.name.c_str(), dmg); log.add(buf, {140, 80, 160, 255}); }
-            if (tgt.hp <= 0 && !world.has<Player>(target)) combat::kill(world, target, log);
+            if (tgt.hp <= 0 && !world.has<Player>(target)) spell_kill_xp(target);
             result.success = true;
             break;
         }
@@ -1155,7 +1163,7 @@ CastResult cast(World& world, Entity caster, SpellId spell,
             if (tgt.hp < 50) {
                 if (is_player) { char buf[128]; snprintf(buf, sizeof(buf), "The %s is marked for death. It falls.", tgt.name.c_str()); log.add(buf, {100, 40, 120, 255}); }
                 tgt.hp = 0;
-                combat::kill(world, target, log);
+                spell_kill_xp(target);
             } else {
                 int dmg = tgt.hp / 2; // half current HP
                 tgt.hp -= dmg;

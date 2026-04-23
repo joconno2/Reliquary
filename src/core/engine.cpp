@@ -2628,6 +2628,17 @@ void Engine::try_move_player(int dx, int dy) {
                 if (wpn != NULL_ENTITY && world_.has<Item>(wpn)) wtags = world_.get<Item>(wpn).tags;
             }
             particles_.hit_spark_weapon((float)nx, (float)ny, wtags);
+            // Schema Monk elemental particles on unarmed hit
+            if (wtags == 0 && world_.has<Player>(player_) &&
+                world_.get<Player>(player_).class_id == ClassId::SCHEMA_MONK) {
+                static int elem_vis = 0;
+                switch (elem_vis % 3) {
+                    case 0: particles_.spell_fire((float)nx, (float)ny); break;
+                    case 1: particles_.spell_ice((float)nx, (float)ny); break;
+                    case 2: particles_.spell_effect((float)nx, (float)ny, 180, 180, 255); break;
+                }
+                elem_vis++;
+            }
             char dbuf[16]; snprintf(dbuf, sizeof(dbuf), "%d", atk_result.damage);
             floating_text_.spawn((float)nx, (float)ny, dbuf, {255, 255, 255, 255});
         }
@@ -3442,7 +3453,7 @@ void Engine::process_turn() {
     }
 
     // Process AI — each monster acts at most once per player turn
-    ai::process(world_, map_, player_, rng_, sneaking_);
+    ai::process(world_, map_, player_, rng_, log_, sneaking_);
 
     // NPC wandering (overworld only, every 3 turns to reduce CPU)
     if (dungeon_level_ == 0 && game_turn_ % 3 == 0) {
@@ -4365,7 +4376,8 @@ void Engine::describe_tile(int x, int y) {
                              st.name.c_str(), st.hp, st.hp_max, st.melee_damage(), st.protection(), note);
                     log_.add(buf, {220, 140, 140, 255});
                 }
-                meta_.total_creatures_examined++;
+                meta_.examined_creature_names.insert(st.name);
+                meta_.total_creatures_examined = static_cast<int>(meta_.examined_creature_names.size());
             } else {
                 log_.add("Something was here.", {160, 140, 140, 255});
             }
