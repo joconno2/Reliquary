@@ -49,7 +49,7 @@ static const MonsterDef MONSTER_TABLE[] = {
     {"dragon",          SHEET_MONSTERS,  2, 8,120,  22, 12, 22, 18, 5,  80,  0, 200},
     // New monsters from unused sprites
     {"myconid",         SHEET_MONSTERS,  0,10, 20,   8,  6, 14,  4, 2,  60, 10,  30}, // mushroom creature (warrens)
-    {"ogre",            SHEET_MONSTERS,  0, 1, 40,  20,  6, 16,  8, 2,  70,  5,  55}, // big brute
+    {"ogre",            SHEET_MONSTERS,  0, 1, 40,  20,  6, 16,  8, 2,  85,  5,  55}, // big brute
     {"golem",           SHEET_MONSTERS,  2, 7, 55,  16,  4, 22, 10, 5,  50,  0,  70}, // stone construct (8.c rock golem)
     {"basilisk",        SHEET_MONSTERS,  4, 8, 30,  12, 10, 14,  5, 2,  90, 10,  55}, // reptile, stun gaze (9.e)
     {"yeti",            SHEET_MONSTERS,  1, 7, 42,  18, 10, 16,  8, 2,  85, 10,  65}, // cold zones (8.b wendigo)

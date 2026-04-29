@@ -3,6 +3,7 @@
 #include <SDL2/SDL_ttf.h>
 #include <vector>
 #include "core/spritesheet.h"
+#include "save/save.h"
 
 enum class MenuChoice {
     NONE,

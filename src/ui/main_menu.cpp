@@ -134,8 +134,9 @@ void MainMenu::render(SDL_Renderer* renderer, TTF_Font* body, TTF_Font* title,
     for (int i = 0; i < count; i++) {
         bool is_sel = (i == selected_);
 
-        // Load is dimmed (placeholder)
+        // Dim Load if no save file exists
         bool is_load = can_continue_ ? (i == 2) : (i == 1);
+        bool load_available = save::save_exists(save::default_path());
 
         int tw = 0, th = 0;
         if (menu_font) TTF_SizeText(menu_font, options[i], &tw, &th);
@@ -147,7 +148,7 @@ void MainMenu::render(SDL_Renderer* renderer, TTF_Font* body, TTF_Font* title,
             SDL_RenderFillRect(renderer, &hit);
         }
 
-        SDL_Color col = is_sel ? sel_col : (is_load ? dim_col : normal_col);
+        SDL_Color col = is_sel ? sel_col : (is_load && !load_available) ? dim_col : normal_col;
         ui::draw_text_centered(renderer, menu_font, options[i], col, cx, menu_y);
         menu_y += line_h + 16;
     }

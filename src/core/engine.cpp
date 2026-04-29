@@ -325,6 +325,7 @@ void Engine::do_load() {
 
     state_ = GameState::PLAYING;
     pause_menu_.close();
+    update_music_for_location();
     log_.add("Game loaded.", {100, 200, 100, 255});
 }
 
@@ -5503,7 +5504,10 @@ void Engine::handle_inventory_action(InvAction action) {
                         log_.add("You already know this spell.", {150, 140, 130, 255});
                     } else {
                         // INT-based study check: fail chance = 60 - INT*2 (min 5%)
-                        int fail_chance = std::max(5, 60 - world_.get<Stats>(player_).attr(Attr::INT) * 2);
+                        // Disgraced Scholar passive: tomes never fail
+                        int fail_chance = (background_ == BackgroundId::DISGRACED_SCHOLAR)
+                            ? 0
+                            : std::max(5, 60 - world_.get<Stats>(player_).attr(Attr::INT) * 2);
                         if (rng_.chance(fail_chance)) {
                             // Failed — book destroyed
                             char buf[128];
