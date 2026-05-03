@@ -211,6 +211,14 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
     if (knight_blocked) {
         result.hit = false;
         result.damage = 0;
+        // Riposte also triggers on shield block (not just dodge)
+        if (def_tree.riposte && world.has<Stats>(attacker)) {
+            int riposte_dmg = std::max(1, def.melee_damage() + def_eq_dmg - atk.protection());
+            atk.hp -= riposte_dmg;
+            char rbuf[128]; snprintf(rbuf, sizeof(rbuf), "You counter off the block! (%d)", riposte_dmg);
+            log.add(rbuf, {220, 200, 140, 255});
+            if (atk.hp <= 0) result.attacker_killed = true;
+        }
     } else if (death_marked || (!tree_dodged && (attack_roll >= defense_roll || natural_20))) {
         result.hit = true;
 

@@ -2512,6 +2512,7 @@ void Engine::try_move_player(int dx, int dy) {
                 world_.get<Stats>(target).hp -= bonus_3x;
                 atk_result.damage += bonus_3x;
                 log_.add("DEVASTATING BLOW!", {255, 200, 60, 255});
+                audio_.play(SfxId::CRIT);
                 trigger_screen_shake(6.0f);
                 if (world_.has<Position>(target)) {
                     auto& tp2 = world_.get<Position>(target);
@@ -2807,6 +2808,7 @@ void Engine::try_move_player(int dx, int dy) {
                     if (world_.has<Stats>(player_) && world_.get<Stats>(player_).wyrmkin_breath_ctr == 0 &&
                         atk_result.damage > 10) {
                         // Dragon Breath: big fire burst (only when breath actually fired)
+                        audio_.play(SfxId::SPELL_FIRE);
                         particles_.spell_fire(fx, fy);
                         particles_.burst(fx, fy, 15, 255, 120, 20, 0.14f, 0.9f, 4);
                         trigger_screen_shake(5.0f);
@@ -2853,6 +2855,7 @@ void Engine::try_move_player(int dx, int dy) {
             if (cid == ClassId::WAR_CLERIC) {
                 zealot_fury_turns_ = 5;
                 log_.add("Zealot's fury!", {255, 240, 140, 255});
+                audio_.play(SfxId::PRAYER);
                 auto& pp = world_.get<Position>(player_);
                 particles_.burst((float)pp.x, (float)pp.y, 12, 255, 240, 100, 0.12f, 0.8f, 3);
                 particles_.rise((float)pp.x, (float)pp.y, 6, 255, 200, 60, 1.0f, 2);
@@ -2901,6 +2904,7 @@ void Engine::try_move_player(int dx, int dy) {
                 }
                 if (hit_any) {
                     log_.add("The corpse explodes!", {200, 100, 80, 255});
+                    audio_.play(SfxId::DEATH);
                     particles_.burst((float)tpos.x, (float)tpos.y, 20, 180, 60, 40, 0.15f, 0.7f, 3);
                     particles_.burst((float)tpos.x, (float)tpos.y, 10, 220, 120, 60, 0.1f, 0.5f, 2);
                 }
@@ -4383,9 +4387,13 @@ void Engine::process_turn() {
                         auto cb = passive_tree::compute_bonuses(world_.get<PassiveTreeState>(player_));
                         chaos_immune = cb.chaos_inoculation;
                     }
-                    // Plague Doctor: immune to all diseases
+                    // Sythara: immune to disease (plague-touched body)
+                    bool sythara_immune = world_.has<GodAlignment>(player_) &&
+                                          world_.get<GodAlignment>(player_).god == GodId::SYTHARA;
                     if (chaos_immune) {
                         log_.add("Your inoculated body rejects the infection.", {120, 200, 60, 255});
+                    } else if (sythara_immune) {
+                        log_.add("[Sythara] Your plague-touched body rejects the infection.", {120, 180, 60, 255});
                     } else if (background_ == BackgroundId::PLAGUE_DOCTOR) {
                         log_.add("Your medical training protects you from infection.", {140, 200, 160, 255});
                     } else if (!con_resist()) {
