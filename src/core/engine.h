@@ -313,6 +313,7 @@ private:
     void render_transition();
     void render_minimap();
     void render_god_panel();
+    void render_build_panel();
     bool minimap_visible_ = true; // toggle with Tab in gameplay
 
     // Methods

@@ -2406,6 +2406,7 @@ void Engine::try_move_player(int dx, int dy) {
         // Capture defender stats before kill removes them
         std::string victim_name;
         int victim_hp = 0, victim_dmg = 0, victim_arm = 0, victim_spd = 0;
+        bool victim_was_full_hp = false;
         GodId victim_god = GodId::NONE;
         if (world_.has<Stats>(target)) {
             auto& vs = world_.get<Stats>(target);
@@ -2414,6 +2415,7 @@ void Engine::try_move_player(int dx, int dy) {
             victim_dmg = vs.base_damage;
             victim_arm = vs.natural_armor;
             victim_spd = vs.base_speed;
+            victim_was_full_hp = (vs.hp == vs.hp_max);
         }
         if (world_.has<GodAlignment>(target) && world_.has<AI>(target))
             victim_god = world_.get<GodAlignment>(target).god;
@@ -2602,9 +2604,8 @@ void Engine::try_move_player(int dx, int dy) {
                     break;
                 }
                 case GodId::MORRETH: {
-                    // First hit on a target = 2x damage (target at full HP = first strike)
-                    if (tgt_stats.hp == tgt_stats.hp_max - atk_result.damage) {
-                        // This was the first hit (target was at full HP before this attack)
+                    // First hit on a target = 2x damage
+                    if (victim_was_full_hp) {
                         int first_bonus = atk_result.damage; // double it
                         tgt_stats.hp -= first_bonus;
                         bonus += first_bonus;
@@ -3544,8 +3545,30 @@ void Engine::process_turn() {
     // Phase walk decrement
     if (world_.has<Stats>(player_) && world_.get<Stats>(player_).phase_turns > 0) {
         world_.get<Stats>(player_).phase_turns--;
-        if (world_.get<Stats>(player_).phase_turns == 0)
+        if (world_.get<Stats>(player_).phase_turns == 0) {
             log_.add("You solidify. Walls are solid again.", {160, 120, 200, 255});
+            // If stuck in a wall, teleport to nearest walkable tile
+            if (world_.has<Position>(player_)) {
+                auto& pp = world_.get<Position>(player_);
+                if (!map_.is_walkable(pp.x, pp.y)) {
+                    for (int radius = 1; radius <= 10; radius++) {
+                        bool found = false;
+                        for (int dx = -radius; dx <= radius && !found; dx++) {
+                            for (int dy = -radius; dy <= radius && !found; dy++) {
+                                if (std::abs(dx) != radius && std::abs(dy) != radius) continue;
+                                int tx = pp.x + dx, ty = pp.y + dy;
+                                if (map_.in_bounds(tx, ty) && map_.is_walkable(tx, ty)) {
+                                    pp.x = tx; pp.y = ty;
+                                    log_.add("You phase out of the stone.", {160, 120, 200, 255});
+                                    found = true;
+                                }
+                            }
+                        }
+                        if (found) break;
+                    }
+                }
+            }
+        }
     }
     // Zhavek: permanent invisibility (re-applies each turn after being broken by attack)
     if (world_.has<GodAlignment>(player_) && world_.has<Stats>(player_)) {
@@ -3562,22 +3585,23 @@ void Engine::process_turn() {
         // Cannibal: eat corpse at your position (auto, no action cost beyond the walk)
         if (tid == TraitId::CANNIBAL && world_.has<Position>(player_) && world_.has<Stats>(player_)) {
             auto& pp = world_.get<Position>(player_);
+            // Find corpse at player position (don't destroy during iteration)
+            Entity corpse_to_eat = 0;
             auto& corpse_pool = world_.pool<Corpse>();
             for (size_t ci = 0; ci < corpse_pool.size(); ci++) {
                 Entity ce = corpse_pool.entity_at(ci);
                 if (!world_.has<Position>(ce)) continue;
                 auto& cp = world_.get<Position>(ce);
-                if (cp.x == pp.x && cp.y == pp.y) {
-                    // Eat it
-                    auto& ps = world_.get<Stats>(player_);
-                    int healed = ps.hp_max - ps.hp;
-                    ps.hp = ps.hp_max;
-                    world_.destroy(ce);
-                    char eb[64]; snprintf(eb, sizeof(eb), "You devour the corpse. (+%d HP)", healed);
-                    log_.add(eb, {180, 100, 80, 255});
-                    particles_.burst((float)pp.x, (float)pp.y, 8, 180, 60, 40, 0.08f, 0.5f, 2);
-                    break;
-                }
+                if (cp.x == pp.x && cp.y == pp.y) { corpse_to_eat = ce; break; }
+            }
+            if (corpse_to_eat != 0) {
+                auto& ps = world_.get<Stats>(player_);
+                int healed = ps.hp_max - ps.hp;
+                ps.hp = ps.hp_max;
+                world_.destroy(corpse_to_eat);
+                char eb[64]; snprintf(eb, sizeof(eb), "You devour the corpse. (+%d HP)", healed);
+                log_.add(eb, {180, 100, 80, 255});
+                particles_.burst((float)pp.x, (float)pp.y, 8, 180, 60, 40, 0.08f, 0.5f, 2);
             }
         }
         // Vampiric: overworld drains 1 HP/5 turns
@@ -8811,6 +8835,9 @@ void Engine::render() {
     // God panel (right side, below minimap)
     render_god_panel();
 
+    // Build panel (left side, below HUD)
+    render_build_panel();
+
     // Overlay screens
     inventory_screen_.render(renderer_, font_, sprites_, world_, width_, height_);
     spell_screen_.render(renderer_, font_, world_, width_, height_);
@@ -9018,6 +9045,67 @@ void Engine::render_minimap() {
         SDL_SetRenderDrawColor(renderer_, 255, 255, pulse, 255);
         SDL_Rect pd = {pdx - ps / 2, pdy - ps / 2, ps, ps};
         SDL_RenderFillRect(renderer_, &pd);
+    }
+}
+
+void Engine::render_build_panel() {
+    if (!font_ || build_traits_.empty()) return;
+    if (!world_.has<Player>(player_)) return;
+
+    auto& player = world_.get<Player>(player_);
+    int line_h = TTF_FontLineSkip(font_);
+
+    // Panel on left side, below HUD
+    int panel_w = std::min(240, width_ / 4);
+    int panel_x = 8;
+    int panel_y = HUD_HEIGHT + 8;
+
+    // Count lines: class name + each trait (name + short desc)
+    int content_lines = 1 + static_cast<int>(build_traits_.size()) * 2;
+    int panel_h = line_h * content_lines + 12;
+
+    // Semi-transparent background
+    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+    SDL_Rect bg = {panel_x, panel_y, panel_w, panel_h};
+    SDL_SetRenderDrawColor(renderer_, 10, 8, 14, 160);
+    SDL_RenderFillRect(renderer_, &bg);
+
+    // Right edge accent (class-colored: warm gold for martial, blue for caster, green for nature)
+    uint8_t ar = 180, ag = 160, ab = 100;
+    switch (player.class_id) {
+        case ClassId::WIZARD: case ClassId::WARLOCK: case ClassId::NECROMANCER: case ClassId::SCHEMA_MONK:
+            ar = 140; ag = 140; ab = 220; break;
+        case ClassId::DRUID: case ClassId::RANGER:
+            ar = 80; ag = 180; ab = 80; break;
+        case ClassId::TEMPLAR: case ClassId::WAR_CLERIC:
+            ar = 220; ag = 200; ab = 100; break;
+        default: break;
+    }
+    SDL_SetRenderDrawColor(renderer_, ar, ag, ab, 180);
+    SDL_Rect accent = {panel_x + panel_w - 3, panel_y, 3, panel_h};
+    SDL_RenderFillRect(renderer_, &accent);
+    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_NONE);
+
+    int tx = panel_x + 6;
+    int ty = panel_y + 4;
+
+    // Class name
+    const auto& cls = get_class_info(player.class_id);
+    SDL_Color class_col = {ar, ag, ab, 255};
+    ui::draw_text(renderer_, font_, cls.name, class_col, tx, ty);
+    ty += line_h;
+
+    // Traits with short upside/downside
+    for (auto tid : build_traits_) {
+        const auto& tr = get_trait_info(tid);
+        // Trait name in white
+        ui::draw_text(renderer_, font_, tr.name, {200, 200, 200, 255}, tx, ty);
+        ty += line_h;
+        // Description truncated (fits panel width)
+        char desc_buf[44];
+        snprintf(desc_buf, sizeof(desc_buf), "%.42s", tr.description);
+        ui::draw_text(renderer_, font_, desc_buf, {140, 130, 120, 255}, tx + 4, ty);
+        ty += line_h;
     }
 }
 

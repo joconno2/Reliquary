@@ -279,14 +279,15 @@ void process(World& world, TileMap& map, Entity player, RNG& rng,
             }
         }
 
-        // God passives: creature behavior overrides
+        // God passives: creature behavior overrides (re-evaluated each turn)
         if (world.has<GodAlignment>(player) && world.has<Stats>(e)) {
             auto& ga = world.get<GodAlignment>(player);
             const char* ename = world.get<Stats>(e).name.c_str();
-            // Khael: ALL animals are friendly (fight for you)
-            if (ga.god == GodId::KHAEL && is_animal(ename)) {
-                ai_comp.friendly = true;
-                continue; // skip all hostile AI for this entity
+            // Khael: ALL animals are friendly (fight for you) - only while Khael is active
+            if (is_animal(ename)) {
+                bool should_be_friendly = (ga.god == GodId::KHAEL);
+                if (ai_comp.friendly != should_be_friendly) ai_comp.friendly = should_be_friendly;
+                if (should_be_friendly) continue; // skip hostile AI
             }
             // Vethrik: undead completely ignore you
             if (ga.god == GodId::VETHRIK && is_undead(ename)) {
