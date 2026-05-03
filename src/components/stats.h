@@ -57,6 +57,7 @@ struct Stats {
     // God prayer / passive status fields
     int invisible_turns = 0;   // Zhavek: invisible until attack or expiry
     int phase_turns = 0;       // Lethis: walk through walls
+    int wyrmkin_breath_ctr = 0; // Wyrmkin: counts hits toward dragon breath
     int sleep_turns = 0;       // Lethis: sleeping, skip turns
     int drown_turns = 0;       // Thalara: taking drown damage over time
     int drown_damage = 0;      // Thalara: damage per drown tick

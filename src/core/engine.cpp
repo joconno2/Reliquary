@@ -2803,9 +2803,10 @@ void Engine::try_move_player(int dx, int dy) {
                     particles_.spell_holy(fx, fy);
                     particles_.rise(fx, fy, 6, 255, 240, 140, 0.8f, 3);
                 } else if (pcid == ClassId::WYRMKIN) {
-                    static int wcount = 0; wcount++;
-                    if (wcount >= 8) { wcount = 0;
-                        // Dragon Breath: big fire burst
+                    // VFX synced with combat counter (fires when counter just reset to 0)
+                    if (world_.has<Stats>(player_) && world_.get<Stats>(player_).wyrmkin_breath_ctr == 0 &&
+                        atk_result.damage > 10) {
+                        // Dragon Breath: big fire burst (only when breath actually fired)
                         particles_.spell_fire(fx, fy);
                         particles_.burst(fx, fy, 15, 255, 120, 20, 0.14f, 0.9f, 4);
                         trigger_screen_shake(5.0f);
@@ -3661,6 +3662,22 @@ void Engine::process_turn() {
                 if (game_turn_ % 20 == 0)
                     particles_.rise((float)pp.x, (float)pp.y, 3, 60, 180, 60, 0.5f, 2);
             }
+        }
+
+        // Thessarka: FOV reduced to 3 when enemies visible (blind in combat)
+        if (ga.god == GodId::THESSARKA) {
+            bool enemies_visible = false;
+            auto& ai_pool_t = world_.pool<AI>();
+            for (size_t ai = 0; ai < ai_pool_t.size(); ai++) {
+                if (ai_pool_t.at_index(ai).friendly) continue;
+                Entity ae = ai_pool_t.entity_at(ai);
+                if (!world_.has<Position>(ae)) continue;
+                auto& ep = world_.get<Position>(ae);
+                if (map_.in_bounds(ep.x, ep.y) && map_.at(ep.x, ep.y).visible) {
+                    enemies_visible = true; break;
+                }
+            }
+            ps.fov_bonus = enemies_visible ? -6 : 0; // drastically reduce FOV in combat
         }
 
         // Morreth: speed drops to 60 when enemies visible (can't flee)

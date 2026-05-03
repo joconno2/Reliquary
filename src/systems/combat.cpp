@@ -519,11 +519,9 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
 
             // Wyrmkin: Dragon Breath (every 8th hit, fire AoE)
             if (cid == ClassId::WYRMKIN) {
-                // Uses static counter (persists within session)
-                static int wyrmkin_ctr = 0;
-                wyrmkin_ctr++;
-                if (wyrmkin_ctr >= 8) {
-                    wyrmkin_ctr = 0;
+                atk.wyrmkin_breath_ctr++;
+                if (atk.wyrmkin_breath_ctr >= 8) {
+                    atk.wyrmkin_breath_ctr = 0;
                     int breath_dmg = 6 + atk.level;
                     // Damage target extra
                     def.hp -= breath_dmg;

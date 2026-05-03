@@ -37,6 +37,9 @@ static json stats_to_json(const Stats& s) {
     j["base_speed"] = s.base_speed;
     j["level"] = s.level; j["xp"] = s.xp; j["xp_next"] = s.xp_next;
     j["xp_value"] = s.xp_value;
+    if (s.phase_turns > 0) j["phase_turns"] = s.phase_turns;
+    if (s.wyrmkin_breath_ctr > 0) j["wyrmkin_ctr"] = s.wyrmkin_breath_ctr;
+    if (s.invisible_turns > 0) j["invis_turns"] = s.invisible_turns;
     json attrs = json::array();
     for (int i = 0; i < ATTR_COUNT; i++) attrs.push_back(s.attributes[i]);
     j["attributes"] = attrs;
@@ -54,6 +57,9 @@ static Stats json_to_stats(const json& j) {
     s.level = j.value("level", 1); s.xp = j.value("xp", 0);
     s.xp_next = j.value("xp_next", 100);
     s.xp_value = j.value("xp_value", 0);
+    s.phase_turns = j.value("phase_turns", 0);
+    s.wyrmkin_breath_ctr = j.value("wyrmkin_ctr", 0);
+    s.invisible_turns = j.value("invis_turns", 0);
     if (j.contains("attributes")) {
         auto& a = j["attributes"];
         for (int i = 0; i < ATTR_COUNT && i < static_cast<int>(a.size()); i++)
