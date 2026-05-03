@@ -138,6 +138,13 @@ CastResult cast(World& world, Entity caster, SpellId spell,
     }
 
     int actual_cost = arcane_overload ? 0 : info.mp_cost;
+    // Spell Glutton trait: spells cost half MP
+    if (!arcane_overload && world.has<Player>(caster)) {
+        auto& player = world.get<Player>(caster);
+        for (auto tid : player.traits) {
+            if (tid == TraitId::SPELL_GLUTTON) { actual_cost = actual_cost / 2; break; }
+        }
+    }
     // Skill cost reduction from spell school proficiency
     if (!arcane_overload && world.has<Player>(caster) && world.has<Skills>(caster)) {
         auto& skills = world.get<Skills>(caster);

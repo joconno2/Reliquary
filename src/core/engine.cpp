@@ -2499,31 +2499,53 @@ void Engine::try_move_player(int dx, int dy) {
             else grant_skill_xp(SkillId::BLADES, 2);
         }
 
-        // Clumsy: 10% chance to fumble (turn hit into miss)
-        if (atk_result.hit) {
-            for (auto tid : build_traits_) {
-                if (tid == TraitId::HEAVY_HITTER && rng_.chance(10)) {
-                    // Refund damage
-                    if (world_.has<Stats>(target))
-                        world_.get<Stats>(target).hp += atk_result.damage;
-                    atk_result.hit = false;
-                    atk_result.damage = 0;
-                    log_.add("You fumble the attack!", {200, 180, 100, 255});
-                    break;
+        // === TRAIT COMBAT EFFECTS ===
+        for (auto tid : build_traits_) {
+            // Heavy Hitter: +20% miss chance (fumble)
+            if (tid == TraitId::HEAVY_HITTER && atk_result.hit && rng_.chance(20)) {
+                if (world_.has<Stats>(target))
+                    world_.get<Stats>(target).hp += atk_result.damage;
+                atk_result.hit = false;
+                atk_result.damage = 0;
+                log_.add("You overswing!", {200, 180, 100, 255});
+            }
+            // Glass Cannon: +6 flat damage on all hits
+            if (tid == TraitId::GLASS_CANNON && atk_result.hit && !atk_result.killed && world_.has<Stats>(target)) {
+                world_.get<Stats>(target).hp -= 6;
+                atk_result.damage += 6;
+                if (world_.get<Stats>(target).hp <= 0) {
+                    combat::kill(world_, target, log_);
+                    atk_result.killed = true;
                 }
             }
-        }
-
-        // Sure-Handed: 10% chance to strike twice
-        if (atk_result.hit && !atk_result.killed && world_.has<Stats>(target)) {
-            for (auto tid : build_traits_) {
-                if (tid == TraitId::HEAVY_HITTER && rng_.chance(10)) {
-                    auto bonus_hit = combat::melee_attack(world_, player_, target, rng_, log_);
-                    if (bonus_hit.hit) {
-                        log_.add("Double strike!", {220, 220, 140, 255});
-                        if (bonus_hit.killed) atk_result.killed = true;
+            // Nocturnal: +4 damage in dungeons, -4 on surface
+            if (tid == TraitId::NOCTURNAL && atk_result.hit && !atk_result.killed && world_.has<Stats>(target)) {
+                int noc_bonus = (dungeon_level_ > 0) ? 4 : -4;
+                world_.get<Stats>(target).hp -= noc_bonus;
+                atk_result.damage += noc_bonus;
+                if (world_.get<Stats>(target).hp <= 0) {
+                    combat::kill(world_, target, log_);
+                    atk_result.killed = true;
+                }
+            }
+            // Spell Glutton: melee damage halved
+            if (tid == TraitId::SPELL_GLUTTON && atk_result.hit && !atk_result.killed && world_.has<Stats>(target)) {
+                int reduce = atk_result.damage / 2;
+                world_.get<Stats>(target).hp += reduce; // refund half damage
+                atk_result.damage -= reduce;
+            }
+            // Berserker: +50% damage below 30% HP
+            if (tid == TraitId::BERSERKER && atk_result.hit && !atk_result.killed &&
+                world_.has<Stats>(player_) && world_.has<Stats>(target)) {
+                auto& pst = world_.get<Stats>(player_);
+                if (pst.hp * 100 < pst.hp_max * 30) {
+                    int rage_bonus = atk_result.damage / 2;
+                    world_.get<Stats>(target).hp -= rage_bonus;
+                    atk_result.damage += rage_bonus;
+                    if (world_.get<Stats>(target).hp <= 0) {
+                        combat::kill(world_, target, log_);
+                        atk_result.killed = true;
                     }
-                    break;
                 }
             }
         }
@@ -2947,14 +2969,12 @@ void Engine::try_move_player(int dx, int dy) {
             }
         }
 
-        // Trait: Venomous — 10% chance to poison on hit
-        if (atk_result.hit && !atk_result.killed) {
+        // Bloodletter: crits apply 5-turn bleed to enemies
+        if (atk_result.hit && atk_result.critical && !atk_result.killed) {
             for (auto tid : build_traits_) {
-                if (tid == TraitId::BLOODLETTER && rng_.chance(10) && world_.has<Stats>(target)) {
-                    if (!world_.has<StatusEffects>(target))
-                        world_.add<StatusEffects>(target, {});
-                    world_.get<StatusEffects>(target).add(StatusType::POISON, 2, 6);
-                    log_.add("Your venomous strike poisons the enemy.", {100, 200, 80, 255});
+                if (tid == TraitId::BLOODLETTER && world_.has<StatusEffects>(target)) {
+                    world_.get<StatusEffects>(target).add(StatusType::BLEED, 2, 5);
+                    log_.add("Blood flows freely.", {200, 60, 60, 255});
                     break;
                 }
             }
@@ -3498,6 +3518,45 @@ void Engine::process_turn() {
         if (ga.god == GodId::ZHAVEK && world_.get<Stats>(player_).invisible_turns == 0)
             world_.get<Stats>(player_).invisible_turns = 2; // refreshes each turn
     }
+    // === TRAIT TURN EFFECTS ===
+    for (auto tid : build_traits_) {
+        // Paranoid: confused 20% of turns
+        if (tid == TraitId::PARANOID && rng_.chance(20) && world_.has<StatusEffects>(player_)) {
+            world_.get<StatusEffects>(player_).add(StatusType::CONFUSED, 0, 1);
+        }
+        // Cannibal: eat corpse at your position (auto, no action cost beyond the walk)
+        if (tid == TraitId::CANNIBAL && world_.has<Position>(player_) && world_.has<Stats>(player_)) {
+            auto& pp = world_.get<Position>(player_);
+            auto& corpse_pool = world_.pool<Corpse>();
+            for (size_t ci = 0; ci < corpse_pool.size(); ci++) {
+                Entity ce = corpse_pool.entity_at(ci);
+                if (!world_.has<Position>(ce)) continue;
+                auto& cp = world_.get<Position>(ce);
+                if (cp.x == pp.x && cp.y == pp.y) {
+                    // Eat it
+                    auto& ps = world_.get<Stats>(player_);
+                    int healed = ps.hp_max - ps.hp;
+                    ps.hp = ps.hp_max;
+                    world_.destroy(ce);
+                    char eb[64]; snprintf(eb, sizeof(eb), "You devour the corpse. (+%d HP)", healed);
+                    log_.add(eb, {180, 100, 80, 255});
+                    particles_.burst((float)pp.x, (float)pp.y, 8, 180, 60, 40, 0.08f, 0.5f, 2);
+                    break;
+                }
+            }
+        }
+        // Vampiric: overworld drains 1 HP/5 turns
+        if (tid == TraitId::VAMPIRIC && dungeon_level_ <= 0 && game_turn_ % 5 == 0 && world_.has<Stats>(player_)) {
+            world_.get<Stats>(player_).hp -= 1;
+            if (game_turn_ % 25 == 0)
+                log_.add("Sunlight burns. Get underground.", {200, 180, 100, 255});
+        }
+        // Bloodletter: permanent 1 HP bleed per turn
+        if (tid == TraitId::BLOODLETTER && world_.has<Stats>(player_) && game_turn_ % 3 == 0) {
+            world_.get<Stats>(player_).hp -= 1;
+        }
+    }
+
     // === GOD PASSIVE TURN EFFECTS ===
     if (world_.has<GodAlignment>(player_) && world_.has<Stats>(player_)) {
         auto& ga = world_.get<GodAlignment>(player_);
@@ -3988,22 +4047,20 @@ void Engine::process_turn() {
                         }
                     }
                 }
-                // Frail: crits deal double damage
+                // Lucky downside: crits against you deal 3x (extra 2x on top of normal crit)
                 if (mresult.hit && mresult.critical && world_.has<Stats>(player_)) {
                     for (auto tid : build_traits_) {
-                        if (tid == TraitId::GLASS_CANNON) {
-                            world_.get<Stats>(player_).hp -= mresult.damage; // extra damage = double
+                        if (tid == TraitId::LUCKY) {
+                            world_.get<Stats>(player_).hp -= mresult.damage; // extra damage = triple total
                             break;
                         }
                     }
                 }
-                // Trait: Second Wind — 10% chance to heal 3 HP when hit
+                // Bloodletter: you bleed 1 HP permanently when hit
                 if (mresult.hit && world_.has<Stats>(player_)) {
                     for (auto tid : build_traits_) {
-                        if (tid == TraitId::VAMPIRIC && rng_.chance(10)) {
-                            auto& ps = world_.get<Stats>(player_);
-                            int heal = std::min(3, ps.hp_max - ps.hp);
-                            if (heal > 0) { ps.hp += heal; }
+                        if (tid == TraitId::BLOODLETTER) {
+                            world_.get<Stats>(player_).hp -= 1;
                             break;
                         }
                     }
@@ -4040,16 +4097,6 @@ void Engine::process_turn() {
                 }
                 if (mresult.critical) {
                     particles_.crit_flash(pp.x, pp.y); trigger_screen_shake(5.0f);
-                    // Cowardly trait: crits cause fear
-                    if (world_.has<StatusEffects>(player_)) {
-                        for (auto tid : build_traits_) {
-                            if (tid == TraitId::PARANOID) {
-                                world_.get<StatusEffects>(player_).add(StatusType::FEARED, 0, 2);
-                                log_.add("Fear grips you!", {255, 200, 200, 255});
-                                break;
-                            }
-                        }
-                    }
                 }
                 else particles_.blood(pp.x, pp.y);
                 // Track what hit us for death screen
@@ -4485,6 +4532,12 @@ void Engine::execute_prayer(int prayer_idx) {
 
 void Engine::fire_ranged() {
     if (!world_.has<Inventory>(player_) || !world_.has<Position>(player_)) return;
+
+    // Morreth: no ranged weapons allowed
+    if (world_.has<GodAlignment>(player_) && world_.get<GodAlignment>(player_).god == GodId::MORRETH) {
+        log_.add("Morreth forbids striking from distance. Close and fight.", {200, 180, 100, 255});
+        return;
+    }
 
     auto& inv = world_.get<Inventory>(player_);
     Entity weapon_e = inv.get_equipped(EquipSlot::MAIN_HAND);
@@ -5754,9 +5807,13 @@ void Engine::handle_inventory_action(InvAction action) {
                         if (ga.god == GodId::YASHKHET) heal_amt = heal_amt / 2;
                         else if (ga.god == GodId::SYTHARA) heal_amt = heal_amt * 7 / 10;
                     }
-                    // Cursed Blood trait: healing potions -50%
-                    for (auto tid : build_traits_)
-                        if (tid == TraitId::BERSERKER) { heal_amt = heal_amt / 2; break; }
+                    // Berserker: cannot use healing items at all
+                    for (auto tid : build_traits_) {
+                        if (tid == TraitId::BERSERKER) {
+                            log_.add("The berserker rage rejects healing.", {200, 80, 80, 255});
+                            heal_amt = 0; break;
+                        }
+                    }
                     int healed = std::min(heal_amt, stats.hp_max - stats.hp);
                     stats.hp += healed;
                     if (healed > 0) meta_.total_hp_healed += healed;
@@ -7704,17 +7761,7 @@ void Engine::handle_input() {
                             snprintf(dbuf, sizeof(dbuf), "Depth %d.", dungeon_level_);
                             log_.add(dbuf, {120, 115, 110, 255});
                         }
-                        // Brittle Bones: take 1-3 damage from stairs
-                        for (auto tid : build_traits_) {
-                            if (tid == TraitId::IRON_SKIN && world_.has<Stats>(player_)) {
-                                int fall_dmg = rng_.range(1, 3);
-                                world_.get<Stats>(player_).hp -= fall_dmg;
-                                char fbuf[64];
-                                snprintf(fbuf, sizeof(fbuf), "The descent jars your bones. (-%d HP)", fall_dmg);
-                                log_.add(fbuf, {200, 160, 120, 255});
-                                break;
-                            }
-                        }
+                        // (stair damage removed with trait overhaul)
                     } else if (tile_type == TileType::STAIRS_UP &&
                                act != Action::STAIRS_DOWN) {
                         if (dungeon_level_ > 1) {

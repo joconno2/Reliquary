@@ -29,6 +29,7 @@ PlayerResult create_player(World& world, const CharacterBuild& build,
 
     Entity player = world.create();
     Player pc; pc.class_id = build.class_id;
+    pc.traits = build.traits;
     world.add<Player>(player, std::move(pc));
     world.add<Position>(player, {start_x, start_y});
 
