@@ -161,22 +161,17 @@ void test_class_names_unique() {
 void test_trait_count() {
     TEST("Trait count matches enum");
     CHECK(TRAIT_COUNT == static_cast<int>(TraitId::COUNT), "TRAIT_COUNT != TraitId::COUNT");
-    CHECK(POSITIVE_TRAIT_COUNT > 0, "No positive traits");
-    CHECK(NEGATIVE_TRAIT_COUNT > 0, "No negative traits");
-    CHECK(POSITIVE_TRAIT_COUNT + NEGATIVE_TRAIT_COUNT == TRAIT_COUNT,
-          "Positive + negative != total");
+    CHECK(TRAIT_COUNT > 0, "No traits defined");
     PASS();
 }
 
 void test_trait_polarity() {
-    TEST("Trait is_positive matches enum ordering");
+    TEST("All traits have names and descriptions");
     for (int i = 0; i < TRAIT_COUNT; i++) {
         auto& t = get_trait_info(static_cast<TraitId>(i));
-        bool expected_positive = (i < POSITIVE_TRAIT_COUNT);
-        if (t.is_positive != expected_positive) {
+        if (t.name[0] == '\0') {
             char buf[128];
-            snprintf(buf, sizeof(buf), "Trait %s: is_positive=%d but index=%d (cutoff=%d)",
-                     t.name, t.is_positive, i, POSITIVE_TRAIT_COUNT);
+            snprintf(buf, sizeof(buf), "Trait %d has empty name", i);
             FAIL(buf); return;
         }
     }

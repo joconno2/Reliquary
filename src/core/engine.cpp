@@ -2073,6 +2073,15 @@ void Engine::generate_level() {
     fov::compute(map_, pos.x, pos.y, stats.fov_radius());
     camera_.center_on(pos.x, pos.y);
 
+    // Thessarka: auto-map entire floor on entry
+    if (dungeon_level_ > 0 && world_.has<GodAlignment>(player_) &&
+        world_.get<GodAlignment>(player_).god == GodId::THESSARKA) {
+        for (int my = 0; my < map_.height(); my++)
+            for (int mx = 0; mx < map_.width(); mx++)
+                map_.at(mx, my).explored = true;
+        log_.add("The Eyeless reveals the floor's layout.", {140, 140, 220, 255});
+    }
+
     if (dungeon_level_ == 0) {
         log_.add("Thornwall.", {180, 170, 160, 255});
         log_.add("A trading post at the edge of the world. Everyone is watching everyone.",
@@ -2493,7 +2502,7 @@ void Engine::try_move_player(int dx, int dy) {
         // Clumsy: 10% chance to fumble (turn hit into miss)
         if (atk_result.hit) {
             for (auto tid : build_traits_) {
-                if (tid == TraitId::CLUMSY && rng_.chance(10)) {
+                if (tid == TraitId::HEAVY_HITTER && rng_.chance(10)) {
                     // Refund damage
                     if (world_.has<Stats>(target))
                         world_.get<Stats>(target).hp += atk_result.damage;
@@ -2508,7 +2517,7 @@ void Engine::try_move_player(int dx, int dy) {
         // Sure-Handed: 10% chance to strike twice
         if (atk_result.hit && !atk_result.killed && world_.has<Stats>(target)) {
             for (auto tid : build_traits_) {
-                if (tid == TraitId::SURE_HANDED && rng_.chance(10)) {
+                if (tid == TraitId::HEAVY_HITTER && rng_.chance(10)) {
                     auto bonus_hit = combat::melee_attack(world_, player_, target, rng_, log_);
                     if (bonus_hit.hit) {
                         log_.add("Double strike!", {220, 220, 140, 255});
@@ -2600,15 +2609,20 @@ void Engine::try_move_player(int dx, int dy) {
                     break;
                 }
                 case GodId::OSSREN: {
-                    // Craftsmanship: +1 base, +2 at favor 25, +3 at favor 75
-                    int craft = (fav >= 75) ? 3 : (fav >= 25) ? 2 : 1;
-                    if (weapon_tags != 0) bonus = craft;
+                    // +1 damage per equipped item (god of permanence blesses all gear)
+                    if (world_.has<Inventory>(player_)) {
+                        auto& oinv = world_.get<Inventory>(player_);
+                        int equip_count = 0;
+                        for (int s = 0; s < EQUIP_SLOT_COUNT; s++)
+                            if (oinv.equipped[s] != NULL_ENTITY) equip_count++;
+                        bonus = equip_count; // +1 per slot filled
+                    }
                     break;
                 }
                 case GodId::GATHRUUN: {
-                    // Underground strength: +2 base, +3 at favor 25, +5 at favor 50
-                    int ground = (fav >= 50) ? 5 : (fav >= 25) ? 3 : 2;
-                    if (dungeon_level_ > 0) bonus = ground;
+                    // +4 damage underground, -3 on surface
+                    if (dungeon_level_ > 0) bonus = 4;
+                    else bonus = -3; // penalty on surface
                     break;
                 }
                 case GodId::SYTHARA: {
@@ -2624,7 +2638,9 @@ void Engine::try_move_player(int dx, int dy) {
                     break;
                 }
                 case GodId::KHAEL:
-                    // Favor 50: melee hits have 10% chance to entangle (slow)
+                    // -4 damage in dungeons (nature weakens underground)
+                    if (dungeon_level_ > 0) bonus = -4;
+                    // Entangle on hit
                     if (fav >= 50 && rng_.chance(10) && !atk_result.killed) {
                         if (!world_.has<StatusEffects>(target))
                             world_.add<StatusEffects>(target, {});
@@ -2934,7 +2950,7 @@ void Engine::try_move_player(int dx, int dy) {
         // Trait: Venomous — 10% chance to poison on hit
         if (atk_result.hit && !atk_result.killed) {
             for (auto tid : build_traits_) {
-                if (tid == TraitId::VENOMOUS && rng_.chance(10) && world_.has<Stats>(target)) {
+                if (tid == TraitId::BLOODLETTER && rng_.chance(10) && world_.has<Stats>(target)) {
                     if (!world_.has<StatusEffects>(target))
                         world_.add<StatusEffects>(target, {});
                     world_.get<StatusEffects>(target).add(StatusType::POISON, 2, 6);
@@ -3482,19 +3498,61 @@ void Engine::process_turn() {
         if (ga.god == GodId::ZHAVEK && world_.get<Stats>(player_).invisible_turns == 0)
             world_.get<Stats>(player_).invisible_turns = 2; // refreshes each turn
     }
-    // Ixuul: random stat mutation every 50/80 turns
+    // === GOD PASSIVE TURN EFFECTS ===
     if (world_.has<GodAlignment>(player_) && world_.has<Stats>(player_)) {
         auto& ga = world_.get<GodAlignment>(player_);
         auto& ps = world_.get<Stats>(player_);
+        auto& pp = world_.get<Position>(player_);
+
+        // Ixuul: random stat mutation every 50/80 turns
         if (ga.god == GodId::IXUUL) {
             if (game_turn_ % 50 == 0) {
                 auto attr = static_cast<Attr>(rng_.range(0, 5));
                 ps.set_attr(attr, ps.attr(attr) + 1);
+                particles_.burst((float)pp.x, (float)pp.y, 6, 180, 80, 255, 0.08f, 0.6f, 2);
             }
             if (game_turn_ % 80 == 0) {
                 auto attr = static_cast<Attr>(rng_.range(0, 5));
                 ps.set_attr(attr, std::max(3, ps.attr(attr) - 1));
+                particles_.burst((float)pp.x, (float)pp.y, 4, 100, 40, 160, 0.06f, 0.4f, 2);
             }
+        }
+
+        // Soleth: 2 damage every 5 turns in deep dungeon darkness (depth 3+)
+        if (ga.god == GodId::SOLETH && dungeon_level_ >= 3 && game_turn_ % 5 == 0) {
+            ps.hp -= 2;
+            if (game_turn_ % 20 == 0)
+                log_.add("The darkness burns. Soleth demands light.", {255, 200, 80, 255});
+            particles_.burn_effect((float)pp.x, (float)pp.y);
+        }
+
+        // Gathruun: surface penalty (-3 damage applied in combat, 2x energy cost here)
+        // Surface damage penalty is handled in combat section below
+
+        // Khael: regen 1 HP/5 turns on surface (overworld)
+        if (ga.god == GodId::KHAEL && dungeon_level_ <= 0 && game_turn_ % 5 == 0) {
+            if (ps.hp < ps.hp_max) {
+                ps.hp++;
+                if (game_turn_ % 20 == 0)
+                    particles_.rise((float)pp.x, (float)pp.y, 3, 60, 180, 60, 0.5f, 2);
+            }
+        }
+
+        // Morreth: speed drops to 60 when enemies visible (can't flee)
+        if (ga.god == GodId::MORRETH && world_.has<Energy>(player_)) {
+            bool enemies_visible = false;
+            auto& ai_pool = world_.pool<AI>();
+            for (size_t ai = 0; ai < ai_pool.size(); ai++) {
+                if (ai_pool.at_index(ai).friendly) continue;
+                Entity ae = ai_pool.entity_at(ai);
+                if (!world_.has<Position>(ae)) continue;
+                auto& ep = world_.get<Position>(ae);
+                if (map_.in_bounds(ep.x, ep.y) && map_.at(ep.x, ep.y).visible) {
+                    enemies_visible = true; break;
+                }
+            }
+            auto& en = world_.get<Energy>(player_);
+            en.speed = enemies_visible ? 60 : 100;
         }
     }
 
@@ -3919,7 +3977,7 @@ void Engine::process_turn() {
                 // Quick-Footed: 15% dodge (negate the hit)
                 if (mresult.hit && !mresult.critical) {
                     for (auto tid : build_traits_) {
-                        if (tid == TraitId::QUICK_FOOTED && rng_.chance(15)) {
+                        if (tid == TraitId::LUCKY && rng_.chance(15)) {
                             // Refund the damage
                             if (world_.has<Stats>(player_)) {
                                 world_.get<Stats>(player_).hp += mresult.damage;
@@ -3933,7 +3991,7 @@ void Engine::process_turn() {
                 // Frail: crits deal double damage
                 if (mresult.hit && mresult.critical && world_.has<Stats>(player_)) {
                     for (auto tid : build_traits_) {
-                        if (tid == TraitId::FRAIL) {
+                        if (tid == TraitId::GLASS_CANNON) {
                             world_.get<Stats>(player_).hp -= mresult.damage; // extra damage = double
                             break;
                         }
@@ -3942,7 +4000,7 @@ void Engine::process_turn() {
                 // Trait: Second Wind — 10% chance to heal 3 HP when hit
                 if (mresult.hit && world_.has<Stats>(player_)) {
                     for (auto tid : build_traits_) {
-                        if (tid == TraitId::SECOND_WIND && rng_.chance(10)) {
+                        if (tid == TraitId::VAMPIRIC && rng_.chance(10)) {
                             auto& ps = world_.get<Stats>(player_);
                             int heal = std::min(3, ps.hp_max - ps.hp);
                             if (heal > 0) { ps.hp += heal; }
@@ -3985,7 +4043,7 @@ void Engine::process_turn() {
                     // Cowardly trait: crits cause fear
                     if (world_.has<StatusEffects>(player_)) {
                         for (auto tid : build_traits_) {
-                            if (tid == TraitId::COWARDLY) {
+                            if (tid == TraitId::PARANOID) {
                                 world_.get<StatusEffects>(player_).add(StatusType::FEARED, 0, 2);
                                 log_.add("Fear grips you!", {255, 200, 200, 255});
                                 break;
@@ -4286,7 +4344,7 @@ void Engine::process_turn() {
                 // Naga gaze — applies STUNNED (Glass Jaw extends by 2)
                 if (world_.has<StatusEffects>(player_)) {
                     int dur = 2;
-                    for (auto tid : build_traits_) if (tid == TraitId::MARKED) dur += 2; // Glass Jaw
+                    for (auto tid : build_traits_) if (tid == TraitId::PARANOID) dur += 2; // Glass Jaw
                     world_.get<StatusEffects>(player_).add(StatusType::STUNNED, 0, dur);
                 }
                 log_.add("The naga's gaze locks your muscles.", {255, 255, 100, 255});
@@ -4297,7 +4355,7 @@ void Engine::process_turn() {
                     for (auto tid : build_traits_) if (get_trait_info(tid).immune_confuse) immune = true;
                     if (!immune) {
                         int dur = 4;
-                        for (auto tid : build_traits_) if (tid == TraitId::SLOW_WITTED) dur += 2;
+                        for (auto tid : build_traits_) if (tid == TraitId::SPELL_GLUTTON) dur += 2;
                         world_.get<StatusEffects>(player_).add(StatusType::CONFUSED, 0, dur);
                     }
                     else log_.add("Your mind holds firm against the wail.", {200, 200, 140, 255});
@@ -4396,7 +4454,27 @@ void Engine::adjust_favor(int amount) {
 }
 
 void Engine::check_tenets() {
+    int favor_before = 0;
+    if (world_.has<GodAlignment>(player_))
+        favor_before = world_.get<GodAlignment>(player_).favor;
+
     god_system::check_tenets(world_, player_, turn_actions_, game_turn_, log_);
+
+    // VFX on tenet violation: god-colored flash + shake
+    if (world_.has<GodAlignment>(player_)) {
+        int favor_after = world_.get<GodAlignment>(player_).favor;
+        if (favor_after < favor_before) {
+            auto& gi = get_god_info(world_.get<GodAlignment>(player_).god);
+            screen_flash(gi.color.r, gi.color.g, gi.color.b, 80.0f);
+            trigger_screen_shake(3.0f);
+            // God-colored particles burst from player
+            if (world_.has<Position>(player_)) {
+                auto& pp = world_.get<Position>(player_);
+                particles_.burst((float)pp.x, (float)pp.y, 10,
+                                 gi.color.r, gi.color.g, gi.color.b, 0.1f, 0.6f, 3);
+            }
+        }
+    }
 }
 
 void Engine::execute_prayer(int prayer_idx) {
@@ -5678,7 +5756,7 @@ void Engine::handle_inventory_action(InvAction action) {
                     }
                     // Cursed Blood trait: healing potions -50%
                     for (auto tid : build_traits_)
-                        if (tid == TraitId::CURSED_BLOOD) { heal_amt = heal_amt / 2; break; }
+                        if (tid == TraitId::BERSERKER) { heal_amt = heal_amt / 2; break; }
                     int healed = std::min(heal_amt, stats.hp_max - stats.hp);
                     stats.hp += healed;
                     if (healed > 0) meta_.total_hp_healed += healed;
@@ -7628,7 +7706,7 @@ void Engine::handle_input() {
                         }
                         // Brittle Bones: take 1-3 damage from stairs
                         for (auto tid : build_traits_) {
-                            if (tid == TraitId::BRITTLE_BONES && world_.has<Stats>(player_)) {
+                            if (tid == TraitId::IRON_SKIN && world_.has<Stats>(player_)) {
                                 int fall_dmg = rng_.range(1, 3);
                                 world_.get<Stats>(player_).hp -= fall_dmg;
                                 char fbuf[64];
@@ -8472,7 +8550,50 @@ void Engine::render() {
     // Overworld weather particles (screen-space, after entities, before HUD)
     render_weather();
 
-    // Day/night and zone atmosphere handled by per-tile lighting (compute_lighting)
+    // God favor edge vignette (champion = god glow, wrath = red pulse)
+    if (world_.has<GodAlignment>(player_)) {
+        auto& ga = world_.get<GodAlignment>(player_);
+        if (ga.god != GodId::NONE && (ga.favor >= 75 || ga.favor <= -30)) {
+            auto& gi = get_god_info(ga.god);
+            Uint32 t = SDL_GetTicks();
+            float pulse = 0.4f + 0.6f * (0.5f + 0.5f * sinf(t * 0.002f));
+            int alpha;
+            uint8_t vr, vg, vb;
+            if (ga.favor >= 75) {
+                vr = gi.color.r; vg = gi.color.g; vb = gi.color.b;
+                alpha = static_cast<int>(35 * pulse);
+            } else {
+                vr = 200; vg = 30; vb = 30;
+                alpha = static_cast<int>(50 * pulse);
+            }
+            SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+            // Top edge
+            for (int i = 0; i < 20; i++) {
+                int a = alpha * (20 - i) / 20;
+                SDL_SetRenderDrawColor(renderer_, vr, vg, vb, static_cast<Uint8>(a));
+                SDL_RenderDrawLine(renderer_, 0, HUD_HEIGHT + i, width_, HUD_HEIGHT + i);
+            }
+            // Bottom edge
+            for (int i = 0; i < 20; i++) {
+                int a = alpha * (20 - i) / 20;
+                SDL_SetRenderDrawColor(renderer_, vr, vg, vb, static_cast<Uint8>(a));
+                SDL_RenderDrawLine(renderer_, 0, height_ - LOG_HEIGHT - i, width_, height_ - LOG_HEIGHT - i);
+            }
+            // Left edge
+            for (int i = 0; i < 15; i++) {
+                int a = alpha * (15 - i) / 15;
+                SDL_SetRenderDrawColor(renderer_, vr, vg, vb, static_cast<Uint8>(a));
+                SDL_RenderDrawLine(renderer_, i, HUD_HEIGHT, i, height_ - LOG_HEIGHT);
+            }
+            // Right edge
+            for (int i = 0; i < 15; i++) {
+                int a = alpha * (15 - i) / 15;
+                SDL_SetRenderDrawColor(renderer_, vr, vg, vb, static_cast<Uint8>(a));
+                SDL_RenderDrawLine(renderer_, width_ - 1 - i, HUD_HEIGHT, width_ - 1 - i, height_ - LOG_HEIGHT);
+            }
+            SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_NONE);
+        }
+    }
 
     // Screen flash overlay (decays per frame)
     if (flash_alpha_ > 1.0f) {
@@ -8765,76 +8886,139 @@ void Engine::render_god_panel() {
     auto& ginfo = get_god_info(ga.god);
     auto tenets = get_god_tenets(ga.god);
     int line_h = TTF_FontLineSkip(font_);
+    Uint32 ticks = SDL_GetTicks();
 
     // Panel dimensions and position (right side, below minimap area)
-    int panel_w = std::min(220, width_ / 5);
+    int panel_w = std::min(240, width_ / 4);
     int panel_x = width_ - panel_w - 8;
-    int panel_y = HUD_HEIGHT + 180; // below minimap
-    int panel_h = line_h * (3 + tenets.count) + 16;
+    int panel_y = HUD_HEIGHT + 180;
+    int content_lines = 4 + tenets.count; // name, bar, passive, tenets, status
+    if (zealot_fury_turns_ > 0 || (world_.has<Stats>(player_) && world_.get<Stats>(player_).phase_turns > 0))
+        content_lines++;
+    int panel_h = line_h * content_lines + 20;
 
-    // Semi-transparent background
+    // Semi-transparent background with god-colored edge glow
     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
     SDL_Rect bg = {panel_x, panel_y, panel_w, panel_h};
-    SDL_SetRenderDrawColor(renderer_, 10, 8, 14, 180);
+    SDL_SetRenderDrawColor(renderer_, 10, 8, 14, 200);
     SDL_RenderFillRect(renderer_, &bg);
 
-    // God-colored border (left edge accent)
-    SDL_SetRenderDrawColor(renderer_, ginfo.color.r, ginfo.color.g, ginfo.color.b, 220);
+    // God-colored left accent bar (pulsing intensity based on favor)
+    float pulse = 0.7f + 0.3f * sinf(ticks * 0.003f);
+    int accent_alpha = static_cast<int>(220 * pulse);
+    SDL_SetRenderDrawColor(renderer_, ginfo.color.r, ginfo.color.g, ginfo.color.b,
+                           static_cast<Uint8>(accent_alpha));
     SDL_Rect accent = {panel_x, panel_y, 3, panel_h};
     SDL_RenderFillRect(renderer_, &accent);
+
+    // Top glow line
+    SDL_SetRenderDrawColor(renderer_, ginfo.color.r, ginfo.color.g, ginfo.color.b, 100);
+    SDL_RenderDrawLine(renderer_, panel_x, panel_y, panel_x + panel_w, panel_y);
+
     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_NONE);
 
-    int tx = panel_x + 8;
-    int ty = panel_y + 4;
+    int tx = panel_x + 10;
+    int ty = panel_y + 6;
 
-    // God name
+    // God name + title
     SDL_Color god_col = {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255};
-    ui::draw_text(renderer_, font_, ginfo.name, god_col, tx, ty);
+    char name_buf[64]; snprintf(name_buf, sizeof(name_buf), "%s", ginfo.name);
+    ui::draw_text(renderer_, font_, name_buf, god_col, tx, ty);
+    // Title in dim
+    SDL_Color title_col = {100, 95, 90, 255};
+    ui::draw_text(renderer_, font_, ginfo.title, title_col, tx + 80, ty);
     ty += line_h;
 
-    // Favor bar
-    int bar_w = panel_w - 16;
-    int bar_h = 8;
-    SDL_Rect bar_bg = {tx, ty + 2, bar_w, bar_h};
-    SDL_SetRenderDrawColor(renderer_, 30, 25, 35, 255);
+    // Favor bar (wider, more detailed)
+    int bar_w = panel_w - 20;
+    int bar_h = 10;
+    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+    SDL_Rect bar_bg = {tx, ty + 1, bar_w, bar_h};
+    SDL_SetRenderDrawColor(renderer_, 25, 20, 30, 255);
     SDL_RenderFillRect(renderer_, &bar_bg);
-    // Favor range: -100 to +100, normalize to 0-200
-    int fill_pct = (ga.favor + 100) * bar_w / 200;
-    fill_pct = std::max(0, std::min(bar_w, fill_pct));
-    SDL_Rect bar_fill = {tx, ty + 2, fill_pct, bar_h};
-    // Color: red if negative, god color if positive
-    if (ga.favor < 0)
-        SDL_SetRenderDrawColor(renderer_, 200, 60, 60, 255);
-    else
+
+    int fill = (ga.favor + 100) * bar_w / 200;
+    fill = std::max(0, std::min(bar_w, fill));
+    SDL_Rect bar_fill = {tx, ty + 1, fill, bar_h};
+
+    // Gradient: deep red -> dim -> god color
+    if (ga.favor <= -60)
+        SDL_SetRenderDrawColor(renderer_, 180, 30, 30, 255);
+    else if (ga.favor < 0)
+        SDL_SetRenderDrawColor(renderer_, 180, 80, 40, 255);
+    else if (ga.favor >= 75)
         SDL_SetRenderDrawColor(renderer_, ginfo.color.r, ginfo.color.g, ginfo.color.b, 255);
+    else
+        SDL_SetRenderDrawColor(renderer_, ginfo.color.r * 3/4, ginfo.color.g * 3/4, ginfo.color.b * 3/4, 255);
     SDL_RenderFillRect(renderer_, &bar_fill);
-    // Center marker
-    SDL_SetRenderDrawColor(renderer_, 140, 140, 140, 200);
-    int center_x = tx + bar_w / 2;
-    SDL_RenderDrawLine(renderer_, center_x, ty + 1, center_x, ty + 2 + bar_h);
-    // Favor number
+
+    // Threshold markers at 25, 50, 75
+    SDL_SetRenderDrawColor(renderer_, 80, 70, 90, 180);
+    for (int thresh : {25, 50, 75}) {
+        int mx = tx + (thresh + 100) * bar_w / 200;
+        SDL_RenderDrawLine(renderer_, mx, ty + 1, mx, ty + 1 + bar_h);
+    }
+    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_NONE);
+
+    // Favor number (right-aligned)
     char fbuf[16]; snprintf(fbuf, sizeof(fbuf), "%d", ga.favor);
-    SDL_Color dim = {140, 140, 140, 255};
-    ui::draw_text(renderer_, font_, fbuf, dim, tx + bar_w + 4, ty);
+    SDL_Color fav_col = ga.favor < 0 ? SDL_Color{200, 80, 60, 255} : SDL_Color{180, 180, 160, 255};
+    ui::draw_text(renderer_, font_, fbuf, fav_col, tx + bar_w - 20, ty);
+    ty += line_h + 2;
+
+    // Passive effect (short, god-colored)
+    const char* passive_short = "";
+    switch (ga.god) {
+        case GodId::VETHRIK:  passive_short = "Undead ignore. Bone 2x."; break;
+        case GodId::THESSARKA:passive_short = "Auto-map. Identify all."; break;
+        case GodId::MORRETH:  passive_short = "First hit 2x. No retreat."; break;
+        case GodId::YASHKHET: passive_short = "Lifesteal 15%. No rest heal."; break;
+        case GodId::KHAEL:    passive_short = "Animals allied. -4 in dungeon."; break;
+        case GodId::SOLETH:   passive_short = "+3 fire all hits. Dark burns."; break;
+        case GodId::IXUUL:    passive_short = "Status immune. Mutating."; break;
+        case GodId::ZHAVEK:   passive_short = "Invisible. Backstab 3x."; break;
+        case GodId::THALARA:  passive_short = "+20 speed. Fire 2x weak."; break;
+        case GodId::OSSREN:   passive_short = "+1/gear slot. Gear bound."; break;
+        case GodId::LETHIS:   passive_short = "Lethal save. Full rest heal."; break;
+        case GodId::GATHRUUN: passive_short = "+5 armor. +4 underground."; break;
+        case GodId::SYTHARA:  passive_short = "All hits poison. Heal halved."; break;
+        default: break;
+    }
+    SDL_Color passive_col = {ginfo.color.r * 3/4 + 60, ginfo.color.g * 3/4 + 60,
+                             ginfo.color.b * 3/4 + 60, 255};
+    ui::draw_text(renderer_, font_, passive_short, passive_col, tx, ty);
     ty += line_h;
 
-    // Tenets
-    SDL_Color tenet_col = {160, 150, 140, 255};
+    // Tenets (compact)
+    SDL_Color tenet_col = {130, 125, 115, 255};
     for (int i = 0; i < tenets.count; i++) {
-        // Truncate long descriptions
-        char tbuf[48];
-        snprintf(tbuf, sizeof(tbuf), "%.46s", tenets.tenets[i].description);
+        char tbuf[42];
+        snprintf(tbuf, sizeof(tbuf), "%.40s", tenets.tenets[i].description);
         ui::draw_text(renderer_, font_, tbuf, tenet_col, tx, ty);
         ty += line_h;
     }
 
-    // Status indicator
-    if (ga.favor >= 75) {
-        ui::draw_text(renderer_, font_, "CHAMPION", {255, 220, 80, 255}, tx, ty);
-    } else if (ga.favor <= -60) {
-        ui::draw_text(renderer_, font_, "WRATH", {255, 60, 60, 255}, tx, ty);
-    } else if (ga.favor <= -30) {
-        ui::draw_text(renderer_, font_, "DISPLEASED", {220, 140, 80, 255}, tx, ty);
+    // Active buffs/status
+    if (zealot_fury_turns_ > 0) {
+        char zb[32]; snprintf(zb, sizeof(zb), "ZEALOT FURY %d", zealot_fury_turns_);
+        ui::draw_text(renderer_, font_, zb, {255, 220, 80, 255}, tx, ty);
+        ty += line_h;
+    }
+    if (world_.has<Stats>(player_) && world_.get<Stats>(player_).phase_turns > 0) {
+        char pb[32]; snprintf(pb, sizeof(pb), "PHASING %d", world_.get<Stats>(player_).phase_turns);
+        ui::draw_text(renderer_, font_, pb, {160, 100, 220, 255}, tx, ty);
+        ty += line_h;
+    }
+
+    // Rank indicator (bottom, prominent)
+    const char* rank_text = nullptr;
+    SDL_Color rank_col = {200, 200, 200, 255};
+    if (ga.favor >= 75) { rank_text = "CHAMPION"; rank_col = {255, 220, 80, 255}; }
+    else if (ga.favor >= 50) { rank_text = "DEVOTED"; rank_col = {200, 200, 140, 255}; }
+    else if (ga.favor <= -60) { rank_text = "WRATH"; rank_col = {255, 40, 40, 255}; }
+    else if (ga.favor <= -30) { rank_text = "DISPLEASED"; rank_col = {220, 120, 60, 255}; }
+    if (rank_text) {
+        ui::draw_text(renderer_, font_, rank_text, rank_col, tx, ty);
     }
 }
 

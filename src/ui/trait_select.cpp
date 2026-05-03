@@ -34,7 +34,7 @@ int TraitSelectScreen::negative_selected_count() const {
 }
 
 bool TraitSelectScreen::can_confirm() const {
-    return positive_selected_count() == 3 && negative_selected_count() == 2;
+    return !selected_traits_.empty(); // can confirm with any selection (0-3 traits)
 }
 
 bool TraitSelectScreen::handle_input(SDL_Event& event) {
@@ -50,12 +50,7 @@ bool TraitSelectScreen::handle_input(SDL_Event& event) {
                 std::remove(selected_traits_.begin(), selected_traits_.end(), id),
                 selected_traits_.end());
         } else {
-            if (info.is_positive && positive_selected_count() < 3) {
-                selected_traits_.push_back(id);
-                if (positive_selected_count() >= 3 && cursor_ < POSITIVE_TRAIT_COUNT) {
-                    cursor_ = POSITIVE_TRAIT_COUNT;
-                }
-            } else if (!info.is_positive && negative_selected_count() < 2) {
+            if (static_cast<int>(selected_traits_.size()) < 3) {
                 selected_traits_.push_back(id);
             }
         }
@@ -123,8 +118,8 @@ void TraitSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     ui::draw_text_in(renderer, font, "Choose your traits.", title_col, title_row, ui::Align::CENTER);
 
     char count_buf[64];
-    snprintf(count_buf, sizeof(count_buf), "Positive: %d/3   Negative: %d/2",
-             positive_selected_count(), negative_selected_count());
+    snprintf(count_buf, sizeof(count_buf), "Selected: %d/3",
+             static_cast<int>(selected_traits_.size()));
     auto counter_row = screen.row(line_h + screen.gap);
     ui::draw_text_in(renderer, font, count_buf, dim_col, counter_row, ui::Align::CENTER);
 
@@ -142,38 +137,12 @@ void TraitSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     int row_h = std::max(line_h + 6, avail_for_traits / TRAIT_COUNT);
     row_h_ = row_h;
 
-    // Section header: Positive
+    // Section header
     auto pos_hdr = list_layout.row(line_h + 4);
-    ui::draw_text(renderer, font, "-- Positive Traits --", section_col, pos_hdr.x, pos_hdr.y);
+    ui::draw_text(renderer, font, "-- Traits (choose up to 3) --", section_col, pos_hdr.x, pos_hdr.y);
     list_y_ = list_layout.cursor.y;
 
-    for (int i = 0; i < POSITIVE_TRAIT_COUNT; i++) {
-        TraitId id = static_cast<TraitId>(i);
-        const TraitInfo& info = get_trait_info(id);
-        bool is_cursor = (cursor_ == i);
-        bool is_picked = is_selected(id);
-
-        auto row = list_layout.row(row_h);
-
-        if (is_cursor) {
-            SDL_Rect hl = {row.x - 4, row.y - 1, row.w + 8, row.h};
-            SDL_SetRenderDrawColor(renderer, 30, 25, 40, 255);
-            SDL_RenderFillRect(renderer, &hl);
-        }
-
-        char buf[128];
-        snprintf(buf, sizeof(buf), "%s %s", is_picked ? "[x]" : "[ ]", info.name);
-        SDL_Color text_col = is_picked ? chosen_col : is_cursor ? sel_col : normal_col;
-        ui::draw_text(renderer, font, buf, text_col, row.x, row.y);
-    }
-
-    list_layout.skip(6);
-
-    // Section header: Negative
-    auto neg_hdr = list_layout.row(line_h + 4);
-    ui::draw_text(renderer, font, "-- Negative Traits --", section_col, neg_hdr.x, neg_hdr.y);
-
-    for (int i = POSITIVE_TRAIT_COUNT; i < TRAIT_COUNT; i++) {
+    for (int i = 0; i < TRAIT_COUNT; i++) {
         TraitId id = static_cast<TraitId>(i);
         const TraitInfo& info = get_trait_info(id);
         bool is_cursor = (cursor_ == i);
