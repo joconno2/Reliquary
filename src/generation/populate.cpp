@@ -46,7 +46,7 @@ static const MonsterDef MONSTER_TABLE[] = {
     {"manticore",       SHEET_MONSTERS,  3, 6, 35,  16, 14, 14,  7, 2, 110, 10,  70},
     {"minotaur",        SHEET_MONSTERS,  7, 7, 45,  20, 10, 18,  9, 3,  85, 10,  90},
     {"naga",            SHEET_MONSTERS,  4, 7, 30,  14, 16, 12,  6, 1, 120, 15,  60},
-    {"dragon",          SHEET_MONSTERS,  2, 8,120,  22, 12, 22, 18, 5,  80,  0, 200},
+    {"dragon",          SHEET_MONSTERS,  2, 8, 90,  22, 12, 22, 18, 5,  80,  0, 200},
     // New monsters from unused sprites
     {"myconid",         SHEET_MONSTERS,  0,10, 20,   8,  6, 14,  4, 2,  60, 10,  30}, // mushroom creature (warrens)
     {"ogre",            SHEET_MONSTERS,  0, 1, 40,  20,  6, 16,  8, 2,  85,  5,  55}, // big brute
@@ -73,6 +73,8 @@ void spawn_monsters(World& world, const TileMap& map,
     // Depth 5+: full table including dragons
     int max_idx = std::min(MONSTER_COUNT - 1, 6 + dungeon_level * 2);
 
+    int dragons_this_floor = 0;
+
     for (size_t r = 1; r < rooms.size(); r++) {
         auto& room = rooms[r];
 
@@ -85,6 +87,15 @@ void spawn_monsters(World& world, const TileMap& map,
 
             // Single roll — depth gating handles difficulty curve
             int idx = rng.range(0, max_idx);
+
+            // Dragon: max 1 per floor, only depth 5+
+            if (std::string(MONSTER_TABLE[idx].name) == "dragon") {
+                if (dragons_this_floor >= 1 || dungeon_level < 5) {
+                    idx = rng.range(0, std::min(max_idx, 20)); // reroll without dragon
+                    continue;
+                }
+                dragons_this_floor++;
+            }
 
             auto& def = MONSTER_TABLE[idx];
 

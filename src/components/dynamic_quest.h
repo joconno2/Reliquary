@@ -21,11 +21,15 @@ struct DynamicQuest {
     int target_town_x = -1;       // delivery destination (-1 = none)
     int target_town_y = -1;
     bool reached_target = false;   // tracks arrival at target town
+    std::string kill_type;        // creature name to kill (empty = no kill requirement)
+    int kills_needed = 0;         // how many to kill
+    int kills_done = 0;           // how many killed so far
 
     bool conditions_met(int current_turn) const {
         if (min_turns > 0 && (current_turn - accepted_turn) < min_turns) return false;
         if (requires_dungeon && !visited_dungeon) return false;
         if (target_town_x >= 0 && !reached_target) return false;
+        if (kills_needed > 0 && kills_done < kills_needed) return false;
         return true;
     }
 };

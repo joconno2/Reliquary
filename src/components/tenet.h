@@ -72,86 +72,80 @@ struct GodTenets {
 
 // VETHRIK — Death, bone, endings
 static const TenetDef TENETS_VETHRIK[] = {
-    {TenetCheck::NEVER_USE_DARK_ARTS, "Never raise the dead or practice Dark Arts.", -5},
-    {TenetCheck::MUST_CARRY_BONE,     "Always carry a bone weapon or relic.", -3},
+    {TenetCheck::NEVER_USE_DARK_ARTS, "Never raise the dead or practice Dark Arts.", -20},
+    {TenetCheck::MUST_CARRY_BONE,     "Always carry a bone weapon or relic.", -10},
 };
 
 // THESSARKA — Knowledge, secrets, madness
 static const TenetDef TENETS_THESSARKA[] = {
-    {TenetCheck::NEVER_DESTROY_BOOK,  "Never destroy a book or scroll.", -5},
-    {TenetCheck::MUST_DESCEND,        "Seek the deepest levels.", -2},
+    {TenetCheck::NEVER_DESTROY_BOOK,  "Never destroy a book or scroll.", -15},
+    {TenetCheck::MUST_DESCEND,        "Seek the deepest levels.", -10},
 };
 
 // MORRETH — War, iron, honor
 static const TenetDef TENETS_MORRETH[] = {
-    {TenetCheck::NEVER_USE_POISON,    "Never use poison.", -4},
-    {TenetCheck::NEVER_BACKSTAB,      "Never strike from stealth.", -4},
-    {TenetCheck::NEVER_FLEE_COMBAT,   "Never flee a fight you started.", -3},
-    {TenetCheck::NEVER_USE_DARK_ARTS, "Never use offensive magic.", -3},
+    {TenetCheck::NEVER_USE_POISON,    "Never use poison.", -15},
+    {TenetCheck::NEVER_BACKSTAB,      "Never strike from stealth.", -15},
+    {TenetCheck::NEVER_FLEE_COMBAT,   "Never flee a fight you started.", -20},
+    {TenetCheck::NEVER_USE_DARK_ARTS, "Never use offensive magic.", -20},
 };
 
 // YASHKHET — Blood, sacrifice, pain
 static const TenetDef TENETS_YASHKHET[] = {
-    {TenetCheck::NEVER_HEAL_ABOVE_75, "Never heal above 75% HP voluntarily.", -4},
-    {TenetCheck::NEVER_FLEE_COMBAT,   "Never flee.", -3},
+    {TenetCheck::NEVER_HEAL_ABOVE_75, "Never heal above 75% HP voluntarily.", -15},
+    {TenetCheck::NEVER_FLEE_COMBAT,   "Never flee.", -20},
 };
 
 // KHAEL — Nature, beasts, rot
 static const TenetDef TENETS_KHAEL[] = {
-    {TenetCheck::NEVER_KILL_ANIMAL,   "Never kill an unprovoked animal.", -5},
-    {TenetCheck::NEVER_DIG_WALLS,     "Never mine or dig walls.", -3},
-    {TenetCheck::NEVER_USE_FIRE_MAGIC,"Never use fire magic.", -3},
+    {TenetCheck::NEVER_KILL_ANIMAL,   "Never kill an unprovoked animal.", -20},
+    {TenetCheck::NEVER_DIG_WALLS,     "Never mine or dig walls.", -10},
+    {TenetCheck::NEVER_USE_FIRE_MAGIC,"Never use fire magic.", -15},
 };
 
 // SOLETH — Fire, purification, zealotry
 static const TenetDef TENETS_SOLETH[] = {
-    {TenetCheck::NEVER_USE_DARK_ARTS, "Never use dark magic.", -5},
-    {TenetCheck::MUST_KILL_UNDEAD,    "Never spare a demon or undead.", -3},
+    {TenetCheck::NEVER_USE_DARK_ARTS, "Never use dark magic.", -20},
+    {TenetCheck::MUST_KILL_UNDEAD,    "Never spare a demon or undead.", -10},
 };
 
 // IXUUL — Chaos, mutation, the void
 static const TenetDef TENETS_IXUUL[] = {
-    // Ixuul's tenets are strange — hard to track mechanically
-    // "Never refuse a mutation" and "all 4 armor slots must be different material"
-    // We'll implement what's trackable
-    {TenetCheck::NEVER_USE_HEALING_MAGIC, "Reject order. Never use Healing magic.", -3},
+    {TenetCheck::NEVER_USE_HEALING_MAGIC, "Reject order. Never use Healing magic.", -15},
 };
 
 // ZHAVEK — Shadow, silence, secrets
 static const TenetDef TENETS_ZHAVEK[] = {
-    {TenetCheck::NEVER_WEAR_HEAVY_ARMOR, "Never wear heavy armor.", -4},
-    {TenetCheck::NEVER_CARRY_LIGHT,      "Never carry a torch or light source.", -3},
+    {TenetCheck::NEVER_WEAR_HEAVY_ARMOR, "Never wear heavy armor.", -15},
+    {TenetCheck::NEVER_CARRY_LIGHT,      "Never carry a torch or light source.", -15},
 };
 
 // THALARA — Sea, storms, drowning
 static const TenetDef TENETS_THALARA[] = {
-    {TenetCheck::NEVER_USE_FIRE_MAGIC,   "Never use fire magic.", -4},
-    {TenetCheck::NEVER_REST_ON_SURFACE,  "Never rest on dry land.", -2},
+    {TenetCheck::NEVER_USE_FIRE_MAGIC,   "Never use fire magic.", -15},
+    {TenetCheck::NEVER_REST_ON_SURFACE,  "Never rest on dry land.", -10},
 };
 
 // OSSREN — Craft, forge, permanence
 static const TenetDef TENETS_OSSREN[] = {
-    // "Never discard a weapon or armor" — hard to track
-    // "Never use consumables in combat" — would need combat-state tracking
-    // Simplified:
-    {TenetCheck::NEVER_DESTROY_BOOK,     "Never destroy a crafted thing.", -3},
+    {TenetCheck::NEVER_DESTROY_BOOK,     "Never destroy a crafted thing.", -15},
 };
 
 // LETHIS — Sleep, dreams, memory
 static const TenetDef TENETS_LETHIS[] = {
-    {TenetCheck::NEVER_KILL_SLEEPING,    "Never kill a sleeping creature.", -5},
-    {TenetCheck::MUST_REST_EACH_FLOOR,   "Rest at least once per floor.", -2},
+    {TenetCheck::NEVER_KILL_SLEEPING,    "Never kill a sleeping creature.", -20},
+    {TenetCheck::MUST_REST_EACH_FLOOR,   "Rest at least once per floor.", -10},
 };
 
 // GATHRUUN — Stone, earth, depth
 static const TenetDef TENETS_GATHRUUN[] = {
-    {TenetCheck::MUST_DESCEND,           "Always descend when stairs are available.", -3},
-    {TenetCheck::NEVER_REST_ON_SURFACE,  "Never rest on the surface.", -2},
+    {TenetCheck::MUST_DESCEND,           "Always descend when stairs are available.", -10},
+    {TenetCheck::NEVER_REST_ON_SURFACE,  "Never rest on the surface.", -10},
 };
 
 // SYTHARA — Plague, decay, entropy
 static const TenetDef TENETS_SYTHARA[] = {
-    {TenetCheck::NEVER_USE_HEALING_MAGIC,"Never use Healing magic.", -4},
+    {TenetCheck::NEVER_USE_HEALING_MAGIC,"Never use Healing magic.", -15},
 };
 
 // ---- Lookup function ----

@@ -20,4 +20,7 @@ CastResult cast(World& world, Entity caster, SpellId spell,
 // Get the nearest hostile entity in range (for auto-targeting)
 Entity nearest_enemy(World& world, Entity caster, const TileMap& map, int range);
 
+// Get all visible hostile entities in range, sorted by distance
+std::vector<Entity> all_visible_enemies(World& world, Entity caster, const TileMap& map, int range);
+
 } // namespace magic

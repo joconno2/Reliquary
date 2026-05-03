@@ -14,6 +14,7 @@ enum class Action {
     PICKUP,
     STAIRS_DOWN, STAIRS_UP, STAIRS_ENTER,
     FIRE_RANGED,
+    CYCLE_TARGET,
     REST,
     PRAY,
     EXAMINE,

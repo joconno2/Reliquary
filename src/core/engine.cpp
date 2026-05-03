@@ -14,6 +14,7 @@
 #include "components/item.h"
 #include "components/inventory.h"
 #include "components/god.h"
+#include "components/tenet.h"
 #include "components/class_def.h"
 #include "components/spellbook.h"
 #include "components/npc.h"
@@ -658,6 +659,9 @@ void Engine::generate_level() {
 
     dungeon_level_++;
     if (dungeon_level_ > run_deepest_) run_deepest_ = dungeon_level_;
+    rooms_explored_.clear();
+    shrine_xp_this_floor_ = false;
+    revenant_saved_this_floor_ = false;
 
     // Mark dynamic quests that require dungeon visits
     if (dungeon_level_ > 0) {
@@ -2196,6 +2200,7 @@ void Engine::grant_skill_xp(SkillId skill, int amount) {
 
 void Engine::try_move_player(int dx, int dy) {
     if (state_ != GameState::PLAYING) return;
+    dwarf_moved_last_turn_ = true; // will be set false on wait
 
     // Status effect checks — frozen/stunned skip turn, confused randomizes direction
     if (world_.has<StatusEffects>(player_)) {
@@ -2420,6 +2425,28 @@ void Engine::try_move_player(int dx, int dy) {
               tutorial_popup_.show("Combat", tb); }
         }
 
+        // War Cleric: Zealot's Fury bonus damage
+        if (zealot_fury_turns_ > 0 && atk_result.hit && !atk_result.killed && world_.has<Stats>(target)) {
+            world_.get<Stats>(target).hp -= 5;
+            atk_result.damage += 5;
+            if (world_.get<Stats>(target).hp <= 0) {
+                combat::kill(world_, target, log_);
+                atk_result.killed = true;
+            }
+        }
+
+        // Dwarf: Stone Stance (+2 damage, +3 armor if didn't move last turn)
+        if (!dwarf_moved_last_turn_ && atk_result.hit && !atk_result.killed &&
+            world_.has<Player>(player_) && world_.get<Player>(player_).class_id == ClassId::DWARF &&
+            world_.has<Stats>(target)) {
+            world_.get<Stats>(target).hp -= 2;
+            atk_result.damage += 2;
+            if (world_.get<Stats>(target).hp <= 0) {
+                combat::kill(world_, target, log_);
+                atk_result.killed = true;
+            }
+        }
+
         // Backstab: bonus damage from sneak attack
         if (sneaking_ && atk_result.hit && !atk_result.killed && world_.has<Stats>(target)) {
             int stealth_lv = 0;
@@ -2525,10 +2552,19 @@ void Engine::try_move_player(int dx, int dy) {
                     break;
                 }
                 case GodId::MORRETH: {
-                    // Blunt/axe: +2 base, +3 at favor 25, +4 at favor 50
+                    // First hit on a target = 2x damage (target at full HP = first strike)
+                    if (tgt_stats.hp == tgt_stats.hp_max - atk_result.damage) {
+                        // This was the first hit (target was at full HP before this attack)
+                        int first_bonus = atk_result.damage; // double it
+                        tgt_stats.hp -= first_bonus;
+                        bonus += first_bonus;
+                        log_.add("IRON STRIKE!", {220, 180, 60, 255});
+                        trigger_screen_shake(4.0f);
+                        particles_.burst((float)nx, (float)ny, 10, 200, 160, 80, 0.12f, 0.6f, 3);
+                    }
+                    // Blunt/axe bonus
                     int wpn_bonus = (fav >= 50) ? 4 : (fav >= 25) ? 3 : 2;
-                    if (weapon_tags & (TAG_BLUNT | TAG_AXE)) bonus = wpn_bonus;
-                    // Favor 75: +1 natural armor (applied once, tracked elsewhere)
+                    if (weapon_tags & (TAG_BLUNT | TAG_AXE)) bonus += wpn_bonus;
                     break;
                 }
                 case GodId::YASHKHET: {
@@ -2614,6 +2650,52 @@ void Engine::try_move_player(int dx, int dy) {
                     atk_result.killed = true;
                 }
             }
+
+            // === DRAMATIC GOD PASSIVES ===
+            if (atk_result.hit && !atk_result.killed && world_.has<Stats>(player_)) {
+                auto& pst = world_.get<Stats>(player_);
+
+                // Yashkhet: lifesteal 15% of damage dealt
+                if (ga.god == GodId::YASHKHET && atk_result.damage > 0) {
+                    int steal = std::max(1, atk_result.damage * 15 / 100);
+                    pst.hp = std::min(pst.hp_max, pst.hp + steal);
+                    particles_.rise((float)world_.get<Position>(player_).x,
+                                    (float)world_.get<Position>(player_).y, 3, 200, 40, 40, 0.5f, 2);
+                }
+
+                // Soleth: +3 fire damage on all attacks + burn
+                if (ga.god == GodId::SOLETH) {
+                    tgt_stats.hp -= 3;
+                    atk_result.damage += 3;
+                    if (world_.has<StatusEffects>(target))
+                        world_.get<StatusEffects>(target).add(StatusType::BURN, 1, 2);
+                    if (tgt_stats.hp <= 0) { combat::kill(world_, target, log_); atk_result.killed = true; }
+                }
+
+                // Sythara: ALL attacks poison (100%)
+                if (ga.god == GodId::SYTHARA && world_.has<StatusEffects>(target)) {
+                    world_.get<StatusEffects>(target).add(StatusType::POISON, 2, 3);
+                }
+
+                // Gathruun: earthquake on crit
+                if (ga.god == GodId::GATHRUUN && atk_result.critical && dungeon_level_ > 0) {
+                    auto& ai_pool = world_.pool<AI>();
+                    for (size_t ai = 0; ai < ai_pool.size(); ai++) {
+                        Entity ae = ai_pool.entity_at(ai);
+                        if (ae == target || ai_pool.at_index(ai).friendly) continue;
+                        if (!world_.has<Position>(ae) || !world_.has<Stats>(ae)) continue;
+                        auto& ap = world_.get<Position>(ae);
+                        if (std::abs(ap.x - nx) <= 2 && std::abs(ap.y - ny) <= 2) {
+                            world_.get<Stats>(ae).hp -= 3;
+                            if (world_.has<StatusEffects>(ae))
+                                world_.get<StatusEffects>(ae).add(StatusType::STUNNED, 0, 1);
+                        }
+                    }
+                    log_.add("The earth shakes!", {180, 140, 80, 255});
+                    trigger_screen_shake(6.0f);
+                    particles_.burst((float)nx, (float)ny, 15, 160, 120, 60, 0.15f, 0.8f, 4);
+                }
+            }
         }
 
         if (atk_result.hit && atk_result.critical) {
@@ -2640,6 +2722,37 @@ void Engine::try_move_player(int dx, int dy) {
                 }
                 elem_vis++;
             }
+            // Class-specific hit VFX
+            if (world_.has<Player>(player_)) {
+                auto pcid = world_.get<Player>(player_).class_id;
+                float fx = (float)nx, fy = (float)ny;
+                if (pcid == ClassId::BARBARIAN && world_.has<Stats>(player_) &&
+                    world_.get<Stats>(player_).hp * 2 < world_.get<Stats>(player_).hp_max) {
+                    // Rage: red burst + screen shake
+                    particles_.burst(fx, fy, 8, 255, 40, 40, 0.12f, 0.5f, 3);
+                    trigger_screen_shake(3.0f);
+                } else if (pcid == ClassId::TEMPLAR && world_.has<Stats>(target) &&
+                           is_undead(world_.get<Stats>(target).name.c_str())) {
+                    // Holy Smite: golden rising flames
+                    particles_.spell_holy(fx, fy);
+                    particles_.rise(fx, fy, 6, 255, 240, 140, 0.8f, 3);
+                } else if (pcid == ClassId::WYRMKIN) {
+                    static int wcount = 0; wcount++;
+                    if (wcount >= 8) { wcount = 0;
+                        // Dragon Breath: big fire burst
+                        particles_.spell_fire(fx, fy);
+                        particles_.burst(fx, fy, 15, 255, 120, 20, 0.14f, 0.9f, 4);
+                        trigger_screen_shake(5.0f);
+                    }
+                } else if (pcid == ClassId::SERPENTINE) {
+                    // Venom: green drips
+                    particles_.fall(fx, fy, 4, 80, 200, 40, 0.6f, 2);
+                } else if (pcid == ClassId::DRUID) {
+                    // Thorns: green sparks outward from player
+                    auto& pp = world_.get<Position>(player_);
+                    particles_.burst((float)pp.x, (float)pp.y, 6, 60, 180, 60, 0.08f, 0.5f, 2);
+                }
+            }
             char dbuf[16]; snprintf(dbuf, sizeof(dbuf), "%d", atk_result.damage);
             floating_text_.spawn((float)nx, (float)ny, dbuf, {255, 255, 255, 255});
         }
@@ -2662,6 +2775,69 @@ void Engine::try_move_player(int dx, int dy) {
                 turn_actions_.killed_sleeping = true;
             if (world_.has<Stats>(player_) && world_.get<Stats>(player_).invisible_turns > 0)
                 turn_actions_.used_stealth_attack = true;
+        }
+
+        // === CLASS ON-KILL ABILITIES ===
+        if (atk_result.killed && world_.has<Player>(player_) && world_.has<Stats>(player_)) {
+            auto cid = world_.get<Player>(player_).class_id;
+            auto& pstats = world_.get<Stats>(player_);
+
+            // War Cleric: Zealot's Fury (next 5 turns get +5 holy damage)
+            if (cid == ClassId::WAR_CLERIC) {
+                zealot_fury_turns_ = 5;
+                log_.add("Zealot's fury!", {255, 240, 140, 255});
+                auto& pp = world_.get<Position>(player_);
+                particles_.burst((float)pp.x, (float)pp.y, 12, 255, 240, 100, 0.12f, 0.8f, 3);
+                particles_.rise((float)pp.x, (float)pp.y, 6, 255, 200, 60, 1.0f, 2);
+            }
+
+            // Warlock: Soul Siphon (restore MP on kill)
+            if (cid == ClassId::WARLOCK) {
+                int mp_gain = 5 + pstats.eff_attr(Attr::INT) / 4;
+                pstats.mp = std::min(pstats.mp_max, pstats.mp + mp_gain);
+                char sb[64]; snprintf(sb, sizeof(sb), "Soul energy flows into you. (+%d MP)", mp_gain);
+                log_.add(sb, {160, 100, 200, 255});
+                // Purple soul trail from corpse to player
+                auto& pp = world_.get<Position>(player_);
+                if (world_.has<Position>(target)) {
+                    auto& tp = world_.get<Position>(target);
+                    particles_.projectile((float)tp.x, (float)tp.y, (float)pp.x, (float)pp.y,
+                                          8, 160, 80, 220, 0.25f, 3);
+                }
+                particles_.orbit((float)pp.x, (float)pp.y, 5, 140, 60, 200, 0.5f, 0.8f, 2);
+            }
+
+            // Revenant: Undying (heal on kill)
+            if (cid == ClassId::REVENANT) {
+                int heal = 2 + pstats.eff_attr(Attr::CON) / 4;
+                pstats.hp = std::min(pstats.hp_max, pstats.hp + heal);
+                char hb[48]; snprintf(hb, sizeof(hb), "Life returns. (+%d HP)", heal);
+                log_.add(hb, {140, 200, 140, 255});
+                auto& pp = world_.get<Position>(player_);
+                particles_.rise((float)pp.x, (float)pp.y, 8, 100, 200, 100, 0.7f, 2);
+            }
+
+            // Necromancer: Corpse Explode (25% chance, 4 AoE to adjacent)
+            if (cid == ClassId::NECROMANCER && rng_.chance(25) && world_.has<Position>(target)) {
+                auto& tpos = world_.get<Position>(target);
+                auto& ai_pool = world_.pool<AI>();
+                bool hit_any = false;
+                for (size_t ai = 0; ai < ai_pool.size(); ai++) {
+                    Entity ae = ai_pool.entity_at(ai);
+                    if (ae == target || ai_pool.at_index(ai).friendly) continue;
+                    if (!world_.has<Position>(ae) || !world_.has<Stats>(ae)) continue;
+                    auto& ap = world_.get<Position>(ae);
+                    if (std::abs(ap.x - tpos.x) <= 1 && std::abs(ap.y - tpos.y) <= 1) {
+                        world_.get<Stats>(ae).hp -= 4;
+                        hit_any = true;
+                    }
+                }
+                if (hit_any) {
+                    log_.add("The corpse explodes!", {200, 100, 80, 255});
+                    particles_.burst((float)tpos.x, (float)tpos.y, 20, 180, 60, 40, 0.15f, 0.7f, 3);
+                    particles_.burst((float)tpos.x, (float)tpos.y, 10, 220, 120, 60, 0.1f, 0.5f, 2);
+                }
+            }
         }
 
         // Bestiary stats (melee has access to victim stats before combat::kill removes them)
@@ -2844,7 +3020,11 @@ void Engine::try_move_player(int dx, int dy) {
         return;
     }
 
-    if (!map_.is_walkable(nx, ny)) return;
+    // Phase walk (Lethis mastery): walk through walls
+    bool phasing = world_.has<Stats>(player_) && world_.get<Stats>(player_).phase_turns > 0;
+    if (!map_.is_walkable(nx, ny) && !phasing) return;
+    // Can't phase into map edges
+    if (!map_.in_bounds(nx, ny)) return;
 
     // Mirror sprite when moving left (sprites face right by default)
     if (world_.has<Renderable>(player_)) {
@@ -3173,6 +3353,11 @@ void Engine::try_move_player(int dx, int dy) {
             auto& ps = world_.get<Stats>(player_);
             int heal = std::min(5, ps.hp_max - ps.hp);
             ps.hp += heal;
+            // Shrine XP (once per floor)
+            if (!shrine_xp_this_floor_) {
+                shrine_xp_this_floor_ = true;
+                ps.grant_xp(8);
+            }
             char sbuf[128];
             snprintf(sbuf, sizeof(sbuf), "A shrine of %s. You feel your god's presence. (+5 favor, +%d HP)", sginfo.name, heal);
             if (!tips_shown_.first_shrine) {
@@ -3283,6 +3468,36 @@ void Engine::process_turn() {
     player_acted_ = false;
     game_turn_++;
 
+    // Class ability turn ticks
+    if (zealot_fury_turns_ > 0) zealot_fury_turns_--;
+    // Phase walk decrement
+    if (world_.has<Stats>(player_) && world_.get<Stats>(player_).phase_turns > 0) {
+        world_.get<Stats>(player_).phase_turns--;
+        if (world_.get<Stats>(player_).phase_turns == 0)
+            log_.add("You solidify. Walls are solid again.", {160, 120, 200, 255});
+    }
+    // Zhavek: permanent invisibility (re-applies each turn after being broken by attack)
+    if (world_.has<GodAlignment>(player_) && world_.has<Stats>(player_)) {
+        auto& ga = world_.get<GodAlignment>(player_);
+        if (ga.god == GodId::ZHAVEK && world_.get<Stats>(player_).invisible_turns == 0)
+            world_.get<Stats>(player_).invisible_turns = 2; // refreshes each turn
+    }
+    // Ixuul: random stat mutation every 50/80 turns
+    if (world_.has<GodAlignment>(player_) && world_.has<Stats>(player_)) {
+        auto& ga = world_.get<GodAlignment>(player_);
+        auto& ps = world_.get<Stats>(player_);
+        if (ga.god == GodId::IXUUL) {
+            if (game_turn_ % 50 == 0) {
+                auto attr = static_cast<Attr>(rng_.range(0, 5));
+                ps.set_attr(attr, ps.attr(attr) + 1);
+            }
+            if (game_turn_ % 80 == 0) {
+                auto attr = static_cast<Attr>(rng_.range(0, 5));
+                ps.set_attr(attr, std::max(3, ps.attr(attr) - 1));
+            }
+        }
+    }
+
     // Drain pending quest kills (from combat::kill, covers melee/ranged/spell/prayer)
     for (int qid_raw : world_.pending_quest_kills) {
         auto qid = static_cast<QuestId>(qid_raw);
@@ -3321,8 +3536,32 @@ void Engine::process_turn() {
         if (kname == "dragon") meta_.killed_dragon = true;
         if (is_undead(kname.c_str())) meta_.total_undead_kills++;
         if (kname == "giant rat") journal_.add_progress(QuestId::SQ_RAT_CELLAR);
+        // Dynamic quest kill tracking
+        auto& dq_pool = world_.pool<DynamicQuest>();
+        for (size_t di = 0; di < dq_pool.size(); di++) {
+            auto& dq = dq_pool.at_index(di);
+            if (dq.accepted && !dq.completed && dq.kills_needed > 0 && dq.kill_type == kname) {
+                dq.kills_done++;
+            }
+        }
     }
     world_.pending_kill_names.clear();
+
+    // Exploration XP: grant XP for entering new rooms in dungeons
+    if (dungeon_level_ > 0 && world_.has<Position>(player_) && world_.has<Stats>(player_)) {
+        auto& pp = world_.get<Position>(player_);
+        for (size_t ri = 0; ri < rooms_.size(); ri++) {
+            auto& r = rooms_[ri];
+            if (pp.x >= r.x && pp.x < r.x + r.w && pp.y >= r.y && pp.y < r.y + r.h) {
+                if (rooms_explored_.find(static_cast<int>(ri)) == rooms_explored_.end()) {
+                    rooms_explored_.insert(static_cast<int>(ri));
+                    int xp = 3 + dungeon_level_;
+                    world_.get<Stats>(player_).grant_xp(xp);
+                }
+                break;
+            }
+        }
+    }
 
     // Recalculate equipment-derived stats
     if (world_.has<Stats>(player_) && world_.has<Inventory>(player_)) {
@@ -4181,12 +4420,24 @@ void Engine::fire_ranged() {
         return;
     }
 
-    // Find nearest visible enemy in range
-    Entity target = magic::nearest_enemy(world_, player_, map_, weapon.range);
-    if (target == NULL_ENTITY) {
+    // Use manually selected target if valid, else fall back to nearest
+    Entity target = 0;
+    if (ranged_target_ != 0 && world_.has<Stats>(ranged_target_) &&
+        world_.has<Position>(ranged_target_) && world_.get<Stats>(ranged_target_).hp > 0) {
+        auto& tp = world_.get<Position>(ranged_target_);
+        if (map_.in_bounds(tp.x, tp.y) && map_.at(tp.x, tp.y).visible) {
+            auto& pp = world_.get<Position>(player_);
+            int d = std::max(std::abs(tp.x - pp.x), std::abs(tp.y - pp.y));
+            if (d <= weapon.range) target = ranged_target_;
+        }
+    }
+    if (target == 0) target = magic::nearest_enemy(world_, player_, map_, weapon.range);
+    if (target == 0) {
         log_.add("No target in range.", {150, 140, 130, 255});
         return;
     }
+    ranged_target_ = 0; // clear after firing
+    target_cycle_idx_ = -1;
 
     int level_before = world_.has<Stats>(player_) ? world_.get<Stats>(player_).level : 0;
     // Capture victim stats before kill
@@ -4377,8 +4628,12 @@ void Engine::describe_tile(int x, int y) {
                              st.name.c_str(), st.hp, st.hp_max, st.melee_damage(), st.protection(), note);
                     log_.add(buf, {220, 140, 140, 255});
                 }
-                meta_.examined_creature_names.insert(st.name);
+                auto ins = meta_.examined_creature_names.insert(st.name);
                 meta_.total_creatures_examined = static_cast<int>(meta_.examined_creature_names.size());
+                // First-examine XP bonus
+                if (ins.second && world_.has<Stats>(player_)) {
+                    world_.get<Stats>(player_).grant_xp(5);
+                }
             } else {
                 log_.add("Something was here.", {160, 140, 140, 255});
             }
@@ -4567,7 +4822,7 @@ bool Engine::is_class_unlocked(ClassId id) const {
         case ClassId::WAR_CLERIC:   return meta_.total_hp_healed >= 300;
         case ClassId::WARLOCK:      return meta_.died_deep;
         case ClassId::DWARF:        return meta_.max_dungeon_depth >= 6;
-        case ClassId::ELF:          return meta_.total_creatures_examined >= 50;
+        case ClassId::ELF:          return meta_.total_creatures_examined >= 15;
         case ClassId::BANDIT:       return meta_.max_gold_single_run >= 500;
         case ClassId::NECROMANCER:  return meta_.total_dark_arts_casts >= 30;
         case ClassId::SCHEMA_MONK:  return meta_.class_max_level[static_cast<int>(ClassId::MONK)] >= 12;
@@ -5176,10 +5431,17 @@ void Engine::try_rest() {
     bool is_vampire = world_.has<Diseases>(player_) &&
                       world_.get<Diseases>(player_).has(DiseaseId::VAMPIRISM);
 
+    // Yashkhet: CANNOT heal from rest (only lifesteal)
+    bool yashkhet_block = world_.has<GodAlignment>(player_) &&
+                          world_.get<GodAlignment>(player_).god == GodId::YASHKHET;
+
     int hp_actual = 0;
     int mp_actual = 0;
 
-    if (!is_vampire) {
+    if (yashkhet_block) {
+        // Yashkhet forbids rest healing
+        log_.add("Yashkhet rejects your rest. Only blood heals.", {200, 60, 60, 255});
+    } else if (!is_vampire) {
         hp_actual = stats.hp_max - stats.hp;
         stats.hp = stats.hp_max;
     }
@@ -5588,7 +5850,8 @@ static SDL_Keycode gamepad_action_to_key(Action act) {
         case Action::PASSIVE_TREE:return SDLK_t;
         case Action::QUEST_LOG:   return SDLK_q;
         case Action::WORLD_MAP:   return SDLK_m;
-        case Action::BESTIARY:    return SDLK_TAB;
+        case Action::CYCLE_TARGET: return SDLK_TAB;
+        case Action::BESTIARY:    return SDLK_b;
         case Action::HELP:        return SDLK_SLASH;
         case Action::QUICK_CAST:  return SDLK_v;
         case Action::QUICKSAVE:   return SDLK_F5;
@@ -5723,7 +5986,7 @@ void Engine::handle_input() {
                     creation_screen_.set_unlock_progress(static_cast<int>(ClassId::DWARF),
                         prog(meta_.max_dungeon_depth, 6, "depth"));
                     creation_screen_.set_unlock_progress(static_cast<int>(ClassId::ELF),
-                        prog(meta_.total_creatures_examined, 50, "examined"));
+                        prog(meta_.total_creatures_examined, 15, "examined"));
                     creation_screen_.set_unlock_progress(static_cast<int>(ClassId::BANDIT),
                         prog(meta_.max_gold_single_run, 500, "gold"));
                     creation_screen_.set_unlock_progress(static_cast<int>(ClassId::NECROMANCER),
@@ -6261,8 +6524,128 @@ void Engine::handle_input() {
                                 log_.add("Stone erupts from the ground!", {180, 140, 100, 255});
                                 break;
                             }
+                            case GodId::VETHRIK: {
+                                // Raise nearest corpse as 5-turn friendly
+                                auto& corpse_pool = world_.pool<Corpse>();
+                                bool raised = false;
+                                for (size_t ci = 0; ci < corpse_pool.size(); ci++) {
+                                    Entity ce = corpse_pool.entity_at(ci);
+                                    if (!world_.has<Position>(ce)) continue;
+                                    auto& cp = world_.get<Position>(ce);
+                                    int cd = std::max(std::abs(cp.x - pp.x), std::abs(cp.y - pp.y));
+                                    if (cd <= 3) {
+                                        // Convert corpse to friendly skeleton
+                                        world_.remove<Corpse>(ce);
+                                        Stats ss; ss.name = "risen dead"; ss.hp = ps.level * 3; ss.hp_max = ss.hp;
+                                        ss.base_damage = 4 + ps.level / 2; ss.base_speed = 100;
+                                        world_.add<Stats>(ce, std::move(ss));
+                                        AI sai; sai.state = AIState::HUNTING; sai.friendly = true;
+                                        world_.add<AI>(ce, sai);
+                                        world_.add<Energy>(ce, {0, 100});
+                                        log_.add("The dead rise at your command.", {160, 160, 200, 255});
+                                        particles_.spell_dark((float)cp.x, (float)cp.y);
+                                        raised = true; break;
+                                    }
+                                }
+                                if (!raised) { log_.add("No corpse nearby.", {150, 130, 130, 255}); ga.favor += 15; acted = false; }
+                                break;
+                            }
+                            case GodId::THESSARKA: {
+                                // Reveal all enemies + traps, auto-identify inventory
+                                auto& ai_pool2 = world_.pool<AI>();
+                                for (size_t ai = 0; ai < ai_pool2.size(); ai++) {
+                                    Entity ae = ai_pool2.entity_at(ai);
+                                    if (world_.has<Position>(ae)) {
+                                        auto& ep = world_.get<Position>(ae);
+                                        if (map_.in_bounds(ep.x, ep.y)) map_.at(ep.x, ep.y).explored = true;
+                                    }
+                                }
+                                // Identify all items in inventory
+                                if (world_.has<Inventory>(player_)) {
+                                    auto& inv = world_.get<Inventory>(player_);
+                                    for (auto item_e : inv.items) {
+                                        if (world_.has<Item>(item_e))
+                                            world_.get<Item>(item_e).identified = true;
+                                    }
+                                }
+                                log_.add("Knowledge floods your mind. All is revealed.", {140, 140, 220, 255});
+                                particles_.burst((float)pp.x, (float)pp.y, 15, 140, 140, 255, 0.15f, 1.0f, 2);
+                                break;
+                            }
+                            case GodId::IXUUL: {
+                                // Random mutation: +3 to one stat, -1 to another
+                                int gain_attr = rng_.range(0, 5); // STR through PER
+                                int lose_attr = rng_.range(0, 5);
+                                while (lose_attr == gain_attr) lose_attr = rng_.range(0, 5);
+                                auto ga_attr = static_cast<Attr>(gain_attr);
+                                auto la_attr = static_cast<Attr>(lose_attr);
+                                ps.set_attr(ga_attr, ps.attr(ga_attr) + 3);
+                                ps.set_attr(la_attr, std::max(3, ps.attr(la_attr) - 1));
+                                log_.add("Your flesh shifts. Mutation!", {180, 100, 255, 255});
+                                particles_.burst((float)pp.x, (float)pp.y, 12, 180, 80, 255, 0.1f, 0.8f, 3);
+                                trigger_screen_shake(4.0f);
+                                break;
+                            }
+                            case GodId::THALARA: {
+                                // Freeze all visible enemies 3 turns
+                                auto& ai_pool3 = world_.pool<AI>();
+                                int frozen_count = 0;
+                                for (size_t ai = 0; ai < ai_pool3.size(); ai++) {
+                                    Entity ae = ai_pool3.entity_at(ai);
+                                    if (ai_pool3.at_index(ai).friendly) continue;
+                                    if (!world_.has<Position>(ae) || !world_.has<StatusEffects>(ae)) continue;
+                                    auto& ep = world_.get<Position>(ae);
+                                    if (map_.in_bounds(ep.x, ep.y) && map_.at(ep.x, ep.y).visible) {
+                                        world_.get<StatusEffects>(ae).add(StatusType::FROZEN, 0, 3);
+                                        particles_.spell_ice((float)ep.x, (float)ep.y);
+                                        frozen_count++;
+                                    }
+                                }
+                                log_.add("The ocean's cold reaches out. Everything freezes.", {80, 180, 220, 255});
+                                trigger_screen_shake(3.0f);
+                                break;
+                            }
+                            case GodId::OSSREN: {
+                                // Temper weapon: +2 permanent damage
+                                if (world_.has<Inventory>(player_)) {
+                                    Entity wpn = world_.get<Inventory>(player_).get_equipped(EquipSlot::MAIN_HAND);
+                                    if (wpn != NULL_ENTITY && world_.has<Item>(wpn)) {
+                                        world_.get<Item>(wpn).damage_bonus += 2;
+                                        log_.add("Your weapon glows. The edge sharpens permanently.", {220, 180, 80, 255});
+                                        particles_.burst((float)pp.x, (float)pp.y, 10, 220, 160, 40, 0.08f, 0.7f, 3);
+                                    } else {
+                                        log_.add("You have no weapon to temper.", {150, 130, 130, 255});
+                                        ga.favor += 15; acted = false;
+                                    }
+                                }
+                                break;
+                            }
+                            case GodId::LETHIS: {
+                                // Phase through walls 5 turns
+                                ps.phase_turns = 5;
+                                log_.add("You drift between worlds. Walls cannot hold you.", {160, 120, 200, 255});
+                                particles_.drift((float)pp.x, (float)pp.y, 10, 140, 100, 180, 1.2f, 2);
+                                break;
+                            }
+                            case GodId::SYTHARA: {
+                                // All visible enemies get 5-turn poison
+                                auto& ai_pool4 = world_.pool<AI>();
+                                for (size_t ai = 0; ai < ai_pool4.size(); ai++) {
+                                    Entity ae = ai_pool4.entity_at(ai);
+                                    if (ai_pool4.at_index(ai).friendly) continue;
+                                    if (!world_.has<Position>(ae) || !world_.has<StatusEffects>(ae)) continue;
+                                    auto& ep = world_.get<Position>(ae);
+                                    if (map_.in_bounds(ep.x, ep.y) && map_.at(ep.x, ep.y).visible) {
+                                        world_.get<StatusEffects>(ae).add(StatusType::POISON, 3, 5);
+                                        particles_.poison_effect((float)ep.x, (float)ep.y);
+                                    }
+                                }
+                                log_.add("Plague erupts from you. Everything rots.", {120, 180, 60, 255});
+                                particles_.burst((float)pp.x, (float)pp.y, 12, 100, 180, 40, 0.12f, 0.9f, 3);
+                                break;
+                            }
                             default: {
-                                // Generic: +10 favor, full MP
+                                // Fallback (shouldn't happen)
                                 ga.favor += 10;
                                 ps.mp = ps.mp_max;
                                 log_.add("Divine energy fills you.", {200, 200, 140, 255});
@@ -6733,6 +7116,7 @@ void Engine::handle_input() {
 
                 case Action::WAIT:
                     player_acted_ = true;
+                    dwarf_moved_last_turn_ = false;
                     break;
 
                 case Action::INTERACT:
@@ -7006,6 +7390,13 @@ void Engine::handle_input() {
                             case GodId::MORRETH:  mastery_name = "War Cry"; mastery_desc = "stun adjacent, +3 damage 10 turns"; break;
                             case GodId::SOLETH:   mastery_name = "Consecrate"; mastery_desc = "undead in 5x5 take 5 damage"; break;
                             case GodId::GATHRUUN: mastery_name = "Stone Wall"; mastery_desc = "create 3 wall tiles in a line"; break;
+                            case GodId::VETHRIK:  mastery_name = "Raise Dead"; mastery_desc = "raise nearest corpse as ally"; break;
+                            case GodId::THESSARKA:mastery_name = "Omniscience"; mastery_desc = "reveal all enemies, identify inventory"; break;
+                            case GodId::IXUUL:    mastery_name = "Mutate"; mastery_desc = "+3 random stat, -1 another (permanent)"; break;
+                            case GodId::THALARA:  mastery_name = "Tidal Freeze"; mastery_desc = "freeze all visible enemies 3 turns"; break;
+                            case GodId::OSSREN:   mastery_name = "Temper"; mastery_desc = "+2 permanent weapon damage"; break;
+                            case GodId::LETHIS:   mastery_name = "Dream Walk"; mastery_desc = "phase through walls 5 turns"; break;
+                            case GodId::SYTHARA:  mastery_name = "Plague Burst"; mastery_desc = "poison all visible enemies"; break;
                             default: mastery_name = "Ascendant Prayer"; mastery_desc = "+10 favor, full MP restore"; break;
                         }
                         snprintf(pbuf, sizeof(pbuf), "  3. %s (15 favor) - %s",
@@ -7013,6 +7404,33 @@ void Engine::handle_input() {
                         log_.add(pbuf, {220, 200, 100, 255});
                     }
                     prayer_mode_ = true;
+                    break;
+                }
+
+                case Action::CYCLE_TARGET: {
+                    // Build target list and cycle
+                    int range = 8;
+                    if (world_.has<Inventory>(player_)) {
+                        Entity wpn = world_.get<Inventory>(player_).get_equipped(EquipSlot::MAIN_HAND);
+                        if (wpn != NULL_ENTITY && world_.has<Item>(wpn))
+                            range = std::max(range, world_.get<Item>(wpn).range);
+                    }
+                    visible_targets_ = magic::all_visible_enemies(world_, player_, map_, range);
+                    if (visible_targets_.empty()) {
+                        log_.add("No targets in range.", {160, 160, 160, 255});
+                        ranged_target_ = 0;
+                    } else {
+                        target_cycle_idx_ = (target_cycle_idx_ + 1) % static_cast<int>(visible_targets_.size());
+                        ranged_target_ = visible_targets_[target_cycle_idx_];
+                        if (world_.has<Stats>(ranged_target_) && world_.has<Position>(ranged_target_)) {
+                            auto& ts = world_.get<Stats>(ranged_target_);
+                            auto& tp = world_.get<Position>(ranged_target_);
+                            auto& pp = world_.get<Position>(player_);
+                            int d = std::max(std::abs(tp.x - pp.x), std::abs(tp.y - pp.y));
+                            char tb[96]; snprintf(tb, sizeof(tb), "Target: %s (dist %d)", ts.name.c_str(), d);
+                            log_.add(tb, {255, 220, 80, 255});
+                        }
+                    }
                     break;
                 }
 
@@ -7853,6 +8271,36 @@ void Engine::render() {
     // Draw entities
     render::draw_entities(renderer_, sprites_, world_, map_, render_cam, y_off);
 
+    // Target reticle
+    if (ranged_target_ != 0 && world_.has<Position>(ranged_target_) &&
+        world_.has<Stats>(ranged_target_) && world_.get<Stats>(ranged_target_).hp > 0) {
+        auto& tp = world_.get<Position>(ranged_target_);
+        if (map_.in_bounds(tp.x, tp.y) && map_.at(tp.x, tp.y).visible) {
+            int ts = render_cam.tile_size;
+            int sx = (tp.x - render_cam.x) * ts;
+            int sy = (tp.y - render_cam.y) * ts + y_off;
+            // Pulsing bracket corners (not a plain rectangle)
+            Uint32 ticks = SDL_GetTicks();
+            int alpha = 160 + static_cast<int>(80.0f * sinf(ticks * 0.006f));
+            SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+            SDL_SetRenderDrawColor(renderer_, 255, 200, 40, static_cast<Uint8>(alpha));
+            int corner = ts / 4;
+            // Top-left corner
+            SDL_RenderDrawLine(renderer_, sx, sy, sx + corner, sy);
+            SDL_RenderDrawLine(renderer_, sx, sy, sx, sy + corner);
+            // Top-right corner
+            SDL_RenderDrawLine(renderer_, sx + ts - 1, sy, sx + ts - 1 - corner, sy);
+            SDL_RenderDrawLine(renderer_, sx + ts - 1, sy, sx + ts - 1, sy + corner);
+            // Bottom-left corner
+            SDL_RenderDrawLine(renderer_, sx, sy + ts - 1, sx + corner, sy + ts - 1);
+            SDL_RenderDrawLine(renderer_, sx, sy + ts - 1, sx, sy + ts - 1 - corner);
+            // Bottom-right corner
+            SDL_RenderDrawLine(renderer_, sx + ts - 1, sy + ts - 1, sx + ts - 1 - corner, sy + ts - 1);
+            SDL_RenderDrawLine(renderer_, sx + ts - 1, sy + ts - 1, sx + ts - 1, sy + ts - 1 - corner);
+            SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_NONE);
+        }
+    }
+
     // God brand glow on player's face
     if (world_.has<GodAlignment>(player_) && world_.has<Position>(player_)) {
         auto& ga = world_.get<GodAlignment>(player_);
@@ -8096,6 +8544,9 @@ void Engine::render() {
     // Dungeon minimap (top-right corner)
     render_minimap();
 
+    // God panel (right side, below minimap)
+    render_god_panel();
+
     // Overlay screens
     inventory_screen_.render(renderer_, font_, sprites_, world_, width_, height_);
     spell_screen_.render(renderer_, font_, world_, width_, height_);
@@ -8303,6 +8754,87 @@ void Engine::render_minimap() {
         SDL_SetRenderDrawColor(renderer_, 255, 255, pulse, 255);
         SDL_Rect pd = {pdx - ps / 2, pdy - ps / 2, ps, ps};
         SDL_RenderFillRect(renderer_, &pd);
+    }
+}
+
+void Engine::render_god_panel() {
+    if (!font_ || !world_.has<GodAlignment>(player_)) return;
+    auto& ga = world_.get<GodAlignment>(player_);
+    if (ga.god == GodId::NONE) return;
+
+    auto& ginfo = get_god_info(ga.god);
+    auto tenets = get_god_tenets(ga.god);
+    int line_h = TTF_FontLineSkip(font_);
+
+    // Panel dimensions and position (right side, below minimap area)
+    int panel_w = std::min(220, width_ / 5);
+    int panel_x = width_ - panel_w - 8;
+    int panel_y = HUD_HEIGHT + 180; // below minimap
+    int panel_h = line_h * (3 + tenets.count) + 16;
+
+    // Semi-transparent background
+    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+    SDL_Rect bg = {panel_x, panel_y, panel_w, panel_h};
+    SDL_SetRenderDrawColor(renderer_, 10, 8, 14, 180);
+    SDL_RenderFillRect(renderer_, &bg);
+
+    // God-colored border (left edge accent)
+    SDL_SetRenderDrawColor(renderer_, ginfo.color.r, ginfo.color.g, ginfo.color.b, 220);
+    SDL_Rect accent = {panel_x, panel_y, 3, panel_h};
+    SDL_RenderFillRect(renderer_, &accent);
+    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_NONE);
+
+    int tx = panel_x + 8;
+    int ty = panel_y + 4;
+
+    // God name
+    SDL_Color god_col = {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255};
+    ui::draw_text(renderer_, font_, ginfo.name, god_col, tx, ty);
+    ty += line_h;
+
+    // Favor bar
+    int bar_w = panel_w - 16;
+    int bar_h = 8;
+    SDL_Rect bar_bg = {tx, ty + 2, bar_w, bar_h};
+    SDL_SetRenderDrawColor(renderer_, 30, 25, 35, 255);
+    SDL_RenderFillRect(renderer_, &bar_bg);
+    // Favor range: -100 to +100, normalize to 0-200
+    int fill_pct = (ga.favor + 100) * bar_w / 200;
+    fill_pct = std::max(0, std::min(bar_w, fill_pct));
+    SDL_Rect bar_fill = {tx, ty + 2, fill_pct, bar_h};
+    // Color: red if negative, god color if positive
+    if (ga.favor < 0)
+        SDL_SetRenderDrawColor(renderer_, 200, 60, 60, 255);
+    else
+        SDL_SetRenderDrawColor(renderer_, ginfo.color.r, ginfo.color.g, ginfo.color.b, 255);
+    SDL_RenderFillRect(renderer_, &bar_fill);
+    // Center marker
+    SDL_SetRenderDrawColor(renderer_, 140, 140, 140, 200);
+    int center_x = tx + bar_w / 2;
+    SDL_RenderDrawLine(renderer_, center_x, ty + 1, center_x, ty + 2 + bar_h);
+    // Favor number
+    char fbuf[16]; snprintf(fbuf, sizeof(fbuf), "%d", ga.favor);
+    SDL_Color dim = {140, 140, 140, 255};
+    ui::draw_text(renderer_, font_, fbuf, dim, tx + bar_w + 4, ty);
+    ty += line_h;
+
+    // Tenets
+    SDL_Color tenet_col = {160, 150, 140, 255};
+    for (int i = 0; i < tenets.count; i++) {
+        // Truncate long descriptions
+        char tbuf[48];
+        snprintf(tbuf, sizeof(tbuf), "%.46s", tenets.tenets[i].description);
+        ui::draw_text(renderer_, font_, tbuf, tenet_col, tx, ty);
+        ty += line_h;
+    }
+
+    // Status indicator
+    if (ga.favor >= 75) {
+        ui::draw_text(renderer_, font_, "CHAMPION", {255, 220, 80, 255}, tx, ty);
+    } else if (ga.favor <= -60) {
+        ui::draw_text(renderer_, font_, "WRATH", {255, 60, 60, 255}, tx, ty);
+    } else if (ga.favor <= -30) {
+        ui::draw_text(renderer_, font_, "DISPLEASED", {220, 140, 80, 255}, tx, ty);
     }
 }
 

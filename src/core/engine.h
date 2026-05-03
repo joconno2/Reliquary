@@ -243,6 +243,21 @@ private:
     int cached_near_town_ = -1; // cached near_town result (updated on move, not every frame)
     const char* cached_location_ = "Wilderness"; // cached location string for HUD
 
+    // Exploration XP tracking
+    std::set<int> rooms_explored_; // room indices explored this floor (for XP)
+    bool shrine_xp_this_floor_ = false;
+
+    // Ranged targeting
+    Entity ranged_target_ = 0;
+    std::vector<Entity> visible_targets_;
+    int target_cycle_idx_ = -1;
+
+    // Class ability state
+    int zealot_fury_turns_ = 0;
+    int wyrmkin_breath_counter_ = 0;
+    bool revenant_saved_this_floor_ = false;
+    bool dwarf_moved_last_turn_ = true;
+
     // UI
     InventoryScreen inventory_screen_;
     CreationScreen creation_screen_;
@@ -296,6 +311,7 @@ private:
     }
     void render_transition();
     void render_minimap();
+    void render_god_panel();
     bool minimap_visible_ = true; // toggle with Tab in gameplay
 
     // Methods

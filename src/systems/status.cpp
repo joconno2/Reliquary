@@ -232,39 +232,95 @@ EffectResult process(World& world, Entity player, TileMap& map, RNG& rng,
             particles.prayer_effect(pp.x, pp.y, 160, 120, 200);
         }
 
-        // === Negative favor punishments (escalating) ===
+        // === Negative favor punishments (god-specific, escalating) ===
         if (ga.god != GodId::NONE && ga.favor < 0) {
             auto& ginfo = get_god_info(ga.god);
 
-            // Mild: favor -1 to -30 — prayer costs doubled (handled in execute_prayer)
-            // Moderate: favor -31 to -60 — random stat drain every 50 turns
-            if (ga.favor <= -30 && game_turn % 50 == 0) {
-                int attr_idx = rng.range(0, 6);
-                int cur = stats.attributes[attr_idx];
-                if (cur > 3) {
-                    stats.attributes[attr_idx] = cur - 1;
-                    static const char* ATTR_NAMES[] = {"STR","DEX","CON","INT","WIL","PER","CHA"};
-                    char buf[128];
-                    snprintf(buf, sizeof(buf), "%s's displeasure weakens you. (-1 %s)", ginfo.name, ATTR_NAMES[attr_idx]);
-                    log.add(buf, {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255});
+            // Moderate: favor <= -30 — god-specific displeasure
+            if (ga.favor <= -30 && game_turn % 40 == 0) {
+                switch (ga.god) {
+                    case GodId::VETHRIK:
+                        // HP drain
+                        stats.hp -= 2;
+                        if (game_turn % 80 == 0) log.add("Death reaches for you.", {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255});
+                        break;
+                    case GodId::THESSARKA:
+                        // Spells cost more (applied in magic system via favor check)
+                        if (game_turn % 80 == 0) log.add("Knowledge slips from your mind.", {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255});
+                        break;
+                    case GodId::MORRETH:
+                        // Weapon damage penalty (apply -3 to base_damage temporarily)
+                        if (game_turn % 80 == 0) log.add("Your arms feel weak. The Iron Father turns away.", {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255});
+                        break;
+                    case GodId::YASHKHET:
+                        // Bleed on every hit taken (applied in combat defender section)
+                        if (game_turn % 80 == 0) log.add("Your blood turns against you.", {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255});
+                        break;
+                    case GodId::KHAEL:
+                        // Poison ticks
+                        stats.hp -= 1;
+                        if (game_turn % 80 == 0) log.add("Nature rejects you. Thorns grow inward.", {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255});
+                        break;
+                    case GodId::SOLETH:
+                        // Burn damage
+                        stats.hp -= 2;
+                        if (game_turn % 80 == 0) log.add("The Pale Flame sears you from within.", {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255});
+                        break;
+                    case GodId::IXUUL:
+                        // Random stat shuffle
+                        if (game_turn % 80 == 0) {
+                            int a1 = rng.range(0, 5), a2 = rng.range(0, 5);
+                            if (a1 != a2) std::swap(stats.attributes[a1], stats.attributes[a2]);
+                            log.add("Your form shifts against your will.", {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255});
+                        }
+                        break;
+                    case GodId::ZHAVEK:
+                        // Gold drain
+                        // (gold tracked in engine, not accessible here; just HP drain)
+                        stats.hp -= 1;
+                        if (game_turn % 80 == 0) log.add("Shadows claw at your life.", {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255});
+                        break;
+                    case GodId::THALARA:
+                        // Freeze applied periodically
+                        if (world.has<StatusEffects>(player))
+                            world.get<StatusEffects>(player).add(StatusType::FROZEN, 0, 1);
+                        if (game_turn % 80 == 0) log.add("Cold grips your bones.", {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255});
+                        break;
+                    case GodId::OSSREN:
+                        // Armor degrades (stat drain on CON)
+                        if (game_turn % 80 == 0 && stats.attributes[2] > 3) {
+                            stats.attributes[2]--;
+                            log.add("Your body weakens. The Hammer rejects you.", {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255});
+                        }
+                        break;
+                    case GodId::LETHIS:
+                        // Can't rest (enforced elsewhere); apply fatigue
+                        if (game_turn % 80 == 0) log.add("Dreams turn to nightmares. Rest brings no peace.", {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255});
+                        break;
+                    case GodId::GATHRUUN:
+                        // Extra damage on surface
+                        if (game_turn % 80 == 0) log.add("The earth rejects you. Return below.", {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255});
+                        break;
+                    case GodId::SYTHARA:
+                        // Random disease (simplified to poison)
+                        if (world.has<StatusEffects>(player))
+                            world.get<StatusEffects>(player).add(StatusType::POISON, 1, 5);
+                        if (game_turn % 80 == 0) log.add("Your own plague consumes you.", {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255});
+                        break;
+                    default: break;
                 }
+                if (stats.hp <= 0) result.death_cause = std::string(ginfo.name) + "'s wrath";
             }
 
-            // Severe: favor -61 to -99 — periodic HP damage
-            if (ga.favor <= -60 && game_turn % 20 == 0) {
-                int dmg = 1 + (-ga.favor) / 30;
+            // Severe: favor <= -60 — escalated HP drain
+            if (ga.favor <= -60 && game_turn % 15 == 0) {
+                int dmg = 2 + (-ga.favor) / 20;
                 stats.hp -= dmg;
                 if (stats.hp <= 0) result.death_cause = std::string(ginfo.name) + "'s wrath";
-                if (game_turn % 60 == 0) {
-                    char buf[128];
-                    snprintf(buf, sizeof(buf), "%s punishes your faithlessness. (%d)", ginfo.name, dmg);
-                    log.add(buf, {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255});
-                }
             }
 
-            // Excommunication: favor == -100
+            // Excommunication: favor <= -100 — divine avenger
             if (ga.favor <= -100 && game_turn % 40 == 0) {
-                // Spawn a divine enemy near the player
                 for (int a = 0; a < 30; a++) {
                     int mx = pp.x + rng.range(-4, 4);
                     int my = pp.y + rng.range(-4, 4);
@@ -273,13 +329,15 @@ EffectResult process(World& world, Entity player, TileMap& map, RNG& rng,
                     if (combat::entity_at(world, mx, my, player) != NULL_ENTITY) continue;
                     Entity de = world.create();
                     world.add<Position>(de, {mx, my});
-                    world.add<Renderable>(de, {SHEET_MONSTERS, 3, 4, // death knight sprite
+                    world.add<Renderable>(de, {SHEET_MONSTERS, 3, 4,
                                                  {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255}, 5});
                     Stats ds; ds.name = "divine avenger"; ds.hp = 30 + stats.level * 5;
                     ds.hp_max = ds.hp; ds.base_damage = 6 + stats.level; ds.base_speed = 110;
                     ds.xp_value = 25 + stats.level * 5;
                     world.add<Stats>(de, std::move(ds));
-                    { AI summon_ai; summon_ai.state = AIState::HUNTING; summon_ai.last_seen_x = pp.x; summon_ai.last_seen_y = pp.y; world.add<AI>(de, summon_ai); } // never flees
+                    AI summon_ai; summon_ai.state = AIState::HUNTING;
+                    summon_ai.last_seen_x = pp.x; summon_ai.last_seen_y = pp.y;
+                    world.add<AI>(de, summon_ai);
                     world.add<Energy>(de, {0, 110});
                     if (game_turn % 120 == 0) {
                         char buf[128];

@@ -54,29 +54,44 @@ static const TownRef& other_town(RNG& rng, const std::string& current) {
 }
 
 static DynamicQuest make_farmer_quest(RNG& rng, const std::string& town) {
-    static const char* CREATURES[] = {"bear", "wolf pack", "spider nest", "boar", "wild dog pack"};
-    static const char* LOCATIONS[] = {"the hills", "the forest", "the fields", "the riverbank"};
-    int ci = rng.range(0, 4);
-    int li = rng.range(0, 3);
+    // Use actual overworld creature names that the player can find and kill
+    struct HuntTarget { const char* name; const char* plural; int count; };
+    static const HuntTarget TARGETS[] = {
+        {"wolf",         "wolves",         3},
+        {"giant spider", "giant spiders",  3},
+        {"wild boar",    "wild boars",     2},
+        {"bear",         "bears",          1},
+        {"dire wolf",    "dire wolves",    2},
+        {"hyena",        "hyenas",         3},
+    };
+    int ci = rng.range(0, 5);
+    auto& t = TARGETS[ci];
 
     DynamicQuest q;
     char buf[256];
-    snprintf(buf, sizeof(buf), "The %s of %s", CREATURES[ci], town.c_str());
+    if (t.count == 1) {
+        snprintf(buf, sizeof(buf), "The %s of %s", t.name, town.c_str());
+    } else {
+        snprintf(buf, sizeof(buf), "The %s of %s", t.plural, town.c_str());
+    }
     q.name = buf;
     snprintf(buf, sizeof(buf),
-        "A %s near %s has been threatening the farms. "
-        "Someone needs to deal with it before the next harvest.",
-        CREATURES[ci], town.c_str());
+        "%s have been threatening the farms outside %s. "
+        "Kill %d of them in the wilderness.",
+        t.plural, town.c_str(), t.count);
+    // Capitalize first letter
+    buf[0] = static_cast<char>(toupper(buf[0]));
     q.description = buf;
-    snprintf(buf, sizeof(buf), "Kill the %s near %s in %s.",
-             CREATURES[ci], town.c_str(), LOCATIONS[li]);
+    snprintf(buf, sizeof(buf), "Kill %d %s in the wilderness.",
+             t.count, t.count == 1 ? t.name : t.plural);
     q.objective = buf;
-    snprintf(buf, sizeof(buf), "The %s is dealt with. The farmers can sleep again.", CREATURES[ci]);
+    snprintf(buf, sizeof(buf), "The %s are dealt with. The farmers can sleep again.",
+             t.plural);
     q.complete_text = buf;
     q.xp_reward = 25 + rng.range(0, 15);
     q.gold_reward = 10 + rng.range(0, 10);
-    // Must spend time in the wilderness
-    q.min_turns = 40 + rng.range(0, 30);
+    q.kill_type = t.name;
+    q.kills_needed = t.count;
     return q;
 }
 

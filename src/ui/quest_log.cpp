@@ -207,7 +207,13 @@ void QuestLog::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_tit
             if (!panel.fits(obj_h)) break;
             ui::Rect obj_area = panel.row(obj_h);
             ui::Rect indented = {obj_area.x + 8, obj_area.y, obj_area.w - 16, obj_area.h};
-            ui::draw_text_wrapped(renderer, font, dq.objective.c_str(), dim_col,
+            std::string obj_display = dq.objective;
+            if (dq.kills_needed > 0) {
+                char prog[32];
+                snprintf(prog, sizeof(prog), " (%d/%d)", dq.kills_done, dq.kills_needed);
+                obj_display += prog;
+            }
+            ui::draw_text_wrapped(renderer, font, obj_display.c_str(), dim_col,
                                    indented.x, indented.y, indented.w);
         }
     }

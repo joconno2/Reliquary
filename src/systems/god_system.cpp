@@ -155,11 +155,12 @@ void check_tenets(World& world, Entity player, const PlayerActions& actions,
         }
 
         if (violated) {
-            adjust_favor(world, player, log, t.violation_favor);
-            auto& ginfo = get_god_info(align.god);
+            auto& gi = get_god_info(align.god);
+            int penalty = t.violation_favor * gi.violation_mult_pct / 100;
+            adjust_favor(world, player, log, penalty);
             char buf[192];
             snprintf(buf, sizeof(buf), "Tenet broken: %s", t.description);
-            log.add(buf, {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255});
+            log.add(buf, {gi.color.r, gi.color.g, gi.color.b, 255});
         }
     }
 
@@ -171,9 +172,10 @@ void check_tenets(World& world, Entity player, const PlayerActions& actions,
         log.add("The cursed item in your possession offends Soleth.", {255, 220, 100, 255});
     }
 
-    // Passive favor gain: +1 favor every 20 turns with no violations this cycle
-    if (game_turn % 20 == 0 && align.favor < 100) {
-        // Only gain passive favor if no violation flags were set
+    // Passive favor gain: +1 every N turns (per-god rate) with no violations
+    auto& ginfo = get_god_info(align.god);
+    int regen = ginfo.regen_rate;
+    if (regen > 0 && game_turn % regen == 0 && align.favor < 100) {
         bool clean = !turn_actions.killed_animal && !turn_actions.used_dark_arts
             && !turn_actions.fled_combat && !turn_actions.used_stealth_attack;
         if (clean) {

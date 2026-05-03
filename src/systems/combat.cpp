@@ -193,7 +193,25 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
 
     bool natural_20 = (raw_roll == 20);
 
-    if (death_marked || (!tree_dodged && (attack_roll >= defense_roll || natural_20))) {
+    // Knight: Shield Wall (30% block if shield equipped)
+    bool knight_blocked = false;
+    if (world.has<Player>(defender) &&
+        world.get<Player>(defender).class_id == ClassId::KNIGHT &&
+        world.has<Inventory>(defender)) {
+        Entity shield = world.get<Inventory>(defender).get_equipped(EquipSlot::OFF_HAND);
+        if (shield != NULL_ENTITY && world.has<Item>(shield) &&
+            world.get<Item>(shield).type == ItemType::SHIELD) {
+            if (rng.range(1, 100) <= 30) {
+                knight_blocked = true;
+                log.add("Shield blocks!", {200, 200, 255, 255});
+            }
+        }
+    }
+
+    if (knight_blocked) {
+        result.hit = false;
+        result.damage = 0;
+    } else if (death_marked || (!tree_dodged && (attack_roll >= defense_roll || natural_20))) {
         result.hit = true;
 
         // Wraith: immune to non-silver/non-magical weapons
@@ -212,7 +230,14 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
             }
             // Ghost Blade keystone: attacks are magical
             if (atk_tree.ghost_blade) can_harm = true;
-            // Unarmed with high WIL (monk-like) can hurt wraiths
+            // Schema Monk elemental strikes are magical
+            if (!can_harm && world.has<Player>(attacker)) {
+                Entity wpn = NULL_ENTITY;
+                if (world.has<Inventory>(attacker))
+                    wpn = world.get<Inventory>(attacker).get_equipped(EquipSlot::MAIN_HAND);
+                if (wpn == NULL_ENTITY && world.get<Player>(attacker).class_id == ClassId::SCHEMA_MONK)
+                    can_harm = true;
+            }
             if (!can_harm) {
                 result.hit = false;
                 result.damage = 0;
@@ -422,6 +447,104 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
                         { char eb[80]; snprintf(eb, sizeof(eb), "Your fist crackles! +%d shock.", bonus);
                           log.add(eb, {200, 200, 255, 255}); }
                         break;
+                }
+            }
+        }
+
+        // === CLASS ABILITIES (attacker, on-hit) ===
+        if (world.has<Player>(attacker) && def.hp > 0) {
+            auto cid = world.get<Player>(attacker).class_id;
+
+            // Barbarian: Rage (+50% damage below 50% HP)
+            if (cid == ClassId::BARBARIAN && atk.hp * 2 < atk.hp_max) {
+                int rage_bonus = dmg / 2;
+                def.hp -= rage_bonus;
+                result.damage += rage_bonus;
+                log.add("Rage!", {255, 80, 80, 255});
+            }
+
+            // Monk: Flurry (40% chance bonus hit at half damage)
+            if (cid == ClassId::MONK) {
+                bool unarmed_m = true;
+                if (world.has<Inventory>(attacker)) {
+                    Entity w = world.get<Inventory>(attacker).get_equipped(EquipSlot::MAIN_HAND);
+                    if (w != NULL_ENTITY) unarmed_m = false;
+                }
+                if (unarmed_m && rng.range(1, 100) <= 40 && def.hp > 0) {
+                    int bonus_dmg = std::max(1, dmg / 2);
+                    def.hp -= bonus_dmg;
+                    result.damage += bonus_dmg;
+                    log.add("Flurry!", {220, 200, 140, 255});
+                }
+            }
+
+            // Templar: Holy Smite (+6 vs undead, execute below 20%)
+            if (cid == ClassId::TEMPLAR && world.has<Stats>(defender)) {
+                auto& ds = world.get<Stats>(defender);
+                if (is_undead(ds.name.c_str())) {
+                    def.hp -= 6;
+                    result.damage += 6;
+                    if (def.hp > 0 && def.hp * 5 < def.hp_max) {
+                        def.hp = 0; // execute
+                        log.add("Holy smite! Purified.", {255, 255, 200, 255});
+                    } else {
+                        log.add("Holy smite!", {255, 255, 200, 255});
+                    }
+                }
+            }
+
+            // Elf: Fey Precision (20% chance for +4 bonus damage)
+            if (cid == ClassId::ELF && rng.range(1, 100) <= 20) {
+                def.hp -= 4;
+                result.damage += 4;
+                log.add("You find a weakness!", {180, 255, 180, 255});
+            }
+
+            // Bandit: Ambush (+5 damage on first strike vs full HP enemy)
+            if (cid == ClassId::BANDIT && def.hp == def.hp_max - result.damage) {
+                // Target was at full HP before this hit
+                def.hp -= 5;
+                result.damage += 5;
+                log.add("Ambush!", {200, 180, 100, 255});
+            }
+
+            // Serpentine: Venom Strike (poison on hit)
+            if (cid == ClassId::SERPENTINE && world.has<StatusEffects>(defender)) {
+                if (rng.range(1, 100) <= 30) {
+                    world.get<StatusEffects>(defender).add(StatusType::POISON, 3, 3);
+                } else {
+                    world.get<StatusEffects>(defender).add(StatusType::POISON, 2, 2);
+                }
+            }
+
+            // Wyrmkin: Dragon Breath (every 8th hit, fire AoE)
+            if (cid == ClassId::WYRMKIN) {
+                // Uses static counter (persists within session)
+                static int wyrmkin_ctr = 0;
+                wyrmkin_ctr++;
+                if (wyrmkin_ctr >= 8) {
+                    wyrmkin_ctr = 0;
+                    int breath_dmg = 6 + atk.level;
+                    // Damage target extra
+                    def.hp -= breath_dmg;
+                    result.damage += breath_dmg;
+                    // Damage adjacent enemies
+                    if (world.has<Position>(defender)) {
+                        auto& dpos = world.get<Position>(defender);
+                        auto& ai_pool = world.pool<AI>();
+                        for (size_t ai = 0; ai < ai_pool.size(); ai++) {
+                            Entity ae = ai_pool.entity_at(ai);
+                            if (ae == defender || ai_pool.at_index(ai).friendly) continue;
+                            if (!world.has<Position>(ae) || !world.has<Stats>(ae)) continue;
+                            auto& ap = world.get<Position>(ae);
+                            if (std::abs(ap.x - dpos.x) <= 1 && std::abs(ap.y - dpos.y) <= 1) {
+                                world.get<Stats>(ae).hp -= breath_dmg;
+                            }
+                        }
+                    }
+                    log.add("Dragon breath!", {255, 140, 40, 255});
+                    if (world.has<StatusEffects>(defender))
+                        world.get<StatusEffects>(defender).add(StatusType::BURN, 3, 2);
                 }
             }
         }
@@ -748,6 +871,22 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
                 log.add(ob, {140, 130, 120, 255});
             }
         }
+    }
+
+    // === CLASS ABILITIES (defender, after hit) ===
+    if (result.hit && world.has<Player>(defender)) {
+        auto dcid = world.get<Player>(defender).class_id;
+
+        // Druid: Thorns (reflect damage on attacker)
+        if (dcid == ClassId::DRUID && world.has<Stats>(attacker)) {
+            int thorn_dmg = 2 + world.get<Stats>(defender).level / 3;
+            world.get<Stats>(attacker).hp -= thorn_dmg;
+            char tb[64]; snprintf(tb, sizeof(tb), "Thorns lash back! (%d)", thorn_dmg);
+            log.add(tb, {80, 200, 80, 255});
+        }
+
+        // Heretic: Godless Resolve (15% status resist)
+        // (status resist handled where statuses are applied, not here)
     }
 
     return result;

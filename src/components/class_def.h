@@ -73,7 +73,7 @@ inline const ClassInfo& get_class_info(ClassId id) {
         {"Dwarf",       "Tough as stone. Poison resist. Sees in the dark.",
          0, 0, 0, 14, 8, 18, 8, 12, 10, 8, 40, 5, 3, "Reach depth 6."},
         {"Elf",         "Magic affinity, keen perception. Agile and ancient.",
-         0, 1, 0, 8, 14, 8, 14, 12, 16, 12, 22, 18, 2, "Examine 50 creatures."},
+         0, 1, 0, 8, 14, 8, 14, 12, 16, 12, 22, 18, 2, "Examine 15 creatures."},
         {"Bandit",      "Dual wield, intimidation, theft. The road provides.",
          0, 4, 0, 12, 16, 10, 8, 8, 12, 10, 28, 0, 4, "Earn 500 gold in one run."},
         {"Necromancer", "The dead serve willingly. Feared by all. Corpse manipulation.",

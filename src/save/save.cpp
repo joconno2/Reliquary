@@ -14,6 +14,7 @@
 #include "components/ai.h"
 #include "components/container.h"
 #include "components/npc.h"
+#include "components/dynamic_quest.h"
 #include "components/corpse.h"
 #include "components/passive_tree.h"
 #include "components/skills.h"
@@ -409,6 +410,31 @@ bool save_game(const std::string& path, const SaveData& data,
             for (auto& line : npc.idle_lines) idle.push_back(line);
             if (!idle.empty()) ej["npc_idle"] = idle;
         }
+        if (world.has<DynamicQuest>(e)) {
+            auto& dq = world.get<DynamicQuest>(e);
+            json dqj;
+            dqj["name"] = dq.name;
+            dqj["desc"] = dq.description;
+            dqj["obj"] = dq.objective;
+            dqj["done_text"] = dq.complete_text;
+            dqj["xp"] = dq.xp_reward;
+            dqj["gold"] = dq.gold_reward;
+            dqj["completed"] = dq.completed;
+            dqj["accepted"] = dq.accepted;
+            dqj["accepted_turn"] = dq.accepted_turn;
+            dqj["min_turns"] = dq.min_turns;
+            dqj["req_dung"] = dq.requires_dungeon;
+            dqj["vis_dung"] = dq.visited_dungeon;
+            dqj["tgt_x"] = dq.target_town_x;
+            dqj["tgt_y"] = dq.target_town_y;
+            dqj["reached"] = dq.reached_target;
+            if (!dq.kill_type.empty()) {
+                dqj["kill_type"] = dq.kill_type;
+                dqj["kills_needed"] = dq.kills_needed;
+                dqj["kills_done"] = dq.kills_done;
+            }
+            ej["dq"] = dqj;
+        }
 
         floor_entities.push_back(ej);
     }
@@ -700,6 +726,29 @@ SaveData load_game(const std::string& path, World& world, TileMap& map) {
                     for (auto& line : ej["npc_idle"])
                         npc.idle_lines.push_back(line.get<std::string>());
                 world.add<NPC>(e, std::move(npc));
+            }
+            if (ej.contains("dq")) {
+                auto& dqj = ej["dq"];
+                DynamicQuest dq;
+                dq.name = dqj.value("name", "");
+                dq.description = dqj.value("desc", "");
+                dq.objective = dqj.value("obj", "");
+                dq.complete_text = dqj.value("done_text", "");
+                dq.xp_reward = dqj.value("xp", 30);
+                dq.gold_reward = dqj.value("gold", 15);
+                dq.completed = dqj.value("completed", false);
+                dq.accepted = dqj.value("accepted", false);
+                dq.accepted_turn = dqj.value("accepted_turn", 0);
+                dq.min_turns = dqj.value("min_turns", 0);
+                dq.requires_dungeon = dqj.value("req_dung", false);
+                dq.visited_dungeon = dqj.value("vis_dung", false);
+                dq.target_town_x = dqj.value("tgt_x", -1);
+                dq.target_town_y = dqj.value("tgt_y", -1);
+                dq.reached_target = dqj.value("reached", false);
+                dq.kill_type = dqj.value("kill_type", "");
+                dq.kills_needed = dqj.value("kills_needed", 0);
+                dq.kills_done = dqj.value("kills_done", 0);
+                world.add<DynamicQuest>(e, std::move(dq));
             }
         }
     }

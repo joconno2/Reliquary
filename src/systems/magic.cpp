@@ -79,6 +79,35 @@ Entity nearest_enemy(World& world, Entity caster, const TileMap& map, int range)
     return best;
 }
 
+std::vector<Entity> all_visible_enemies(World& world, Entity caster, const TileMap& map, int range) {
+    std::vector<Entity> result;
+    if (!world.has<Position>(caster)) return result;
+    auto& cpos = world.get<Position>(caster);
+
+    struct DistEntity { int dist; Entity e; };
+    std::vector<DistEntity> candidates;
+
+    auto& positions = world.pool<Position>();
+    for (size_t i = 0; i < positions.size(); i++) {
+        Entity e = positions.entity_at(i);
+        if (e == caster) continue;
+        if (!world.has<Stats>(e) || !world.has<AI>(e)) continue;
+        if (world.get<AI>(e).friendly) continue;
+
+        auto& epos = positions.at_index(i);
+        if (!map.in_bounds(epos.x, epos.y) || !map.at(epos.x, epos.y).visible) continue;
+
+        int d = distance(cpos.x, cpos.y, epos.x, epos.y);
+        if (d <= range) candidates.push_back({d, e});
+    }
+
+    std::sort(candidates.begin(), candidates.end(),
+              [](const DistEntity& a, const DistEntity& b) { return a.dist < b.dist; });
+
+    for (auto& c : candidates) result.push_back(c.e);
+    return result;
+}
+
 CastResult cast(World& world, Entity caster, SpellId spell,
                  TileMap& map, RNG& rng, MessageLog& log,
                  [[maybe_unused]] int target_x, [[maybe_unused]] int target_y) {

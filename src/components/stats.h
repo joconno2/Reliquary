@@ -56,6 +56,7 @@ struct Stats {
 
     // God prayer / passive status fields
     int invisible_turns = 0;   // Zhavek: invisible until attack or expiry
+    int phase_turns = 0;       // Lethis: walk through walls
     int sleep_turns = 0;       // Lethis: sleeping, skip turns
     int drown_turns = 0;       // Thalara: taking drown damage over time
     int drown_damage = 0;      // Thalara: damage per drown tick
@@ -97,7 +98,7 @@ struct Stats {
         if (xp >= xp_next) {
             level++;
             xp -= xp_next;
-            xp_next = level * level * 75 + 75; // steeper scaling curve
+            xp_next = level * level * 56 + 56;
             // No free HP/MP on level — real gains come from level-up choice screen only
             return true;
         }

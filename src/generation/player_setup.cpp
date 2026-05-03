@@ -88,23 +88,44 @@ PlayerResult create_player(World& world, const CharacterBuild& build,
         player_stats.bleed_resist += tr.bleed_resist;
     }
 
+    // Heretic: Godless Resolve (+1 all stats)
+    if (build.class_id == ClassId::HERETIC) {
+        player_stats.set_attr(Attr::STR, player_stats.attr(Attr::STR) + 1);
+        player_stats.set_attr(Attr::DEX, player_stats.attr(Attr::DEX) + 1);
+        player_stats.set_attr(Attr::CON, player_stats.attr(Attr::CON) + 1);
+        player_stats.set_attr(Attr::INT, player_stats.attr(Attr::INT) + 1);
+        player_stats.set_attr(Attr::WIL, player_stats.attr(Attr::WIL) + 1);
+        player_stats.set_attr(Attr::PER, player_stats.attr(Attr::PER) + 1);
+    }
+
     // God-specific resistances and passive stat mods
     switch (build.god) {
         case GodId::SOLETH:
-            player_stats.fire_resist = 30;
+            player_stats.fire_resist = -100; // Fire hurts you 2x (negative resist = weakness)
             break;
         case GodId::KHAEL:
-            player_stats.poison_resist = 25;
+            player_stats.poison_resist = 100;
             break;
         case GodId::THALARA:
-            player_stats.poison_resist = 100; // immune
-            player_stats.fire_resist = -20;   // weakness
+            player_stats.poison_resist = 100; // immune to poison
+            player_stats.fire_resist = -100;  // fire 2x weakness
+            player_stats.base_speed = 120;    // +20 speed always
             break;
         case GodId::SYTHARA:
-            player_stats.poison_resist = 100; // immune -- you ARE the plague
+            player_stats.poison_resist = 100; // immune to poison and disease
             break;
         case GodId::GATHRUUN:
-            player_stats.natural_armor += 3; // stone's endurance
+            player_stats.natural_armor += 5;  // +5 armor (up from 3)
+            break;
+        case GodId::ZHAVEK:
+            // -30% max HP
+            player_stats.hp_max = player_stats.hp_max * 70 / 100;
+            player_stats.hp = player_stats.hp_max;
+            player_stats.base_hp_max = player_stats.hp_max;
+            break;
+        case GodId::THESSARKA:
+            // -4 STR (already in god stat bonuses via struct, but enforce here)
+            player_stats.set_attr(Attr::STR, std::max(3, player_stats.attr(Attr::STR) - 4));
             break;
         default: break;
     }

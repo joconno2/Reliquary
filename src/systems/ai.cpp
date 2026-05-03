@@ -11,6 +11,7 @@
 #include "components/corpse.h"
 #include "components/status_effect.h"
 #include "components/skills.h"
+#include "systems/combat.h"
 #include <cmath>
 #include <cstdlib>
 #include <cstdio>
@@ -234,7 +235,9 @@ void process(World& world, TileMap& map, Entity player, RNG& rng,
                         snprintf(sbuf, sizeof(sbuf), "Your %s strikes the %s. (%d)",
                                  ms.name.c_str(), ts.name.c_str(), dmg);
                         log.add(sbuf, {160, 160, 140, 255});
-                        // Death handled by engine's death sweep
+                        if (ts.hp <= 0) {
+                            combat::kill(world, nearest_hostile, log);
+                        }
                     }
                 } else {
                     move_toward(world, map, e, hp.x, hp.y, rng);
@@ -276,17 +279,25 @@ void process(World& world, TileMap& map, Entity player, RNG& rng,
             }
         }
 
-        // Khael passive: animals never aggro first
-        // Ixuul passive: slimes/aberrations neutral
+        // God passives: creature behavior overrides
         if (world.has<GodAlignment>(player) && world.has<Stats>(e)) {
             auto& ga = world.get<GodAlignment>(player);
             const char* ename = world.get<Stats>(e).name.c_str();
-            if (ga.god == GodId::KHAEL && ai_comp.state == AIState::IDLE
-                && is_animal(ename)) {
-                can_see = false;
+            // Khael: ALL animals are friendly (fight for you)
+            if (ga.god == GodId::KHAEL && is_animal(ename)) {
+                ai_comp.friendly = true;
+                continue; // skip all hostile AI for this entity
             }
-            if (ga.god == GodId::IXUUL && ai_comp.state == AIState::IDLE
-                && is_slime(ename)) {
+            // Vethrik: undead completely ignore you
+            if (ga.god == GodId::VETHRIK && is_undead(ename)) {
+                can_see = false;
+                if (ai_comp.state == AIState::HUNTING) {
+                    ai_comp.state = AIState::IDLE;
+                    ai_comp.alert_turns = 0;
+                }
+            }
+            // Ixuul: slimes/aberrations neutral
+            if (ga.god == GodId::IXUUL && is_slime(ename)) {
                 can_see = false;
             }
         }
