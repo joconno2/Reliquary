@@ -662,6 +662,7 @@ void Engine::generate_level() {
     rooms_explored_.clear();
     shrine_xp_this_floor_ = false;
     revenant_saved_this_floor_ = false;
+    heavy_hitter_used_this_floor_ = false;
 
     // Mark dynamic quests that require dungeon visits
     if (dungeon_level_ > 0) {
@@ -2501,7 +2502,25 @@ void Engine::try_move_player(int dx, int dy) {
 
         // === TRAIT COMBAT EFFECTS ===
         for (auto tid : build_traits_) {
-            // Heavy Hitter: +20% miss chance (fumble)
+            // Heavy Hitter: first hit each floor does 3x
+            if (tid == TraitId::HEAVY_HITTER && atk_result.hit && !heavy_hitter_used_this_floor_ &&
+                !atk_result.killed && world_.has<Stats>(target)) {
+                heavy_hitter_used_this_floor_ = true;
+                int bonus_3x = atk_result.damage * 2;
+                world_.get<Stats>(target).hp -= bonus_3x;
+                atk_result.damage += bonus_3x;
+                log_.add("DEVASTATING BLOW!", {255, 200, 60, 255});
+                trigger_screen_shake(6.0f);
+                if (world_.has<Position>(target)) {
+                    auto& tp2 = world_.get<Position>(target);
+                    particles_.burst((float)tp2.x, (float)tp2.y, 15, 255, 200, 60, 0.15f, 0.9f, 4);
+                }
+                if (world_.get<Stats>(target).hp <= 0) {
+                    combat::kill(world_, target, log_);
+                    atk_result.killed = true;
+                }
+            }
+            // Heavy Hitter: +20% miss chance (overswing downside)
             if (tid == TraitId::HEAVY_HITTER && atk_result.hit && rng_.chance(20)) {
                 if (world_.has<Stats>(target))
                     world_.get<Stats>(target).hp += atk_result.damage;
@@ -3382,6 +3401,14 @@ void Engine::try_move_player(int dx, int dy) {
         GodId shrine_god = static_cast<GodId>(map_.at(nx, ny).variant % GOD_COUNT);
         auto& sginfo = get_god_info(shrine_god);
         auto& pginfo = get_god_info(ga.god);
+
+        // Ixuul: shrines are useless (god of chaos rejects divine order)
+        if (ga.god == GodId::IXUUL) {
+            log_.add("The shrine means nothing. Ixuul rejects all divine order.", {180, 100, 255, 255});
+            log_.add("[Ixuul] Cannot use shrines.", {140, 100, 180, 255});
+            player_acted_ = true;
+            return;
+        }
 
         if (shrine_god == ga.god) {
             // Same god shrine: +5 favor, small heal, identify curse/bless
@@ -5804,8 +5831,11 @@ void Engine::handle_inventory_action(InvAction action) {
                     // Yashkhet: healing -50%, Sythara: healing -30%
                     if (world_.has<GodAlignment>(player_)) {
                         auto& ga = world_.get<GodAlignment>(player_);
-                        if (ga.god == GodId::YASHKHET) heal_amt = heal_amt / 2;
-                        else if (ga.god == GodId::SYTHARA) heal_amt = heal_amt * 7 / 10;
+                        if (ga.god == GodId::YASHKHET) {
+                            heal_amt = 0;
+                            log_.add("[Yashkhet] Only blood heals. Potions are rejected.", {200, 60, 60, 255});
+                        }
+                        else if (ga.god == GodId::SYTHARA) heal_amt = heal_amt / 2;
                     }
                     // Berserker: cannot use healing items at all
                     for (auto tid : build_traits_) {
@@ -5935,6 +5965,12 @@ void Engine::handle_inventory_action(InvAction action) {
         }
         case InvAction::DROP: {
             auto& pos = world_.get<Position>(player_);
+            // Ossren: can never drop equipment
+            if (world_.has<GodAlignment>(player_) && world_.get<GodAlignment>(player_).god == GodId::OSSREN) {
+                log_.add("Ossren binds all you carry. Nothing leaves your hands.", {220, 180, 80, 255});
+                log_.add("[Ossren] Cannot drop or sell equipment.", {180, 150, 80, 255});
+                break;
+            }
             if (inv.is_equipped(item_e) && item.curse_state == 1) {
                 log_.add("The cursed item clings to you.", {200, 80, 80, 255});
                 break;
@@ -6810,7 +6846,11 @@ void Engine::handle_input() {
                         log_.add("You can't buy that.", {180, 120, 120, 255});
                     }
                 } else if (act == ShopAction::SELL) {
-                    if (shop_screen_.execute(world_, &gold_)) {
+                    // Ossren: can't sell
+                    if (world_.has<GodAlignment>(player_) && world_.get<GodAlignment>(player_).god == GodId::OSSREN) {
+                        log_.add("Ossren forbids parting with your gear.", {220, 180, 80, 255});
+                        log_.add("[Ossren] Cannot sell equipment.", {180, 150, 80, 255});
+                    } else if (shop_screen_.execute(world_, &gold_)) {
                         log_.add("Sold.", {180, 200, 140, 255});
                         audio_.play(SfxId::GOLD);
                     }

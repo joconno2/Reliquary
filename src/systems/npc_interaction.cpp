@@ -10,6 +10,7 @@
 #include "systems/particles.h"
 #include "components/npc.h"
 #include "components/god.h"
+#include "components/player.h"
 #include "components/stats.h"
 #include "components/position.h"
 #include "components/dynamic_quest.h"
@@ -60,13 +61,25 @@ bool interact(Context& ctx, Entity target, int target_x, int target_y) {
         return get_town_god(sp.x, sp.y);
     };
 
-    // Shop pricing: excommunication, god faction, charisma
+    // Check if player has a trait (via Player component)
+    auto has_trait = [&](TraitId t) -> bool {
+        if (!ctx.world.has<Player>(ctx.player)) return false;
+        for (auto tid : ctx.world.get<Player>(ctx.player).traits)
+            if (tid == t) return true;
+        return false;
+    };
+
+    // Shop pricing: excommunication, god faction, charisma, traits
     auto calc_shop_price_mult = [&]() -> int {
         int mult = 100;
         if (ctx.world.has<GodAlignment>(ctx.player)) {
             auto& a = ctx.world.get<GodAlignment>(ctx.player);
             if (a.god != GodId::NONE && a.favor <= -100) return 200;
-            if (npc.god_affiliation != GodId::NONE && a.god != GodId::NONE) {
+            // Ixuul: shops charge 2x (god of chaos, mistrusted)
+            if (a.god == GodId::IXUUL) mult = 200;
+            // Sythara: towns charge 3x (feared plague-bringer)
+            else if (a.god == GodId::SYTHARA) mult = 300;
+            else if (npc.god_affiliation != GodId::NONE && a.god != GodId::NONE) {
                 if (a.god == npc.god_affiliation) mult = 85;
                 else mult = 125;
             }
@@ -132,6 +145,13 @@ bool interact(Context& ctx, Entity target, int target_x, int target_y) {
         return true;
     }
 
+    // Cannibal trait: shops refuse to trade with you
+    if (npc.role == NPCRole::SHOPKEEPER && has_trait(TraitId::CANNIBAL)) {
+        ctx.log.add("The merchant recoils. \"Get away from me, flesh-eater.\"", {200, 120, 80, 255});
+        ctx.log.add("[Cannibal] Shops refuse to trade with you.", {180, 140, 100, 255});
+        return true;
+    }
+
     // Shopkeeper — open shop screen (unless they have a dynamic quest to offer)
     if (npc.role == NPCRole::SHOPKEEPER && !ctx.world.has<DynamicQuest>(target)) {
         // Shops closed at night (overworld only)
@@ -143,8 +163,10 @@ bool interact(Context& ctx, Entity target, int target_x, int target_y) {
             return true;
         }
         int pm = calc_shop_price_mult();
-        if (pm >= 200)
-            ctx.log.add("The merchant eyes you with suspicion and doubles the prices.", {200, 160, 80, 255});
+        if (pm >= 300)
+            ctx.log.add("[Sythara] The merchant backs away in fear. Prices tripled.", {120, 180, 60, 255});
+        else if (pm >= 200)
+            ctx.log.add("[Ixuul] The merchant mistrusts you. Prices doubled.", {180, 100, 255, 255});
         else if (pm > 100)
             ctx.log.add("The merchant seems wary of your faith. Prices are higher.", {200, 180, 120, 255});
         else if (pm < 100)
@@ -157,8 +179,10 @@ bool interact(Context& ctx, Entity target, int target_x, int target_y) {
         auto& dq = ctx.world.get<DynamicQuest>(target);
         if (dq.completed) {
             int pm = calc_shop_price_mult();
-            if (pm >= 200)
-                ctx.log.add("The merchant eyes you with suspicion and doubles the prices.", {200, 160, 80, 255});
+            if (pm >= 300)
+                ctx.log.add("[Sythara] The merchant backs away in fear. Prices tripled.", {120, 180, 60, 255});
+            else if (pm >= 200)
+                ctx.log.add("[Ixuul] The merchant mistrusts you. Prices doubled.", {180, 100, 255, 255});
             else if (pm > 100)
                 ctx.log.add("The merchant seems wary of your faith. Prices are higher.", {200, 180, 120, 255});
             else if (pm < 100)

@@ -257,6 +257,7 @@ private:
     int wyrmkin_breath_counter_ = 0;
     bool revenant_saved_this_floor_ = false;
     bool dwarf_moved_last_turn_ = true;
+    bool heavy_hitter_used_this_floor_ = false;
 
     // UI
     InventoryScreen inventory_screen_;
