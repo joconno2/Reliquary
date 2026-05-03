@@ -5875,6 +5875,11 @@ void Engine::handle_inventory_action(InvAction action) {
                     log_.add("[Khael] Metal weapons offend nature. Use wood or bone.", {80, 200, 80, 255});
                     break;
                 }
+                // Morreth: no ranged weapons
+                if (ga.god == GodId::MORRETH && is_weapon && item.range > 0) {
+                    log_.add("[Morreth] The Iron Father demands you fight up close.", {200, 180, 140, 255});
+                    break;
+                }
                 // Zhavek: heavy armor = instant excommunication
                 if (ga.god == GodId::ZHAVEK && is_heavy_armor) {
                     log_.add("[Zhavek] Heavy armor shatters your bond with shadow.", {60, 60, 100, 255});
@@ -7043,11 +7048,7 @@ void Engine::handle_input() {
                         log_.add("You can't buy that.", {180, 120, 120, 255});
                     }
                 } else if (act == ShopAction::SELL) {
-                    // Ossren: can't sell
-                    if (world_.has<GodAlignment>(player_) && world_.get<GodAlignment>(player_).god == GodId::OSSREN) {
-                        log_.add("Ossren forbids parting with your gear.", {220, 180, 80, 255});
-                        log_.add("[Ossren] Cannot sell equipment.", {180, 150, 80, 255});
-                    } else if (shop_screen_.execute(world_, &gold_)) {
+                    if (shop_screen_.execute(world_, &gold_)) {
                         log_.add("Sold.", {180, 200, 140, 255});
                         audio_.play(SfxId::GOLD);
                     }
@@ -7198,7 +7199,10 @@ void Engine::handle_input() {
                         }
                         auto result = magic::cast(world_, player_, spell,
                                                    map_, rng_, log_);
-                        if (result.consumed_turn) player_acted_ = true;
+                        if (result.consumed_turn) {
+                            player_acted_ = true;
+                            ranged_target_ = 0; target_cycle_idx_ = -1;
+                        }
                         if (result.success) {
                             // Per-school spell sound
                             switch (sinfo.school) {
@@ -7846,7 +7850,10 @@ void Engine::handle_input() {
                                 }
                             }
                             auto result = magic::cast(world_, player_, quick_cast_, map_, rng_, log_);
-                            if (result.consumed_turn) player_acted_ = true;
+                            if (result.consumed_turn) {
+                                player_acted_ = true;
+                                ranged_target_ = 0; target_cycle_idx_ = -1;
+                            }
                             if (result.success) {
                                 switch (sinfo.school) {
                                     case SpellSchool::CONJURATION: audio_.play(SfxId::SPELL_FIRE); break;
