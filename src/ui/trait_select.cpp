@@ -39,12 +39,7 @@ bool TraitSelectScreen::can_confirm() const {
 
 bool TraitSelectScreen::handle_input(SDL_Event& event) {
     auto toggle_trait = [&]() {
-        if (can_confirm()) {
-            confirmed_ = true;
-            return;
-        }
         TraitId id = static_cast<TraitId>(cursor_);
-        const TraitInfo& info = get_trait_info(id);
         if (is_selected(id)) {
             selected_traits_.erase(
                 std::remove(selected_traits_.begin(), selected_traits_.end(), id),
@@ -85,7 +80,7 @@ bool TraitSelectScreen::handle_input(SDL_Event& event) {
             toggle_trait();
             return true;
         case SDLK_SPACE:
-            if (can_confirm()) { confirmed_ = true; }
+            if (can_confirm()) { confirmed_ = true; return true; }
             return true;
         case SDLK_ESCAPE: case SDLK_BACKSPACE:
             return false;

@@ -89,6 +89,11 @@ PlayerResult create_player(World& world, const CharacterBuild& build,
         player_stats.bleed_resist += tr.bleed_resist;
     }
 
+    // Minimum HP floor after trait penalties (prevent starting at 0 or negative)
+    if (player_stats.hp_max < 10) player_stats.hp_max = 10;
+    if (player_stats.hp < 1) player_stats.hp = player_stats.hp_max;
+    player_stats.base_hp_max = std::max(10, player_stats.base_hp_max);
+
     // Heretic: Godless Resolve (+1 all stats)
     if (build.class_id == ClassId::HERETIC) {
         player_stats.set_attr(Attr::STR, player_stats.attr(Attr::STR) + 1);

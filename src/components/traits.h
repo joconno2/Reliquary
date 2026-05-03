@@ -49,7 +49,7 @@ inline const TraitInfo& get_trait_info(TraitId id) {
         {"Iron Skin",      "+4 armor permanently. -20 speed.",                    true,  0, 0, 0, 0, 0, 0, 0,  0, 4,-20, 0, 0, 0,  0, 0, false,false},
         {"Fleet Foot",     "+25 speed. -2 armor, -1 damage.",                     true,  0, 0, 0, 0, 0, 0, 0,  0,-2,25,  0, 0, 0,  0, 0, false,false},
         {"Spell Glutton",  "Spells cost half MP. Melee damage halved.",           true,  0, 0, 0, 2, 0, 0, 0,  0, 0, 0,  0, 0, 0,  0, 0, false,false},
-        {"Bloodletter",    "Crits apply 5-turn bleed to enemies. You bleed 1/turn permanently.", true,  0, 0, 0, 0, 0, 0, 0,  0, 0, 0,  0, 0, 0,  0, 0, false,false},
+        {"Bloodletter",    "Crits apply 5-turn bleed. You lose 1 HP every 8 turns.", true,  0, 0, 0, 0, 0, 0, 0,  0, 0, 0,  0, 0, 0,  0, 0, false,false},
         {"Cannibal",       "Eat corpses for full heal (10 turns). Shops refuse to trade.", true,  0, 0, 2, 0, 0, 0,-3,  0, 0, 0,  0, 0, 0,  0, 0, false,false},
         {"Paranoid",       "+5 FOV. See invisible. Confused 20% of turns.",       true,  0, 0, 0, 0, 0, 0, 0,  0, 0, 0,  0, 0, 0,  0, 5, false,false},
         {"Lucky",          "15% chance to dodge any attack. Crits against you deal 3x.", true,  0, 0, 0, 0, 0, 0, 0,  0, 0, 0,  0, 0, 0,  0, 0, false,false},

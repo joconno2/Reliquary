@@ -3647,8 +3647,8 @@ void Engine::process_turn() {
             if (game_turn_ % 25 == 0)
                 log_.add("Sunlight burns. Get underground.", {200, 180, 100, 255});
         }
-        // Bloodletter: permanent 1 HP bleed per turn
-        if (tid == TraitId::BLOODLETTER && world_.has<Stats>(player_) && game_turn_ % 3 == 0) {
+        // Bloodletter: slow permanent bleed (1 HP per 8 turns)
+        if (tid == TraitId::BLOODLETTER && world_.has<Stats>(player_) && game_turn_ % 8 == 0) {
             world_.get<Stats>(player_).hp -= 1;
         }
     }
@@ -4209,15 +4209,7 @@ void Engine::process_turn() {
                         }
                     }
                 }
-                // Bloodletter: you bleed 1 HP permanently when hit
-                if (mresult.hit && world_.has<Stats>(player_)) {
-                    for (auto tid : build_traits_) {
-                        if (tid == TraitId::BLOODLETTER) {
-                            world_.get<Stats>(player_).hp -= 1;
-                            break;
-                        }
-                    }
-                }
+                // (Bloodletter passive drain handled in process_turn, not per-hit)
                 // Background damage reduction
                 if (mresult.hit && mresult.damage > 0) {
                     auto& mname2 = world_.get<Stats>(e).name;
@@ -9266,9 +9258,9 @@ void Engine::render_god_panel() {
     Uint32 ticks = SDL_GetTicks();
 
     // Panel dimensions and position (right side, below minimap area)
-    int panel_w = std::min(240, width_ / 4);
-    int panel_x = width_ - panel_w - 8;
-    int panel_y = HUD_HEIGHT + 180;
+    int panel_w = std::min(200, width_ / 5);
+    int panel_x = width_ - panel_w - 4;
+    int panel_y = HUD_HEIGHT + 176;
     int content_lines = 4 + tenets.count; // name, bar, passive, tenets, status
     if (zealot_fury_turns_ > 0 || (world_.has<Stats>(player_) && world_.get<Stats>(player_).phase_turns > 0))
         content_lines++;
@@ -9370,7 +9362,7 @@ void Engine::render_god_panel() {
     SDL_Color tenet_col = {130, 125, 115, 255};
     for (int i = 0; i < tenets.count; i++) {
         char tbuf[42];
-        snprintf(tbuf, sizeof(tbuf), "%.40s", tenets.tenets[i].description);
+        snprintf(tbuf, sizeof(tbuf), "%.26s", tenets.tenets[i].description);
         ui::draw_text(renderer_, font_, tbuf, tenet_col, tx, ty);
         ty += line_h;
     }
