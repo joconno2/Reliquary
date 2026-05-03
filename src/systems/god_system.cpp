@@ -743,13 +743,15 @@ void render_god_visuals(World& world, Entity player, SDL_Renderer* renderer,
     uint8_t r = ginfo.color.r, g = ginfo.color.g, b = ginfo.color.b;
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    // Scale aura intensity with favor (champion = full, low = dim)
+    int favor_intensity = std::max(1, (ga.favor + 100) * 4 / 200 + 1); // 1-5 particles
     int ds = std::max(3, TS / 12); // dot/drip size scales with tile
-
+    if (ga.favor >= 75) ds = std::max(4, TS / 8); // bigger at champion
 
     switch (ga.god) {
     case GodId::VETHRIK: {
         // Rising bone motes (matches creation screen)
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < favor_intensity; i++) {
             float phase = std::fmod(t * 0.8f + i * 0.25f, 1.0f);
             int mx = cx + static_cast<int>(std::sin(t * 0.5f + i * 1.7f) * TS * 0.4f);
             int my = py + TS - static_cast<int>(phase * TS * 1.2f);

@@ -2716,8 +2716,13 @@ void Engine::try_move_player(int dx, int dy) {
                 if (ga.god == GodId::YASHKHET && atk_result.damage > 0) {
                     int steal = std::max(1, atk_result.damage * 15 / 100);
                     pst.hp = std::min(pst.hp_max, pst.hp + steal);
-                    particles_.rise((float)world_.get<Position>(player_).x,
-                                    (float)world_.get<Position>(player_).y, 3, 200, 40, 40, 0.5f, 2);
+                    // Blood stream from enemy to player
+                    auto& pp = world_.get<Position>(player_);
+                    particles_.projectile((float)nx, (float)ny, (float)pp.x, (float)pp.y,
+                                          6, 200, 20, 20, 0.3f, 3);
+                    particles_.rise((float)pp.x, (float)pp.y, 4, 180, 30, 30, 0.6f, 2);
+                    // Blood drips at hit location
+                    particles_.fall((float)nx, (float)ny, 3, 160, 20, 20, 0.4f, 2);
                 }
 
                 // Soleth: +3 fire damage on all attacks + burn
@@ -2726,6 +2731,9 @@ void Engine::try_move_player(int dx, int dy) {
                     atk_result.damage += 3;
                     if (world_.has<StatusEffects>(target))
                         world_.get<StatusEffects>(target).add(StatusType::BURN, 1, 2);
+                    // Fire burst VFX
+                    particles_.spell_fire((float)nx, (float)ny);
+                    particles_.burst((float)nx, (float)ny, 6, 255, 160, 40, 0.1f, 0.4f, 3);
                     if (tgt_stats.hp <= 0) { combat::kill(world_, target, log_); atk_result.killed = true; }
                 }
 
@@ -3590,6 +3598,13 @@ void Engine::process_turn() {
         auto& ps = world_.get<Stats>(player_);
         auto& pp = world_.get<Position>(player_);
 
+        // Ixuul: immune to ALL status effects (clear every turn)
+        if (ga.god == GodId::IXUUL && world_.has<StatusEffects>(player_)) {
+            auto& fx = world_.get<StatusEffects>(player_);
+            if (!fx.effects.empty()) {
+                fx.effects.clear(); // chaos protects from external influence
+            }
+        }
         // Ixuul: random stat mutation every 50/80 turns
         if (ga.god == GodId::IXUUL) {
             if (game_turn_ % 50 == 0) {
@@ -3737,6 +3752,14 @@ void Engine::process_turn() {
             pstats.equip_hp += item.affix_hp;
             pstats.equip_mp += item.affix_mp;
             pstats.equip_speed += item.affix_speed;
+        }
+
+        // Ossren: -2 speed per equipped slot (weight of permanence)
+        if (world_.has<GodAlignment>(player_) && world_.get<GodAlignment>(player_).god == GodId::OSSREN) {
+            int equipped_count = 0;
+            for (int s = 0; s < EQUIP_SLOT_COUNT; s++)
+                if (pinv.equipped[s] != NULL_ENTITY) equipped_count++;
+            pstats.equip_speed -= equipped_count * 2;
         }
 
         // Apply HP/MP bonuses to max values
@@ -5688,6 +5711,39 @@ void Engine::handle_inventory_action(InvAction action) {
             if (item.slot == EquipSlot::NONE) {
                 log_.add("You can't equip that.", {150, 120, 120, 255});
                 break;
+            }
+            // God material restrictions on equip
+            if (world_.has<GodAlignment>(player_) && !inv.is_equipped(item_e)) {
+                auto& ga = world_.get<GodAlignment>(player_);
+                bool is_metal = (item.material == MaterialType::IRON ||
+                                 item.material == MaterialType::SILVER ||
+                                 item.material == MaterialType::MITHRIL ||
+                                 item.material == MaterialType::ADAMANTINE ||
+                                 item.material == MaterialType::NONE); // default iron
+                bool is_armor = (item.type == ItemType::ARMOR_CHEST || item.type == ItemType::ARMOR_HEAD ||
+                                 item.type == ItemType::ARMOR_HANDS || item.type == ItemType::ARMOR_FEET);
+                bool is_weapon = (item.type == ItemType::WEAPON);
+                bool is_heavy_armor = is_armor && (item.armor_bonus >= 3); // chain+ is heavy
+
+                // Vethrik: no metal armor
+                if (ga.god == GodId::VETHRIK && is_armor && is_metal && item.material != MaterialType::BONE) {
+                    log_.add("[Vethrik] Metal armor is forbidden. Only bone protects the dead.", {160, 160, 200, 255});
+                    break;
+                }
+                // Khael: no metal weapons
+                if (ga.god == GodId::KHAEL && is_weapon && is_metal && item.material != MaterialType::BONE) {
+                    log_.add("[Khael] Metal weapons offend nature. Use wood or bone.", {80, 200, 80, 255});
+                    break;
+                }
+                // Zhavek: heavy armor = instant excommunication
+                if (ga.god == GodId::ZHAVEK && is_heavy_armor) {
+                    log_.add("[Zhavek] Heavy armor shatters your bond with shadow.", {60, 60, 100, 255});
+                    ga.favor = -100;
+                    log_.add("EXCOMMUNICATED.", {255, 40, 40, 255});
+                    trigger_screen_shake(8.0f);
+                    screen_flash(60, 60, 100, 120);
+                    break;
+                }
             }
             if (inv.is_equipped(item_e)) {
                 // Relics and cursed items can't be unequipped
