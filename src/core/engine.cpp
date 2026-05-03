@@ -2888,6 +2888,9 @@ void Engine::try_move_player(int dx, int dy) {
             // Revenant: Undying (heal on kill)
             if (cid == ClassId::REVENANT) {
                 int heal = 2 + pstats.eff_attr(Attr::CON) / 4;
+                // Sythara halves all healing
+                if (world_.has<GodAlignment>(player_) && world_.get<GodAlignment>(player_).god == GodId::SYTHARA)
+                    heal = heal / 2;
                 pstats.hp = std::min(pstats.hp_max, pstats.hp + heal);
                 char hb[48]; snprintf(hb, sizeof(hb), "Life returns. (+%d HP)", heal);
                 log_.add(hb, {140, 200, 140, 255});
@@ -3021,13 +3024,16 @@ void Engine::try_move_player(int dx, int dy) {
             }
         }
 
-        // Trait: Bloodlust — heal on kill
+        // Trait: Vampiric — heal on kill
         if (atk_result.killed && world_.has<Stats>(player_)) {
             for (TraitId tid : build_traits_) {
                 auto& tr = get_trait_info(tid);
                 if (tr.hp_on_kill > 0) {
                     auto& ps = world_.get<Stats>(player_);
                     int heal = std::min(tr.hp_on_kill, ps.hp_max - ps.hp);
+                    // Sythara halves all healing
+                    if (world_.has<GodAlignment>(player_) && world_.get<GodAlignment>(player_).god == GodId::SYTHARA)
+                        heal = heal / 2;
                     if (heal > 0) {
                         ps.hp += heal;
                         char hbuf[64];
@@ -3618,7 +3624,10 @@ void Engine::process_turn() {
                     log_.add("[Yashkhet] Only blood heals.", {180, 60, 60, 255});
                 } else {
                     int healed = ps.hp_max - ps.hp;
-                    ps.hp = ps.hp_max;
+                    // Sythara halves all healing
+                    if (world_.has<GodAlignment>(player_) && world_.get<GodAlignment>(player_).god == GodId::SYTHARA)
+                        healed = healed / 2;
+                    ps.hp = std::min(ps.hp_max, ps.hp + healed);
                     world_.destroy(corpse_to_eat);
                     char eb[64]; snprintf(eb, sizeof(eb), "You devour the corpse. (+%d HP)", healed);
                     log_.add(eb, {180, 100, 80, 255});
@@ -4629,11 +4638,21 @@ void Engine::process_turn() {
         auto fx_result = status::process(world_, player_, map_, rng_, log_, audio_, particles_,
                                          game_turn_, dungeon_level_, zone);
         if (fx_result.player_died) {
-            death_cause_ = fx_result.death_cause;
-            state_ = GameState::DEAD;
-            end_screen_time_ = SDL_GetTicks();
-            audio_.stop_all_ambient(500);
-            audio_.play_music(MusicId::DEATH, 1500);
+            // Revenant death save (status.cpp death path)
+            if (!revenant_saved_this_floor_ && world_.has<Player>(player_) &&
+                world_.get<Player>(player_).class_id == ClassId::REVENANT &&
+                world_.has<Stats>(player_)) {
+                revenant_saved_this_floor_ = true;
+                world_.get<Stats>(player_).hp = 1;
+                log_.add("Death refused. You endure.", {180, 100, 100, 255});
+                audio_.play(SfxId::PRAYER);
+            } else {
+                death_cause_ = fx_result.death_cause;
+                state_ = GameState::DEAD;
+                end_screen_time_ = SDL_GetTicks();
+                audio_.stop_all_ambient(500);
+                audio_.play_music(MusicId::DEATH, 1500);
+            }
         }
     }
 
@@ -5730,12 +5749,17 @@ void Engine::try_rest() {
     int hp_actual = 0;
     int mp_actual = 0;
 
+    // Sythara: ALL healing halved
+    bool sythara_halve = world_.has<GodAlignment>(player_) &&
+                         world_.get<GodAlignment>(player_).god == GodId::SYTHARA;
+
     if (yashkhet_block) {
         // Yashkhet forbids rest healing
         log_.add("Yashkhet rejects your rest. Only blood heals.", {200, 60, 60, 255});
     } else if (!is_vampire) {
         hp_actual = stats.hp_max - stats.hp;
-        stats.hp = stats.hp_max;
+        if (sythara_halve) hp_actual = hp_actual / 2;
+        stats.hp = std::min(stats.hp_max, stats.hp + hp_actual);
     }
     if (stats.mp_max > 0) {
         mp_actual = stats.mp_max - stats.mp;
