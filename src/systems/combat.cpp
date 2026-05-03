@@ -1033,6 +1033,14 @@ AttackResult ranged_attack(World& world, Entity attacker, Entity defender,
             }
         }
 
+        // Wyrmkin: ranged hits also count toward Dragon Breath
+        if (world.has<Player>(attacker) &&
+            world.get<Player>(attacker).class_id == ClassId::WYRMKIN) {
+            atk.wyrmkin_breath_ctr++;
+            // Note: breath only fires on melee (requires proximity for AoE),
+            // but ranged hits build the counter
+        }
+
         if (def.hp <= 0) {
             result.killed = true;
             if (defender_is_player) {

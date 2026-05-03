@@ -739,6 +739,12 @@ void Engine::generate_level() {
     // Try to restore cached floor
     if (dungeon_level_ > 0 && restore_floor(dungeon_level_, ascending_)) {
         // Floor restored from cache — skip generation
+        // Thessarka auto-map applies on every floor entry (including cache restore)
+        if (world_.has<GodAlignment>(player_) && world_.get<GodAlignment>(player_).god == GodId::THESSARKA) {
+            for (int my = 0; my < map_.height(); my++)
+                for (int mx = 0; mx < map_.width(); mx++)
+                    map_.at(mx, my).explored = true;
+        }
         if (world_.has<Position>(player_) && world_.has<Stats>(player_)) {
             auto& pos = world_.get<Position>(player_);
             fov::compute(map_, pos.x, pos.y, world_.get<Stats>(player_).fov_radius());
@@ -6155,10 +6161,11 @@ void Engine::handle_inventory_action(InvAction action) {
         }
         case InvAction::DROP: {
             auto& pos = world_.get<Position>(player_);
-            // Ossren: can never drop equipment
-            if (world_.has<GodAlignment>(player_) && world_.get<GodAlignment>(player_).god == GodId::OSSREN) {
-                log_.add("Ossren binds all you carry. Nothing leaves your hands.", {220, 180, 80, 255});
-                log_.add("[Ossren] Cannot drop or sell equipment.", {180, 150, 80, 255});
+            // Ossren: can never drop equipment (consumables are fine)
+            if (world_.has<GodAlignment>(player_) && world_.get<GodAlignment>(player_).god == GodId::OSSREN &&
+                item.slot != EquipSlot::NONE) {
+                log_.add("Ossren binds your gear. It cannot leave you.", {220, 180, 80, 255});
+                log_.add("[Ossren] Cannot drop equipment.", {180, 150, 80, 255});
                 break;
             }
             if (inv.is_equipped(item_e) && item.curse_state == 1) {
