@@ -883,8 +883,7 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
             log.add(tb, {80, 200, 80, 255});
         }
 
-        // Heretic: Godless Resolve (15% status resist)
-        // (status resist handled where statuses are applied, not here)
+        // Heretic: Godless Resolve (15% status resist — implemented in engine.cpp monster attack section)
     }
 
     return result;

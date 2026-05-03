@@ -4230,6 +4230,15 @@ void Engine::process_turn() {
 
             // Status effects from monster hits
             if (mresult.hit && world_.has<Stats>(e) && world_.has<StatusEffects>(player_)) {
+                // Heretic: Godless Resolve — 15% chance to resist any status
+                bool heretic_resisted = false;
+                if (world_.has<Player>(player_) &&
+                    world_.get<Player>(player_).class_id == ClassId::HERETIC && rng_.chance(15)) {
+                    heretic_resisted = true;
+                }
+                if (heretic_resisted) {
+                    // Skip status entirely
+                } else {
                 auto& mname = world_.get<Stats>(e).name;
                 auto& fx = world_.get<StatusEffects>(player_);
                 bool inflicted = false;
@@ -4269,6 +4278,7 @@ void Engine::process_turn() {
                     fx.add(StatusType::BLIND, 0, 3); inflicted = true; inflict_sfx = SfxId::CURSE;
                 }
                 if (inflicted) audio_.play(inflict_sfx);
+                } // end else (heretic didn't resist)
             }
             // Troll/slime regeneration — heals HP per turn if alive
             if (world_.has<Stats>(e)) {
@@ -9076,6 +9086,8 @@ void Engine::render_minimap() {
 void Engine::render_build_panel() {
     if (!font_ || build_traits_.empty()) return;
     if (!world_.has<Player>(player_)) return;
+    // Don't render on small screens (< 900px wide)
+    if (width_ < 900) return;
 
     auto& player = world_.get<Player>(player_);
     int line_h = TTF_FontLineSkip(font_);
@@ -9136,6 +9148,7 @@ void Engine::render_build_panel() {
 
 void Engine::render_god_panel() {
     if (!font_ || !world_.has<GodAlignment>(player_)) return;
+    if (width_ < 900) return; // hide on small screens
     auto& ga = world_.get<GodAlignment>(player_);
     if (ga.god == GodId::NONE) return;
 
