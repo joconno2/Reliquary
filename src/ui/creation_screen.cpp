@@ -1041,7 +1041,8 @@ void CreationScreen::render_character_preview(SDL_Renderer* renderer, TTF_Font* 
             if (!preview.fits_row()) break;
             auto& tr = get_trait_info(tid);
             auto trow = preview.row(line_h + 2);
-            ui::draw_text_clipped(renderer, font, tr.name, tr.is_positive ? green_col : red_col,
+            SDL_Color trait_col = {220, 200, 140, 255}; // gold for trade-off traits
+            ui::draw_text_clipped(renderer, font, tr.name, trait_col,
                                   trow.x + 4, trow.y, trow.w - 4);
         }
     }

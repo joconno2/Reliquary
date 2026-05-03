@@ -167,7 +167,7 @@ void TraitSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
 
     const TraitInfo& cur = get_trait_info(static_cast<TraitId>(cursor_));
 
-    SDL_Color name_col = cur.is_positive ? chosen_col : neg_col;
+    SDL_Color name_col = {220, 200, 140, 255}; // gold for trade-off traits
     auto dname = detail.row(line_h + 8);
     ui::draw_text(renderer, font, cur.name, name_col, dname.x, dname.y);
 

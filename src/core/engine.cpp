@@ -7095,10 +7095,20 @@ void Engine::handle_input() {
                     if (spell != SpellId::COUNT) {
                         auto& sinfo = get_spell_info(spell);
                         // Get target position before cast (for particles)
+                        // Prefer Tab-selected target if valid
                         int tx = 0, ty = 0;
                         bool has_target = false;
                         if (sinfo.hostile && sinfo.range > 0) {
-                            Entity tgt = magic::nearest_enemy(world_, player_, map_, sinfo.range);
+                            Entity tgt = 0;
+                            if (ranged_target_ != 0 && world_.has<Position>(ranged_target_) &&
+                                world_.has<Stats>(ranged_target_) && world_.get<Stats>(ranged_target_).hp > 0) {
+                                auto& rtp = world_.get<Position>(ranged_target_);
+                                auto& pp = world_.get<Position>(player_);
+                                int d = std::max(std::abs(rtp.x - pp.x), std::abs(rtp.y - pp.y));
+                                if (d <= sinfo.range && map_.in_bounds(rtp.x, rtp.y) && map_.at(rtp.x, rtp.y).visible)
+                                    tgt = ranged_target_;
+                            }
+                            if (tgt == 0) tgt = magic::nearest_enemy(world_, player_, map_, sinfo.range);
                             if (tgt != NULL_ENTITY && world_.has<Position>(tgt)) {
                                 auto& tp = world_.get<Position>(tgt);
                                 tx = tp.x; ty = tp.y; has_target = true;
@@ -7738,7 +7748,16 @@ void Engine::handle_input() {
                             int tx = 0, ty = 0;
                             bool has_target = false;
                             if (sinfo.hostile && sinfo.range > 0) {
-                                Entity tgt = magic::nearest_enemy(world_, player_, map_, sinfo.range);
+                                Entity tgt = 0;
+                                if (ranged_target_ != 0 && world_.has<Position>(ranged_target_) &&
+                                    world_.has<Stats>(ranged_target_) && world_.get<Stats>(ranged_target_).hp > 0) {
+                                    auto& rtp = world_.get<Position>(ranged_target_);
+                                    auto& pp = world_.get<Position>(player_);
+                                    int d = std::max(std::abs(rtp.x - pp.x), std::abs(rtp.y - pp.y));
+                                    if (d <= sinfo.range && map_.in_bounds(rtp.x, rtp.y) && map_.at(rtp.x, rtp.y).visible)
+                                        tgt = ranged_target_;
+                                }
+                                if (tgt == 0) tgt = magic::nearest_enemy(world_, player_, map_, sinfo.range);
                                 if (tgt != NULL_ENTITY && world_.has<Position>(tgt)) {
                                     auto& tp = world_.get<Position>(tgt);
                                     tx = tp.x; ty = tp.y; has_target = true;
