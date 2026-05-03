@@ -2211,6 +2211,8 @@ void Engine::grant_skill_xp(SkillId skill, int amount) {
 void Engine::try_move_player(int dx, int dy) {
     if (state_ != GameState::PLAYING) return;
     dwarf_moved_last_turn_ = true; // will be set false on wait
+    ranged_target_ = 0; // clear target on move (may be out of range)
+    target_cycle_idx_ = -1;
 
     // Status effect checks — frozen/stunned skip turn, confused randomizes direction
     if (world_.has<StatusEffects>(player_)) {
@@ -3601,11 +3603,20 @@ void Engine::process_turn() {
             }
             if (corpse_to_eat != 0) {
                 auto& ps = world_.get<Stats>(player_);
-                int healed = ps.hp_max - ps.hp;
-                ps.hp = ps.hp_max;
-                world_.destroy(corpse_to_eat);
-                char eb[64]; snprintf(eb, sizeof(eb), "You devour the corpse. (+%d HP)", healed);
-                log_.add(eb, {180, 100, 80, 255});
+                // Yashkhet blocks all healing (including cannibal)
+                bool yash_block = world_.has<GodAlignment>(player_) &&
+                                  world_.get<GodAlignment>(player_).god == GodId::YASHKHET;
+                if (yash_block) {
+                    world_.destroy(corpse_to_eat);
+                    log_.add("You devour the corpse, but Yashkhet rejects the healing.", {200, 60, 60, 255});
+                    log_.add("[Yashkhet] Only blood heals.", {180, 60, 60, 255});
+                } else {
+                    int healed = ps.hp_max - ps.hp;
+                    ps.hp = ps.hp_max;
+                    world_.destroy(corpse_to_eat);
+                    char eb[64]; snprintf(eb, sizeof(eb), "You devour the corpse. (+%d HP)", healed);
+                    log_.add(eb, {180, 100, 80, 255});
+                }
                 particles_.burst((float)pp.x, (float)pp.y, 8, 180, 60, 40, 0.08f, 0.5f, 2);
             }
         }
@@ -3893,12 +3904,27 @@ void Engine::process_turn() {
     if (world_.has<Stats>(player_)) {
         auto& stats = world_.get<Stats>(player_);
         if (stats.hp <= 0) {
-            state_ = GameState::DEAD;
-            end_screen_time_ = SDL_GetTicks();
-            audio_.play(SfxId::DEATH);
-            audio_.stop_all_ambient(500);
-            audio_.play_music(MusicId::DEATH, 1500);
-            return;
+            // Revenant: survive lethal once per floor
+            if (!revenant_saved_this_floor_ && world_.has<Player>(player_) &&
+                world_.get<Player>(player_).class_id == ClassId::REVENANT) {
+                revenant_saved_this_floor_ = true;
+                stats.hp = 1;
+                log_.add("Death refused. You endure.", {180, 100, 100, 255});
+                audio_.play(SfxId::PRAYER);
+                if (world_.has<Position>(player_)) {
+                    auto& pp = world_.get<Position>(player_);
+                    particles_.burst((float)pp.x, (float)pp.y, 12, 160, 60, 60, 0.1f, 0.8f, 3);
+                    screen_flash(100, 30, 30, 100);
+                }
+                // Don't die
+            } else {
+                state_ = GameState::DEAD;
+                end_screen_time_ = SDL_GetTicks();
+                audio_.play(SfxId::DEATH);
+                audio_.stop_all_ambient(500);
+                audio_.play_music(MusicId::DEATH, 1500);
+                return;
+            }
         }
     }
 

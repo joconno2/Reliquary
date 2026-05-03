@@ -110,7 +110,7 @@ PlayerResult create_player(World& world, const CharacterBuild& build,
         case GodId::THALARA:
             player_stats.poison_resist = 100; // immune to poison
             player_stats.fire_resist = -100;  // fire 2x weakness
-            player_stats.base_speed = 120;    // +20 speed always
+            player_stats.base_speed += 20;    // +20 speed (additive with traits)
             break;
         case GodId::SYTHARA:
             player_stats.poison_resist = 100; // immune to poison and disease
@@ -119,8 +119,8 @@ PlayerResult create_player(World& world, const CharacterBuild& build,
             player_stats.natural_armor += 5;  // +5 armor (up from 3)
             break;
         case GodId::ZHAVEK:
-            // -30% max HP
-            player_stats.hp_max = player_stats.hp_max * 70 / 100;
+            // -30% max HP (minimum 8 to survive)
+            player_stats.hp_max = std::max(8, player_stats.hp_max * 70 / 100);
             player_stats.hp = player_stats.hp_max;
             player_stats.base_hp_max = player_stats.hp_max;
             break;
