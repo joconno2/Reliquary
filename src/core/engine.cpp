@@ -505,6 +505,9 @@ void Engine::save_floor_cache(const std::string& path) {
                 ej["sbhpm"] = ce.stats.base_hp_max; ej["sbmpm"] = ce.stats.base_mp_max;
                 ej["sdmg"] = ce.stats.base_damage; ej["sarm"] = ce.stats.natural_armor;
                 ej["sspd"] = ce.stats.base_speed; ej["sxp"] = ce.stats.xp_value;
+                if (ce.stats.phase_turns > 0) ej["sphase"] = ce.stats.phase_turns;
+                if (ce.stats.wyrmkin_breath_ctr > 0) ej["swyrm"] = ce.stats.wyrmkin_breath_ctr;
+                if (ce.stats.invisible_turns > 0) ej["sinvis"] = ce.stats.invisible_turns;
                 nlohmann::json attrs = nlohmann::json::array();
                 for (int a = 0; a < ATTR_COUNT; a++) attrs.push_back(ce.stats.attributes[a]);
                 ej["sattr"] = attrs;
@@ -593,6 +596,9 @@ void Engine::load_floor_cache(const std::string& path) {
                     ce.stats.base_damage = ej.value("sdmg", 1);
                     ce.stats.natural_armor = ej.value("sarm", 0); ce.stats.base_speed = ej.value("sspd", 100);
                     ce.stats.xp_value = ej.value("sxp", 0);
+                    ce.stats.phase_turns = ej.value("sphase", 0);
+                    ce.stats.wyrmkin_breath_ctr = ej.value("swyrm", 0);
+                    ce.stats.invisible_turns = ej.value("sinvis", 0);
                     if (ej.contains("sattr")) {
                         int ai = 0;
                         for (auto& a : ej["sattr"]) { if (ai < ATTR_COUNT) ce.stats.attributes[ai++] = a.get<int>(); }
@@ -3679,21 +3685,7 @@ void Engine::process_turn() {
             }
         }
 
-        // Thessarka: FOV reduced to 3 when enemies visible (blind in combat)
-        if (ga.god == GodId::THESSARKA) {
-            bool enemies_visible = false;
-            auto& ai_pool_t = world_.pool<AI>();
-            for (size_t ai = 0; ai < ai_pool_t.size(); ai++) {
-                if (ai_pool_t.at_index(ai).friendly) continue;
-                Entity ae = ai_pool_t.entity_at(ai);
-                if (!world_.has<Position>(ae)) continue;
-                auto& ep = world_.get<Position>(ae);
-                if (map_.in_bounds(ep.x, ep.y) && map_.at(ep.x, ep.y).visible) {
-                    enemies_visible = true; break;
-                }
-            }
-            ps.fov_bonus = enemies_visible ? -6 : 0; // drastically reduce FOV in combat
-        }
+        // Thessarka FOV reduction moved to after equipment recalc (see below)
 
         // Morreth: speed drops to 60 when enemies visible (can't flee)
         if (ga.god == GodId::MORRETH && world_.has<Energy>(player_)) {
@@ -3835,6 +3827,22 @@ void Engine::process_turn() {
             // Morreth override is handled separately in god passives section
             if (!world_.has<GodAlignment>(player_) || world_.get<GodAlignment>(player_).god != GodId::MORRETH)
                 en.speed = std::max(30, eff_speed);
+        }
+
+        // Thessarka: FOV reduced when enemies visible (applied AFTER equip recalc)
+        if (world_.has<GodAlignment>(player_) && world_.get<GodAlignment>(player_).god == GodId::THESSARKA) {
+            bool enemies_near = false;
+            auto& ai_pool_th = world_.pool<AI>();
+            for (size_t ai = 0; ai < ai_pool_th.size(); ai++) {
+                if (ai_pool_th.at_index(ai).friendly) continue;
+                Entity ae = ai_pool_th.entity_at(ai);
+                if (!world_.has<Position>(ae)) continue;
+                auto& ep = world_.get<Position>(ae);
+                if (map_.in_bounds(ep.x, ep.y) && map_.at(ep.x, ep.y).visible) {
+                    enemies_near = true; break;
+                }
+            }
+            if (enemies_near) pstats.fov_bonus -= 6;
         }
     }
 
@@ -4585,11 +4593,20 @@ void Engine::process_turn() {
         }
 
         if (world_.has<Stats>(player_) && world_.get<Stats>(player_).hp <= 0) {
-            state_ = GameState::DEAD;
-            end_screen_time_ = SDL_GetTicks();
-            audio_.stop_all_ambient(500);
-            audio_.play_music(MusicId::DEATH, 1500);
-            return;
+            // Revenant death save (same check as primary death path)
+            if (!revenant_saved_this_floor_ && world_.has<Player>(player_) &&
+                world_.get<Player>(player_).class_id == ClassId::REVENANT) {
+                revenant_saved_this_floor_ = true;
+                world_.get<Stats>(player_).hp = 1;
+                log_.add("Death refused. You endure.", {180, 100, 100, 255});
+                audio_.play(SfxId::PRAYER);
+            } else {
+                state_ = GameState::DEAD;
+                end_screen_time_ = SDL_GetTicks();
+                audio_.stop_all_ambient(500);
+                audio_.play_music(MusicId::DEATH, 1500);
+                return;
+            }
         }
     }
 
