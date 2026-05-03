@@ -34,7 +34,7 @@ int TraitSelectScreen::negative_selected_count() const {
 }
 
 bool TraitSelectScreen::can_confirm() const {
-    return !selected_traits_.empty(); // can confirm with any selection (0-3 traits)
+    return selected_traits_.size() >= 1; // must pick at least 1 trait
 }
 
 bool TraitSelectScreen::handle_input(SDL_Event& event) {

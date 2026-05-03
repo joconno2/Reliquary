@@ -177,7 +177,8 @@ void HelpScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_t
             {"t",   "Passive tree (spend points)"},
             {"q",   "Quest journal"},
             {"M",   "World map"},
-            {"Tab", "Bestiary"},
+            {"Tab", "Cycle ranged target"},
+            {"b",   "Bestiary"},
             {"?",   "This help screen"},
             {"Esc", "Pause (save/load/settings)"},
         };

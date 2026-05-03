@@ -477,10 +477,13 @@ SaveData load_game(const std::string& path, World& world, TileMap& map) {
     data.hardcore = root.value("hardcore", false);
     data.current_dungeon_idx = root.value("current_dungeon_idx", -1);
 
-    // Traits
+    // Traits (discard invalid IDs from old saves with different enum)
     if (root.contains("traits")) {
-        for (auto& t : root["traits"])
-            data.traits.push_back(static_cast<TraitId>(t.get<int>()));
+        for (auto& t : root["traits"]) {
+            int tid = t.get<int>();
+            if (tid >= 0 && tid < TRAIT_COUNT)
+                data.traits.push_back(static_cast<TraitId>(tid));
+        }
     }
 
     // Visited towns
