@@ -494,22 +494,22 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
             }
 
             // Elf: Fey Precision (20% chance for +4 bonus damage)
-            if (cid == ClassId::ELF && rng.range(1, 100) <= 20) {
+            if (cid == ClassId::ELF && def.hp > 0 && rng.range(1, 100) <= 20) {
                 def.hp -= 4;
                 result.damage += 4;
                 log.add("You find a weakness!", {180, 255, 180, 255});
             }
 
             // Bandit: Ambush (+5 damage on first strike vs full HP enemy)
-            if (cid == ClassId::BANDIT && def.hp == def.hp_max - result.damage) {
-                // Target was at full HP before this hit
+            if (cid == ClassId::BANDIT && def.hp > 0 && (def.hp + result.damage >= def.hp_max)) {
+                // Target was at or near full HP before this hit
                 def.hp -= 5;
                 result.damage += 5;
                 log.add("Ambush!", {200, 180, 100, 255});
             }
 
             // Serpentine: Venom Strike (poison on hit)
-            if (cid == ClassId::SERPENTINE && world.has<StatusEffects>(defender)) {
+            if (cid == ClassId::SERPENTINE && def.hp > 0 && world.has<StatusEffects>(defender)) {
                 if (rng.range(1, 100) <= 30) {
                     world.get<StatusEffects>(defender).add(StatusType::POISON, 3, 3);
                 } else {

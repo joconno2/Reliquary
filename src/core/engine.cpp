@@ -3795,6 +3795,15 @@ void Engine::process_turn() {
         // Clamp current values
         if (pstats.hp > pstats.hp_max) pstats.hp = pstats.hp_max;
         if (pstats.mp > pstats.mp_max) pstats.mp = pstats.mp_max;
+
+        // Sync Energy speed with effective speed (base + equip bonuses)
+        if (world_.has<Energy>(player_)) {
+            auto& en = world_.get<Energy>(player_);
+            int eff_speed = pstats.base_speed + pstats.equip_speed;
+            // Morreth override is handled separately in god passives section
+            if (!world_.has<GodAlignment>(player_) || world_.get<GodAlignment>(player_).god != GodId::MORRETH)
+                en.speed = std::max(30, eff_speed);
+        }
     }
 
     // Check tenet violations for this turn's actions
@@ -5742,8 +5751,7 @@ void Engine::handle_inventory_action(InvAction action) {
                 bool is_metal = (item.material == MaterialType::IRON ||
                                  item.material == MaterialType::SILVER ||
                                  item.material == MaterialType::MITHRIL ||
-                                 item.material == MaterialType::ADAMANTINE ||
-                                 item.material == MaterialType::NONE); // default iron
+                                 item.material == MaterialType::ADAMANTINE);
                 bool is_armor = (item.type == ItemType::ARMOR_CHEST || item.type == ItemType::ARMOR_HEAD ||
                                  item.type == ItemType::ARMOR_HANDS || item.type == ItemType::ARMOR_FEET);
                 bool is_weapon = (item.type == ItemType::WEAPON);
