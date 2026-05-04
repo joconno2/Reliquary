@@ -467,8 +467,8 @@ void spawn_quest_content(World& world, const TileMap& map,
                 log.add("Your god is screaming.", {180, 80, 80, 255});
             }
         }
-        // MQ_09: auto-activate at depth 4 (claim reliquary)
-        if (dungeon_level >= 4 && !journal.has_quest(QuestId::MQ_09_CLAIM_RELIQUARY)) {
+        // MQ_09: auto-activate at depth 5 (halfway through Sepulchre) (claim reliquary)
+        if (dungeon_level >= 5 && !journal.has_quest(QuestId::MQ_09_CLAIM_RELIQUARY)) {
             if (journal.has_quest(QuestId::MQ_08_ENTER_SEPULCHRE) &&
                 journal.get_state(QuestId::MQ_08_ENTER_SEPULCHRE) == QuestState::ACTIVE) {
                 journal.set_state(QuestId::MQ_08_ENTER_SEPULCHRE, QuestState::COMPLETE);
@@ -478,14 +478,19 @@ void spawn_quest_content(World& world, const TileMap& map,
                 log.add("The architecture stops making sense. You hear other footsteps.", {180, 80, 80, 255});
             }
         }
-        // Sepulchre atmospheric entry messages
+        // Sepulchre atmospheric entry messages (9 floors, each distinct)
         static const char* SEPULCHRE_ENTRY[] = {
             "The air changes. Something is wrong with this place.",
-            "The walls here are older than stone should be.",
+            "The walls are older than stone should be. Your brand pulses.",
+            "Bones line every surface. Not decoration. Geology.",
+            "The dead here were arranged. Something organized them.",
+            "Heat rises from below. The stone sweats. Your brand burns.",
+            "Lava flows behind the walls. The architecture defies reason.",
+            "Ice. Impossible ice over volcanic stone. The cold is wrong.",
             "The geometry stops making sense. Corners that shouldn't exist.",
-            "The Reliquary is here. You can feel it pulling.",
+            "You can feel it. Vast and patient and aware. The Reliquary waits.",
         };
-        if (dungeon_level >= 1 && dungeon_level <= 4) {
+        if (dungeon_level >= 1 && dungeon_level <= 9) {
             log.add(SEPULCHRE_ENTRY[dungeon_level - 1], {160, 100, 140, 255});
         }
     }
@@ -519,7 +524,7 @@ void spawn_quest_content(World& world, const TileMap& map,
         static const ZoneMax ZONE_DEPTHS[] = {
             {"warrens", 3}, {"stonekeep", 4}, {"deep_halls", 4},
             {"catacombs", 4}, {"molten", 4}, {"sunken", 4},
-            {"sepulchre", 4},
+            {"sepulchre", 9},
         };
         int zone_max = 3; // default
         for (auto& zd : ZONE_DEPTHS) {
@@ -553,8 +558,8 @@ void spawn_quest_content(World& world, const TileMap& map,
                     "The fragments resonate near it. Break the seal.",
                     5, 16, QuestId::MQ_07_BREAK_SEAL);
             }
-            // MQ_17: The Reliquary in The Sepulchre (depth 6)
-            if (dungeon_ctx->quest == "MQ_09" && dungeon_level >= 4) {
+            // The Reliquary spawns on the final floor (9)
+            if (dungeon_ctx->quest == "MQ_09" && dungeon_level >= 9) {
                 spawn_quest_item("The Reliquary",
                     "A vessel of light that hurts to look at. It was here before the gods.",
                     6, 16, QuestId::MQ_09_CLAIM_RELIQUARY,

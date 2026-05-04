@@ -1316,6 +1316,23 @@ void spawn_doodads(World& world, TileMap& map,
     bool is_deep_halls = (zone == "deep_halls");
     bool is_sepulchre = (zone == "sepulchre");
 
+    // Sepulchre hazards: lava on floors 5-6, deep water on floors 7-9
+    if (is_sepulchre && dungeon_level >= 5) {
+        TileType hazard = (dungeon_level <= 6) ? TileType::LAVA : TileType::DEEP_WATER;
+        for (size_t r = 2; r < rooms.size(); r++) {
+            if (!rng.chance(50)) continue; // 50% of rooms get hazards
+            auto& hr = rooms[r];
+            int cx = rng.range(hr.x + 2, hr.x + hr.w - 3);
+            int cy = rng.range(hr.y + 2, hr.y + hr.h - 3);
+            for (int ti = 0; ti < rng.range(3, 6); ti++) {
+                int hx = cx + rng.range(-1, 1);
+                int hy = cy + rng.range(-1, 1);
+                if (map.in_bounds(hx, hy) && map.is_walkable(hx, hy))
+                    map.at(hx, hy).type = hazard;
+            }
+        }
+    }
+
     // Hazard terrain: lava in molten zones, deep water in sunken zones
     if (is_molten || is_sunken) {
         TileType hazard = is_molten ? TileType::LAVA : TileType::DEEP_WATER;
@@ -1434,10 +1451,16 @@ void spawn_doodads(World& world, TileMap& map,
         if (is_sunken && rng.chance(20)) place_decor(1, 20);
         if (is_sunken && rng.chance(15)) place_decor(rng.range(2, 3), 22); // slime
 
-        // Sepulchre: bones, coffins, blood — heavy atmosphere
-        if (is_sepulchre && rng.chance(25)) place_decor(rng.range(0, 1), 21); // corpse bones
-        if (is_sepulchre && rng.chance(20)) place_decor(rng.range(0, 2), 23); // coffins
-        if (is_sepulchre && rng.chance(15)) place_decor(rng.range(0, 1), 22); // blood
+        // Sepulchre: HEAVY atmosphere — bones, coffins, blood, environmental dread
+        if (is_sepulchre) {
+            // Multiple doodads per room (the deeper, the more cluttered)
+            int doodad_density = 2 + dungeon_level / 3;
+            for (int dd = 0; dd < doodad_density; dd++) {
+                if (rng.chance(60)) place_decor(rng.range(0, 1), 21); // corpse bones
+                if (rng.chance(40)) place_decor(rng.range(0, 2), 23); // coffins
+                if (rng.chance(30)) place_decor(rng.range(0, 1), 22); // blood
+            }
+        }
 
         // Catacombs: extra bone piles
         if (is_catacombs && rng.chance(20)) place_decor(rng.range(0, 1), 21); // corpse bones

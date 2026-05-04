@@ -182,7 +182,7 @@ bool Engine::init() {
                 if (de.zone_difficulty > 8) de.zone_difficulty = 8;
                 // All dungeons capped at 4 floors (tighter loop)
                 de.max_depth = std::min(4, 3 + de.zone_difficulty / 3);
-                if (de.zone == "sepulchre") { de.max_depth = 4; de.zone_difficulty = 8; }
+                if (de.zone == "sepulchre") { de.max_depth = 9; de.zone_difficulty = 8; }
                 else if (!de.quest.empty() && de.zone != "warrens") de.max_depth = 4;
                 // Warrens quest dungeons (The Barrow) stay at 3 — boss on bottom floor
             }
@@ -1477,11 +1477,32 @@ void Engine::generate_level() {
             params.max_rooms = 5 + dungeon_level_;
             params.corridor_width = rng_.range(2, 3);
         } else if (zone_key == "sepulchre") {
-            // Ancient, large, oppressive
-            params.room_min_w = 7; params.room_max_w = 12;
-            params.room_min_h = 7; params.room_max_h = 12;
+            // The Sepulchre: 9 floors, each themed differently
+            // Floors grow larger and more oppressive as you descend
+            params.room_min_w = 6 + dungeon_level_ / 3;
+            params.room_max_w = 10 + dungeon_level_ / 2;
+            params.room_min_h = 6 + dungeon_level_ / 3;
+            params.room_max_h = 10 + dungeon_level_ / 2;
             params.max_rooms = 5 + dungeon_level_;
-            params.corridor_width = 2;
+            params.corridor_width = 2 + dungeon_level_ / 5;
+            // Per-floor wall/floor themes (the deeper, the stranger)
+            if (dungeon_level_ <= 2) {
+                // Floors 1-2: Ancient stonework (familiar)
+                params.wall_type = TileType::WALL_STONE_BRICK;
+                params.floor_type = TileType::FLOOR_STONE;
+            } else if (dungeon_level_ <= 4) {
+                // Floors 3-4: Bone-lined catacombs
+                params.wall_type = TileType::WALL_CATACOMB;
+                params.floor_type = TileType::FLOOR_BONE;
+            } else if (dungeon_level_ <= 6) {
+                // Floors 5-6: Igneous/volcanic (heat from below)
+                params.wall_type = TileType::WALL_IGNEOUS;
+                params.floor_type = TileType::FLOOR_RED_STONE;
+            } else {
+                // Floors 7-9: Something alien (ice/void)
+                params.wall_type = TileType::WALL_ICE;
+                params.floor_type = TileType::FLOOR_ICE;
+            }
         } else {
             // Fallback: depth-based defaults
             params.room_min_w = 5; params.room_max_w = 12;
