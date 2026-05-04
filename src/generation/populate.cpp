@@ -69,9 +69,8 @@ void spawn_monsters(World& world, const TileMap& map,
                      int dungeon_level) {
     // Monster pool range scales with dungeon depth
     // Depth 1: indices 0-7 (rats, bats, kobolds, slimes, goblins, spiders)
-    // Depth 3+: indices 0-12 (adds warchiefs, trolls)
-    // Depth 5+: full table including dragons
-    int max_idx = std::min(MONSTER_COUNT - 1, 6 + dungeon_level * 2);
+    // Steeper pool unlock for 4-floor dungeons: full table by floor 4
+    int max_idx = std::min(MONSTER_COUNT - 1, 4 + dungeon_level * 6);
 
     int dragons_this_floor = 0;
 
@@ -88,9 +87,9 @@ void spawn_monsters(World& world, const TileMap& map,
             // Single roll — depth gating handles difficulty curve
             int idx = rng.range(0, max_idx);
 
-            // Dragon: max 1 per floor, only depth 5+
+            // Dragon: max 1 per floor, only depth 3+
             bool is_dragon = (std::string(MONSTER_TABLE[idx].name) == "dragon");
-            if (is_dragon && (dragons_this_floor >= 1 || dungeon_level < 5)) {
+            if (is_dragon && (dragons_this_floor >= 1 || dungeon_level < 3)) {
                 idx = rng.range(0, std::min(max_idx, 20)); // reroll to non-dragon
                 is_dragon = false;
             }
@@ -671,11 +670,11 @@ static Entity create_item_from_def(World& world, const ItemDef& def, int x, int 
 
 // Apply quality prefix and bonus based on dungeon depth
 static void apply_quality(Item& item, int dungeon_level, RNG& rng) {
-    // Quality tiers: depth 5+ = Fine (+1), depth 10+ = Superior (+2), depth 15+ = Masterwork (+3)
+    // Quality tiers scaled for 4-floor dungeons
     int max_tier = 0;
-    if (dungeon_level >= 15) max_tier = 3;
-    else if (dungeon_level >= 10) max_tier = 2;
-    else if (dungeon_level >= 5) max_tier = 1;
+    if (dungeon_level >= 4) max_tier = 3;      // Masterwork on final floor
+    else if (dungeon_level >= 3) max_tier = 2;  // Superior on floor 3
+    else if (dungeon_level >= 2) max_tier = 1;  // Fine on floor 2
 
     if (max_tier == 0) return;
 
@@ -733,24 +732,20 @@ static void apply_material(Item& item, int dungeon_level, RNG& rng) {
     // Only melee and ranged weapons get materials — not armor, staves, rings, amulets
     if (item.type != ItemType::WEAPON) return;
 
-    // Depth-based material table
-    // Shallow (1-3): bone/wood/iron
-    // Mid (4-6): iron/steel, small chance silver
-    // Deep (7-9): steel/silver/obsidian, small chance mithril
-    // Very deep (10+): mithril/adamantine possible
+    // Depth-based material table (scaled for 4-floor dungeons)
     MaterialType mat = MaterialType::IRON; // default
 
-    if (dungeon_level <= 3) {
+    if (dungeon_level <= 1) {
         int roll = rng.range(1, 100);
         if (roll <= 15) mat = MaterialType::BONE;
         else if (roll <= 25) mat = MaterialType::WOOD;
         else mat = MaterialType::IRON;
-    } else if (dungeon_level <= 6) {
+    } else if (dungeon_level <= 2) {
         int roll = rng.range(1, 100);
-        if (roll <= 40) mat = MaterialType::IRON;
-        else if (roll <= 75) mat = MaterialType::STEEL;
+        if (roll <= 30) mat = MaterialType::IRON;
+        else if (roll <= 65) mat = MaterialType::STEEL;
         else mat = MaterialType::SILVER;
-    } else if (dungeon_level <= 9) {
+    } else if (dungeon_level <= 3) {
         int roll = rng.range(1, 100);
         if (roll <= 20) mat = MaterialType::STEEL;
         else if (roll <= 45) mat = MaterialType::SILVER;
@@ -782,25 +777,21 @@ static void apply_affixes(Item& item, int dungeon_level, RNG& rng) {
     // Don't affix items that are already legendary/relic
     if (item.relic_god >= 0) return;
 
-    // Rarity roll: deeper = better odds
-    // Depth 1-2: 85% common, 15% magic
-    // Depth 3-5: 65% common, 28% magic, 7% rare
-    // Depth 6-8: 45% common, 38% magic, 17% rare
-    // Depth 9+:  30% common, 42% magic, 28% rare
+    // Rarity roll scaled for 4-floor dungeons
     int roll = rng.range(1, 100);
     Rarity rarity = Rarity::COMMON;
 
-    if (dungeon_level <= 2) {
+    if (dungeon_level <= 1) {
         if (roll > 85) rarity = Rarity::MAGIC;
-    } else if (dungeon_level <= 5) {
-        if (roll > 93) rarity = Rarity::RARE;
-        else if (roll > 65) rarity = Rarity::MAGIC;
-    } else if (dungeon_level <= 8) {
-        if (roll > 83) rarity = Rarity::RARE;
-        else if (roll > 45) rarity = Rarity::MAGIC;
+    } else if (dungeon_level <= 2) {
+        if (roll > 90) rarity = Rarity::RARE;
+        else if (roll > 60) rarity = Rarity::MAGIC;
+    } else if (dungeon_level <= 3) {
+        if (roll > 80) rarity = Rarity::RARE;
+        else if (roll > 40) rarity = Rarity::MAGIC;
     } else {
-        if (roll > 72) rarity = Rarity::RARE;
-        else if (roll > 30) rarity = Rarity::MAGIC;
+        if (roll > 70) rarity = Rarity::RARE;
+        else if (roll > 25) rarity = Rarity::MAGIC;
     }
 
     if (rarity == Rarity::COMMON) return;
@@ -1722,8 +1713,8 @@ Entity spawn_paragon(World& world, [[maybe_unused]] const TileMap& map,
     int x = room.cx();
     int y = room.cy();
 
-    // Depth scaling — paragons get stronger deeper
-    float scale = 1.0f + (dungeon_level - 4) * 0.15f;
+    // Depth scaling for 4-floor dungeons (paragons appear floor 3-4)
+    float scale = 1.0f + (dungeon_level - 2) * 0.25f;
 
     Entity e = world.create();
     world.add<Position>(e, {x, y});
