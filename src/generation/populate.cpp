@@ -98,9 +98,9 @@ void spawn_monsters(World& world, const TileMap& map,
 
             auto& def = MONSTER_TABLE[idx];
 
-            // Scale HP and damage with depth
-            float hp_scale = 1.0f + dungeon_level * 0.3f;
-            float dmg_scale = 1.0f + dungeon_level * 0.2f;
+            // Scale HP and damage with depth (steeper for shorter dungeons)
+            float hp_scale = 1.0f + dungeon_level * 0.5f;
+            float dmg_scale = 1.0f + dungeon_level * 0.35f;
             int scaled_hp = static_cast<int>(def.hp * hp_scale);
             int scaled_dmg = static_cast<int>(def.base_damage * dmg_scale);
 

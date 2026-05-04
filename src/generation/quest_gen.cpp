@@ -540,9 +540,9 @@ void spawn_quest_content(World& world, const TileMap& map,
         // Determine the zone's max depth to know if we're at the bottom
         struct ZoneMax { const char* key; int max_depth; };
         static const ZoneMax ZONE_DEPTHS[] = {
-            {"warrens", 3}, {"stonekeep", 6}, {"deep_halls", 9},
-            {"catacombs", 12}, {"molten", 15}, {"sunken", 18},
-            {"sepulchre", 6}, // Sepulchre has 6 levels
+            {"warrens", 3}, {"stonekeep", 4}, {"deep_halls", 4},
+            {"catacombs", 4}, {"molten", 4}, {"sunken", 4},
+            {"sepulchre", 4},
         };
         int zone_max = 3; // default
         for (auto& zd : ZONE_DEPTHS) {

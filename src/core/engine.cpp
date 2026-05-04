@@ -180,11 +180,10 @@ bool Engine::init() {
                                                          (de.y - START_Y) * (de.y - START_Y)));
                 de.zone_difficulty = static_cast<int>(d / max_dist * 8.0f);
                 if (de.zone_difficulty > 8) de.zone_difficulty = 8;
-                // Dungeon depth scales with difficulty: 3 floors near start, up to 10 far out
-                de.max_depth = 3 + de.zone_difficulty;
-                // Named quest dungeons get a minimum depth based on zone
-                if (de.zone == "sepulchre") { de.max_depth = 13; de.zone_difficulty = 8; }
-                else if (!de.quest.empty() && de.max_depth < 4) de.max_depth = 4;
+                // All dungeons capped at 4 floors (tighter loop)
+                de.max_depth = std::min(4, 3 + de.zone_difficulty / 3);
+                if (de.zone == "sepulchre") { de.max_depth = 4; de.zone_difficulty = 8; }
+                else if (!de.quest.empty()) de.max_depth = 4; // quest dungeons always 4
             }
         }
     }
