@@ -231,18 +231,24 @@ def place_town(tx, ty, is_start, town_rng, is_city=False, province_idx=2):
     #   Greenwood (3, Khael) → grass walls 'g' (nature god, organic)
     #   Iron Coast (4, Ossren) → stone brick '#' (forge/craft, well-built)
     #   Dust Provinces (5, Sythara) → sandstone walls 'n' (plague/decay, desert)
+    # Each province has DISTINCT visual identity
     PROVINCE_WALLS = {
-        0: '#',  # Pale Reach — Soleth
-        1: '#',  # Frozen Marches — Gathruun
-        2: '#',  # Heartlands — Morreth
-        3: 'g',  # Greenwood — Khael
-        4: '#',  # Iron Coast — Ossren
-        5: 'n',  # Dust Provinces — Sythara
+        0: '#',  # Pale Reach (Soleth) — clean white stone, braziers
+        1: 'L',  # Frozen Marches (Gathruun) — large rough stone blocks
+        2: '#',  # Heartlands (Morreth) — iron-reinforced stone brick
+        3: 'w',  # Greenwood (Khael) — wood walls, organic
+        4: 'L',  # Iron Coast (Ossren) — heavy hewn stone, forge-built
+        5: 'n',  # Dust Provinces (Sythara) — crumbling sandstone
+    }
+    PROVINCE_GROUND = {
+        0: ':',  # Pale Reach — clean stone floor
+        1: ':',  # Frozen Marches — stone (snow outside)
+        2: ':',  # Heartlands — cobblestone
+        3: '.',  # Greenwood — dirt paths (nature)
+        4: ':',  # Iron Coast — stone floor
+        5: ',',  # Dust Provinces — sand/dirt
     }
     wall_ch = PROVINCE_WALLS.get(province_idx, '#')
-    # Non-city towns in temperate zones may use wood for smaller buildings
-    if not is_city and province_idx in (2, 0) and town_rng.random() < 0.3:
-        wall_ch = 'w'
     floor_ch = ':'  # stone floor inside buildings always
 
     if is_city:
@@ -264,8 +270,8 @@ def place_town(tx, ty, is_start, town_rng, is_city=False, province_idx=2):
             building_slots = [(-13, -9, 7, 5), (-4, -9, 7, 5), (5, -9, 7, 5),
                               (-13, 4, 7, 5), (5, 4, 7, 5)]
 
-    # Clear ground — cities get cobblestone streets, towns get dirt
-    ground_ch = ':' if is_city else '.'  # stone floor for cities (cobble looked bad)
+    # Clear ground — province-specific
+    ground_ch = PROVINCE_GROUND.get(province_idx, ':') if not is_city else ':'
     for dy in range(-half_h - 2, half_h + 3):
         for dx in range(-half_w - 2, half_w + 3):
             set_tile(tx + dx, ty + dy, ground_ch)

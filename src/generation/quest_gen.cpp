@@ -21,26 +21,16 @@ struct TownRef {
 };
 
 static const TownRef ALL_TOWNS[] = {
-    {"Thornwall",    1000, 750},
-    {"Ashford",       750, 650},
-    {"Greywatch",    1300, 670},
-    {"Millhaven",     850, 950},
-    {"Stonehollow",  1200, 930},
-    {"Frostmere",    1050, 450},
-    {"Bramblewood",   650, 800},
-    {"Ironhearth",   1400, 750},
-    {"Dustfall",     1000, 1100},
-    {"Whitepeak",     800, 400},
-    {"Drywell",      1250, 1100},
-    {"Hollowgate",    550, 550},
-    {"Candlemere",   1450, 500},
-    {"Sandmoor",      900, 1200},
-    {"Glacierveil",  1100, 300},
-    {"Tanglewood",    700, 1050},
-    {"Redrock",      1350, 1000},
-    {"Ravenshold",   1150, 550},
-    {"Fenwatch",      600, 700},
-    {"Endgate",      1500, 850},
+    {"Thornwall",    500, 375},
+    {"Millhaven",    425, 475},
+    {"Candlemere",   725, 250},
+    {"Frostmere",    525, 225},
+    {"Greywatch",    650, 335},
+    {"Whitepeak",    400, 200},
+    {"Bramblewood",  325, 400},
+    {"Hollowgate",   275, 275},
+    {"Ironhearth",   700, 375},
+    {"Dustfall",     500, 550},
 };
 static constexpr int TOWN_REF_COUNT = sizeof(ALL_TOWNS) / sizeof(ALL_TOWNS[0]);
 

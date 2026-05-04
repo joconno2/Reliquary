@@ -105,66 +105,66 @@ void populate(World& world, TileMap& map, RNG& rng,
 
     // Travelers on roads between towns
     static const struct { int x, y; const char* dialogue; } TRAVELERS[] = {
-        {875, 700, "The roads aren't safe. But then, nothing is."},
-        {1150, 710, "I'm heading to Greywatch. They say there's work there."},
-        {950, 850, "Used to be farmers here. Before the barrow opened."},
-        {1100, 600, "The cold gets worse the further north you go."},
-        {700, 750, "Bramblewood's seen better days. The forest is closing in."},
-        {1300, 850, "Ironhearth's forges never stop. You can hear them for miles."},
-        {800, 1050, "Something's wrong with the water south of here."},
-        {1050, 950, "I saw lights in the hills last night. Moving."},
+        {437, 350, "The roads aren't safe. But then, nothing is."},
+        {575, 355, "I'm heading to Greywatch. They say there's work there."},
+        {475, 425, "Used to be farmers here. Before the barrow opened."},
+        {550, 300, "The cold gets worse the further north you go."},
+        {350, 375, "Bramblewood's seen better days. The forest is closing in."},
+        {650, 425, "Ironhearth's forges never stop. You can hear them for miles."},
+        {400, 525, "Something's wrong with the water south of here."},
+        {525, 475, "I saw lights in the hills last night. Moving."},
     };
     for (auto& t : TRAVELERS) {
         spawn_ow_npc(t.x, t.y, "Traveler", t.dialogue, NPCRole::FARMER, 1, 6); // peasant sprite
     }
 
     // Pilgrims (near dungeon entrances or holy sites)
-    spawn_ow_npc(1060, 730, "Pilgrim", "The barrow calls to the faithful. And the foolish.", NPCRole::FARMER, 4, 6);
-    spawn_ow_npc(1450, 520, "Pilgrim", "Soleth's fire burns in Candlemere. I go to pray.", NPCRole::FARMER, 4, 6);
-    spawn_ow_npc(580, 560, "Pilgrim", "The seal at Hollowgate. Have you seen it? It's cracking.", NPCRole::FARMER, 4, 6);
+    spawn_ow_npc(530, 365, "Pilgrim", "The barrow calls to the faithful. And the foolish.", NPCRole::FARMER, 4, 6);
+    spawn_ow_npc(725, 260, "Pilgrim", "Soleth's fire burns in Candlemere. I go to pray.", NPCRole::FARMER, 4, 6);
+    spawn_ow_npc(290, 280, "Pilgrim", "The seal at Hollowgate. Have you seen it? It's cracking.", NPCRole::FARMER, 4, 6);
 
     // Hunters in the deep wilderness
-    spawn_ow_npc(300, 500, "Hunter", "The game's thin out here. Something's scaring them deeper into the woods.", NPCRole::FARMER, 2, 6);
-    spawn_ow_npc(1700, 700, "Hunter", "I track wolves. They've been moving in packs larger than I've ever seen.", NPCRole::FARMER, 1, 6);
-    spawn_ow_npc(500, 1100, "Hunter", "Don't go south. The swamp takes people.", NPCRole::FARMER, 2, 6);
+    spawn_ow_npc(150, 250, "Hunter", "The game's thin out here. Something's scaring them deeper into the woods.", NPCRole::FARMER, 2, 6);
+    spawn_ow_npc(850, 350, "Hunter", "I track wolves. They've been moving in packs larger than I've ever seen.", NPCRole::FARMER, 1, 6);
+    spawn_ow_npc(250, 550, "Hunter", "Don't go south. The swamp takes people.", NPCRole::FARMER, 2, 6);
 
     // Hermits (isolated, deeper dialogue)
-    spawn_ow_npc(200, 300, "Hermit", "I left the towns years ago. The gods are louder out here.", NPCRole::PRIEST, 4, 6);
-    spawn_ow_npc(1800, 400, "Old Woman", "I remember when there were no dungeons. Then the ground opened.", NPCRole::FARMER, 3, 6);
-    spawn_ow_npc(400, 1200, "Hermit", "The Reliquary isn't what they think. It was here before the gods.", NPCRole::PRIEST, 4, 6);
-    spawn_ow_npc(1600, 1100, "Madman", "I HEARD IT. Under the stone. Breathing.", NPCRole::FARMER, 1, 6);
+    spawn_ow_npc(100, 150, "Hermit", "I left the towns years ago. The gods are louder out here.", NPCRole::PRIEST, 4, 6);
+    spawn_ow_npc(900, 200, "Old Woman", "I remember when there were no dungeons. Then the ground opened.", NPCRole::FARMER, 3, 6);
+    spawn_ow_npc(200, 600, "Hermit", "The Reliquary isn't what they think. It was here before the gods.", NPCRole::PRIEST, 4, 6);
+    spawn_ow_npc(800, 550, "Madman", "I HEARD IT. Under the stone. Breathing.", NPCRole::FARMER, 1, 6);
 
     // =============================================
     // PROVINCE-SPECIFIC WANDERING NPCs
     // =============================================
 
     // Frozen Marches (Gathruun) — fur traders, mountain folk
-    spawn_ow_npc(1050, 350, "Fur Trader", "Pelts from the deep north fetch good coin in the Heartlands.", NPCRole::SHOPKEEPER, 2, 5);
-    spawn_ow_npc(900, 300, "Mountain Guide", "I know every pass in the Marches. For a price.", NPCRole::FARMER, 2, 5);
-    spawn_ow_npc(1200, 280, "Ice Miner", "The glacier caves have veins of mithril. If you survive the cold.", NPCRole::FARMER, 4, 5);
+    spawn_ow_npc(525, 175, "Fur Trader", "Pelts from the deep north fetch good coin in the Heartlands.", NPCRole::SHOPKEEPER, 2, 5);
+    spawn_ow_npc(450, 150, "Mountain Guide", "I know every pass in the Marches. For a price.", NPCRole::FARMER, 2, 5);
+    spawn_ow_npc(600, 140, "Ice Miner", "The glacier caves have veins of mithril. If you survive the cold.", NPCRole::FARMER, 4, 5);
 
     // Pale Reach (Soleth) — zealots, lamplighters
-    spawn_ow_npc(1100, 500, "Lamplighter", "I keep the road torches lit. Soleth's work, even out here.", NPCRole::FARMER, 1, 5);
-    spawn_ow_npc(1300, 550, "Soleth Zealot", "The pale flame cleanses all. Even you.", NPCRole::PRIEST, 5, 5);
+    spawn_ow_npc(550, 250, "Lamplighter", "I keep the road torches lit. Soleth's work, even out here.", NPCRole::FARMER, 1, 5);
+    spawn_ow_npc(650, 275, "Soleth Zealot", "The pale flame cleanses all. Even you.", NPCRole::PRIEST, 5, 5);
 
     // Greenwood (Khael) — druids, woodcutters, herbalists
-    spawn_ow_npc(500, 800, "Druid", "The forest remembers what you've done. Tread carefully.", NPCRole::PRIEST, 4, 5);
-    spawn_ow_npc(620, 900, "Woodcutter", "The trees grow back faster than we can cut them. Khael's blessing.", NPCRole::FARMER, 1, 5);
-    spawn_ow_npc(450, 700, "Herb Gatherer", "The best frostcap mushrooms grow near the old ruins.", NPCRole::SHOPKEEPER, 3, 5);
+    spawn_ow_npc(250, 400, "Druid", "The forest remembers what you've done. Tread carefully.", NPCRole::PRIEST, 4, 5);
+    spawn_ow_npc(310, 450, "Woodcutter", "The trees grow back faster than we can cut them. Khael's blessing.", NPCRole::FARMER, 1, 5);
+    spawn_ow_npc(225, 350, "Herb Gatherer", "The best frostcap mushrooms grow near the old ruins.", NPCRole::SHOPKEEPER, 3, 5);
 
     // Iron Coast (Ossren) — smiths, merchant caravans
-    spawn_ow_npc(1350, 800, "Caravan Guard", "We move iron from the coast to the Heartlands. Dangerous work.", NPCRole::GUARD, 0, 5);
-    spawn_ow_npc(1500, 750, "Itinerant Smith", "I shoe horses and mend armor. The road is my forge.", NPCRole::SHOPKEEPER, 4, 5);
-    spawn_ow_npc(1400, 900, "Ore Hauler", "Ossren's gift is heavy. My back can testify.", NPCRole::FARMER, 1, 5);
+    spawn_ow_npc(675, 400, "Caravan Guard", "We move iron from the coast to the Heartlands. Dangerous work.", NPCRole::GUARD, 0, 5);
+    spawn_ow_npc(750, 375, "Itinerant Smith", "I shoe horses and mend armor. The road is my forge.", NPCRole::SHOPKEEPER, 4, 5);
+    spawn_ow_npc(700, 450, "Ore Hauler", "Ossren's gift is heavy. My back can testify.", NPCRole::FARMER, 1, 5);
 
     // Dust Provinces (Sythara) — refugees, scavengers, outcasts
-    spawn_ow_npc(1100, 1100, "Scavenger", "The old towns south of here have been picked clean. Almost.", NPCRole::FARMER, 1, 5);
-    spawn_ow_npc(850, 1150, "Outcast", "Exiled from three towns. The dust is my home now.", NPCRole::FARMER, 0, 5);
-    spawn_ow_npc(1200, 1200, "Plague Doctor", "I treat the blighted. Sythara's children need someone.", NPCRole::PRIEST, 5, 5);
+    spawn_ow_npc(550, 550, "Scavenger", "The old towns south of here have been picked clean. Almost.", NPCRole::FARMER, 1, 5);
+    spawn_ow_npc(425, 575, "Outcast", "Exiled from three towns. The dust is my home now.", NPCRole::FARMER, 0, 5);
+    spawn_ow_npc(600, 600, "Plague Doctor", "I treat the blighted. Sythara's children need someone.", NPCRole::PRIEST, 5, 5);
 
     // Heartlands (Morreth) — soldiers, farmers, merchants
-    spawn_ow_npc(1000, 800, "Patrol Soldier", "Morreth's reach keeps the roads safe. Mostly.", NPCRole::GUARD, 2, 5);
-    spawn_ow_npc(900, 700, "Merchant", "Good trade between Thornwall and Ashford. If the highwaymen don't get you.", NPCRole::SHOPKEEPER, 2, 5);
+    spawn_ow_npc(500, 400, "Patrol Soldier", "Morreth's reach keeps the roads safe. Mostly.", NPCRole::GUARD, 2, 5);
+    spawn_ow_npc(450, 350, "Merchant", "Good trade between Thornwall and Ashford. If the highwaymen don't get you.", NPCRole::SHOPKEEPER, 2, 5);
 
     // =============================================
     // ENCAMPMENTS (small NPC + lore clusters)
@@ -174,20 +174,20 @@ void populate(World& world, TileMap& map, RNG& rng,
     paint_ruin(650, 600);
     place_lore(650, 600, "abandoned journal",
         "Day 3. We found the entrance. Day 5. Markus didn't come back. Day 7. None of us are going back in.");
-    spawn_ow_npc(655, 600, "Deserter", "I was a guard once. Then I saw what's down there.", NPCRole::FARMER, 1, 6);
+    spawn_ow_npc(327, 300, "Deserter", "I was a guard once. Then I saw what's down there.", NPCRole::FARMER, 1, 6);
 
     // Mercenary camp — between Greywatch and Ironhearth
-    spawn_ow_npc(1350, 720, "Sellsword", "We're waiting for a contract. Know anyone who needs killing?", NPCRole::GUARD, 0, 6);
-    spawn_ow_npc(1355, 725, "Sellsword", "Gold talks. Everything else walks.", NPCRole::GUARD, 0, 6);
+    spawn_ow_npc(675, 360, "Sellsword", "We're waiting for a contract. Know anyone who needs killing?", NPCRole::GUARD, 0, 6);
+    spawn_ow_npc(677, 362, "Sellsword", "Gold talks. Everything else walks.", NPCRole::GUARD, 0, 6);
 
     // Scholar's camp — between Frostmere and Glacierveil
-    spawn_ow_npc(1080, 370, "Field Scholar", "The inscriptions up north predate the current pantheon by centuries.", NPCRole::PRIEST, 5, 6);
+    spawn_ow_npc(540, 185, "Field Scholar", "The inscriptions up north predate the current pantheon by centuries.", NPCRole::PRIEST, 5, 6);
     place_lore(1075, 370, "field notes",
         "The symbols near Glacierveil match nothing in our records. They resemble the Sepulchre markings.");
 
     // Refugee camp — between Dustfall and Sandmoor
-    spawn_ow_npc(950, 1150, "Refugee", "The southern dungeons drove us out. We can't go home.", NPCRole::FARMER, 0, 6);
-    spawn_ow_npc(955, 1155, "Refugee", "My children are hungry. The road north is dangerous.", NPCRole::FARMER, 3, 6);
+    spawn_ow_npc(475, 575, "Refugee", "The southern dungeons drove us out. We can't go home.", NPCRole::FARMER, 0, 6);
+    spawn_ow_npc(477, 577, "Refugee", "My children are hungry. The road north is dangerous.", NPCRole::FARMER, 3, 6);
 
     // =============================================
     // POINTS OF INTEREST
@@ -200,15 +200,15 @@ void populate(World& world, TileMap& map, RNG& rng,
         if (map.in_bounds(x+1, y)) map.at(x+1, y).type = TileType::ROCK;
     };
 
-    paint_standing_stone(400, 400);
+    paint_standing_stone(200, 200);
     place_lore(400, 402, "worn inscription",
         "BEFORE THE SEVEN. BEFORE THE NAMING. THIS PLACE REMEMBERS.");
 
-    paint_standing_stone(1600, 300);
+    paint_standing_stone(800, 150);
     place_lore(1600, 302, "cracked tablet",
         "The Reliquary was not made. It arrived. The stones grew around it.");
 
-    paint_standing_stone(800, 1300);
+    paint_standing_stone(400, 650);
     place_lore(800, 1302, "eroded pillar text",
         "Seven gods claimed it. None of them made it. Who will claim it next?");
 
@@ -238,10 +238,10 @@ void populate(World& world, TileMap& map, RNG& rng,
 
     // Watchtower ruins — hilltop between Whitepeak and Frostmere
     paint_ruin(920, 420);
-    spawn_ow_npc(920, 420, "Tower Guard", "I watch the north. Nothing comes from there anymore. That worries me.", NPCRole::GUARD, 3, 1);
+    spawn_ow_npc(460, 210, "Tower Guard", "I watch the north. Nothing comes from there anymore. That worries me.", NPCRole::GUARD, 3, 1);
 
     // Witch's hut — deep forest
-    spawn_ow_npc(350, 700, "Hedge Witch", "I know what you seek. Everyone who comes here seeks the same thing.", NPCRole::PRIEST, 4, 6);
+    spawn_ow_npc(175, 350, "Hedge Witch", "I know what you seek. Everyone who comes here seeks the same thing.", NPCRole::PRIEST, 4, 6);
     place_lore(355, 700, "witch's note",
         "The herbs won't help. The prayers won't help. The only cure for what's down there is not going down there.");
 
@@ -265,7 +265,7 @@ void populate(World& world, TileMap& map, RNG& rng,
     paint_ruin(800, 250);
     place_lore(800, 250, "mine foreman's log",
         "Shaft 3 broke through into something. Not rock. Not cave. The miners refuse to go back.");
-    spawn_ow_npc(805, 252, "Old Miner", "We found mithril down there. And something that didn't want us finding it.", NPCRole::FARMER, 1, 5);
+    spawn_ow_npc(402, 126, "Old Miner", "We found mithril down there. And something that didn't want us finding it.", NPCRole::FARMER, 1, 5);
 
     // Stone circle — ritual site
     for (int a = 0; a < 6; a++) {
@@ -315,13 +315,13 @@ void populate(World& world, TileMap& map, RNG& rng,
     }
     place_lore(1305, 503, "charred signpost",
         "This was Ember's Rest. The name turned out to be prophetic.");
-    spawn_ow_npc(1308, 500, "Survivor", "Soleth's faithful burned it. Said the town was unclean. Maybe it was.", NPCRole::FARMER, 0, 5);
+    spawn_ow_npc(654, 250, "Survivor", "Soleth's faithful burned it. Said the town was unclean. Maybe it was.", NPCRole::FARMER, 0, 5);
 
     // Signal beacon (intact)
     if (map.in_bounds(1150, 450)) map.at(1150, 450).type = TileType::ROCK;
     if (map.in_bounds(1151, 450)) map.at(1151, 450).type = TileType::ROCK;
     if (map.in_bounds(1150, 449)) map.at(1150, 449).type = TileType::ROCK;
-    spawn_ow_npc(1152, 451, "Beacon Keeper", "When I light this, help comes. I haven't lit it yet. I keep hoping I won't have to.", NPCRole::GUARD, 2, 5);
+    spawn_ow_npc(576, 225, "Beacon Keeper", "When I light this, help comes. I haven't lit it yet. I keep hoping I won't have to.", NPCRole::GUARD, 2, 5);
 
     // --- Iron Coast (Ossren, x > 1100, center-south) ---
 
@@ -329,7 +329,7 @@ void populate(World& world, TileMap& map, RNG& rng,
     paint_ruin(1500, 900);
     place_lore(1500, 900, "smith's last work",
         "The anvil cracked under the last blow. The metal was wrong. It came from too deep.");
-    spawn_ow_npc(1505, 902, "Retired Smithy", "I made weapons for thirty years. Then I made something I couldn't unmake.", NPCRole::FARMER, 4, 5);
+    spawn_ow_npc(752, 451, "Retired Smithy", "I made weapons for thirty years. Then I made something I couldn't unmake.", NPCRole::FARMER, 4, 5);
 
     // Quarry
     for (int i = 0; i < 10; i++) {
@@ -377,7 +377,7 @@ void populate(World& world, TileMap& map, RNG& rng,
     paint_ruin(908, 1103);
     place_lore(904, 1102, "faded town charter",
         "Township of Silt Crossing, established in the Year of the Third Reckoning. Population: 0.");
-    spawn_ow_npc(910, 1105, "Grave Tender", "Someone has to remember the names. The sand forgets everything else.", NPCRole::FARMER, 0, 5);
+    spawn_ow_npc(455, 552, "Grave Tender", "Someone has to remember the names. The sand forgets everything else.", NPCRole::FARMER, 0, 5);
 
     // --- Greenwood (Khael, x < 700) ---
 
@@ -772,10 +772,10 @@ void populate(World& world, TileMap& map, RNG& rng,
     // Small hamlets — 2-3 cabins clustered together
     struct HamletDef { int x, y; const char* name; };
     static const HamletDef HAMLETS[] = {
-        {300, 650, "Thornbrook"},
-        {1200, 200, "Icewind Post"},
-        {1100, 1250, "Dry Creek"},
-        {500, 900, "Mosshaven"},
+        {150, 325, "Thornbrook"},
+        {600, 100, "Icewind Post"},
+        {550, 625, "Dry Creek"},
+        {250, 450, "Mosshaven"},
     };
 
     for (auto& hm : HAMLETS) {
@@ -804,9 +804,9 @@ void populate(World& world, TileMap& map, RNG& rng,
     // Outposts — single fortified structures (guard post at crossroads)
     struct OutpostDef { int x, y; const char* dialogue; };
     static const OutpostDef OUTPOSTS[] = {
-        {1050, 660, "Road's clear, last I checked. That was yesterday."},
-        {850, 500, "I watch the northern pass. Nothing human comes through anymore."},
-        {700, 950, "The southern road gets worse every year. We need more guards."},
+        {525, 330, "Road's clear, last I checked. That was yesterday."},
+        {425, 250, "I watch the northern pass. Nothing human comes through anymore."},
+        {350, 475, "The southern road gets worse every year. We need more guards."},
     };
 
     for (auto& op : OUTPOSTS) {
@@ -826,7 +826,7 @@ void populate(World& world, TileMap& map, RNG& rng,
 
     // Temperate zone: varied flowers and grasses
     for (int i = 0; i < 80; i++) {
-        int x = rng.range(100, 1900);
+        int x = rng.range(50, 950);
         int y = rng.range(500, 900);
         if (!map.in_bounds(x, y)) continue;
         auto tt = map.at(x, y).type;
@@ -839,7 +839,7 @@ void populate(World& world, TileMap& map, RNG& rng,
 
     // Northern cold zone: sparse, icy-blue tinted plants
     for (int i = 0; i < 30; i++) {
-        int x = rng.range(100, 1900);
+        int x = rng.range(50, 950);
         int y = rng.range(100, 400);
         if (!map.in_bounds(x, y)) continue;
         auto tt = map.at(x, y).type;
@@ -853,8 +853,8 @@ void populate(World& world, TileMap& map, RNG& rng,
 
     // Southern warm zone: warm-tinted plants, more variety
     for (int i = 0; i < 60; i++) {
-        int x = rng.range(100, 1900);
-        int y = rng.range(1000, 1400);
+        int x = rng.range(50, 950);
+        int y = rng.range(500, 700);
         if (!map.in_bounds(x, y)) continue;
         auto tt = map.at(x, y).type;
         if (tt != TileType::FLOOR_GRASS && tt != TileType::FLOOR_SAND
@@ -870,8 +870,8 @@ void populate(World& world, TileMap& map, RNG& rng,
 
     // Mushrooms near dungeon entrances and in dark forest areas
     for (int i = 0; i < 25; i++) {
-        int x = rng.range(100, 1900);
-        int y = rng.range(100, 1400);
+        int x = rng.range(50, 950);
+        int y = rng.range(50, 700);
         if (!map.in_bounds(x, y)) continue;
         // Only place near trees (forest areas)
         bool near_tree = false;
@@ -888,8 +888,8 @@ void populate(World& world, TileMap& map, RNG& rng,
 
     // Saplings near forest edges (col 0, row 25 of tiles sheet)
     for (int i = 0; i < 40; i++) {
-        int x = rng.range(100, 1900);
-        int y = rng.range(200, 1300);
+        int x = rng.range(50, 950);
+        int y = rng.range(100, 650);
         if (!map.in_bounds(x, y) || !map.is_walkable(x, y)) continue;
         // Place near trees but not in dense forest
         int tree_count = 0;
@@ -1037,38 +1037,38 @@ void populate(World& world, TileMap& map, RNG& rng,
     struct LairDef { int x, y; const char* type; int count; };
     static const LairDef LAIRS[] = {
         // Wolf dens (Frozen Marches, Greenwood)
-        {350, 350, "wolf", 3},      // north wilderness
-        {1150, 250, "wolf", 4},     // near Glacierveil
-        {550, 850, "wolf", 3},      // Greenwood fringe
+        {175, 175, "wolf", 3},      // north wilderness
+        {575, 125, "wolf", 4},     // near Glacierveil
+        {275, 425, "wolf", 3},      // Greenwood fringe
         // Spider nests (Greenwood, caves)
-        {450, 650, "spider", 3},    // deep Greenwood
-        {600, 950, "spider", 4},    // near Tanglewood
+        {225, 325, "spider", 3},    // deep Greenwood
+        {300, 475, "spider", 4},    // near Tanglewood
         // Skeleton patrols (near catacombs/ruins)
-        {850, 650, "skeleton", 3},  // near Ashford
-        {1200, 680, "skeleton", 4}, // near Greywatch
-        {1350, 1050, "skeleton", 3},// Dust Province ruins
+        {425, 325, "skeleton", 3},  // near Ashford
+        {600, 340, "skeleton", 4}, // near Greywatch
+        {675, 525, "skeleton", 3},// Dust Province ruins
         // Bandit camps (roads, trade routes)
-        {1250, 780, "bandit", 3},   // Iron Coast road
-        {950, 1050, "bandit", 3},   // Dustfall approach
-        {700, 600, "bandit", 2},    // Greenwood road
+        {625, 390, "bandit", 3},   // Iron Coast road
+        {475, 525, "bandit", 3},   // Dustfall approach
+        {350, 300, "bandit", 2},    // Greenwood road
         // Boar wallows (temperate zones)
-        {800, 800, "boar", 3},      // central Heartlands
-        {650, 1000, "boar", 3},     // south Greenwood
+        {400, 400, "boar", 3},      // central Heartlands
+        {325, 500, "boar", 3},     // south Greenwood
         // Lion pride (Dust Provinces, warm)
-        {1200, 1150, "lion", 2},    // south desert
-        {1050, 1200, "lion", 3},    // near Sandmoor
+        {600, 575, "lion", 2},    // south desert
+        {525, 600, "lion", 3},    // near Sandmoor
         // Scorpion nest (Dust Provinces)
-        {1300, 1200, "scorpion", 4}, // deep desert
-        {900, 1250, "scorpion", 3},  // far south
+        {650, 600, "scorpion", 4}, // deep desert
+        {450, 625, "scorpion", 3},  // far south
         // Hyena pack (Dust Provinces, Iron Coast)
-        {1400, 900, "hyena", 3},     // Iron Coast border
-        {1100, 1100, "hyena", 3},    // Dust Provinces
+        {700, 450, "hyena", 3},     // Iron Coast border
+        {550, 550, "hyena", 3},    // Dust Provinces
         // Crocodile (rivers, swamps)
-        {400, 1100, "crocodile", 2}, // southern swamp
-        {1000, 1050, "crocodile", 2},// river crossing
+        {200, 550, "crocodile", 2}, // southern swamp
+        {500, 525, "crocodile", 2},// river crossing
         // Lynx (cold forests)
-        {500, 400, "lynx", 2},       // Greenwood north
-        {900, 300, "lynx", 2},       // Frozen Marches
+        {250, 200, "lynx", 2},       // Greenwood north
+        {450, 150, "lynx", 2},       // Frozen Marches
     };
 
     for (auto& lair : LAIRS) {
@@ -1131,11 +1131,11 @@ void populate(World& world, TileMap& map, RNG& rng,
     // =============================================
     struct MerchPos { int x, y; const char* name; const char* dialogue; };
     static const MerchPos MERCHANTS[] = {
-        {900, 700,  "Traveling Merchant", "I sell what I find. Everything has a price."},
-        {1200, 850, "Peddler",           "Trinkets, potions, and a few things I shouldn't have."},
-        {750, 950,  "Herb Seller",       "Fresh stock. The forest provides."},
-        {1400, 600, "Arms Dealer",       "I supply both sides. Business is business."},
-        {1100, 1100,"Dustland Trader",   "Water's more valuable than gold out here. I sell both."},
+        {450, 350,  "Traveling Merchant", "I sell what I find. Everything has a price."},
+        {600, 425, "Peddler",           "Trinkets, potions, and a few things I shouldn't have."},
+        {375, 475,  "Herb Seller",       "Fresh stock. The forest provides."},
+        {700, 300, "Arms Dealer",       "I supply both sides. Business is business."},
+        {550, 550,"Dustland Trader",   "Water's more valuable than gold out here. I sell both."},
     };
     for (auto& m : MERCHANTS) {
         spawn_ow_npc(m.x, m.y, m.name, m.dialogue, NPCRole::SHOPKEEPER, 3, 6, 25);
@@ -1220,7 +1220,7 @@ void populate(World& world, TileMap& map, RNG& rng,
 
     // Bandit roadblock (Iron Coast road)
     paint_ruin(1350, 720);
-    spawn_ow_npc(1350, 720, "Bandit Leader",
+    spawn_ow_npc(675, 360, "Bandit Leader",
                  "Pay the toll or bleed. Your choice.", NPCRole::FARMER, 4, 0, 30);
     place_lore(1352, 721, "threatening note",
                "Any merchant who tries the Iron Coast road without paying answers to us. No exceptions.");
@@ -1254,12 +1254,12 @@ void populate(World& world, TileMap& map, RNG& rng,
 
     // Watchtower camp (Pale Reach border)
     paint_ruin(1350, 450);
-    spawn_ow_npc(1350, 450, "Border Watcher",
+    spawn_ow_npc(675, 225, "Border Watcher",
                  "Past here, you're in Soleth's land. The zealots don't take kindly to outsiders.",
                  NPCRole::GUARD, 3, 2, 30);
 
     // Fisherman's shack (near lake)
-    spawn_ow_npc(850, 700, "Fisherman",
+    spawn_ow_npc(425, 350, "Fisherman",
                  "The fish have been strange lately. Eyes where eyes shouldn't be.",
                  NPCRole::FARMER, 1, 6, 20);
 
