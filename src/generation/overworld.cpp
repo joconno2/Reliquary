@@ -1228,7 +1228,7 @@ void populate(World& world, TileMap& map, RNG& rng,
     // Abandoned caravan (Dust Provinces)
     paint_ruin(1150, 1150);
     place_lore(1152, 1151, "trade manifest",
-               "Fifty bolts of silk, twelve casks of wine, and a sealed chest marked DO NOT OPEN. Destination: Endgate. The chest is gone.");
+               "Fifty bolts of silk, twelve casks of wine, and a sealed chest marked DO NOT OPEN. Destination: Ironhearth. The chest is gone.");
 
     // Hunting lodge (Greenwood)
     {

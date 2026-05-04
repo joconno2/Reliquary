@@ -59,7 +59,7 @@ inline const ClassInfo& get_class_info(ClassId id) {
         {"Barbarian",   "Berserker. Rage fuels the blade. Light armor, heavy damage.",
          0, 0, 3, 18, 10, 16, 6, 8, 9, 7, 40, 0, 5, "Slay 50 enemies across all runs."},
         {"Knight",      "Heavy armor, shield, honor. The old way of war.",
-         0, 4, 1, 15, 8, 15, 9, 12, 10, 12, 38, 5, 4, "Reach dungeon depth 5."},
+         0, 4, 1, 15, 8, 15, 9, 12, 10, 12, 38, 5, 4, "Reach dungeon depth 3."},
         {"Monk",        "Empty hands, clear mind. Unarmed, unarmored, unstoppable.",
          0, 0, 2, 10, 16, 12, 10, 14, 14, 8, 25, 10, 5, "Kill an enemy unarmed."},
         {"Templar",     "Anti-undead specialist. Divine smite. Unwavering.",
@@ -71,7 +71,7 @@ inline const ClassInfo& get_class_info(ClassId id) {
         {"Warlock",     "Dark pacts. Glass cannon. Something watches over your shoulder.",
          0, 5, 4, 7, 10, 8, 18, 12, 10, 6, 18, 30, 2, "Die on depth 4+."},
         {"Dwarf",       "Tough as stone. Poison resist. Sees in the dark.",
-         0, 0, 0, 14, 8, 18, 8, 12, 10, 8, 40, 5, 3, "Reach depth 6."},
+         0, 0, 0, 14, 8, 18, 8, 12, 10, 8, 40, 5, 3, "Reach depth 4."},
         {"Elf",         "Magic affinity, keen perception. Agile and ancient.",
          0, 1, 0, 8, 14, 8, 14, 12, 16, 12, 22, 18, 2, "Examine 15 creatures."},
         {"Bandit",      "Dual wield, intimidation, theft. The road provides.",
@@ -91,7 +91,7 @@ inline const ClassInfo& get_class_info(ClassId id) {
          1, 4, 7, 8, 18, 10, 12, 10, 16, 6, 25, 10, 5, "Survive 3 diseases at once."},
         {"Trollblood",  "Something in your ancestry wasn't human. You heal. You endure.",
          1, 2, 1, 18, 6, 20, 6, 10, 6, 4,
-         55, 0, 8, "Reach dungeon depth 8."},
+         55, 0, 8, "Reach dungeon depth 4."},
     };
     return CLASSES[static_cast<int>(id)];
 }

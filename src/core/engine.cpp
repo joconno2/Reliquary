@@ -1174,7 +1174,7 @@ void Engine::generate_level() {
                     else if (town_idx == 5 && !mq_assigned[12]) {
                         npc_comp.quest_id = static_cast<int>(QuestId::MQ_06_THIRD_FRAGMENT);
                         npc_comp.name = "Guard Thane";
-                        npc_comp.dialogue = "The Sunken Halls flood more each year. The water there remembers.";
+                        npc_comp.dialogue = "The Molten Depths flood more each year. The water there remembers.";
                         mq_assigned[12] = true;
                     }
                     break;
@@ -1376,7 +1376,7 @@ void Engine::generate_level() {
             {TileType::WALL_STONE_BRICK, TileType::FLOOR_STONE,     "The Deep Halls",    9},
             {TileType::WALL_CATACOMB,    TileType::FLOOR_BONE,      "The Catacombs",    12},
             {TileType::WALL_IGNEOUS,     TileType::FLOOR_RED_STONE, "The Molten Depths",15},
-            {TileType::WALL_LARGE_STONE, TileType::FLOOR_STONE,     "The Sunken Halls", 18},
+            {TileType::WALL_LARGE_STONE, TileType::FLOOR_STONE,     "The Molten Depths", 18},
         };
         constexpr int DEPTH_ZONE_COUNT = sizeof(DEPTH_ZONES) / sizeof(DEPTH_ZONES[0]);
 
@@ -2089,7 +2089,7 @@ void Engine::generate_level() {
         // Dungeon zone messages
         static const char* ZONE_NAMES[] = {
             "The Warrens", "Stonekeep", "The Deep Halls",
-            "The Catacombs", "The Molten Depths", "The Sunken Halls",
+            "The Catacombs", "The Molten Depths", "The Molten Depths",
         };
         static const char* ZONE_MESSAGES[] = {
             "Dirt crumbles from the ceiling. Rats scatter at your approach.",
@@ -5109,13 +5109,13 @@ bool Engine::is_class_unlocked(ClassId id) const {
     if (idx < BASE_CLASS_COUNT) return true; // base classes always available
     switch (id) {
         case ClassId::BARBARIAN:    return meta_.total_kills >= 50;
-        case ClassId::KNIGHT:       return meta_.max_dungeon_depth >= 5;
+        case ClassId::KNIGHT:       return meta_.max_dungeon_depth >= 3;
         case ClassId::MONK:         return meta_.killed_unarmed;
         case ClassId::TEMPLAR:      return meta_.total_undead_kills >= 30;
         case ClassId::DRUID:        return meta_.total_quests_completed >= 10;
         case ClassId::WAR_CLERIC:   return meta_.total_hp_healed >= 300;
         case ClassId::WARLOCK:      return meta_.died_deep;
-        case ClassId::DWARF:        return meta_.max_dungeon_depth >= 6;
+        case ClassId::DWARF:        return meta_.max_dungeon_depth >= 4;
         case ClassId::ELF:          return meta_.total_creatures_examined >= 15;
         case ClassId::BANDIT:       return meta_.max_gold_single_run >= 500;
         case ClassId::NECROMANCER:  return meta_.total_dark_arts_casts >= 30;
@@ -5124,7 +5124,7 @@ bool Engine::is_class_unlocked(ClassId id) const {
         case ClassId::WYRMKIN:      return meta_.killed_dragon;
         case ClassId::REVENANT:     return meta_.total_deaths >= 10;
         case ClassId::SERPENTINE:   return meta_.max_diseases >= 3;
-        case ClassId::TROLLBLOOD:   return meta_.max_dungeon_depth >= 8;
+        case ClassId::TROLLBLOOD:   return meta_.max_dungeon_depth >= 4;
         default: return false;
     }
 }
@@ -7969,17 +7969,17 @@ void Engine::handle_input() {
                             std::string dname = de.name;
                             if (dname == "The Barrow") {
                                 log_.add("Your brand pulses. The dead down here know you're coming.", brand_nar);
-                            } else if (dname == "Ashford Ruins") {
+                            } else if (dname == "Stonekeep") {
                                 log_.add("The brand itches. Something written here is meant for you.", brand_nar);
                             } else if (dname == "Stonekeep") {
                                 log_.add("Your brand burns bright enough to see by. The walls are warm.", brand_nar);
-                            } else if (dname == "Frostmere Depths") {
+                            } else if (dname == "The Catacombs") {
                                 log_.add("The cold should numb your brand. Instead it burns hotter.", brand_nar);
                             } else if (dname == "The Catacombs") {
                                 log_.add("The dead here are older than the gods. Your brand illuminates their faces.", brand_nar);
                             } else if (dname == "The Molten Depths") {
                                 log_.add("The heat is immense. Your brand matches it. You feel a fragment calling.", brand_nar);
-                            } else if (dname == "The Sunken Halls") {
+                            } else if (dname == "The Molten Depths") {
                                 log_.add("Water everywhere. Your brand reflects off the surface like a lantern.", brand_nar);
                             } else if (dname == "The Hollowgate") {
                                 log_.add("The seal recognizes your brand. The fragments resonate. The way opens.", brand_nar);

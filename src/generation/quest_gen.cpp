@@ -455,7 +455,7 @@ void spawn_quest_content(World& world, const TileMap& map,
         }
     }
 
-    // The Sepulchre depth-triggered quests (MQ_15/16/17)
+    // The Sepulchre depth-triggered quests (MQ_08/MQ_09)
     bool in_sepulchre = dungeon_ctx && dungeon_ctx->zone == "sepulchre";
     if (in_sepulchre) {
         // MQ_15: auto-activate on entering The Sepulchre
@@ -467,7 +467,7 @@ void spawn_quest_content(World& world, const TileMap& map,
                 log.add("Your god is screaming.", {180, 80, 80, 255});
             }
         }
-        // MQ_16: auto-activate at depth 4+
+        // MQ_09: auto-activate at depth 4 (claim reliquary)
         if (dungeon_level >= 4 && !journal.has_quest(QuestId::MQ_09_CLAIM_RELIQUARY)) {
             if (journal.has_quest(QuestId::MQ_08_ENTER_SEPULCHRE) &&
                 journal.get_state(QuestId::MQ_08_ENTER_SEPULCHRE) == QuestState::ACTIVE) {
@@ -528,7 +528,7 @@ void spawn_quest_content(World& world, const TileMap& map,
         bool is_bottom = (dungeon_level >= zone_max);
 
         if (is_bottom) {
-            // MQ_03: Stone Tablet in Ashford Ruins
+            // (disabled: Ashford removed from quest chain)
             if (false) {
                 spawn_quest_item("Stone Tablet",
                     "A heavy stone tablet. The inscriptions shift when you aren't looking.",

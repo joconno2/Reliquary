@@ -3,7 +3,7 @@
 #include <cmath>
 #include <cstdlib>
 
-// Canonical town data — single source of truth for all 20 towns.
+// Canonical town data — single source of truth for all towns.
 // Referenced by: NPC spawning, quest generation, music proximity,
 // overworld population, sign generation, enemy spawn avoidance.
 
