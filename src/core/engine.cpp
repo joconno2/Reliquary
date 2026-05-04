@@ -932,6 +932,10 @@ void Engine::generate_level() {
             "The gods arrived. That's what the oldest records say. Arrived, not arose.",
             "Have you read the standing stone inscriptions? They predate everything.",
             "Somewhere in those dungeons is the truth. I just can't go get it myself.",
+            "There's a tree in the deep Greenwood that glows at night. Nobody goes near it.",
+            "The northern peaks hide an altar of ice. Something rests there. Something old.",
+            "Hunters say there's a shrine half-buried in the southern wastes. Sythara's mark.",
+            "The deepest dungeons have guardians. Not monsters. Something placed there on purpose.",
         };
         static const char* BLACKSMITH_DIALOGUE[] = {
             "Iron holds. Steel bites. That's all you need to know.",
@@ -2055,6 +2059,38 @@ void Engine::generate_level() {
                     log_.add("Something valuable gleams in the deepest chamber.", {255, 240, 140, 255});
                 }
             }
+            // Legendary Guardian — unique mini-boss in highest-difficulty generic dungeons
+            if (dungeon_level_ >= dentry.max_depth && dentry.zone_difficulty >= 7
+                && dentry.quest.empty() && !rooms_.empty()) {
+                // Spawn a guardian boss with a guaranteed legendary drop
+                auto& last_room = rooms_.back();
+                int gx = last_room.x + last_room.w / 2;
+                int gy = last_room.y + last_room.h / 2;
+                Entity guardian = world_.create();
+                world_.add<Position>(guardian, {gx, gy});
+
+                // Guardian type based on zone
+                const char* gname = "Ancient Guardian";
+                int gsheet = SHEET_MONSTERS, gsx = 0, gsy = 11;
+                if (dentry.zone == "deep_halls") { gname = "The Stone King"; gsx = 7; gsy = 7; }
+                else if (dentry.zone == "catacombs") { gname = "The Undying"; gsx = 3; gsy = 4; }
+                else if (dentry.zone == "molten") { gname = "Ashborn"; gsx = 2; gsy = 8; }
+                else { gname = "The Watcher"; gsx = 2; gsy = 5; }
+
+                world_.add<Renderable>(guardian, {gsheet, gsx, gsy, {255, 200, 100, 255}, 5});
+                Stats gs; gs.name = gname; gs.hp = 200; gs.hp_max = 200;
+                gs.base_damage = 20; gs.natural_armor = 8; gs.base_speed = 90;
+                gs.set_attr(Attr::STR, 22); gs.set_attr(Attr::DEX, 14); gs.set_attr(Attr::CON, 22);
+                gs.xp_value = 500;
+                world_.add<Stats>(guardian, std::move(gs));
+                AI gai; gai.state = AIState::HUNTING; gai.flee_threshold = 0;
+                world_.add<AI>(guardian, gai);
+                world_.add<Energy>(guardian, {0, 90});
+                world_.add<StatusEffects>(guardian);
+                log_.add("A powerful guardian blocks the way.", {255, 200, 100, 255});
+                audio_.play(SfxId::SPELL_IMPACT);
+            }
+
             // God relic — bottom floor of late-game dungeons with a patron god, ~30% chance
             if (dungeon_level_ >= dentry.max_depth && dentry.zone_difficulty >= 6
                 && dentry.patron_god_idx >= 0 && rng_.chance(30)) {

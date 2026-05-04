@@ -212,6 +212,70 @@ void populate(World& world, TileMap& map, RNG& rng,
     place_lore(800, 1302, "eroded pillar text",
         "Seven gods claimed it. None of them made it. Who will claim it next?");
 
+    // === LEGENDARY SECRET LOCATIONS (3 overworld-placed game-breaking items) ===
+    // Each is at a visually distinct landmark that players can find by exploring or NPC hints
+
+    // 1. The Glowing Tree (deep Greenwood, west) - Worldsplitter axe
+    {
+        int tx = 180, ty = 380;
+        // Paint a clearing with a special tree
+        for (int dy = -2; dy <= 2; dy++)
+            for (int dx = -2; dx <= 2; dx++)
+                if (map.in_bounds(tx+dx, ty+dy)) map.at(tx+dx, ty+dy).type = TileType::FLOOR_GRASS;
+        if (map.in_bounds(tx, ty)) map.at(tx, ty).type = TileType::TREE; // the glowing tree itself
+        // Item entity spawned at base of tree
+        Entity wsi = world.create();
+        world.add<Position>(wsi, {tx, ty+1});
+        world.add<Renderable>(wsi, {SHEET_ITEMS, 1, 2, {120, 255, 120, 255}, 3}); // green glow, high z
+        Item ws_item;
+        ws_item.name = "Worldsplitter"; ws_item.description = "An axe that fell from a dead god's hand. Kills in one hit below 30% HP. +15 damage.";
+        ws_item.type = ItemType::WEAPON; ws_item.slot = EquipSlot::MAIN_HAND;
+        ws_item.damage_bonus = 15; ws_item.attack_bonus = 3;
+        ws_item.unique_effect = UniqueEffect::EXECUTE_THRESHOLD;
+        ws_item.rarity = Rarity::LEGENDARY; ws_item.identified = true;
+        ws_item.gold_value = 500;
+        world.add<Item>(wsi, std::move(ws_item));
+    }
+
+    // 2. The Frozen Altar (far north peaks) - Frostbind Crown
+    {
+        int tx = 450, ty = 60;
+        for (int dy = -1; dy <= 1; dy++)
+            for (int dx = -2; dx <= 2; dx++)
+                if (map.in_bounds(tx+dx, ty+dy)) map.at(tx+dx, ty+dy).type = TileType::FLOOR_ICE;
+        Entity fbi = world.create();
+        world.add<Position>(fbi, {tx, ty});
+        world.add<Renderable>(fbi, {SHEET_ITEMS, 7, 15, {140, 200, 255, 255}, 3}); // ice blue glow
+        Item fb_item;
+        fb_item.name = "Frostbind Crown"; fb_item.description = "Worn by a king who froze time. All enemies near you are slowed. +5 armor. Immune to freeze.";
+        fb_item.type = ItemType::ARMOR_HEAD; fb_item.slot = EquipSlot::HEAD;
+        fb_item.armor_bonus = 5; fb_item.dodge_bonus = 2;
+        fb_item.unique_effect = UniqueEffect::FEAR_AURA; // repurpose: slows enemies (closest mechanic)
+        fb_item.rarity = Rarity::LEGENDARY; fb_item.identified = true;
+        fb_item.gold_value = 500;
+        world.add<Item>(fbi, std::move(fb_item));
+    }
+
+    // 3. The Sunken Shrine (southern wastes, half-buried) - Plagueheart Amulet
+    {
+        int tx = 600, ty = 650;
+        for (int dy = -1; dy <= 1; dy++)
+            for (int dx = -1; dx <= 1; dx++)
+                if (map.in_bounds(tx+dx, ty+dy)) map.at(tx+dx, ty+dy).type = TileType::FLOOR_SAND;
+        if (map.in_bounds(tx, ty)) map.at(tx, ty).type = TileType::SHRINE;
+        Entity phi = world.create();
+        world.add<Position>(phi, {tx+1, ty});
+        world.add<Renderable>(phi, {SHEET_ITEMS, 6, 16, {180, 255, 80, 255}, 3}); // sickly green glow
+        Item ph_item;
+        ph_item.name = "Plagueheart"; ph_item.description = "A gem cut from Sythara's own flesh. All your attacks deal 5 poison damage. Immune to all disease and poison.";
+        ph_item.type = ItemType::AMULET; ph_item.slot = EquipSlot::AMULET;
+        ph_item.damage_bonus = 5; ph_item.con_bonus = 3;
+        ph_item.unique_effect = UniqueEffect::POISON_IMMUNE;
+        ph_item.rarity = Rarity::LEGENDARY; ph_item.identified = true;
+        ph_item.gold_value = 500;
+        world.add<Item>(phi, std::move(ph_item));
+    }
+
     // Graveyard — north of Thornwall
     for (int i = 0; i < 8; i++) {
         int gx = 980 + (i % 4) * 4;

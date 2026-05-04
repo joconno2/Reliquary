@@ -422,17 +422,32 @@ void draw_entities(SDL_Renderer* renderer, const SpriteManager& sprites,
     for (auto& cmd : cmds) {
         int sx = cmd.sx, sy = cmd.sy;
         // Animated sprites: cycle columns as frames (offset by position for desync)
-        // Only animate rows that have animation frames (1=brazier, 5=torch, 8=crystal)
-        // Static rows (2=dead campfire, 4=unlit torch) keep their original sprite
         if (cmd.sheet == SHEET_ANIMATED && (sy == 1 || sy == 5 || sy == 8)) {
-            int offset = (cmd.dx * 7 + cmd.dy * 13) & 0xFF; // spatial hash for per-entity offset
+            int offset = (cmd.dx * 7 + cmd.dy * 13) & 0xFF;
             sx = static_cast<int>(((ticks + offset * 40) / 150) % 6);
         }
+
+        // Legendary/Relic glow: pulsing circle beneath high-value items
+        if (cmd.z_order >= 2) {
+            float pulse = 0.5f + 0.5f * sinf(ticks * 0.004f + cmd.dx * 0.1f);
+            int glow_alpha = static_cast<int>(40 + 50 * pulse);
+            int glow_r = static_cast<int>(TS * (0.6f + 0.3f * pulse));
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+            // Draw concentric glow circles
+            for (int ring = glow_r; ring > glow_r / 3; ring -= 2) {
+                int alpha = glow_alpha * ring / glow_r;
+                SDL_SetRenderDrawColor(renderer, cmd.tint.r, cmd.tint.g, cmd.tint.b,
+                                       static_cast<Uint8>(alpha));
+                int cx = cmd.dx + TS / 2, cy = cmd.dy + TS / 2;
+                // Approximate circle with 4 rects
+                SDL_Rect gr = {cx - ring / 2, cy - ring / 4, ring, ring / 2};
+                SDL_RenderFillRect(renderer, &gr);
+            }
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+        }
+
         sprites.draw_sprite_sized(renderer, cmd.sheet, sx, sy,
                                    cmd.dx, cmd.dy, TS, cmd.tint, cmd.flip_h);
-
-        // Light sources: glow handled by per-tile lighting system (compute_lighting)
-        // No post-render overlay needed
     }
 }
 
