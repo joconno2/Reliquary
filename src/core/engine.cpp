@@ -1004,7 +1004,7 @@ void Engine::generate_level() {
         };
 
         // Track which main quest slots have been assigned so each is assigned once
-        bool mq_assigned[17] = {};
+        bool mq_assigned[9] = {};
         // Side quest assignment tracking (for Thornwall side quests)
         bool sq_farmer_assigned = false;
         bool sq_guard_assigned = false;
@@ -1031,8 +1031,8 @@ void Engine::generate_level() {
                     { int sv = (me.x * 11 + me.y * 7) % 2;
                       if (sv == 0) { sx = 2; sy = 6; }      // shopkeep
                       else { sx = 3; sy = 6; } }             // elderly woman (merchant)
-                    // Side quest: Ashford shopkeeper — rats in the cellar
-                    if (town_idx == 1 && !sq_ratcellar_assigned) {
+                    // Side quest: Thornwall shopkeeper — rats in the cellar
+                    if (town_idx == 0 && !sq_ratcellar_assigned) {
                         npc_comp.quest_id = static_cast<int>(QuestId::SQ_RAT_CELLAR);
                         npc_comp.dialogue = "Rats in the cellar. Every night, more of them. I'll pay you to clear them out.";
                         sq_ratcellar_assigned = true;
@@ -1049,12 +1049,12 @@ void Engine::generate_level() {
                         npc_comp.quest_id = static_cast<int>(QuestId::SQ_DELIVER_WEAPON);
                         sq_blacksmith_assigned = true;
                     }
-                    // MQ_10: Ironhearth blacksmith
-                    if (town_idx == 4 && !mq_assigned[9]) {
+                    // Ironhearth blacksmith (near Molten Depths)
+                    if (town_idx == 7 && !mq_assigned[5]) {
                         npc_comp.quest_id = static_cast<int>(QuestId::MQ_06_THIRD_FRAGMENT);
                         npc_comp.name = "Master Smith Brynn";
-                        npc_comp.dialogue = "Bring me something worth studying and I'll tell you what it is.";
-                        mq_assigned[9] = true;
+                        npc_comp.dialogue = "The Molten Depths glow brighter each day. Something burns down there.";
+                        mq_assigned[5] = true;
                     }
                     break;
                 case 'P':
@@ -1066,7 +1066,7 @@ void Engine::generate_level() {
                       if (pv == 0) { sx = 5; sy = 5; }      // scholar
                       else if (pv == 1) { sx = 3; sy = 4; }  // desert sage
                       else { sx = 4; sy = 4; } }             // dwarf mage
-                    // MQ_02: Thornwall scholar
+                    // MQ_02: Thornwall scholar (brand explanation)
                     if (town_idx == 0 && !mq_assigned[1]) {
                         npc_comp.quest_id = static_cast<int>(QuestId::MQ_02_SCHOLAR_CLUE);
                         npc_comp.name = "Scholar Aldric";
@@ -1074,40 +1074,33 @@ void Engine::generate_level() {
                                             "You're not the first. The others didn't survive.";
                         mq_assigned[1] = true;
                     }
-                    // MQ_05: Greywatch scholar
-                    else if (town_idx == 2 && !mq_assigned[4]) {
+                    // MQ_03: Greywatch scholar (Stonekeep / first fragment)
+                    else if (town_idx == 4 && !mq_assigned[2]) {
                         npc_comp.quest_id = static_cast<int>(QuestId::MQ_03_FIRST_FRAGMENT);
-                        npc_comp.name = "Scholar Erynn";
-                        npc_comp.dialogue = "Stonekeep holds inscriptions no one alive can read.";
-                        mq_assigned[4] = true;
+                        npc_comp.name = "Captain Voss";
+                        npc_comp.dialogue = "Stonekeep is groaning. Whatever you're looking for is down there.";
+                        mq_assigned[2] = true;
                     }
-                    // MQ_06: Frostmere scholar (ice sage)
-                    else if (town_idx == 3 && !mq_assigned[5]) {
+                    // MQ_04: Frostmere sage (counsel)
+                    else if (town_idx == 3 && !mq_assigned[3]) {
                         npc_comp.quest_id = static_cast<int>(QuestId::MQ_04_SAGE_COUNSEL);
                         npc_comp.name = "Sage Yeva";
                         npc_comp.dialogue = "Some names should stay frozen.";
-                        mq_assigned[5] = true;
+                        mq_assigned[3] = true;
                     }
-                    // MQ_08+MQ_09: Millhaven scholar (Catacombs area)
-                    else if (town_idx == 7 && !mq_assigned[7]) {
+                    // MQ_05: Millhaven scholar (Catacombs / second fragment)
+                    else if (town_idx == 1 && !mq_assigned[4]) {
                         npc_comp.quest_id = static_cast<int>(QuestId::MQ_05_SECOND_FRAGMENT);
                         npc_comp.name = "Scholar Maren";
-                        npc_comp.dialogue = "The Catacombs gate has stood sealed since before this town was built.";
-                        mq_assigned[7] = true;
+                        npc_comp.dialogue = "The Catacombs have been sealed since before this town existed.";
+                        mq_assigned[4] = true;
                     }
-                    // MQ_12: Candlemere scholar (binding ritual)
-                    else if (town_idx == 5 && !mq_assigned[11]) {
-                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_07_BREAK_SEAL);
-                        npc_comp.name = "Priest Solara";
-                        npc_comp.dialogue = "The old rituals are preserved here. The gods tried to make everyone forget.";
-                        mq_assigned[11] = true;
-                    }
-                    // MQ_14: Hollowgate scholar (break the seal)
-                    else if (town_idx == 6 && !mq_assigned[13]) {
+                    // MQ_07: Hollowgate scholar (break the seal)
+                    else if (town_idx == 6 && !mq_assigned[6]) {
                         npc_comp.quest_id = static_cast<int>(QuestId::MQ_07_BREAK_SEAL);
                         npc_comp.name = "Scholar Daven";
-                        npc_comp.dialogue = "The seal here is the last one. Beyond it lies the oldest place in the world.";
-                        mq_assigned[13] = true;
+                        npc_comp.dialogue = "The seal here is the last one. Beyond it lies the oldest place.";
+                        mq_assigned[6] = true;
                     }
                     break;
                 case 'F':
@@ -1125,17 +1118,10 @@ void Engine::generate_level() {
                         sq_farmer_assigned = true;
                     }
                     // Side quest: Millhaven farmer — lost amulet
-                    if (town_idx == 7 && !sq_amulet_assigned) {
+                    if (town_idx == 1 && !sq_amulet_assigned) {
                         npc_comp.quest_id = static_cast<int>(QuestId::SQ_LOST_AMULET);
                         npc_comp.dialogue = "My grandmother's amulet — I lost it in the dungeon nearby. Please, it's all I have of her.";
                         sq_amulet_assigned = true;
-                    }
-                    // MQ_03: Ashford farmer
-                    if (town_idx == 1 && !mq_assigned[2]) {
-                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_03_FIRST_FRAGMENT);
-                        npc_comp.name = "Farmer Galen";
-                        npc_comp.dialogue = "There's a stone tablet in the ruins nearby. The dead don't want it found.";
-                        mq_assigned[2] = true;
                     }
                     break;
                 case 'G':
@@ -1155,7 +1141,7 @@ void Engine::generate_level() {
                         sq_guard_assigned = true;
                     }
                     // Side quest: Greywatch guard — undead patrol
-                    else if (town_idx == 2 && !sq_undead_assigned) {
+                    else if (town_idx == 4 && !sq_undead_assigned) {
                         npc_comp.quest_id = static_cast<int>(QuestId::SQ_UNDEAD_PATROL);
                         npc_comp.name = "Sergeant Breck";
                         npc_comp.dialogue = "The dead walk in the tunnels south of here. Thin their numbers.";

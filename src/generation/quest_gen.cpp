@@ -478,27 +478,14 @@ void spawn_quest_content(World& world, const TileMap& map,
                 log.add("The architecture stops making sense. You hear other footsteps.", {180, 80, 80, 255});
             }
         }
-        // MQ_17: auto-activate at depth 6 (the bottom)
-        if (dungeon_level >= 4 && !journal.has_quest(QuestId::MQ_09_CLAIM_RELIQUARY)) {
-            if (journal.has_quest(QuestId::MQ_09_CLAIM_RELIQUARY) &&
-                journal.get_state(QuestId::MQ_09_CLAIM_RELIQUARY) == QuestState::ACTIVE) {
-                journal.set_state(QuestId::MQ_09_CLAIM_RELIQUARY, QuestState::COMPLETE);
-                journal.set_state(QuestId::MQ_09_CLAIM_RELIQUARY, QuestState::FINISHED);
-                journal.add_quest(QuestId::MQ_09_CLAIM_RELIQUARY);
-                log.add("Quest started: Claim the Reliquary", {220, 200, 100, 255});
-                log.add("You see it. A vessel of light that hurts to look at.", {255, 220, 100, 255});
-            }
-        }
         // Sepulchre atmospheric entry messages
         static const char* SEPULCHRE_ENTRY[] = {
             "The air changes. Something is wrong with this place.",
             "The walls here are older than stone should be.",
             "The geometry stops making sense. Corners that shouldn't exist.",
-            "You hear footsteps that aren't yours.",
-            "The walls are breathing.",
             "The Reliquary is here. You can feel it pulling.",
         };
-        if (dungeon_level >= 1 && dungeon_level <= 6) {
+        if (dungeon_level >= 1 && dungeon_level <= 4) {
             log.add(SEPULCHRE_ENTRY[dungeon_level - 1], {160, 100, 140, 255});
         }
     }
@@ -586,7 +573,7 @@ void spawn_quest_content(World& world, const TileMap& map,
                     5, 16, QuestId::MQ_07_BREAK_SEAL);
             }
             // MQ_17: The Reliquary in The Sepulchre (depth 6)
-            if (dungeon_ctx->quest == "MQ_08" && dungeon_level >= 4) {
+            if (dungeon_ctx->quest == "MQ_09" && dungeon_level >= 4) {
                 spawn_quest_item("The Reliquary",
                     "A vessel of light that hurts to look at. It was here before the gods.",
                     6, 16, QuestId::MQ_09_CLAIM_RELIQUARY,

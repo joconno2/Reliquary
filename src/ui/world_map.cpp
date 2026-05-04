@@ -117,13 +117,10 @@ void WorldMap::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_tit
     // Town markers
     struct TownMarker { int tx, ty; const char* name; };
     static const TownMarker TOWNS[] = {
-        {1000, 750, "Thornwall"}, {750, 650, "Ashford"}, {1300, 670, "Greywatch"},
-        {850, 950, "Millhaven"}, {1200, 930, "Stonehollow"}, {1050, 450, "Frostmere"},
-        {650, 800, "Bramblewood"}, {1400, 750, "Ironhearth"}, {1000, 1100, "Dustfall"},
-        {800, 400, "Whitepeak"}, {1250, 1100, "Drywell"}, {550, 550, "Hollowgate"},
-        {1450, 500, "Candlemere"}, {900, 1200, "Sandmoor"}, {1100, 300, "Glacierveil"},
-        {700, 1050, "Tanglewood"}, {1350, 1000, "Redrock"}, {1150, 550, "Ravenshold"},
-        {600, 700, "Fenwatch"}, {1500, 850, "Endgate"},
+        {500, 375, "Thornwall"}, {425, 475, "Millhaven"}, {725, 250, "Candlemere"},
+        {525, 225, "Frostmere"}, {650, 335, "Greywatch"}, {400, 200, "Whitepeak"},
+        {325, 400, "Bramblewood"}, {275, 275, "Hollowgate"}, {700, 375, "Ironhearth"},
+        {500, 550, "Dustfall"},
     };
 
     SDL_Color town_label = {220, 210, 200, 255};

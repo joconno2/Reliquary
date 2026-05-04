@@ -164,13 +164,13 @@ void populate(World& world, TileMap& map, RNG& rng,
 
     // Heartlands (Morreth) — soldiers, farmers, merchants
     spawn_ow_npc(500, 400, "Patrol Soldier", "Morreth's reach keeps the roads safe. Mostly.", NPCRole::GUARD, 2, 5);
-    spawn_ow_npc(450, 350, "Merchant", "Good trade between Thornwall and Ashford. If the highwaymen don't get you.", NPCRole::SHOPKEEPER, 2, 5);
+    spawn_ow_npc(450, 350, "Merchant", "Good trade on the western road. If the highwaymen don't get you.", NPCRole::SHOPKEEPER, 2, 5);
 
     // =============================================
     // ENCAMPMENTS (small NPC + lore clusters)
     // =============================================
 
-    // Abandoned camp — between Ashford and Hollowgate
+    // Abandoned camp — near the deep woods
     paint_ruin(650, 600);
     place_lore(650, 600, "abandoned journal",
         "Day 3. We found the entrance. Day 5. Markus didn't come back. Day 7. None of us are going back in.");
@@ -180,12 +180,12 @@ void populate(World& world, TileMap& map, RNG& rng,
     spawn_ow_npc(675, 360, "Sellsword", "We're waiting for a contract. Know anyone who needs killing?", NPCRole::GUARD, 0, 6);
     spawn_ow_npc(677, 362, "Sellsword", "Gold talks. Everything else walks.", NPCRole::GUARD, 0, 6);
 
-    // Scholar's camp — between Frostmere and Glacierveil
+    // Scholar's camp — in the frozen north
     spawn_ow_npc(540, 185, "Field Scholar", "The inscriptions up north predate the current pantheon by centuries.", NPCRole::PRIEST, 5, 6);
     place_lore(1075, 370, "field notes",
-        "The symbols near Glacierveil match nothing in our records. They resemble the Sepulchre markings.");
+        "The symbols in the north match nothing in our records. They resemble the Sepulchre markings.");
 
-    // Refugee camp — between Dustfall and Sandmoor
+    // Refugee camp — in the southern wastes
     spawn_ow_npc(475, 575, "Refugee", "The southern dungeons drove us out. We can't go home.", NPCRole::FARMER, 0, 6);
     spawn_ow_npc(477, 577, "Refugee", "My children are hungry. The road north is dangerous.", NPCRole::FARMER, 3, 6);
 
@@ -221,7 +221,7 @@ void populate(World& world, TileMap& map, RNG& rng,
     place_lore(982, 695, "gravestone",
         "Here lies the second paragon of Morreth. He did not fail. He chose to stop.");
 
-    // Old battlefield — between Redrock and Stonehollow
+    // Old battlefield — on the eastern plains
     for (int i = 0; i < 12; i++) {
         int bx = 1280 + rng.range(-8, 8);
         int by = 960 + rng.range(-8, 8);
@@ -1003,28 +1003,28 @@ void populate(World& world, TileMap& map, RNG& rng,
     // Sample points along major routes
     struct { int x, y; } road_signs[] = {
         // Heartlands crossroads
-        {900, 700},   // between Thornwall and Ashford
+        {900, 700},   // on the western road
         {1150, 710},  // between Thornwall and Greywatch
         {950, 850},   // between Thornwall and Millhaven
         // Pale Reach
         {1050, 600},  // between Thornwall and Frostmere
-        {1200, 500},  // between Ravenshold and Candlemere
-        {1075, 375},  // between Frostmere and Glacierveil
+        {1200, 500},  // on the northern road
+        {1075, 375},  // in the frozen north
         {900, 575},   // between Whitepeak and Thornwall
         // Greenwood
-        {625, 650},   // between Fenwatch and Hollowgate
-        {675, 900},   // between Bramblewood and Tanglewood
+        {625, 650},   // near the Greenwood
+        {675, 900},   // in the deep forest
         // Iron Coast
         {1375, 650},  // between Greywatch and Ironhearth
         {1475, 675},  // between Ironhearth and Candlemere
-        {1425, 925},  // between Ironhearth and Redrock
+        {1425, 925},  // on the Iron Coast
         // Dust Provinces
         {950, 1050},  // between Millhaven and Dustfall
-        {1125, 1100}, // between Dustfall and Drywell
-        {850, 1150},  // between Sandmoor and Tanglewood
+        {1125, 1100}, // in the dust wastes
+        {850, 1150},  // in the southern wilds
         // Far routes
         {775, 525},   // between Whitepeak and Hollowgate
-        {1500, 700},  // approaching Endgate
+        {1500, 700},  // on the eastern edge
         {1050, 200},  // approaching The Sepulchre
     };
     for (auto& rs : road_signs) {
@@ -1038,7 +1038,7 @@ void populate(World& world, TileMap& map, RNG& rng,
     static const LairDef LAIRS[] = {
         // Wolf dens (Frozen Marches, Greenwood)
         {175, 175, "wolf", 3},      // north wilderness
-        {575, 125, "wolf", 4},     // near Glacierveil
+        {575, 125, "wolf", 4},     // in the north
         {275, 425, "wolf", 3},      // Greenwood fringe
         // Spider nests (Greenwood, caves)
         {225, 325, "spider", 3},    // deep Greenwood

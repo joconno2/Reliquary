@@ -336,15 +336,12 @@ print("Placing dungeons...", flush=True)
 
 # Named quest-linked dungeons: (x, y, name, zone, quest_id)
 named_dungeons = [
-    (CX + 60,   CY,      "The Barrow",        "warrens",      "MQ_01"),
-    (CX - 200,  CY - 100, "Ashford Ruins",    "warrens",      "MQ_03"),  # near Ashford (CX-250, CY-100)
-    (CX + 200,  CY - 110, "Stonekeep",        "stonekeep",    "MQ_05"),  # near Ravenshold/Greywatch area
-    (CX + 100,  CY - 250, "Frostmere Depths", "deep_halls",   "MQ_07"),  # near Frostmere (CX+50, CY-300)
-    (CX - 150,  CY + 150, "The Catacombs",    "catacombs",    "MQ_08"),  # near Millhaven/Bramblewood
-    (CX + 450,  CY + 50,  "The Molten Depths", "molten",      "MQ_11"),  # near Ironhearth (CX+400, CY)
-    (CX + 500,  CY - 200, "The Sunken Halls", "sunken",       "MQ_13"),  # near Candlemere (CX+450, CY-250)
-    (CX - 400,  CY - 200, "The Hollowgate",   "deep_halls",   "MQ_14"),  # near Hollowgate (CX-450, CY-200)
-    (CX,        CY - 600, "The Sepulchre",    "sepulchre",    "MQ_15"),  # far north, final mega-dungeon
+    (CX + 60,   CY,      "The Barrow",        "warrens",      "MQ_01"),   # tutorial boss
+    (CX + 150,  CY - 50, "Stonekeep",          "stonekeep",    "MQ_03"),   # first fragment
+    (CX - 75,   CY + 100, "The Catacombs",     "catacombs",    "MQ_05"),   # second fragment
+    (CX + 200,  CY,       "The Molten Depths",  "molten",      "MQ_06"),   # third fragment
+    (CX - 225,  CY - 100, "The Hollowgate",    "deep_halls",   "MQ_07"),   # break seal
+    (CX,        CY - 300, "The Sepulchre",     "sepulchre",    "MQ_09"),   # final dungeon
 ]
 
 # Generic exploration dungeons spread across the map

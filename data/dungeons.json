@@ -11,10 +11,10 @@
     "patron_god_idx": 2
   },
   {
-    "name": "Ashford Ruins",
-    "x": 300,
-    "y": 275,
-    "zone": "warrens",
+    "name": "Stonekeep",
+    "x": 650,
+    "y": 325,
+    "zone": "stonekeep",
     "quest": "MQ_03",
     "province": 2,
     "province_name": "The Heartlands",
@@ -22,33 +22,11 @@
     "patron_god_idx": 2
   },
   {
-    "name": "Stonekeep",
-    "x": 700,
-    "y": 265,
-    "zone": "stonekeep",
-    "quest": "MQ_05",
-    "province": 0,
-    "province_name": "The Pale Reach",
-    "patron_god": "Soleth",
-    "patron_god_idx": 5
-  },
-  {
-    "name": "Frostmere Depths",
-    "x": 600,
-    "y": 125,
-    "zone": "deep_halls",
-    "quest": "MQ_07",
-    "province": 0,
-    "province_name": "The Pale Reach",
-    "patron_god": "Soleth",
-    "patron_god_idx": 5
-  },
-  {
     "name": "The Catacombs",
-    "x": 350,
-    "y": 525,
+    "x": 425,
+    "y": 475,
     "zone": "catacombs",
-    "quest": "MQ_08",
+    "quest": "MQ_05",
     "province": 2,
     "province_name": "The Heartlands",
     "patron_god": "Morreth",
@@ -56,47 +34,36 @@
   },
   {
     "name": "The Molten Depths",
-    "x": 950,
-    "y": 425,
+    "x": 700,
+    "y": 375,
     "zone": "molten",
-    "quest": "MQ_11",
-    "province": 4,
-    "province_name": "The Iron Coast",
-    "patron_god": "Ossren",
-    "patron_god_idx": 9
-  },
-  {
-    "name": "The Sunken Halls",
-    "x": 985,
-    "y": 175,
-    "zone": "sunken",
-    "quest": "MQ_13",
-    "province": 0,
-    "province_name": "The Pale Reach",
-    "patron_god": "Soleth",
-    "patron_god_idx": 5
+    "quest": "MQ_06",
+    "province": 2,
+    "province_name": "The Heartlands",
+    "patron_god": "Morreth",
+    "patron_god_idx": 2
   },
   {
     "name": "The Hollowgate",
-    "x": 100,
-    "y": 175,
+    "x": 275,
+    "y": 275,
     "zone": "deep_halls",
-    "quest": "MQ_14",
-    "province": 0,
-    "province_name": "The Pale Reach",
-    "patron_god": "Soleth",
-    "patron_god_idx": 5
+    "quest": "MQ_07",
+    "province": 3,
+    "province_name": "The Greenwood",
+    "patron_god": "Khael",
+    "patron_god_idx": 4
   },
   {
     "name": "The Sepulchre",
     "x": 500,
-    "y": 15,
+    "y": 75,
     "zone": "sepulchre",
-    "quest": "MQ_15",
-    "province": 1,
-    "province_name": "The Frozen Marches",
-    "patron_god": "Gathruun",
-    "patron_god_idx": 11
+    "quest": "MQ_09",
+    "province": 0,
+    "province_name": "The Pale Reach",
+    "patron_god": "Soleth",
+    "patron_god_idx": 5
   },
   {
     "name": "The Crawl Warren",
@@ -155,19 +122,19 @@
   },
   {
     "name": "The Damp Basin",
-    "x": 635,
-    "y": 400,
+    "x": 408,
+    "y": 113,
     "zone": "sunken",
     "quest": null,
-    "province": 2,
-    "province_name": "The Heartlands",
-    "patron_god": "Morreth",
-    "patron_god_idx": 2
+    "province": 0,
+    "province_name": "The Pale Reach",
+    "patron_god": "Soleth",
+    "patron_god_idx": 5
   },
   {
     "name": "The Worm Warren",
-    "x": 408,
-    "y": 113,
+    "x": 223,
+    "y": 198,
     "zone": "warrens",
     "quest": null,
     "province": 0,
@@ -177,20 +144,9 @@
   },
   {
     "name": "The Broken Vault",
-    "x": 223,
-    "y": 198,
-    "zone": "stonekeep",
-    "quest": null,
-    "province": 0,
-    "province_name": "The Pale Reach",
-    "patron_god": "Soleth",
-    "patron_god_idx": 5
-  },
-  {
-    "name": "The Deep Halls",
     "x": 401,
     "y": 311,
-    "zone": "deep_halls",
+    "zone": "stonekeep",
     "quest": null,
     "province": 2,
     "province_name": "The Heartlands",
@@ -198,9 +154,20 @@
     "patron_god_idx": 2
   },
   {
-    "name": "The Bone Ossuary",
+    "name": "The Deep Halls",
     "x": 227,
     "y": 61,
+    "zone": "deep_halls",
+    "quest": null,
+    "province": 0,
+    "province_name": "The Pale Reach",
+    "patron_god": "Soleth",
+    "patron_god_idx": 5
+  },
+  {
+    "name": "The Bone Ossuary",
+    "x": 506,
+    "y": 149,
     "zone": "catacombs",
     "quest": null,
     "province": 0,
@@ -210,14 +177,14 @@
   },
   {
     "name": "The Slag Core",
-    "x": 506,
-    "y": 149,
+    "x": 671,
+    "y": 446,
     "zone": "molten",
     "quest": null,
-    "province": 0,
-    "province_name": "The Pale Reach",
-    "patron_god": "Soleth",
-    "patron_god_idx": 5
+    "province": 2,
+    "province_name": "The Heartlands",
+    "patron_god": "Morreth",
+    "patron_god_idx": 2
   },
   {
     "name": "The Salt Grotto",
@@ -243,19 +210,19 @@
   },
   {
     "name": "The Silent Citadel",
-    "x": 847,
-    "y": 372,
+    "x": 331,
+    "y": 540,
     "zone": "stonekeep",
     "quest": null,
-    "province": 4,
-    "province_name": "The Iron Coast",
-    "patron_god": "Ossren",
-    "patron_god_idx": 9
+    "province": 2,
+    "province_name": "The Heartlands",
+    "patron_god": "Morreth",
+    "patron_god_idx": 2
   },
   {
     "name": "The Hollow Underhall",
-    "x": 880,
-    "y": 554,
+    "x": 847,
+    "y": 372,
     "zone": "deep_halls",
     "quest": null,
     "province": 4,
@@ -265,9 +232,20 @@
   },
   {
     "name": "The Grave Ossuary",
+    "x": 880,
+    "y": 554,
+    "zone": "catacombs",
+    "quest": null,
+    "province": 4,
+    "province_name": "The Iron Coast",
+    "patron_god": "Ossren",
+    "patron_god_idx": 9
+  },
+  {
+    "name": "The Cinder Core",
     "x": 271,
     "y": 683,
-    "zone": "catacombs",
+    "zone": "molten",
     "quest": null,
     "province": 5,
     "province_name": "The Dust Provinces",
@@ -275,25 +253,14 @@
     "patron_god_idx": 12
   },
   {
-    "name": "The Cinder Core",
+    "name": "The Murk Grotto",
     "x": 72,
     "y": 467,
-    "zone": "molten",
+    "zone": "sunken",
     "quest": null,
     "province": 3,
     "province_name": "The Greenwood",
     "patron_god": "Khael",
     "patron_god_idx": 4
-  },
-  {
-    "name": "The Murk Grotto",
-    "x": 713,
-    "y": 670,
-    "zone": "sunken",
-    "quest": null,
-    "province": 5,
-    "province_name": "The Dust Provinces",
-    "patron_god": "Sythara",
-    "patron_god_idx": 12
   }
 ]
