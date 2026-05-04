@@ -1315,6 +1315,7 @@ void spawn_doodads(World& world, TileMap& map,
     bool is_warrens = (zone == "warrens");
     bool is_deep_halls = (zone == "deep_halls");
     bool is_sepulchre = (zone == "sepulchre");
+    bool is_stonekeep = (zone == "stonekeep");
 
     // Sepulchre hazards: lava on floors 5-6, deep water on floors 7-9
     if (is_sepulchre && dungeon_level >= 5) {
@@ -1336,14 +1337,13 @@ void spawn_doodads(World& world, TileMap& map,
     // Hazard terrain: lava in molten zones, deep water in sunken zones
     if (is_molten || is_sunken) {
         TileType hazard = is_molten ? TileType::LAVA : TileType::DEEP_WATER;
-        // Place small pools (2-4 tiles) in some rooms
+        // Hazard pools: larger and more frequent
         for (size_t r = 2; r < rooms.size(); r++) {
-            if (!rng.chance(40)) continue; // 40% of rooms get a hazard pool
+            if (!rng.chance(60)) continue; // 60% of rooms get hazards
             auto& hr = rooms[r];
             int cx = rng.range(hr.x + 2, hr.x + hr.w - 3);
             int cy = rng.range(hr.y + 2, hr.y + hr.h - 3);
-            // Small pool: 2-4 tiles
-            for (int ti = 0; ti < rng.range(2, 4); ti++) {
+            for (int ti = 0; ti < rng.range(4, 8); ti++) {
                 int hx = cx + rng.range(-1, 1);
                 int hy = cy + rng.range(-1, 1);
                 if (map.in_bounds(hx, hy) && map.is_walkable(hx, hy))
@@ -1411,56 +1411,70 @@ void spawn_doodads(World& world, TileMap& map,
             if (!map.is_walkable(x, y)) return;
             Entity e = world.create();
             world.add<Position>(e, {x, y});
-            world.add<Renderable>(e, {sheet, sx, sy, {255,255,255,255}, 0}); // z=0, under everything
+            world.add<Renderable>(e, {sheet, sx, sy, {255,255,255,255}, 0});
         };
 
-        // Mushrooms — common in all dungeons
-        if (rng.chance(25)) place_decor(0, 20); // small mushrooms
-        if (rng.chance(10)) place_decor(1, 20); // large mushroom
-
-        // Blood splatters — more in deeper levels
-        if (rng.chance(10 + dungeon_level * 3)) place_decor(rng.range(0, 1), 22);
-
-        // Coffins in catacombs
-        if (is_catacombs && rng.chance(30)) {
-            place_decor(rng.range(0, 2), 23); // coffin variants
-        }
-        if (is_catacombs && rng.chance(15)) {
-            place_decor(rng.range(3, 5), 23); // sarcophagus variants
+        // === GUARANTEED MINIMUM: every room gets 1-2 doodads ===
+        int min_doodads = 1 + rng.range(0, 1);
+        for (int md = 0; md < min_doodads; md++) {
+            int pick = rng.range(0, 3);
+            if (pick == 0) place_decor(0, 20);       // small mushroom
+            else if (pick == 1) place_decor(rng.range(0, 1), 22); // blood/scatter
+            else if (pick == 2) place_decor(4, 17);  // barrel
+            else place_decor(rng.range(0, 1), 21);   // bones
         }
 
-        // Ore sacks in deep/molten dungeons
-        if (is_molten && rng.chance(20)) place_decor(5, 17);
+        // === ZONE-SPECIFIC DOODADS (stacked on top of minimum) ===
 
-        // Slime in warrens
-        if (is_warrens && rng.chance(20)) place_decor(rng.range(2, 3), 22);
-        // Extra webs/slime in warrens
-        if (is_warrens && rng.chance(15)) place_decor(rng.range(2, 3), 22);
-        // Extra mushrooms in warrens (damp tunnels)
-        if (is_warrens && rng.chance(20)) place_decor(0, 20);
-
-        // Molten: extra braziers for glow, ore sacks
-        if (is_molten && rng.chance(25)) place_decor(5, 17); // ore sacks
-        if (is_molten && rng.chance(15)) place_decor(rng.range(0, 1), 22); // slag/blood splatters
-
-        // Deep halls: large rocks (rubble/pillars)
-        if (is_deep_halls && rng.chance(20)) place_decor(rng.range(0, 1), 18); // large rocks
-
-        // Sunken: extra mushrooms near water, slime
-        if (is_sunken && rng.chance(30)) place_decor(0, 20);
-        if (is_sunken && rng.chance(20)) place_decor(1, 20);
-        if (is_sunken && rng.chance(15)) place_decor(rng.range(2, 3), 22); // slime
-
-        // Sepulchre: HEAVY atmosphere — bones, coffins, blood, environmental dread
-        if (is_sepulchre) {
-            // Multiple doodads per room (the deeper, the more cluttered)
-            int doodad_density = 2 + dungeon_level / 3;
-            for (int dd = 0; dd < doodad_density; dd++) {
-                if (rng.chance(60)) place_decor(rng.range(0, 1), 21); // corpse bones
-                if (rng.chance(40)) place_decor(rng.range(0, 2), 23); // coffins
-                if (rng.chance(30)) place_decor(rng.range(0, 1), 22); // blood
+        if (is_warrens) {
+            // Damp, filthy tunnels: slime, mushrooms, scattered bones
+            place_decor(rng.range(2, 3), 22); // slime always
+            if (rng.chance(40)) place_decor(0, 20); // more mushrooms
+            if (rng.chance(30)) place_decor(rng.range(2, 3), 22); // more slime
+            if (rng.chance(20)) place_decor(rng.range(0, 1), 21); // bones
+        } else if (is_stonekeep) {
+            // Fortress: barrels, weapon racks, banners
+            if (rng.chance(40)) place_decor(4, 17); // barrel
+            if (rng.chance(30)) place_decor(5, 17); // ore sack (supplies)
+            if (rng.chance(25)) place_decor(6, 17); // log pile
+            if (rng.chance(20)) place_decor(rng.range(0, 1), 21); // old bones
+        } else if (is_catacombs) {
+            // Burial grounds: coffins, bones, sarcophagi everywhere
+            place_decor(rng.range(0, 2), 23); // coffin always
+            place_decor(rng.range(0, 1), 21); // bones always
+            if (rng.chance(50)) place_decor(rng.range(0, 2), 23); // more coffins
+            if (rng.chance(40)) place_decor(3, 23); // sarcophagus
+            if (rng.chance(30)) place_decor(rng.range(0, 1), 22); // blood
+        } else if (is_molten) {
+            // Volcanic: ore, slag, heat shimmer (multiple ore sacks)
+            place_decor(5, 17); // ore sack always
+            if (rng.chance(50)) place_decor(5, 17); // more ore
+            if (rng.chance(40)) place_decor(rng.range(0, 1), 22); // slag/scorch
+            if (rng.chance(30)) place_decor(4, 17); // barrel (supplies)
+        } else if (is_sunken) {
+            // Flooded: mushrooms, slime, aquatic growth
+            place_decor(0, 20); // mushroom always
+            place_decor(1, 20); // large mushroom always
+            if (rng.chance(50)) place_decor(rng.range(2, 3), 22); // slime
+            if (rng.chance(40)) place_decor(0, 20); // more mushrooms
+        } else if (is_deep_halls) {
+            // Cavernous: rocks, rubble, crystal formations
+            place_decor(rng.range(0, 1), 18); // large rock always
+            if (rng.chance(50)) place_decor(rng.range(0, 1), 18); // more rocks
+            if (rng.chance(30)) place_decor(0, 20); // cave mushroom
+            if (rng.chance(20)) place_decor(4, 17); // fallen barrel
+        } else if (is_sepulchre) {
+            // The final dungeon: DENSE dread (bones, coffins, blood everywhere)
+            int density = 2 + dungeon_level / 3;
+            for (int dd = 0; dd < density; dd++) {
+                if (rng.chance(60)) place_decor(rng.range(0, 1), 21);
+                if (rng.chance(40)) place_decor(rng.range(0, 2), 23);
+                if (rng.chance(30)) place_decor(rng.range(0, 1), 22);
             }
         }
+
+        // Blood splatters scale with depth (all zones)
+        if (rng.chance(15 + dungeon_level * 4)) place_decor(rng.range(0, 1), 22);
 
         // Catacombs: extra bone piles
         if (is_catacombs && rng.chance(20)) place_decor(rng.range(0, 1), 21); // corpse bones
@@ -1527,7 +1541,7 @@ void spawn_doodads(World& world, TileMap& map,
         // Wall torches — animated, placed against walls
         // Animated tiles: row 5 = torch (lit), row 1 = brazier (lit)
         // Molten zones get more light; catacombs/warrens get less
-        int torch_chance = is_molten ? 55 : (is_catacombs || is_warrens) ? 20 : 35;
+        int torch_chance = is_molten ? 70 : is_sepulchre ? 30 : (is_catacombs || is_warrens) ? 40 : 50;
         if (rng.chance(torch_chance)) {
             for (int a = 0; a < 20; a++) {
                 int x = rng.range(room.x + 1, room.x + room.w - 2);
