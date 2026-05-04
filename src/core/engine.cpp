@@ -183,7 +183,8 @@ bool Engine::init() {
                 // All dungeons capped at 4 floors (tighter loop)
                 de.max_depth = std::min(4, 3 + de.zone_difficulty / 3);
                 if (de.zone == "sepulchre") { de.max_depth = 4; de.zone_difficulty = 8; }
-                else if (!de.quest.empty()) de.max_depth = 4; // quest dungeons always 4
+                else if (!de.quest.empty() && de.zone != "warrens") de.max_depth = 4;
+                // Warrens quest dungeons (The Barrow) stay at 3 — boss on bottom floor
             }
         }
     }
