@@ -469,32 +469,32 @@ void spawn_quest_content(World& world, const TileMap& map,
     bool in_sepulchre = dungeon_ctx && dungeon_ctx->zone == "sepulchre";
     if (in_sepulchre) {
         // MQ_15: auto-activate on entering The Sepulchre
-        if (dungeon_level == 1 && !journal.has_quest(QuestId::MQ_15_THE_SEPULCHRE)) {
-            auto prereq = QuestId::MQ_14_HOLLOWGATE_SEAL;
+        if (dungeon_level == 1 && !journal.has_quest(QuestId::MQ_08_ENTER_SEPULCHRE)) {
+            auto prereq = QuestId::MQ_07_BREAK_SEAL;
             if (journal.has_quest(prereq) && journal.get_state(prereq) == QuestState::FINISHED) {
-                journal.add_quest(QuestId::MQ_15_THE_SEPULCHRE);
+                journal.add_quest(QuestId::MQ_08_ENTER_SEPULCHRE);
                 log.add("Quest started: Enter The Sepulchre", {220, 200, 100, 255});
                 log.add("Your god is screaming.", {180, 80, 80, 255});
             }
         }
         // MQ_16: auto-activate at depth 4+
-        if (dungeon_level >= 4 && !journal.has_quest(QuestId::MQ_16_THE_DESCENT)) {
-            if (journal.has_quest(QuestId::MQ_15_THE_SEPULCHRE) &&
-                journal.get_state(QuestId::MQ_15_THE_SEPULCHRE) == QuestState::ACTIVE) {
-                journal.set_state(QuestId::MQ_15_THE_SEPULCHRE, QuestState::COMPLETE);
-                journal.set_state(QuestId::MQ_15_THE_SEPULCHRE, QuestState::FINISHED);
-                journal.add_quest(QuestId::MQ_16_THE_DESCENT);
+        if (dungeon_level >= 4 && !journal.has_quest(QuestId::MQ_09_CLAIM_RELIQUARY)) {
+            if (journal.has_quest(QuestId::MQ_08_ENTER_SEPULCHRE) &&
+                journal.get_state(QuestId::MQ_08_ENTER_SEPULCHRE) == QuestState::ACTIVE) {
+                journal.set_state(QuestId::MQ_08_ENTER_SEPULCHRE, QuestState::COMPLETE);
+                journal.set_state(QuestId::MQ_08_ENTER_SEPULCHRE, QuestState::FINISHED);
+                journal.add_quest(QuestId::MQ_09_CLAIM_RELIQUARY);
                 log.add("Quest started: The Descent", {220, 200, 100, 255});
                 log.add("The architecture stops making sense. You hear other footsteps.", {180, 80, 80, 255});
             }
         }
         // MQ_17: auto-activate at depth 6 (the bottom)
-        if (dungeon_level >= 6 && !journal.has_quest(QuestId::MQ_17_CLAIM_RELIQUARY)) {
-            if (journal.has_quest(QuestId::MQ_16_THE_DESCENT) &&
-                journal.get_state(QuestId::MQ_16_THE_DESCENT) == QuestState::ACTIVE) {
-                journal.set_state(QuestId::MQ_16_THE_DESCENT, QuestState::COMPLETE);
-                journal.set_state(QuestId::MQ_16_THE_DESCENT, QuestState::FINISHED);
-                journal.add_quest(QuestId::MQ_17_CLAIM_RELIQUARY);
+        if (dungeon_level >= 4 && !journal.has_quest(QuestId::MQ_09_CLAIM_RELIQUARY)) {
+            if (journal.has_quest(QuestId::MQ_09_CLAIM_RELIQUARY) &&
+                journal.get_state(QuestId::MQ_09_CLAIM_RELIQUARY) == QuestState::ACTIVE) {
+                journal.set_state(QuestId::MQ_09_CLAIM_RELIQUARY, QuestState::COMPLETE);
+                journal.set_state(QuestId::MQ_09_CLAIM_RELIQUARY, QuestState::FINISHED);
+                journal.add_quest(QuestId::MQ_09_CLAIM_RELIQUARY);
                 log.add("Quest started: Claim the Reliquary", {220, 200, 100, 255});
                 log.add("You see it. A vessel of light that hurts to look at.", {255, 220, 100, 255});
             }
@@ -552,54 +552,54 @@ void spawn_quest_content(World& world, const TileMap& map,
 
         if (is_bottom) {
             // MQ_03: Stone Tablet in Ashford Ruins
-            if (dungeon_ctx->quest == "MQ_03") {
+            if (false) {
                 spawn_quest_item("Stone Tablet",
                     "A heavy stone tablet. The inscriptions shift when you aren't looking.",
-                    0, 21, QuestId::MQ_03_ASHFORD_TABLET);
+                    0, 21, QuestId::MQ_03_FIRST_FRAGMENT);
             }
             // MQ_05: Ancient Inscription in Stonekeep
-            if (dungeon_ctx->quest == "MQ_05") {
+            if (dungeon_ctx->quest == "MQ_03") {
                 spawn_quest_item("Ancient Inscription",
                     "A page of burned stone. The words are too heavy for the rock.",
-                    7, 21, QuestId::MQ_05_STONEKEEP_DEPTHS);
+                    7, 21, QuestId::MQ_03_FIRST_FRAGMENT);
             }
             // MQ_07: Frozen Key in Frostmere Depths
-            if (dungeon_ctx->quest == "MQ_07") {
+            if (false) {
                 spawn_quest_item("Frozen Key",
                     "A key of impossible cold. It burns your hand.",
-                    2, 22, QuestId::MQ_07_FROZEN_KEY);
+                    2, 22, QuestId::MQ_05_SECOND_FRAGMENT);
             }
             // MQ_09: Reliquary Fragment in The Catacombs
-            if (dungeon_ctx->quest == "MQ_08") {
+            if (dungeon_ctx->quest == "MQ_05") {
                 spawn_quest_item("Reliquary Fragment",
                     "A shard of solidified memory. It hums with warmth.",
-                    2, 16, QuestId::MQ_09_OSSUARY_FRAGMENT);
+                    2, 16, QuestId::MQ_05_SECOND_FRAGMENT);
             }
             // MQ_11: Molten Fragment in The Molten Depths
-            if (dungeon_ctx->quest == "MQ_11") {
+            if (dungeon_ctx->quest == "MQ_06") {
                 spawn_quest_item("Molten Fragment",
                     "Cold even in the heart of the furnace. Two of three.",
-                    2, 16, QuestId::MQ_11_MOLTEN_TRIAL,
+                    2, 16, QuestId::MQ_06_THIRD_FRAGMENT,
                     {255, 120, 80, 255}); // red tint
             }
             // MQ_13: Sunken Fragment in The Sunken Halls
-            if (dungeon_ctx->quest == "MQ_13") {
+            if (false) {
                 spawn_quest_item("Sunken Fragment",
                     "The water remembers. Three fragments. They pull toward each other.",
-                    2, 16, QuestId::MQ_13_SUNKEN_FRAGMENT,
+                    2, 16, QuestId::MQ_06_THIRD_FRAGMENT,
                     {100, 160, 255, 255}); // blue tint
             }
             // MQ_14: Seal Stone in The Hollowgate
-            if (dungeon_ctx->quest == "MQ_14") {
+            if (dungeon_ctx->quest == "MQ_07") {
                 spawn_quest_item("Seal Stone",
                     "The fragments resonate near it. Break the seal.",
-                    5, 16, QuestId::MQ_14_HOLLOWGATE_SEAL);
+                    5, 16, QuestId::MQ_07_BREAK_SEAL);
             }
             // MQ_17: The Reliquary in The Sepulchre (depth 6)
-            if (dungeon_ctx->quest == "MQ_15" && dungeon_level >= 6) {
+            if (dungeon_ctx->quest == "MQ_08" && dungeon_level >= 4) {
                 spawn_quest_item("The Reliquary",
                     "A vessel of light that hurts to look at. It was here before the gods.",
-                    6, 16, QuestId::MQ_17_CLAIM_RELIQUARY,
+                    6, 16, QuestId::MQ_09_CLAIM_RELIQUARY,
                     {255, 220, 100, 255}); // golden tint
 
                 // Spawn The Keeper — final boss guarding the Reliquary

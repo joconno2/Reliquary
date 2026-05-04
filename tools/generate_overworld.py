@@ -14,15 +14,15 @@ import math
 import os
 import json
 
-W = 2000
-H = 1500
+W = 1000
+H = 750
 random.seed(42)
 
 def climate(y):
-    if y < 250: return 'ice'
-    if y < 400: return 'cold'
-    if y < 1100: return 'temperate'
-    if y < 1250: return 'warm'
+    if y < 125: return 'ice'
+    if y < 200: return 'cold'
+    if y < 550: return 'temperate'
+    if y < 625: return 'warm'
     return 'desert'
 
 def base_tile(y):
@@ -119,7 +119,7 @@ for _ in range(40):
 # Desert rocky outcrops
 for _ in range(30):
     rx = random.randint(30, W - 30)
-    ry = random.randint(1250, H - 30)
+    ry = random.randint(int(H * 0.83), H - 30)
     rr = random.randint(5, 15)
     for dy in range(-rr, rr + 1):
         for dx in range(-rr, rr + 1):
@@ -157,10 +157,9 @@ for start_x in [400, 1000, 1600]:
 
 # === LARGE LAKES ===
 print("Creating lakes...", flush=True)
-for lx, ly, lrx, lry in [(500, 400, 30, 20), (1200, 350, 25, 18),
-                            (900, 900, 35, 22), (1600, 600, 28, 18),
-                            (350, 800, 22, 16), (1400, 1000, 30, 20),
-                            (750, 1300, 25, 18)]:
+for lx, ly, lrx, lry in [(250, 200, 15, 10), (600, 175, 12, 9),
+                            (450, 450, 18, 11), (800, 300, 14, 9),
+                            (175, 400, 11, 8)]:
     for dy in range(-lry, lry + 1):
         for dx in range(-lrx, lrx + 1):
             dist = (dx / lrx) ** 2 + (dy / lry) ** 2
@@ -206,30 +205,20 @@ GOD_COLORS = {
 towns = [
     # === The Heartlands (province 2, Morreth) ===
     (CX,        CY,      "Thornwall",    True,  True, 2),   # Capital — player start
-    (CX - 250,  CY - 100,"Ashford",      False, False, 2),
-    (CX - 150,  CY + 200,"Millhaven",    False, False, 2),
-    (CX + 150,  CY - 200,"Ravenshold",   False, False, 2),
+    (CX - 75,   CY + 100,"Millhaven",    False, False, 2),
     # === The Pale Reach (province 0, Soleth) ===
-    (CX + 450,  CY - 250,"Candlemere",   False, True, 0),   # Capital — Soleth temple city
-    (CX + 50,   CY - 300,"Frostmere",    False, False, 0),
-    (CX + 300,  CY - 80, "Greywatch",    False, False, 0),
+    (CX + 225,  CY - 125,"Candlemere",   False, True, 0),   # Capital
+    (CX + 25,   CY - 150,"Frostmere",    False, False, 0),
+    (CX + 150,  CY - 40, "Greywatch",    False, False, 0),
     # === The Frozen Marches (province 1, Gathruun) ===
-    (CX + 100,  CY - 450,"Glacierveil",  False, True, 1),   # Capital — stone fortress
-    (CX - 200,  CY - 350,"Whitepeak",    False, False, 1),
+    (CX - 100,  CY - 175,"Whitepeak",    False, True, 1),
     # === The Greenwood (province 3, Khael) ===
-    (CX - 350,  CY + 50, "Bramblewood",  False, True, 3),   # Capital — nature city
-    (CX - 450,  CY - 200,"Hollowgate",   False, False, 3),
-    (CX - 400,  CY - 50, "Fenwatch",     False, False, 3),
-    (CX - 300,  CY + 300,"Tanglewood",   False, False, 3),
+    (CX - 175,  CY + 25, "Bramblewood",  False, True, 3),   # Capital
+    (CX - 225,  CY - 100,"Hollowgate",   False, False, 3),
     # === The Iron Coast (province 4, Ossren) ===
-    (CX + 400,  CY,      "Ironhearth",   False, True, 4),   # Capital — forge city
-    (CX + 200,  CY + 180,"Stonehollow",   False, False, 4),
-    (CX + 500,  CY + 100,"Endgate",      False, False, 4),
+    (CX + 200,  CY,      "Ironhearth",   False, True, 4),   # Capital
     # === The Dust Provinces (province 5, Sythara) ===
-    (CX,        CY + 350,"Dustfall",      False, True, 5),   # Capital — decaying city
-    (CX + 250,  CY + 350,"Drywell",      False, False, 5),
-    (CX - 100,  CY + 450,"Sandmoor",     False, False, 5),
-    (CX + 350,  CY + 250,"Redrock",      False, False, 5),
+    (CX,        CY + 175,"Dustfall",      False, True, 5),   # Capital
 ]
 
 def place_town(tx, ty, is_start, town_rng, is_city=False, province_idx=2):

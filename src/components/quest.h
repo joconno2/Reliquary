@@ -10,33 +10,25 @@ enum class QuestState : int {
 };
 
 enum class QuestId : int {
-    // Main quest line (17 steps)
-    MQ_01_BARROW_WIGHT = 0,      // Kill the wight in the barrow near Thornwall
-    MQ_02_SCHOLAR_CLUE,           // Speak to the scholar in Thornwall about what stirred
-    MQ_03_ASHFORD_TABLET,         // Travel to Ashford — find a stone tablet in the Warrens nearby
-    MQ_04_GREYWATCH_WARNING,      // Deliver the tablet to the captain in Greywatch
-    MQ_05_STONEKEEP_DEPTHS,       // Descend Stonekeep to find the First Inscription
-    MQ_06_FROSTMERE_SAGE,         // Travel north to Frostmere — consult the ice sage
-    MQ_07_FROZEN_KEY,             // Retrieve the Frozen Key from the ice dungeon near Frostmere
-    MQ_08_CATACOMBS_GATE,         // Use the Frozen Key to open the Catacombs gate
-    MQ_09_OSSUARY_FRAGMENT,       // Find the first Reliquary Fragment in the Catacombs
-    MQ_10_IRONHEARTH_FORGE,       // Travel to Ironhearth — have the fragment analyzed
-    MQ_11_MOLTEN_TRIAL,           // Descend the Molten Depths to find the second fragment
-    MQ_12_CANDLEMERE_RITUAL,      // Travel to Candlemere — the Soleth priests know the binding ritual
-    MQ_13_SUNKEN_FRAGMENT,        // Retrieve the third fragment from the Sunken Halls
-    MQ_14_HOLLOWGATE_SEAL,        // Travel to Hollowgate — break the final seal
-    MQ_15_THE_SEPULCHRE,           // Enter The Sepulchre — the deepest mega-dungeon (6 levels)
-    MQ_16_THE_DESCENT,             // The Sepulchre goes deeper than it should
-    MQ_17_CLAIM_RELIQUARY,        // Claim the Reliquary — the game's climax
+    // Main quest line (9 steps, tight loop)
+    MQ_01_BARROW_WIGHT = 0,      // Kill the wight in the barrow (tutorial boss)
+    MQ_02_SCHOLAR_CLUE,           // Talk to scholar, learn about fragments
+    MQ_03_FIRST_FRAGMENT,         // Find first fragment in Stonekeep
+    MQ_04_SAGE_COUNSEL,           // Talk to Frostmere sage about the Reliquary
+    MQ_05_SECOND_FRAGMENT,        // Find second fragment in the Catacombs
+    MQ_06_THIRD_FRAGMENT,         // Find third fragment in the Molten Depths
+    MQ_07_BREAK_SEAL,             // Break the seal at Hollowgate
+    MQ_08_ENTER_SEPULCHRE,        // Enter the Sepulchre
+    MQ_09_CLAIM_RELIQUARY,        // Claim the Reliquary (final boss)
 
     // Side quests
-    SQ_RAT_CELLAR,         // Clear rats from the shop cellar
-    SQ_LOST_AMULET,        // Find a lost amulet in the Warrens
-    SQ_UNDEAD_PATROL,      // Destroy 10 undead in the Catacombs
-    SQ_KILL_BEAR,          // Hunter asks to kill a dangerous bear in the wilderness
-    SQ_DELIVER_WEAPON,     // Blacksmith asks to deliver a sword to the guard captain in Greywatch
-    SQ_HERB_GATHERING,     // Herbalist needs 3 herbs from the wilderness
-    SQ_MISSING_PERSON,     // Farmer's son went into the Warrens and hasn't returned
+    SQ_RAT_CELLAR,
+    SQ_LOST_AMULET,
+    SQ_UNDEAD_PATROL,
+    SQ_KILL_BEAR,
+    SQ_DELIVER_WEAPON,
+    SQ_HERB_GATHERING,
+    SQ_MISSING_PERSON,
 
     COUNT
 };
@@ -59,151 +51,73 @@ inline const QuestInfo& get_quest_info(QuestId id) {
         {"The Barrow Wight",
          "The brand on your face burns when you face east. Something in the Barrow "
          "woke the same night you appeared. The elder says a wight walks there.",
-         "Go east from Thornwall. Enter The Barrow. Kill the wight on floor 3.",
+         "Enter The Barrow east of Thornwall. Kill the wight on floor 3.",
          "The wight crumbles. Your brand flares. Something deeper answered.",
          true, 50, 30},
 
         // MQ_02_SCHOLAR_CLUE
         {"What Stirs Below",
-         "When the wight died, your brand pulsed and something moved far below. "
-         "Scholar Aldric in Thornwall studies old texts. He may know what the brand means.",
+         "When the wight died, your brand pulsed. Scholar Aldric in Thornwall "
+         "studies old texts. He may know what the brand means.",
          "Speak to Scholar Aldric in Thornwall.",
-         "Aldric went pale when he saw your face. 'That mark. There's a tablet in the "
-         "ruins near Ashford. It describes what you are.'",
+         "Aldric went pale. 'The Reliquary. Three fragments, scattered in the deep places. "
+         "Find them or the brand will consume you.'",
          true, 60, 0},
 
-        // MQ_03_ASHFORD_TABLET
-        {"The Ashford Tablet",
-         "Aldric spoke of a stone tablet in the Ashford Ruins to the west. "
-         "It predates the gods. It describes the brand.",
-         "Travel west to Ashford. Enter the dungeon nearby. Find the tablet on floor 3.",
-         "The tablet is cold. The words are in no language, but you can read them. "
-         "'The Reliquary chooses. The branded are drawn. The seals will open.'",
-         true, 80, 20},
-
-        // MQ_04_GREYWATCH_WARNING
-        {"The Captain's Warning",
-         "The tablet says seals are failing beneath the land. Your brand is a key. "
-         "Captain Voss in Greywatch commands the region's garrison.",
-         "Travel northeast to Greywatch. Show the tablet to Captain Voss.",
-         "Voss read the tablet twice. 'Stonekeep. Northeast. The walls have been "
-         "groaning for weeks. Whatever is down there knows you're coming.'",
-         true, 100, 40},
-
-        // MQ_05_STONEKEEP_DEPTHS
-        {"The First Inscription",
-         "Stonekeep has been sealed for generations. Now the seals are failing. "
-         "Your brand aches as you approach. Something is written on the deepest wall.",
-         "Descend Stonekeep. Find the inscription on the bottom floor.",
-         "The inscription burned itself into your mind before you finished reading. "
-         "A name: Vehlkyr. The one who made the Reliquary.",
+        // MQ_03_FIRST_FRAGMENT
+        {"The First Fragment",
+         "The first fragment lies in Stonekeep to the northeast. Your brand aches "
+         "as you face that direction. The walls are groaning.",
+         "Descend Stonekeep. Find the first fragment on the bottom floor.",
+         "The fragment fused to your hand, then released. You can feel the others.",
          true, 120, 50},
 
-        // MQ_06_FROSTMERE_SAGE
-        {"The Ice Sage",
-         "Vehlkyr. The name means nothing to anyone alive. But in Frostmere, "
-         "far north in the Frozen Marches, an old sage studies things older than the gods. "
-         "Your brand pulls you north.",
+        // MQ_04_SAGE_COUNSEL
+        {"The Sage's Warning",
+         "One fragment found. Sage Yeva in Frostmere to the north studies things "
+         "older than the gods. She may know what the fragments do when assembled.",
          "Travel north to Frostmere. Speak to Sage Yeva.",
-         "The sage said Vehlkyr was the first to find the Reliquary. "
-         "He did not survive.",
+         "'Vehlkyr assembled it once. It killed him. The second fragment is in the "
+         "Catacombs near Millhaven. The third burns in the Molten Depths.'",
          true, 140, 30},
 
-        // MQ_07_FROZEN_KEY
-        {"The Frozen Key",
-         "The sage said Vehlkyr sealed the Reliquary behind locks of element and will. "
-         "The first key is frozen in the ice dungeon near Frostmere. "
-         "Your brand aches in the cold. It recognizes this place.",
-         "Descend Frostmere Depths. Find the Frozen Key.",
-         "The key burns cold in your hand. Your brand flares in response.",
-         true, 160, 0},
-
-        // MQ_08_CATACOMBS_GATE
-        {"The Sealed Gate",
-         "The Catacombs near Millhaven have been sealed since before the town existed. "
-         "The Frozen Key fits the gate. Your brand is pulling you through.",
-         "Travel southwest to The Catacombs near Millhaven. Use the key.",
-         "The gate opened with a sound like a sigh. Something has been waiting for you.",
-         true, 180, 0},
-
-        // MQ_09_OSSUARY_FRAGMENT
-        {"The First Fragment",
-         "Deep in the Catacombs, past the dead, your brand burns brighter. "
-         "A piece of the Reliquary is here. You can feel it in your skull.",
-         "Descend The Catacombs. Find the first fragment.",
-         "The fragment fused to your hand for a moment, then released. "
-         "You can feel the other two. South and east.",
+        // MQ_05_SECOND_FRAGMENT
+        {"The Second Fragment",
+         "The Catacombs near Millhaven. Your brand burns brighter with each fragment. "
+         "Something dead guards this one.",
+         "Descend The Catacombs. Find the second fragment.",
+         "Two of three. The fragments resonate. Your brand is changing.",
          true, 200, 60},
 
-        // MQ_10_IRONHEARTH_FORGE
-        {"The Master Smith",
-         "The fragment is made of something that shouldn't exist. The master smith "
-         "in Ironhearth on the Iron Coast works metals others refuse. "
-         "He might know what you're carrying.",
-         "Travel far east to Ironhearth. Show the fragment to Master Smith Brynn.",
-         "Brynn held the fragment to the light and said nothing for a long time. "
-         "'Two more pieces. Get them all or this one will eat you alive.'",
-         true, 220, 50},
+        // MQ_06_THIRD_FRAGMENT
+        {"The Third Fragment",
+         "The Molten Depths east of Ironhearth. Volcanic tunnels. "
+         "Your brand glows hot enough to see by.",
+         "Enter The Molten Depths. Find the third fragment.",
+         "Three fragments. The Reliquary is whole. You feel it assembling inside you.",
+         true, 280, 80},
 
-        // MQ_11_MOLTEN_TRIAL
-        {"The Molten Trial",
-         "The second fragment is in the Molten Depths east of Ironhearth. "
-         "Volcanic tunnels. Your brand glows hotter as you approach.",
-         "Enter The Molten Depths. Find the second fragment.",
-         "Two of three. The fragments hum when brought together. "
-         "Your brand is changing. Growing brighter.",
-         true, 260, 80},
-
-        // MQ_12_CANDLEMERE_RITUAL
-        {"The Binding Ritual",
-         "The fragments need to be bound or they'll tear apart. "
-         "The Soleth priests in Candlemere preserve rituals from before the schism. "
-         "They may know how to stabilize what you carry.",
-         "Travel to Candlemere in the Pale Reach. Learn the binding ritual.",
-         "The priests taught you the words. They looked at your brand and wept.",
-         true, 280, 40},
-
-        // MQ_13_SUNKEN_FRAGMENT
-        {"The Drowned Shard",
-         "The third fragment lies in the Sunken Halls, flooded ruins past Candlemere. "
-         "Something guards it. Something old. Your brand knows it.",
-         "Enter The Sunken Halls. Find the third fragment.",
-         "Three fragments. The Reliquary is nearly whole. "
-         "You feel it assembling itself inside you.",
-         true, 320, 100},
-
-        // MQ_14_HOLLOWGATE_SEAL
+        // MQ_07_BREAK_SEAL
         {"The Final Seal",
-         "The Sepulchre entrance is sealed beneath Hollowgate in the deep Greenwood. "
+         "The Sepulchre is sealed beneath Hollowgate in the deep Greenwood. "
          "The assembled fragments will break it. Your brand is screaming.",
-         "Travel far west to Hollowgate. Break the seal with the fragments.",
-         "The seal shattered. The descent is open. You feel it below you, "
-         "vast and patient and aware.",
+         "Travel to Hollowgate. Break the seal.",
+         "The seal shattered. The descent is open.",
          true, 360, 0},
 
-        // MQ_15_THE_SEPULCHRE
+        // MQ_08_ENTER_SEPULCHRE
         {"The Sepulchre",
-         "The oldest place in the world. Beneath the Frozen Marches, far north. "
-         "Everything has been leading here. Your brand is a beacon now.",
+         "The oldest place in the world. Everything has led here. "
+         "Your brand is a beacon now.",
          "Enter The Sepulchre.",
-         "The air is wrong. Each floor is older than the last. "
-         "Your brand illuminates the way.",
+         "The air is wrong. Each floor is older than the last.",
          true, 400, 0},
 
-        // MQ_16_THE_DESCENT
-        {"The Descent",
-         "Deeper. The walls are smooth, carved by something that wasn't human. "
-         "The Reliquary is close. You can hear it.",
-         "Descend past floor 4 of The Sepulchre.",
-         "The vault is open. It was always open. It was waiting for you.",
-         true, 450, 0},
-
-        // MQ_17_CLAIM_RELIQUARY
+        // MQ_09_CLAIM_RELIQUARY
         {"The Reliquary",
          "You see it. Not light. Not dark. Something from before the distinction. "
-         "Your brand is burning. Your god is screaming. The paragons are close. "
-         "This is what you were made for.",
-         "Claim the Reliquary.",
+         "Your brand is burning. Your god is screaming. This is what you were made for.",
+         "Claim the Reliquary on the bottom floor.",
          "You hold it. For a moment, you understand everything. Then you forget.",
          true, 500, 0},
 
@@ -270,11 +184,7 @@ inline const QuestInfo& get_quest_info(QuestId id) {
 inline bool is_auto_complete_quest(QuestId id) {
     switch (id) {
         case QuestId::MQ_02_SCHOLAR_CLUE:
-        case QuestId::MQ_04_GREYWATCH_WARNING:
-        case QuestId::MQ_06_FROSTMERE_SAGE:
-        case QuestId::MQ_08_CATACOMBS_GATE:
-        case QuestId::MQ_10_IRONHEARTH_FORGE:
-        case QuestId::MQ_12_CANDLEMERE_RITUAL:
+        case QuestId::MQ_04_SAGE_COUNSEL:
             return true;
         default:
             return false;
@@ -284,23 +194,16 @@ inline bool is_auto_complete_quest(QuestId id) {
 // Direction hints shown when bumping a quest NPC while their quest is active
 inline const char* get_quest_hint(QuestId id) {
     switch (id) {
-        // Main quests — dungeon directions
         case QuestId::MQ_01_BARROW_WIGHT:
-            return "The barrow is east of town. Look for the stairs down among the old stones.";
-        case QuestId::MQ_03_ASHFORD_TABLET:
-            return "The Warrens lie just east of here, in the old ruins. The tablet should be on the lowest level.";
-        case QuestId::MQ_05_STONEKEEP_DEPTHS:
-            return "Stonekeep is west of Greywatch. An old fortress in the hills — you can't miss it.";
-        case QuestId::MQ_07_FROZEN_KEY:
-            return "The ice dungeon is southeast of Frostmere. The cold gets worse the deeper you go.";
-        case QuestId::MQ_09_OSSUARY_FRAGMENT:
-            return "The Catacombs are north of Millhaven. The fragment lies deep — search the lowest level.";
-        case QuestId::MQ_11_MOLTEN_TRIAL:
-            return "The Molten Depths are southeast of Ironhearth. Follow the heat.";
-        case QuestId::MQ_13_SUNKEN_FRAGMENT:
-            return "The Sunken Halls are southeast of Candlemere. The water there doesn't behave naturally.";
-        case QuestId::MQ_14_HOLLOWGATE_SEAL:
-            return "The seal is east of town. The fragments will guide you.";
+            return "The barrow is east of town. Look for the stairs down.";
+        case QuestId::MQ_03_FIRST_FRAGMENT:
+            return "Stonekeep is northeast. The fragment is on the bottom floor.";
+        case QuestId::MQ_05_SECOND_FRAGMENT:
+            return "The Catacombs are near Millhaven. The fragment lies deep.";
+        case QuestId::MQ_06_THIRD_FRAGMENT:
+            return "The Molten Depths are east of Ironhearth. Follow the heat.";
+        case QuestId::MQ_07_BREAK_SEAL:
+            return "Hollowgate is to the west. The fragments will break the seal.";
 
         // Side quests
         case QuestId::SQ_RAT_CELLAR:

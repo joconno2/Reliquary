@@ -1051,7 +1051,7 @@ void Engine::generate_level() {
                     }
                     // MQ_10: Ironhearth blacksmith
                     if (town_idx == 4 && !mq_assigned[9]) {
-                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_10_IRONHEARTH_FORGE);
+                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_06_THIRD_FRAGMENT);
                         npc_comp.name = "Master Smith Brynn";
                         npc_comp.dialogue = "Bring me something worth studying and I'll tell you what it is.";
                         mq_assigned[9] = true;
@@ -1076,35 +1076,35 @@ void Engine::generate_level() {
                     }
                     // MQ_05: Greywatch scholar
                     else if (town_idx == 2 && !mq_assigned[4]) {
-                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_05_STONEKEEP_DEPTHS);
+                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_03_FIRST_FRAGMENT);
                         npc_comp.name = "Scholar Erynn";
                         npc_comp.dialogue = "Stonekeep holds inscriptions no one alive can read.";
                         mq_assigned[4] = true;
                     }
                     // MQ_06: Frostmere scholar (ice sage)
                     else if (town_idx == 3 && !mq_assigned[5]) {
-                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_06_FROSTMERE_SAGE);
+                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_04_SAGE_COUNSEL);
                         npc_comp.name = "Sage Yeva";
                         npc_comp.dialogue = "Some names should stay frozen.";
                         mq_assigned[5] = true;
                     }
                     // MQ_08+MQ_09: Millhaven scholar (Catacombs area)
                     else if (town_idx == 7 && !mq_assigned[7]) {
-                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_08_CATACOMBS_GATE);
+                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_05_SECOND_FRAGMENT);
                         npc_comp.name = "Scholar Maren";
                         npc_comp.dialogue = "The Catacombs gate has stood sealed since before this town was built.";
                         mq_assigned[7] = true;
                     }
                     // MQ_12: Candlemere scholar (binding ritual)
                     else if (town_idx == 5 && !mq_assigned[11]) {
-                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_12_CANDLEMERE_RITUAL);
+                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_07_BREAK_SEAL);
                         npc_comp.name = "Priest Solara";
                         npc_comp.dialogue = "The old rituals are preserved here. The gods tried to make everyone forget.";
                         mq_assigned[11] = true;
                     }
                     // MQ_14: Hollowgate scholar (break the seal)
                     else if (town_idx == 6 && !mq_assigned[13]) {
-                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_14_HOLLOWGATE_SEAL);
+                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_07_BREAK_SEAL);
                         npc_comp.name = "Scholar Daven";
                         npc_comp.dialogue = "The seal here is the last one. Beyond it lies the oldest place in the world.";
                         mq_assigned[13] = true;
@@ -1132,7 +1132,7 @@ void Engine::generate_level() {
                     }
                     // MQ_03: Ashford farmer
                     if (town_idx == 1 && !mq_assigned[2]) {
-                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_03_ASHFORD_TABLET);
+                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_03_FIRST_FRAGMENT);
                         npc_comp.name = "Farmer Galen";
                         npc_comp.dialogue = "There's a stone tablet in the ruins nearby. The dead don't want it found.";
                         mq_assigned[2] = true;
@@ -1164,7 +1164,7 @@ void Engine::generate_level() {
                     }
                     // MQ_04: Greywatch guard (receives tablet)
                     if (town_idx == 2 && !mq_assigned[3]) {
-                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_04_GREYWATCH_WARNING);
+                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_04_SAGE_COUNSEL);
                         npc_comp.name = "Captain Voss";
                         npc_comp.dialogue = "I command the largest garrison in the region. Speak plainly.";
                         sx = 0; sy = 1; // knight
@@ -1172,21 +1172,21 @@ void Engine::generate_level() {
                     }
                     // MQ_07: Frostmere guard (frozen key location)
                     else if (town_idx == 3 && !mq_assigned[6]) {
-                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_07_FROZEN_KEY);
+                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_05_SECOND_FRAGMENT);
                         npc_comp.name = "Guard Osric";
                         npc_comp.dialogue = "The ice dungeon north of here holds things that stopped being human long ago.";
                         mq_assigned[6] = true;
                     }
                     // MQ_11: Ironhearth guard (Molten Depths)
                     else if (town_idx == 4 && !mq_assigned[10]) {
-                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_11_MOLTEN_TRIAL);
+                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_06_THIRD_FRAGMENT);
                         npc_comp.name = "Guard Holt";
                         npc_comp.dialogue = "The volcanic tunnels beneath us run deep. The heat kills anything that isn't already dead.";
                         mq_assigned[10] = true;
                     }
                     // MQ_13: Candlemere guard (Sunken Halls)
                     else if (town_idx == 5 && !mq_assigned[12]) {
-                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_13_SUNKEN_FRAGMENT);
+                        npc_comp.quest_id = static_cast<int>(QuestId::MQ_06_THIRD_FRAGMENT);
                         npc_comp.name = "Guard Thane";
                         npc_comp.dialogue = "The Sunken Halls flood more each year. The water there remembers.";
                         mq_assigned[12] = true;
@@ -5641,7 +5641,7 @@ void Engine::try_pickup() {
                 log_.add(qbuf, {220, 200, 100, 255});
             }
             // Victory — claiming The Reliquary ends the game
-            if (qid == QuestId::MQ_17_CLAIM_RELIQUARY) {
+            if (qid == QuestId::MQ_09_CLAIM_RELIQUARY) {
                 state_ = GameState::VICTORY;
                 end_screen_time_ = SDL_GetTicks();
                 audio_.stop_all_ambient(500);
@@ -8777,7 +8777,7 @@ void Engine::render() {
                 // If prereq not met, don't show marker
                 auto quest_prereq = [](QuestId id) -> QuestId {
                     int idx = static_cast<int>(id);
-                    if (idx <= 0 || idx > static_cast<int>(QuestId::MQ_17_CLAIM_RELIQUARY))
+                    if (idx <= 0 || idx > static_cast<int>(QuestId::MQ_09_CLAIM_RELIQUARY))
                         return QuestId::COUNT;
                     return static_cast<QuestId>(idx - 1);
                 };

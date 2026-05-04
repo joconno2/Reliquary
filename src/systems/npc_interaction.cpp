@@ -198,27 +198,27 @@ bool interact(Context& ctx, Entity target, int target_x, int target_y) {
         auto qs = [&](QuestId q) { return ctx.journal.get_state(q); };
 
         // Late game: fragments and Sepulchre
-        if (qs(QuestId::MQ_17_CLAIM_RELIQUARY) == QuestState::FINISHED)
+        if (qs(QuestId::MQ_09_CLAIM_RELIQUARY) == QuestState::FINISHED)
             reaction = "You did it. I can feel the difference. The air is lighter.";
-        else if (qs(QuestId::MQ_15_THE_SEPULCHRE) == QuestState::ACTIVE)
+        else if (qs(QuestId::MQ_08_ENTER_SEPULCHRE) == QuestState::ACTIVE)
             reaction = "You're going into the Sepulchre? Gods help you.";
-        else if (qs(QuestId::MQ_14_HOLLOWGATE_SEAL) == QuestState::FINISHED)
+        else if (qs(QuestId::MQ_07_BREAK_SEAL) == QuestState::FINISHED)
             reaction = "Word is the seal at Hollowgate broke open. People are scared.";
-        else if (qs(QuestId::MQ_13_SUNKEN_FRAGMENT) == QuestState::FINISHED)
+        else if (qs(QuestId::MQ_06_THIRD_FRAGMENT) == QuestState::FINISHED)
             reaction = "Three fragments. I can see it in your eyes. You're changing.";
-        else if (qs(QuestId::MQ_11_MOLTEN_TRIAL) == QuestState::FINISHED)
+        else if (qs(QuestId::MQ_06_THIRD_FRAGMENT) == QuestState::FINISHED)
             reaction = "Two fragments. The ground trembles less now. Or more. I can't tell.";
-        else if (qs(QuestId::MQ_09_OSSUARY_FRAGMENT) == QuestState::FINISHED)
+        else if (qs(QuestId::MQ_05_SECOND_FRAGMENT) == QuestState::FINISHED)
             reaction = "I heard you found something in the Catacombs. Something old.";
-        else if (qs(QuestId::MQ_08_CATACOMBS_GATE) == QuestState::FINISHED)
+        else if (qs(QuestId::MQ_05_SECOND_FRAGMENT) == QuestState::FINISHED)
             reaction = "The Catacombs gate is open? That's been sealed since before I was born.";
-        else if (qs(QuestId::MQ_07_FROZEN_KEY) == QuestState::FINISHED)
+        else if (qs(QuestId::MQ_05_SECOND_FRAGMENT) == QuestState::FINISHED)
             reaction = "A key from the ice? The old stories are true, then.";
-        else if (qs(QuestId::MQ_05_STONEKEEP_DEPTHS) == QuestState::FINISHED)
+        else if (qs(QuestId::MQ_03_FIRST_FRAGMENT) == QuestState::FINISHED)
             reaction = "Stonekeep. I heard the inscription drove the last person who read it mad.";
-        else if (qs(QuestId::MQ_04_GREYWATCH_WARNING) == QuestState::FINISHED)
+        else if (qs(QuestId::MQ_04_SAGE_COUNSEL) == QuestState::FINISHED)
             reaction = "Captain Voss sent word. Whatever you told him has the garrison on alert.";
-        else if (qs(QuestId::MQ_03_ASHFORD_TABLET) == QuestState::FINISHED)
+        else if (qs(QuestId::MQ_03_FIRST_FRAGMENT) == QuestState::FINISHED)
             reaction = "You found the tablet? The scholars will want to hear about that.";
         else if (qs(QuestId::MQ_01_BARROW_WIGHT) == QuestState::FINISHED)
             reaction = "You cleared the Barrow? We've been hearing less noise from that direction.";
@@ -331,7 +331,7 @@ bool interact(Context& ctx, Entity target, int target_x, int target_y) {
         // Check prerequisite: for main quests, the previous quest must be FINISHED
         auto quest_prereq = [](QuestId id) -> QuestId {
             int idx = static_cast<int>(id);
-            if (idx <= 0 || idx > static_cast<int>(QuestId::MQ_17_CLAIM_RELIQUARY))
+            if (idx <= 0 || idx > static_cast<int>(QuestId::MQ_09_CLAIM_RELIQUARY))
                 return QuestId::COUNT;
             return static_cast<QuestId>(idx - 1);
         };
