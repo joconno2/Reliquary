@@ -258,7 +258,15 @@ private:
     bool revenant_saved_this_floor_ = false;
     bool dwarf_moved_last_turn_ = true;
     bool heavy_hitter_used_this_floor_ = false;
-    Entity ranger_marked_target_ = 0; // Ranger: marked prey
+    Entity ranger_marked_target_ = 0;
+    // New dramatic class state
+    int serpentine_stacks_ = 0;        // poison stacks on current target
+    Entity serpentine_target_ = 0;     // who has the stacks
+    bool dwarf_fortified_ = false;     // fortify stance active
+    int elf_weave_counter_ = 0;        // attacks until free spell
+    int druid_kill_counter_ = 0;       // kills until shapeshift ready
+    int druid_beast_turns_ = 0;        // turns remaining in beast form
+    int trollblood_corpse_count_ = 0;  // tracking (not needed, just eat on demand)
 
     // UI
     InventoryScreen inventory_screen_;

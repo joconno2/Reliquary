@@ -513,8 +513,8 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
                 }
             }
 
-            // Elf: Arcane Arrow (ranged bonus handled in ranged_attack section)
-            // Melee: Elves get +INT/3 bonus arcane damage on all hits
+            // Elf: WEAVE (every 3rd hit counted in engine triggers free spell)
+            // Melee still gets INT/3 arcane bonus
             if (cid == ClassId::ELF && def.hp > 0) {
                 int arcane_bonus = atk.eff_attr(Attr::INT) / 3;
                 if (arcane_bonus > 0) {
@@ -523,21 +523,22 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
                 }
             }
 
-            // Bandit: Pickpocket (15% chance to steal gold on hit)
-            if (cid == ClassId::BANDIT && def.hp > 0 && rng.range(1, 100) <= 15) {
-                int stolen = rng.range(5, 20);
-                log.add("Your fingers find their purse!", {255, 220, 80, 255});
-                // Gold tracked externally (engine), just log it here
-                result.gold_stolen = stolen;
+            // Bandit: EXPLOIT (attacks always crit vs enemies below 25% HP)
+            if (cid == ClassId::BANDIT && def.hp > 0 && def.hp * 4 < def.hp_max) {
+                // Force critical: double damage
+                if (!result.critical) {
+                    int exploit_bonus = result.damage;
+                    def.hp -= exploit_bonus;
+                    result.damage += exploit_bonus;
+                    result.critical = true;
+                    log.add("EXPLOIT!", {255, 180, 60, 255});
+                }
             }
 
-            // Serpentine: Venom Strike (poison on hit)
+            // Serpentine: INJECT (stack poison, detonate at 5 stacks handled in engine)
             if (cid == ClassId::SERPENTINE && def.hp > 0 && world.has<StatusEffects>(defender)) {
-                if (rng.range(1, 100) <= 30) {
-                    world.get<StatusEffects>(defender).add(StatusType::POISON, 3, 3);
-                } else {
-                    world.get<StatusEffects>(defender).add(StatusType::POISON, 2, 2);
-                }
+                world.get<StatusEffects>(defender).add(StatusType::POISON, 2, 3);
+                result.poison_stacked = true; // signal to engine for stack tracking
             }
 
             // Wyrmkin: Dragon Breath (every 8th hit, fire AoE)

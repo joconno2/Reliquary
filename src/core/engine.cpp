@@ -2272,8 +2272,9 @@ void Engine::grant_skill_xp(SkillId skill, int amount) {
 
 void Engine::try_move_player(int dx, int dy) {
     if (state_ != GameState::PLAYING) return;
-    dwarf_moved_last_turn_ = true; // will be set false on wait
-    ranged_target_ = 0; // clear target on move (may be out of range)
+    dwarf_moved_last_turn_ = true;
+    dwarf_fortified_ = false; // moving breaks fortify
+    ranged_target_ = 0;
     target_cycle_idx_ = -1;
 
     // Status effect checks — frozen/stunned skip turn, confused randomizes direction
@@ -2525,12 +2526,16 @@ void Engine::try_move_player(int dx, int dy) {
             }
         }
 
-        // Dwarf: Stone Stance (+2 damage, +3 armor if didn't move last turn)
-        if (!dwarf_moved_last_turn_ && atk_result.hit && !atk_result.killed &&
+        // Dwarf: FORTIFY (double damage if fortified, then break stance)
+        if (dwarf_fortified_ && atk_result.hit && !atk_result.killed &&
             world_.has<Player>(player_) && world_.get<Player>(player_).class_id == ClassId::DWARF &&
             world_.has<Stats>(target)) {
-            world_.get<Stats>(target).hp -= 2;
-            atk_result.damage += 2;
+            int fort_bonus = atk_result.damage; // double it
+            world_.get<Stats>(target).hp -= fort_bonus;
+            atk_result.damage += fort_bonus;
+            dwarf_fortified_ = false;
+            log_.add("Fortified strike!", {200, 180, 100, 255});
+            trigger_screen_shake(4.0f);
             if (world_.get<Stats>(target).hp <= 0) {
                 combat::kill(world_, target, log_);
                 atk_result.killed = true;
@@ -2913,12 +2918,119 @@ void Engine::try_move_player(int dx, int dy) {
             trigger_screen_shake(3.0f);
         }
 
-        // Bandit pickpocket gold
+        // Bandit pickpocket gold (legacy, kept for any remaining gold_stolen usage)
         if (atk_result.gold_stolen > 0) {
             gold_ += atk_result.gold_stolen;
             char gbuf[48]; snprintf(gbuf, sizeof(gbuf), "Stole %d gold!", atk_result.gold_stolen);
             log_.add(gbuf, {255, 220, 80, 255});
             audio_.play(SfxId::GOLD);
+        }
+
+        // Serpentine: INJECT stack tracking + detonate at 5
+        if (atk_result.poison_stacked && world_.has<Player>(player_) &&
+            world_.get<Player>(player_).class_id == ClassId::SERPENTINE) {
+            if (serpentine_target_ != target) {
+                serpentine_target_ = target;
+                serpentine_stacks_ = 0;
+            }
+            serpentine_stacks_++;
+            if (serpentine_stacks_ >= 5 && world_.has<Stats>(target) && !atk_result.killed) {
+                // DETONATE: burst damage
+                int burst = 10 + serpentine_stacks_ * 3;
+                world_.get<Stats>(target).hp -= burst;
+                serpentine_stacks_ = 0;
+                char sb[64]; snprintf(sb, sizeof(sb), "VENOM BURST! (%d)", burst);
+                log_.add(sb, {120, 255, 60, 255});
+                audio_.play(SfxId::SPELL_IMPACT);
+                if (world_.has<Position>(target)) {
+                    auto& tp = world_.get<Position>(target);
+                    particles_.burst((float)tp.x, (float)tp.y, 12, 80, 220, 40, 0.12f, 0.7f, 3);
+                }
+                trigger_screen_shake(4.0f);
+                if (world_.get<Stats>(target).hp <= 0) {
+                    combat::kill(world_, target, log_);
+                    atk_result.killed = true;
+                }
+            } else if (serpentine_stacks_ < 5) {
+                char sb[32]; snprintf(sb, sizeof(sb), "Venom: %d/5", serpentine_stacks_);
+                log_.add(sb, {100, 200, 60, 255});
+            }
+        }
+
+        // Elf: WEAVE counter (every 3rd attack = free spell)
+        if (atk_result.hit && world_.has<Player>(player_) &&
+            world_.get<Player>(player_).class_id == ClassId::ELF) {
+            elf_weave_counter_++;
+            if (elf_weave_counter_ >= 3 && world_.has<Spellbook>(player_)) {
+                elf_weave_counter_ = 0;
+                auto& book = world_.get<Spellbook>(player_);
+                if (!book.known_spells.empty()) {
+                    // Cast a random known spell for free at the target
+                    SpellId free_spell = book.known_spells[rng_.range(0, static_cast<int>(book.known_spells.size()) - 1)];
+                    magic::cast(world_, player_, free_spell, map_, rng_, log_);
+                    log_.add("Arcane weave!", {140, 180, 255, 255});
+                }
+            }
+        }
+
+        // Heretic: DEVOUR (20% on kill, learn a random spell)
+        if (atk_result.killed && world_.has<Player>(player_) &&
+            world_.get<Player>(player_).class_id == ClassId::HERETIC && rng_.chance(20)) {
+            if (world_.has<Spellbook>(player_)) {
+                // Pick a random spell the player doesn't know
+                int total_spells = static_cast<int>(SpellId::COUNT);
+                auto& book = world_.get<Spellbook>(player_);
+                SpellId candidate = static_cast<SpellId>(rng_.range(0, total_spells - 1));
+                bool already_known = false;
+                for (auto s : book.known_spells) if (s == candidate) { already_known = true; break; }
+                if (!already_known) {
+                    book.known_spells.push_back(candidate);
+                    auto& sinfo = get_spell_info(candidate);
+                    char db[96]; snprintf(db, sizeof(db), "DEVOURED: learned %s!", sinfo.name);
+                    log_.add(db, {220, 140, 255, 255});
+                    audio_.play(SfxId::SPELL_IMPACT);
+                    if (world_.has<Position>(player_)) {
+                        auto& pp = world_.get<Position>(player_);
+                        particles_.burst((float)pp.x, (float)pp.y, 10, 200, 100, 255, 0.1f, 0.7f, 3);
+                    }
+                }
+            } else {
+                // Give spellbook if they don't have one
+                Spellbook sb;
+                SpellId first = static_cast<SpellId>(rng_.range(0, static_cast<int>(SpellId::COUNT) - 1));
+                sb.known_spells.push_back(first);
+                world_.add<Spellbook>(player_, std::move(sb));
+                auto& sinfo = get_spell_info(first);
+                char db[96]; snprintf(db, sizeof(db), "DEVOURED: learned %s!", sinfo.name);
+                log_.add(db, {220, 140, 255, 255});
+                audio_.play(SfxId::SPELL_IMPACT);
+            }
+        }
+
+        // Druid: kill counter toward shapeshift
+        if (atk_result.killed && world_.has<Player>(player_) &&
+            world_.get<Player>(player_).class_id == ClassId::DRUID && druid_beast_turns_ == 0) {
+            druid_kill_counter_++;
+            if (druid_kill_counter_ >= 5) {
+                druid_kill_counter_ = 0;
+                druid_beast_turns_ = 10;
+                log_.add("THE BEAST AWAKENS!", {80, 200, 80, 255});
+                audio_.play(SfxId::SPELL_IMPACT);
+                trigger_screen_shake(5.0f);
+                if (world_.has<Position>(player_)) {
+                    auto& pp = world_.get<Position>(player_);
+                    particles_.burst((float)pp.x, (float)pp.y, 15, 60, 180, 60, 0.12f, 0.9f, 4);
+                }
+                // Beast form: temporary stat boost
+                if (world_.has<Stats>(player_)) {
+                    auto& ps = world_.get<Stats>(player_);
+                    ps.base_damage += 8;
+                    ps.base_speed += 30;
+                }
+            } else {
+                char kb[32]; snprintf(kb, sizeof(kb), "Beast stirs: %d/5", druid_kill_counter_);
+                log_.add(kb, {80, 160, 80, 255});
+            }
         }
 
         // Ranger: mark target for bonus damage (auto-mark on first hit)
@@ -3649,6 +3761,16 @@ void Engine::process_turn() {
 
     // Class ability turn ticks
     if (zealot_fury_turns_ > 0) zealot_fury_turns_--;
+    // Druid beast form expiry
+    if (druid_beast_turns_ > 0) {
+        druid_beast_turns_--;
+        if (druid_beast_turns_ == 0 && world_.has<Stats>(player_)) {
+            auto& ps = world_.get<Stats>(player_);
+            ps.base_damage -= 8;
+            ps.base_speed -= 30;
+            log_.add("The beast recedes. You return to yourself.", {80, 160, 80, 255});
+        }
+    }
     // Phase walk decrement
     if (world_.has<Stats>(player_) && world_.get<Stats>(player_).phase_turns > 0) {
         world_.get<Stats>(player_).phase_turns--;
@@ -7577,6 +7699,35 @@ void Engine::handle_input() {
                 case Action::WAIT:
                     player_acted_ = true;
                     dwarf_moved_last_turn_ = false;
+                    // Dwarf: FORTIFY on wait
+                    if (world_.has<Player>(player_) && world_.get<Player>(player_).class_id == ClassId::DWARF) {
+                        dwarf_fortified_ = true;
+                        log_.add("FORTIFIED. Next attack deals double.", {180, 160, 100, 255});
+                    }
+                    // Trollblood: CONSUME nearby corpse on wait
+                    if (world_.has<Player>(player_) && world_.get<Player>(player_).class_id == ClassId::TROLLBLOOD &&
+                        world_.has<Stats>(player_) && world_.has<Position>(player_)) {
+                        auto& pp = world_.get<Position>(player_);
+                        Entity corpse_eat = 0;
+                        auto& cp = world_.pool<Corpse>();
+                        for (size_t ci = 0; ci < cp.size(); ci++) {
+                            Entity ce = cp.entity_at(ci);
+                            if (!world_.has<Position>(ce)) continue;
+                            auto& cpos = world_.get<Position>(ce);
+                            if (std::abs(cpos.x - pp.x) <= 1 && std::abs(cpos.y - pp.y) <= 1) {
+                                corpse_eat = ce; break;
+                            }
+                        }
+                        if (corpse_eat != 0) {
+                            auto& ps = world_.get<Stats>(player_);
+                            int heal = ps.hp_max / 4;
+                            ps.hp = std::min(ps.hp_max, ps.hp + heal);
+                            world_.destroy(corpse_eat);
+                            char eb[48]; snprintf(eb, sizeof(eb), "You consume the flesh. (+%d HP)", heal);
+                            log_.add(eb, {140, 180, 100, 255});
+                            particles_.burst((float)pp.x, (float)pp.y, 6, 140, 100, 60, 0.08f, 0.5f, 2);
+                        }
+                    }
                     break;
 
                 case Action::INTERACT:

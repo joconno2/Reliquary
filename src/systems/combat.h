@@ -13,7 +13,8 @@ struct AttackResult {
     bool killed = false;
     bool attacker_killed = false;
     bool teleport_behind = false;
-    int gold_stolen = 0; // bandit pickpocket
+    int gold_stolen = 0;
+    bool poison_stacked = false; // serpentine inject
 };
 
 // Resolve a melee attack from attacker to defender
