@@ -141,8 +141,7 @@ void WorldMap::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_tit
     // Dungeon markers (red dots)
     struct DungeonMarker { int tx, ty; };
     static const DungeonMarker DUNGEONS[] = {
-        {1060, 750}, {800, 650}, {1200, 640}, {1100, 500}, {850, 900},
-        {1450, 800}, {1500, 550}, {600, 550}, {1000, 150},
+        {560, 375}, {650, 325}, {425, 475}, {700, 375}, {275, 275}, {500, 75},
     };
     SDL_Color dungeon_dot = {200, 60, 60, 255};
     for (auto& d : DUNGEONS) {
@@ -172,12 +171,12 @@ void WorldMap::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_tit
     SDL_Color region_col = {180, 170, 150, 80};
     struct ProvLabel { int tx, ty; const char* name; };
     static const ProvLabel PROV_LABELS[] = {
-        {1000, 200, "The Frozen Marches"},
-        {1100, 500, "The Pale Reach"},
-        {1000, 750, "The Heartlands"},
-        {600,  700, "The Greenwood"},
-        {1400, 750, "The Iron Coast"},
-        {1000, 1100,"The Dust Provinces"},
+        {450, 100, "The Frozen Marches"},
+        {650, 250, "The Pale Reach"},
+        {500, 375, "The Heartlands"},
+        {300, 350, "The Greenwood"},
+        {700, 375, "The Iron Coast"},
+        {500, 550, "The Dust Provinces"},
     };
     for (auto& pl : PROV_LABELS) {
         int lx = map_x0 + static_cast<int>(pl.tx * scale);

@@ -166,8 +166,8 @@ bool Engine::init() {
                 }
             }
         }
-        // Calculate zone difficulty based on distance from Thornwall (1000, 750)
-        constexpr int START_X = 1000, START_Y = 750;
+        // Calculate zone difficulty based on distance from Thornwall
+        constexpr int START_X = 500, START_Y = 375;
         float max_dist = 0;
         for (auto& de : dungeon_registry_) {
             float d = std::sqrt(static_cast<float>((de.x - START_X) * (de.x - START_X) +
@@ -1416,8 +1416,8 @@ void Engine::generate_level() {
         bool at_zone_bottom = (dungeon_level_ >= max_depth);
 
         DungeonParams params;
-        params.width = 80;
-        params.height = 50;
+        params.width = 60;
+        params.height = 38;
         params.wall_type = zone.wall;
         params.floor_type = zone.floor;
 
@@ -1440,39 +1440,46 @@ void Engine::generate_level() {
         }
 
         if (zone_key == "warrens") {
-            params.room_min_w = 4; params.room_max_w = 8;
-            params.room_min_h = 4; params.room_max_h = 8;
-            params.max_rooms = 15 + dungeon_level_;
-            params.corridor_width = 1;
-        } else if (zone_key == "stonekeep") {
-            params.room_min_w = 5; params.room_max_w = 10;
-            params.room_min_h = 5; params.room_max_h = 10;
-            params.max_rooms = 10 + dungeon_level_;
-            params.corridor_width = rng_.range(1, 2);
-        } else if (zone_key == "deep_halls") {
-            params.room_min_w = 8; params.room_max_w = 16;
-            params.room_min_h = 8; params.room_max_h = 16;
-            params.max_rooms = 6 + dungeon_level_;
-            params.corridor_width = rng_.range(2, 3);
-        } else if (zone_key == "catacombs") {
+            // Cramped, many small rooms
             params.room_min_w = 4; params.room_max_w = 7;
             params.room_min_h = 4; params.room_max_h = 7;
-            params.max_rooms = 14 + dungeon_level_;
+            params.max_rooms = 7 + dungeon_level_;
+            params.corridor_width = 1;
+        } else if (zone_key == "stonekeep") {
+            // Medium rooms, fortress-like
+            params.room_min_w = 5; params.room_max_w = 9;
+            params.room_min_h = 5; params.room_max_h = 9;
+            params.max_rooms = 6 + dungeon_level_;
+            params.corridor_width = rng_.range(1, 2);
+        } else if (zone_key == "deep_halls") {
+            // Large cavernous rooms, fewer of them
+            params.room_min_w = 7; params.room_max_w = 12;
+            params.room_min_h = 7; params.room_max_h = 12;
+            params.max_rooms = 4 + dungeon_level_;
+            params.corridor_width = rng_.range(2, 3);
+        } else if (zone_key == "catacombs") {
+            // Tight narrow corridors, many small crypts
+            params.room_min_w = 4; params.room_max_w = 6;
+            params.room_min_h = 4; params.room_max_h = 6;
+            params.max_rooms = 7 + dungeon_level_;
             params.corridor_width = 1;
         } else if (zone_key == "molten") {
-            params.room_min_w = 6; params.room_max_w = 12;
-            params.room_min_h = 6; params.room_max_h = 12;
-            params.max_rooms = 8 + dungeon_level_;
+            // Open volcanic chambers
+            params.room_min_w = 6; params.room_max_w = 10;
+            params.room_min_h = 6; params.room_max_h = 10;
+            params.max_rooms = 5 + dungeon_level_;
             params.corridor_width = 2;
         } else if (zone_key == "sunken") {
-            params.room_min_w = 6; params.room_max_w = 14;
-            params.room_min_h = 6; params.room_max_h = 14;
-            params.max_rooms = 7 + dungeon_level_;
+            // Flooded halls, medium-large
+            params.room_min_w = 6; params.room_max_w = 11;
+            params.room_min_h = 6; params.room_max_h = 11;
+            params.max_rooms = 5 + dungeon_level_;
             params.corridor_width = rng_.range(2, 3);
         } else if (zone_key == "sepulchre") {
-            params.room_min_w = 7; params.room_max_w = 14;
-            params.room_min_h = 7; params.room_max_h = 14;
-            params.max_rooms = 8 + dungeon_level_;
+            // Ancient, large, oppressive
+            params.room_min_w = 7; params.room_max_w = 12;
+            params.room_min_h = 7; params.room_max_h = 12;
+            params.max_rooms = 5 + dungeon_level_;
             params.corridor_width = 2;
         } else {
             // Fallback: depth-based defaults

@@ -458,7 +458,7 @@ void spawn_quest_content(World& world, const TileMap& map,
     // The Sepulchre depth-triggered quests (MQ_08/MQ_09)
     bool in_sepulchre = dungeon_ctx && dungeon_ctx->zone == "sepulchre";
     if (in_sepulchre) {
-        // MQ_15: auto-activate on entering The Sepulchre
+        // MQ_08: auto-activate on entering The Sepulchre
         if (dungeon_level == 1 && !journal.has_quest(QuestId::MQ_08_ENTER_SEPULCHRE)) {
             auto prereq = QuestId::MQ_07_BREAK_SEAL;
             if (journal.has_quest(prereq) && journal.get_state(prereq) == QuestState::FINISHED) {
@@ -528,43 +528,24 @@ void spawn_quest_content(World& world, const TileMap& map,
         bool is_bottom = (dungeon_level >= zone_max);
 
         if (is_bottom) {
-            // (disabled: Ashford removed from quest chain)
-            if (false) {
-                spawn_quest_item("Stone Tablet",
-                    "A heavy stone tablet. The inscriptions shift when you aren't looking.",
-                    0, 21, QuestId::MQ_03_FIRST_FRAGMENT);
-            }
-            // MQ_05: Ancient Inscription in Stonekeep
+            // MQ_03: First Fragment in Stonekeep
             if (dungeon_ctx->quest == "MQ_03") {
-                spawn_quest_item("Ancient Inscription",
-                    "A page of burned stone. The words are too heavy for the rock.",
+                spawn_quest_item("Reliquary Fragment",
+                    "A shard of burned stone. The words carved into it are too heavy.",
                     7, 21, QuestId::MQ_03_FIRST_FRAGMENT);
             }
-            // MQ_07: Frozen Key in Frostmere Depths
-            if (false) {
-                spawn_quest_item("Frozen Key",
-                    "A key of impossible cold. It burns your hand.",
-                    2, 22, QuestId::MQ_05_SECOND_FRAGMENT);
-            }
-            // MQ_09: Reliquary Fragment in The Catacombs
+            // MQ_05: Second Fragment in The Catacombs
             if (dungeon_ctx->quest == "MQ_05") {
                 spawn_quest_item("Reliquary Fragment",
                     "A shard of solidified memory. It hums with warmth.",
                     2, 16, QuestId::MQ_05_SECOND_FRAGMENT);
             }
-            // MQ_11: Molten Fragment in The Molten Depths
+            // MQ_06: Third Fragment in The Molten Depths
             if (dungeon_ctx->quest == "MQ_06") {
-                spawn_quest_item("Molten Fragment",
-                    "Cold even in the heart of the furnace. Two of three.",
+                spawn_quest_item("Reliquary Fragment",
+                    "Cold even in the heart of the furnace. Three of three.",
                     2, 16, QuestId::MQ_06_THIRD_FRAGMENT,
-                    {255, 120, 80, 255}); // red tint
-            }
-            // MQ_13: Sunken Fragment in The Sunken Halls
-            if (false) {
-                spawn_quest_item("Sunken Fragment",
-                    "The water remembers. Three fragments. They pull toward each other.",
-                    2, 16, QuestId::MQ_06_THIRD_FRAGMENT,
-                    {100, 160, 255, 255}); // blue tint
+                    {255, 120, 80, 255});
             }
             // MQ_14: Seal Stone in The Hollowgate
             if (dungeon_ctx->quest == "MQ_07") {
