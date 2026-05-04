@@ -2502,7 +2502,7 @@ void Engine::try_move_player(int dx, int dy) {
               tutorial_popup_.show("Combat", tb); }
         }
 
-        // Ranger: Marked Prey (+50% damage vs marked target, can't miss)
+        // Ranger: Marked Prey (+50% damage vs marked target)
         if (ranger_marked_target_ == target && atk_result.hit && !atk_result.killed &&
             world_.has<Player>(player_) && world_.get<Player>(player_).class_id == ClassId::RANGER &&
             world_.has<Stats>(target)) {
@@ -2512,14 +2512,15 @@ void Engine::try_move_player(int dx, int dy) {
             if (world_.get<Stats>(target).hp <= 0) {
                 combat::kill(world_, target, log_);
                 atk_result.killed = true;
-                ranger_marked_target_ = 0; // clear mark on kill
+                ranger_marked_target_ = 0;
             }
         }
 
-        // War Cleric: Zealot's Fury bonus damage
+        // War Cleric: Zealot's Fury (damage scales with remaining fury turns)
         if (zealot_fury_turns_ > 0 && atk_result.hit && !atk_result.killed && world_.has<Stats>(target)) {
-            world_.get<Stats>(target).hp -= 5;
-            atk_result.damage += 5;
+            int fury_dmg = 3 + zealot_fury_turns_ / 2; // scales: 5 turns=5, 11 turns=8, 20 turns=13
+            world_.get<Stats>(target).hp -= fury_dmg;
+            atk_result.damage += fury_dmg;
             if (world_.get<Stats>(target).hp <= 0) {
                 combat::kill(world_, target, log_);
                 atk_result.killed = true;
@@ -2926,7 +2927,7 @@ void Engine::try_move_player(int dx, int dy) {
             audio_.play(SfxId::GOLD);
         }
 
-        // Serpentine: INJECT stack tracking + detonate at 5
+        // Serpentine: INJECT stack tracking + detonate (no cap, exponential scaling)
         if (atk_result.poison_stacked && world_.has<Player>(player_) &&
             world_.get<Player>(player_).class_id == ClassId::SERPENTINE) {
             if (serpentine_target_ != target) {
@@ -2934,9 +2935,9 @@ void Engine::try_move_player(int dx, int dy) {
                 serpentine_stacks_ = 0;
             }
             serpentine_stacks_++;
+            // Detonate at 5+ stacks. Damage = stacks SQUARED (exponential scaling)
             if (serpentine_stacks_ >= 5 && world_.has<Stats>(target) && !atk_result.killed) {
-                // DETONATE: burst damage
-                int burst = 10 + serpentine_stacks_ * 3;
+                int burst = serpentine_stacks_ * serpentine_stacks_; // 5=25, 7=49, 10=100
                 world_.get<Stats>(target).hp -= burst;
                 serpentine_stacks_ = 0;
                 char sb[64]; snprintf(sb, sizeof(sb), "VENOM BURST! (%d)", burst);
@@ -2944,15 +2945,15 @@ void Engine::try_move_player(int dx, int dy) {
                 audio_.play(SfxId::SPELL_IMPACT);
                 if (world_.has<Position>(target)) {
                     auto& tp = world_.get<Position>(target);
-                    particles_.burst((float)tp.x, (float)tp.y, 12, 80, 220, 40, 0.12f, 0.7f, 3);
+                    particles_.burst((float)tp.x, (float)tp.y, 15, 80, 220, 40, 0.14f, 0.9f, 4);
                 }
-                trigger_screen_shake(4.0f);
+                trigger_screen_shake(5.0f);
                 if (world_.get<Stats>(target).hp <= 0) {
                     combat::kill(world_, target, log_);
                     atk_result.killed = true;
                 }
-            } else if (serpentine_stacks_ < 5) {
-                char sb[32]; snprintf(sb, sizeof(sb), "Venom: %d/5", serpentine_stacks_);
+            } else {
+                char sb[32]; snprintf(sb, sizeof(sb), "Venom: %d (burst at 5+)", serpentine_stacks_);
                 log_.add(sb, {100, 200, 60, 255});
             }
         }
@@ -3007,29 +3008,35 @@ void Engine::try_move_player(int dx, int dy) {
             }
         }
 
-        // Druid: kill counter toward shapeshift
+        // Druid: SHAPESHIFT (kills build form, kills IN form extend it)
         if (atk_result.killed && world_.has<Player>(player_) &&
-            world_.get<Player>(player_).class_id == ClassId::DRUID && druid_beast_turns_ == 0) {
-            druid_kill_counter_++;
-            if (druid_kill_counter_ >= 5) {
-                druid_kill_counter_ = 0;
-                druid_beast_turns_ = 10;
-                log_.add("THE BEAST AWAKENS!", {80, 200, 80, 255});
-                audio_.play(SfxId::SPELL_IMPACT);
-                trigger_screen_shake(5.0f);
-                if (world_.has<Position>(player_)) {
-                    auto& pp = world_.get<Position>(player_);
-                    particles_.burst((float)pp.x, (float)pp.y, 15, 60, 180, 60, 0.12f, 0.9f, 4);
-                }
-                // Beast form: temporary stat boost
-                if (world_.has<Stats>(player_)) {
-                    auto& ps = world_.get<Stats>(player_);
-                    ps.base_damage += 8;
-                    ps.base_speed += 30;
-                }
+            world_.get<Player>(player_).class_id == ClassId::DRUID) {
+            if (druid_beast_turns_ > 0) {
+                // Kill during beast form: EXTEND duration (+3 turns per kill)
+                druid_beast_turns_ += 3;
+                log_.add("The beast feeds! (+3 turns)", {80, 255, 80, 255});
             } else {
-                char kb[32]; snprintf(kb, sizeof(kb), "Beast stirs: %d/5", druid_kill_counter_);
-                log_.add(kb, {80, 160, 80, 255});
+                // Not in beast form: build toward transformation
+                druid_kill_counter_++;
+                if (druid_kill_counter_ >= 5) {
+                    druid_kill_counter_ = 0;
+                    druid_beast_turns_ = 10;
+                    log_.add("THE BEAST AWAKENS!", {80, 200, 80, 255});
+                    audio_.play(SfxId::SPELL_IMPACT);
+                    trigger_screen_shake(5.0f);
+                    if (world_.has<Position>(player_)) {
+                        auto& pp = world_.get<Position>(player_);
+                        particles_.burst((float)pp.x, (float)pp.y, 15, 60, 180, 60, 0.12f, 0.9f, 4);
+                    }
+                    if (world_.has<Stats>(player_)) {
+                        auto& ps = world_.get<Stats>(player_);
+                        ps.base_damage += 8;
+                        ps.base_speed += 30;
+                    }
+                } else {
+                    char kb[32]; snprintf(kb, sizeof(kb), "Beast stirs: %d/5", druid_kill_counter_);
+                    log_.add(kb, {80, 160, 80, 255});
+                }
             }
         }
 
@@ -3059,10 +3066,16 @@ void Engine::try_move_player(int dx, int dy) {
             auto cid = world_.get<Player>(player_).class_id;
             auto& pstats = world_.get<Stats>(player_);
 
-            // War Cleric: Zealot's Fury (next 5 turns get +5 holy damage)
+            // War Cleric: ZEALOT'S FURY (stacking: kills during fury extend + amplify)
             if (cid == ClassId::WAR_CLERIC) {
-                zealot_fury_turns_ = 5;
-                log_.add("Zealot's fury!", {255, 240, 140, 255});
+                if (zealot_fury_turns_ > 0) {
+                    // Kill during fury: EXTEND +3 turns, fury power increases
+                    zealot_fury_turns_ += 3;
+                    log_.add("FURY GROWS!", {255, 200, 60, 255});
+                } else {
+                    zealot_fury_turns_ = 5;
+                    log_.add("Zealot's fury!", {255, 240, 140, 255});
+                }
                 audio_.play(SfxId::PRAYER);
                 auto& pp = world_.get<Position>(player_);
                 particles_.burst((float)pp.x, (float)pp.y, 12, 255, 240, 100, 0.12f, 0.8f, 3);

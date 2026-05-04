@@ -437,7 +437,9 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
                 static int elem_cycle = 0;
                 int elem = elem_cycle % 3;
                 elem_cycle++;
-                int bonus = 2 + atk.eff_attr(Attr::INT) / 5;
+                // Base damage + BONUS per active status on target (exponential synergy)
+                int active_statuses = static_cast<int>(world.get<StatusEffects>(defender).effects.size());
+                int bonus = 2 + atk.eff_attr(Attr::INT) / 5 + active_statuses * 3;
                 def.hp -= bonus;
                 switch (elem) {
                     case 0: // Fire
