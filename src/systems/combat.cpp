@@ -463,6 +463,18 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
         if (world.has<Player>(attacker) && def.hp > 0) {
             auto cid = world.get<Player>(attacker).class_id;
 
+            // Rogue: Shadow Step (first strike vs full HP = teleport behind + 2x damage)
+            if (cid == ClassId::ROGUE && (def.hp + result.damage >= def.hp_max) && def.hp > 0) {
+                // Double the damage
+                int shadow_bonus = result.damage;
+                def.hp -= shadow_bonus;
+                result.damage += shadow_bonus;
+                result.teleport_behind = true;
+                log.add("Shadow step!", {100, 80, 160, 255});
+            }
+
+            // Ranger: Marked Prey handled in engine.cpp (persistent target mark)
+
             // Barbarian: Rage (+50% damage below 50% HP)
             if (cid == ClassId::BARBARIAN && atk.hp * 2 < atk.hp_max) {
                 int rage_bonus = dmg / 2;
@@ -501,19 +513,22 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
                 }
             }
 
-            // Elf: Fey Precision (20% chance for +4 bonus damage)
-            if (cid == ClassId::ELF && def.hp > 0 && rng.range(1, 100) <= 20) {
-                def.hp -= 4;
-                result.damage += 4;
-                log.add("You find a weakness!", {180, 255, 180, 255});
+            // Elf: Arcane Arrow (ranged bonus handled in ranged_attack section)
+            // Melee: Elves get +INT/3 bonus arcane damage on all hits
+            if (cid == ClassId::ELF && def.hp > 0) {
+                int arcane_bonus = atk.eff_attr(Attr::INT) / 3;
+                if (arcane_bonus > 0) {
+                    def.hp -= arcane_bonus;
+                    result.damage += arcane_bonus;
+                }
             }
 
-            // Bandit: Ambush (+5 damage on first strike vs full HP enemy)
-            if (cid == ClassId::BANDIT && def.hp > 0 && (def.hp + result.damage >= def.hp_max)) {
-                // Target was at or near full HP before this hit
-                def.hp -= 5;
-                result.damage += 5;
-                log.add("Ambush!", {200, 180, 100, 255});
+            // Bandit: Pickpocket (15% chance to steal gold on hit)
+            if (cid == ClassId::BANDIT && def.hp > 0 && rng.range(1, 100) <= 15) {
+                int stolen = rng.range(5, 20);
+                log.add("Your fingers find their purse!", {255, 220, 80, 255});
+                // Gold tracked externally (engine), just log it here
+                result.gold_stolen = stolen;
             }
 
             // Serpentine: Venom Strike (poison on hit)
@@ -883,6 +898,16 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
     if (result.hit && world.has<Player>(defender)) {
         auto dcid = world.get<Player>(defender).class_id;
 
+        // Fighter: Parry (25% chance to counter for 2x damage after being hit)
+        if (dcid == ClassId::FIGHTER && world.has<Stats>(attacker) && rng.range(1, 100) <= 25) {
+            auto& d_stats = world.get<Stats>(defender);
+            int counter_dmg = (d_stats.melee_damage() * 2);
+            world.get<Stats>(attacker).hp -= counter_dmg;
+            char pb[64]; snprintf(pb, sizeof(pb), "PARRY! (%d)", counter_dmg);
+            log.add(pb, {255, 220, 140, 255});
+            if (world.get<Stats>(attacker).hp <= 0) result.attacker_killed = true;
+        }
+
         // Druid: Thorns (reflect damage on attacker)
         if (dcid == ClassId::DRUID && world.has<Stats>(attacker)) {
             int thorn_dmg = 2 + world.get<Stats>(defender).level / 3;
@@ -1037,8 +1062,21 @@ AttackResult ranged_attack(World& world, Entity attacker, Entity defender,
         if (world.has<Player>(attacker) &&
             world.get<Player>(attacker).class_id == ClassId::WYRMKIN) {
             atk.wyrmkin_breath_ctr++;
-            // Note: breath only fires on melee (requires proximity for AoE),
-            // but ranged hits build the counter
+        }
+
+        // Elf: Arcane Arrow (ranged attacks deal bonus INT damage + random status)
+        if (world.has<Player>(attacker) &&
+            world.get<Player>(attacker).class_id == ClassId::ELF && def.hp > 0) {
+            int arcane_dmg = atk.eff_attr(Attr::INT) / 2;
+            def.hp -= arcane_dmg;
+            result.damage += arcane_dmg;
+            // Random status on ranged hit
+            if (world.has<StatusEffects>(defender)) {
+                int status_roll = rng.range(0, 2);
+                if (status_roll == 0) world.get<StatusEffects>(defender).add(StatusType::BURN, 1, 2);
+                else if (status_roll == 1) world.get<StatusEffects>(defender).add(StatusType::FROZEN, 0, 1);
+                else world.get<StatusEffects>(defender).add(StatusType::POISON, 1, 3);
+            }
         }
 
         if (def.hp <= 0) {

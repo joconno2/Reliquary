@@ -2501,6 +2501,20 @@ void Engine::try_move_player(int dx, int dy) {
               tutorial_popup_.show("Combat", tb); }
         }
 
+        // Ranger: Marked Prey (+50% damage vs marked target, can't miss)
+        if (ranger_marked_target_ == target && atk_result.hit && !atk_result.killed &&
+            world_.has<Player>(player_) && world_.get<Player>(player_).class_id == ClassId::RANGER &&
+            world_.has<Stats>(target)) {
+            int mark_bonus = atk_result.damage / 2;
+            world_.get<Stats>(target).hp -= mark_bonus;
+            atk_result.damage += mark_bonus;
+            if (world_.get<Stats>(target).hp <= 0) {
+                combat::kill(world_, target, log_);
+                atk_result.killed = true;
+                ranger_marked_target_ = 0; // clear mark on kill
+            }
+        }
+
         // War Cleric: Zealot's Fury bonus damage
         if (zealot_fury_turns_ > 0 && atk_result.hit && !atk_result.killed && world_.has<Stats>(target)) {
             world_.get<Stats>(target).hp -= 5;
@@ -2897,6 +2911,24 @@ void Engine::try_move_player(int dx, int dy) {
             bool is_an = world_.has<Stats>(target) && is_animal(world_.get<Stats>(target).name.c_str());
             particles_.death_burst_typed((float)nx, (float)ny, is_un, is_an);
             trigger_screen_shake(3.0f);
+        }
+
+        // Bandit pickpocket gold
+        if (atk_result.gold_stolen > 0) {
+            gold_ += atk_result.gold_stolen;
+            char gbuf[48]; snprintf(gbuf, sizeof(gbuf), "Stole %d gold!", atk_result.gold_stolen);
+            log_.add(gbuf, {255, 220, 80, 255});
+            audio_.play(SfxId::GOLD);
+        }
+
+        // Ranger: mark target for bonus damage (auto-mark on first hit)
+        if (world_.has<Player>(player_) && world_.get<Player>(player_).class_id == ClassId::RANGER &&
+            atk_result.hit && target != ranger_marked_target_) {
+            ranger_marked_target_ = target;
+            if (world_.has<Stats>(target)) {
+                char mb[64]; snprintf(mb, sizeof(mb), "Marked: %s", world_.get<Stats>(target).name.c_str());
+                log_.add(mb, {200, 255, 140, 255});
+            }
         }
 
         // Tenet action tracking for kills

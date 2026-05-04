@@ -11,8 +11,9 @@ struct AttackResult {
     int damage = 0;
     bool critical = false;
     bool killed = false;
-    bool attacker_killed = false; // riposte killed the attacker
-    bool teleport_behind = false; // unique ring: blinked behind target
+    bool attacker_killed = false;
+    bool teleport_behind = false;
+    int gold_stolen = 0; // bandit pickpocket
 };
 
 // Resolve a melee attack from attacker to defender

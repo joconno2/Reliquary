@@ -258,6 +258,7 @@ private:
     bool revenant_saved_this_floor_ = false;
     bool dwarf_moved_last_turn_ = true;
     bool heavy_hitter_used_this_floor_ = false;
+    Entity ranger_marked_target_ = 0; // Ranger: marked prey
 
     // UI
     InventoryScreen inventory_screen_;
