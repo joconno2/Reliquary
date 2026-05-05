@@ -9620,8 +9620,8 @@ void Engine::render_build_panel() {
     auto& player = world_.get<Player>(player_);
     int line_h = TTF_FontLineSkip(font_);
 
-    // Panel on left side (half previous width, expands vertically)
-    int panel_w = width_ / 8;
+    // Panel on left side (proportional, readable)
+    int panel_w = width_ / 6;
     int panel_x = 6;
     int panel_y = HUD_HEIGHT + 6;
     int text_w = panel_w - 14;
@@ -9660,7 +9660,10 @@ void Engine::render_build_panel() {
     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_NONE);
 
     // Helper: estimate wrapped text height
-    int char_w = 8; // approximate pixel width per character
+    // Get actual character width from font
+    int char_w = 8;
+    { int tw = 0; TTF_SizeText(font_, "ABCDEFGHIJ", &tw, nullptr); char_w = tw / 10; }
+    if (char_w < 4) char_w = 8;
     auto wrap_h = [&](const char* text) -> int {
         int len = static_cast<int>(strlen(text));
         int chars_per_line = std::max(1, text_w / char_w);
@@ -9712,8 +9715,8 @@ void Engine::render_god_panel() {
     int line_h = TTF_FontLineSkip(font_);
     Uint32 ticks = SDL_GetTicks();
 
-    // Panel on right side (half previous width, expands vertically)
-    int panel_w = width_ / 8;
+    // Panel on right side (proportional, readable)
+    int panel_w = width_ / 6;
     int panel_x = width_ - panel_w - 4;
     int panel_y = HUD_HEIGHT + 8;
     if (dungeon_level_ > 0) {
@@ -9818,6 +9821,8 @@ void Engine::render_god_panel() {
                              ginfo.color.b * 3/4 + 60, 255};
     // Helper for wrapped height
     int gchar_w = 8;
+    { int tw = 0; TTF_SizeText(font_, "ABCDEFGHIJ", &tw, nullptr); gchar_w = tw / 10; }
+    if (gchar_w < 4) gchar_w = 8;
     auto god_wrap_h = [&](const char* text) -> int {
         int len = static_cast<int>(strlen(text));
         int cpl = std::max(1, text_max_w / gchar_w);
