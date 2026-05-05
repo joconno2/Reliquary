@@ -2487,6 +2487,14 @@ void Engine::try_move_player(int dx, int dy) {
         auto atk_result = combat::melee_attack(world_, player_, target, rng_, log_);
         player_acted_ = true;
 
+        // Capture weapon type for gear interactions
+        uint32_t player_weapon_tags = 0;
+        if (world_.has<Inventory>(player_)) {
+            Entity wpn = world_.get<Inventory>(player_).get_equipped(EquipSlot::MAIN_HAND);
+            if (wpn != NULL_ENTITY && world_.has<Item>(wpn))
+                player_weapon_tags = world_.get<Item>(wpn).tags;
+        }
+
         // Tutorial: first combat
         if (!tips_shown_.first_combat) {
             tips_shown_.first_combat = true;
@@ -2513,6 +2521,27 @@ void Engine::try_move_player(int dx, int dy) {
                 combat::kill(world_, target, log_);
                 atk_result.killed = true;
                 ranger_marked_target_ = 0;
+            }
+        }
+
+        // === GEAR INTERACTIONS (class + weapon type = bonus) ===
+        if (atk_result.hit && !atk_result.killed && world_.has<Player>(player_) && world_.has<Stats>(target)) {
+            auto gcid = world_.get<Player>(player_).class_id;
+            // Barbarian + Axe: rage threshold 60% instead of 50% (handled in combat.cpp via tag)
+            // Templar + Mace: smite damage +4
+            if (gcid == ClassId::TEMPLAR && (player_weapon_tags & TAG_BLUNT) &&
+                world_.has<Stats>(target) && is_undead(world_.get<Stats>(target).name.c_str())) {
+                world_.get<Stats>(target).hp -= 4;
+                atk_result.damage += 4;
+            }
+            // Wyrmkin + Axe: breath counter 6 instead of 8
+            // (handled via faster increment in combat.cpp if we add it)
+            // Bandit + Dagger: exploit threshold 30% instead of 25%
+            // (boosted in combat.cpp via broader check)
+            // Serpentine + Dagger: double stacking
+            if (gcid == ClassId::SERPENTINE && (player_weapon_tags & TAG_DAGGER) &&
+                atk_result.poison_stacked) {
+                serpentine_stacks_++; // extra stack with daggers
             }
         }
 
@@ -5629,6 +5658,39 @@ void Engine::reset_to_main_menu() {
 void Engine::try_interact() {
     auto& pos = world_.get<Position>(player_);
 
+    // Trollblood: CONSUME corpse on interact (adjacent)
+    if (world_.has<Player>(player_) && world_.get<Player>(player_).class_id == ClassId::TROLLBLOOD &&
+        world_.has<Stats>(player_)) {
+        Entity corpse_eat = 0;
+        auto& cp = world_.pool<Corpse>();
+        for (size_t ci = 0; ci < cp.size(); ci++) {
+            Entity ce = cp.entity_at(ci);
+            if (!world_.has<Position>(ce)) continue;
+            auto& cpos = world_.get<Position>(ce);
+            if (std::abs(cpos.x - pos.x) <= 1 && std::abs(cpos.y - pos.y) <= 1) {
+                corpse_eat = ce; break;
+            }
+        }
+        if (corpse_eat != 0) {
+            auto& ps = world_.get<Stats>(player_);
+            int heal = ps.hp_max / 4;
+            ps.hp = std::min(ps.hp_max, ps.hp + heal);
+            auto& cpos = world_.get<Position>(corpse_eat);
+            float cx = (float)cpos.x, cy = (float)cpos.y;
+            world_.destroy(corpse_eat);
+            // Bloody explosion VFX + sound
+            particles_.burst(cx, cy, 15, 200, 40, 40, 0.15f, 0.8f, 4);
+            particles_.burst(cx, cy, 8, 180, 80, 60, 0.1f, 0.5f, 3);
+            particles_.blood(cx, cy);
+            audio_.play(SfxId::DEATH);
+            trigger_screen_shake(3.0f);
+            char eb[48]; snprintf(eb, sizeof(eb), "You DEVOUR the corpse. (+%d HP)", heal);
+            log_.add(eb, {200, 80, 60, 255});
+            player_acted_ = true;
+            return;
+        }
+    }
+
     // 1. Items or containers on the ground -> pickup
     {
         auto& positions = world_.pool<Position>();
@@ -7717,30 +7779,7 @@ void Engine::handle_input() {
                         dwarf_fortified_ = true;
                         log_.add("FORTIFIED. Next attack deals double.", {180, 160, 100, 255});
                     }
-                    // Trollblood: CONSUME nearby corpse on wait
-                    if (world_.has<Player>(player_) && world_.get<Player>(player_).class_id == ClassId::TROLLBLOOD &&
-                        world_.has<Stats>(player_) && world_.has<Position>(player_)) {
-                        auto& pp = world_.get<Position>(player_);
-                        Entity corpse_eat = 0;
-                        auto& cp = world_.pool<Corpse>();
-                        for (size_t ci = 0; ci < cp.size(); ci++) {
-                            Entity ce = cp.entity_at(ci);
-                            if (!world_.has<Position>(ce)) continue;
-                            auto& cpos = world_.get<Position>(ce);
-                            if (std::abs(cpos.x - pp.x) <= 1 && std::abs(cpos.y - pp.y) <= 1) {
-                                corpse_eat = ce; break;
-                            }
-                        }
-                        if (corpse_eat != 0) {
-                            auto& ps = world_.get<Stats>(player_);
-                            int heal = ps.hp_max / 4;
-                            ps.hp = std::min(ps.hp_max, ps.hp + heal);
-                            world_.destroy(corpse_eat);
-                            char eb[48]; snprintf(eb, sizeof(eb), "You consume the flesh. (+%d HP)", heal);
-                            log_.add(eb, {140, 180, 100, 255});
-                            particles_.burst((float)pp.x, (float)pp.y, 6, 140, 100, 60, 0.08f, 0.5f, 2);
-                        }
-                    }
+                    // (Trollblood consume moved to INTERACT action)
                     break;
 
                 case Action::INTERACT:
