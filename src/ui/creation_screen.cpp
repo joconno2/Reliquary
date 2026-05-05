@@ -415,33 +415,32 @@ void CreationScreen::render_class_select(SDL_Renderer* renderer, TTF_Font* font,
 
     auto screen = ui::Layout::from_screen(w, h, line_h);
 
-    // Title
-    auto title_row = screen.row(title_h + screen.gap);
-    ui::draw_text_in(renderer, font_title, "Reliquary", title_col, title_row, ui::Align::CENTER);
+    // Layout: left 2/3 = class grid, right 1/3 = description panel
+    int desc_panel_w = w / 3;
+    int grid_area_w = w - desc_panel_w;
+    int top_y_cs = title_h + 12;
 
-    // Reserve bottom for class info + hints (generous space for 5 info lines)
-    auto hint_row = screen.row_bottom(line_h + 4);
-    auto info_area = screen.row_bottom(title_h + line_h * 6 + 30);
+    // Title (left-aligned above grid)
+    ui::draw_text(renderer, font_title, "Reliquary", title_col, 12, 6);
 
-    // Grid fills remaining space
-    auto grid_rect = screen.cursor;
-    int grid_w = grid_rect.w - screen.pad * 2;
-    int grid_h = grid_rect.h;
+    // Grid area (left 2/3)
+    int grid_w = grid_area_w - 24;
+    int grid_h = h - top_y_cs - line_h * 2;
 
-    // Compute columns from available width: minimum cell width ~100px
+    // Compute columns from available width
     int min_cell = std::max(80, line_h * 6);
-    int cols = std::max(4, grid_w / min_cell);
-    if (cols > 8) cols = 8;
+    int cols = std::max(3, grid_w / min_cell);
+    if (cols > 7) cols = 7;
     int rows = (CLASS_COUNT + cols - 1) / cols;
 
     int cell_w = grid_w / cols;
     int cell_h = grid_h / rows;
     int sprite_sz = std::min(cell_w - 10, cell_h - line_h - 10) * 55 / 100;
     if (sprite_sz < 24) sprite_sz = 24;
-    if (sprite_sz > 160) sprite_sz = 160;
+    if (sprite_sz > 140) sprite_sz = 140;
 
-    int grid_x = grid_rect.x + screen.pad;
-    int grid_y = grid_rect.y;
+    int grid_x = 12;
+    int grid_y = top_y_cs;
 
     // Cache for mouse hit-testing
     grid_x_ = grid_x; grid_y_ = grid_y;
@@ -483,68 +482,69 @@ void CreationScreen::render_class_select(SDL_Renderer* renderer, TTF_Font* font,
         SDL_RenderSetClipRect(renderer, nullptr);
     }
 
-    // Bottom info area: selected class details
+    // === RIGHT PANEL: class description (right 1/3, full height) ===
+    int dp_x = grid_area_w + 8;
+    int dp_w = desc_panel_w - 16;
+    int dp_y = top_y_cs;
+
+    // Separator line
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 60, 55, 70, 200);
+    SDL_RenderDrawLine(renderer, grid_area_w, dp_y, grid_area_w, h - line_h * 2);
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+
     auto& cls = get_class_info(static_cast<ClassId>(selected_));
     bool sel_unlocked = class_unlocked_[selected_];
-    auto info = ui::Layout::from_rect(info_area, line_h);
 
     if (sel_unlocked) {
-        auto name_row = info.row(title_h + 4);
-        ui::draw_text_in(renderer, font_title, cls.name, sel_col, name_row, ui::Align::CENTER);
+        // Class name (title font)
+        ui::draw_text(renderer, font_title, cls.name, sel_col, dp_x, dp_y);
+        int ty = dp_y + title_h + 8;
 
-        // Primary ability (the main mechanic description)
-        info.skip(4);
-        auto desc_row_area = info.row(line_h + 6);
-        ui::draw_text_in(renderer, font, cls.description, desc_col, desc_row_area, ui::Align::CENTER);
+        // Stats line
+        char stat_buf[128];
+        snprintf(stat_buf, sizeof(stat_buf),
+            "HP:%d MP:%d STR:%d DEX:%d CON:%d INT:%d",
+            cls.hp, cls.mp, cls.str, cls.dex, cls.con, cls.intel);
+        ui::draw_text_clipped(renderer, font, stat_buf, {160, 155, 150, 255}, dp_x, ty, dp_w);
+        ty += line_h + 8;
 
-        // Gear synergy + Level 5 ability + tip (spaced out)
+        // Full description (wrapped, uses all remaining vertical space)
+        ui::draw_text_wrapped(renderer, font, cls.description, desc_col, dp_x, ty, dp_w);
+        ty += line_h * 5 + 12; // approximate space for wrapped text
+
+        // Gear synergy + Level 5 + Build tip (below description)
         auto details = get_class_details(static_cast<ClassId>(selected_));
-        SDL_Color gear_col = {180, 200, 140, 255};
-        SDL_Color lv5_col = {200, 180, 255, 255};
-        SDL_Color tip_col = {160, 155, 140, 255};
+        SDL_Color gear_col = {160, 200, 120, 255};
+        SDL_Color lv5_col = {180, 160, 255, 255};
+        SDL_Color tip_col = {150, 145, 130, 255};
         if (details.gear_synergy[0]) {
-            auto gear_row = info.row(line_h + 6);
-            ui::draw_text_in(renderer, font, details.gear_synergy, gear_col, gear_row, ui::Align::CENTER);
+            ui::draw_text_wrapped(renderer, font, details.gear_synergy, gear_col, dp_x, ty, dp_w);
+            ty += line_h * 2 + 6;
         }
         if (details.level5_ability[0]) {
-            auto lv5_row = info.row(line_h + 6);
-            ui::draw_text_in(renderer, font, details.level5_ability, lv5_col, lv5_row, ui::Align::CENTER);
+            ui::draw_text_wrapped(renderer, font, details.level5_ability, lv5_col, dp_x, ty, dp_w);
+            ty += line_h * 2 + 6;
         }
         if (details.scaling_tip[0]) {
-            auto tip_row = info.row(line_h + 6);
-            ui::draw_text_in(renderer, font, details.scaling_tip, tip_col, tip_row, ui::Align::CENTER);
+            ui::draw_text_wrapped(renderer, font, details.scaling_tip, tip_col, dp_x, ty, dp_w);
         }
-
-        // Stats
-        info.skip(4);
-        char stat_buf[256];
-        snprintf(stat_buf, sizeof(stat_buf),
-            "STR:%d  DEX:%d  CON:%d  INT:%d  WIL:%d  PER:%d  |  HP:%d  MP:%d",
-            cls.str, cls.dex, cls.con, cls.intel, cls.wil, cls.per, cls.hp, cls.mp);
-        auto stat_row = info.row();
-        ui::draw_text_in(renderer, font, stat_buf, {180, 175, 170, 255}, stat_row, ui::Align::CENTER);
     } else {
-        auto name_row = info.row(title_h + 2);
-        ui::draw_text_in(renderer, font_title, cls.name, {120, 100, 80, 255}, name_row, ui::Align::CENTER);
+        ui::draw_text(renderer, font_title, cls.name, {120, 100, 80, 255}, dp_x, dp_y);
+        int ty = dp_y + title_h + 8;
         if (cls.unlock_hint) {
-            auto hint_r = info.row(line_h + 2);
-            ui::draw_text_in(renderer, font, cls.unlock_hint, {160, 140, 100, 255}, hint_r, ui::Align::CENTER);
+            ui::draw_text_wrapped(renderer, font, cls.unlock_hint, {160, 140, 100, 255}, dp_x, ty, dp_w);
+            ty += line_h + 4;
         }
         if (!unlock_progress_[selected_].empty()) {
-            auto prog_row = info.row();
-            ui::draw_text_in(renderer, font, unlock_progress_[selected_].c_str(),
-                             {200, 180, 100, 255}, prog_row, ui::Align::CENTER);
+            ui::draw_text(renderer, font, unlock_progress_[selected_].c_str(),
+                          {200, 180, 100, 255}, dp_x, ty);
         }
     }
 
-    { auto* ig = InputGlyphs::get();
-      char hbuf[256];
-      if (ig && ig->using_gamepad())
-          snprintf(hbuf, sizeof(hbuf), "D-Pad browse   %s select   %s random",
-                   ig->confirm().c_str(), ig->label(Action::REST).c_str());
-      else
-          snprintf(hbuf, sizeof(hbuf), "[Arrows] browse   [Enter] select   [R] random character");
-      ui::draw_text_in(renderer, font, hbuf, dim_col, hint_row, ui::Align::CENTER); }
+    // Bottom hint
+    ui::draw_text(renderer, font, "[Arrows] browse   [Enter] select   [R] random",
+                  dim_col, 12, h - line_h - 8);
 }
 
 void CreationScreen::render_name_entry(SDL_Renderer* renderer, TTF_Font* font,
