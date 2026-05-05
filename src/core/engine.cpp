@@ -9623,10 +9623,10 @@ void Engine::render_build_panel() {
     auto& player = world_.get<Player>(player_);
     int line_h = TTF_FontLineSkip(font_);
 
-    // Panel on left side, below HUD (compact to avoid overlap)
-    int panel_w = std::min(160, width_ / 6);
-    int panel_x = 4;
-    int panel_y = HUD_HEIGHT + 4;
+    // Panel on left side, below HUD
+    int panel_w = std::min(220, width_ / 5);
+    int panel_x = 6;
+    int panel_y = HUD_HEIGHT + 6;
 
     // Count lines: class name + trait names
     int content_lines = 1 + static_cast<int>(build_traits_.size());
@@ -9684,8 +9684,8 @@ void Engine::render_god_panel() {
     Uint32 ticks = SDL_GetTicks();
 
     // Panel dimensions and position (right side, below minimap)
-    int panel_w = std::min(150, width_ / 7);
-    int panel_x = width_ - panel_w - 2;
+    int panel_w = std::min(220, width_ / 5);
+    int panel_x = width_ - panel_w - 4;
     int panel_y = HUD_HEIGHT + 172;
     int content_lines = 4 + tenets.count; // name, bar, passive, tenets, status
     if (zealot_fury_turns_ > 0 || (world_.has<Stats>(player_) && world_.get<Stats>(player_).phase_turns > 0))

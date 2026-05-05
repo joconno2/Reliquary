@@ -1206,7 +1206,7 @@ void CreationScreen::render_build_screen(SDL_Renderer* renderer, TTF_Font* font,
         int anchor_y = gy + build_god_cursor_ * god_row_h;
         // Clamp so icon+desc don't go off screen
         int min_y = top_y + 10;
-        int max_y = h - line_h * 7 - icon_sz * 2; // extra margin for bottom hint
+        int max_y = h - line_h * 9 - icon_sz * 2; // extra margin for bottom hint
         int block_y = std::max(min_y, std::min(max_y, anchor_y - icon_sz));
 
         // God diamond (filled)
@@ -1257,7 +1257,7 @@ void CreationScreen::render_build_screen(SDL_Renderer* renderer, TTF_Font* font,
         int ticon_sz = 24;
         int tanchor_y = ty + build_trait_cursor_ * trait_row_h;
         int tmin_y = top_y + 10;
-        int tmax_y = h - line_h * 7 - ticon_sz * 2;
+        int tmax_y = h - line_h * 9 - ticon_sz * 2;
         int tblock_y = std::max(tmin_y, std::min(tmax_y, tanchor_y - ticon_sz));
 
         // Trait symbol (nested squares)
@@ -1307,7 +1307,7 @@ void CreationScreen::render_build_screen(SDL_Renderer* renderer, TTF_Font* font,
         int bicon_r = 22;
         int banchor_y = by + build_bg_cursor_ * bg_row_h;
         int bmin_y = top_y + 10;
-        int bmax_y = h - line_h * 7 - bicon_r * 2;
+        int bmax_y = h - line_h * 9 - bicon_r * 2;
         int bblock_y = std::max(bmin_y, std::min(bmax_y, banchor_y - bicon_r));
 
         // Background circle (filled)
