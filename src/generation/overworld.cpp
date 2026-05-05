@@ -526,8 +526,18 @@ void populate(World& world, TileMap& map, RNG& rng,
         return t == TileType::WALL_STONE_BRICK || t == TileType::WALL_STONE_ROUGH ||
                t == TileType::WALL_DIRT || t == TileType::WALL_WOOD || t == TileType::DOOR_CLOSED;
     };
+    // Near any wall (for exterior barrels, crates)
     auto adjacent_to_wall = [&](int x, int y) -> bool {
         return is_wall(x-1,y) || is_wall(x+1,y) || is_wall(x,y-1) || is_wall(x,y+1);
+    };
+    // Inside a room (2+ walls = corner, definitely interior, not outdoor)
+    auto inside_building = [&](int x, int y) -> bool {
+        int walls = 0;
+        if (is_wall(x-1,y)) walls++;
+        if (is_wall(x+1,y)) walls++;
+        if (is_wall(x,y-1)) walls++;
+        if (is_wall(x,y+1)) walls++;
+        return walls >= 2;
     };
 
     // Helper: place doodads against building walls in a town
@@ -566,7 +576,7 @@ void populate(World& world, TileMap& map, RNG& rng,
         }
     };
 
-    // Helper: place doodads inside buildings (stone/cobble/dirt floor, near interior walls)
+    // Helper: place doodads inside buildings (stone/cobble/dirt floor, 2+ walls = interior)
     auto place_interior = [&](int cx, int cy, int radius, int count,
                                int sx, int sy, SDL_Color tint = {255,255,255,255}) {
         int placed = 0;
@@ -577,8 +587,8 @@ void populate(World& world, TileMap& map, RNG& rng,
             auto tt = map.at(tx, ty).type;
             if (tt != TileType::FLOOR_STONE && tt != TileType::FLOOR_COBBLE &&
                 tt != TileType::FLOOR_DIRT) continue;
-            // Must be near a wall (inside a building)
-            if (!adjacent_to_wall(tx, ty)) continue;
+            // Must be inside a building (2+ walls nearby)
+            if (!inside_building(tx, ty)) continue;
             // Don't block doors
             bool near_door = false;
             for (int dy2 = -1; dy2 <= 1 && !near_door; dy2++)
@@ -713,7 +723,7 @@ void populate(World& world, TileMap& map, RNG& rng,
                 if (!map.in_bounds(bx2, by2) || !map.in_bounds(bx2, by2+1)) continue;
                 if (map.at(bx2, by2).type != TileType::FLOOR_STONE) continue;
                 if (map.at(bx2, by2+1).type != TileType::FLOOR_STONE) continue;
-                if (!adjacent_to_wall(bx2, by2)) continue;
+                if (!inside_building(bx2, by2)) continue;
                 bool door_near = false;
                 for (int dy2 = -1; dy2 <= 2 && !door_near; dy2++)
                     for (int dx2 = -1; dx2 <= 1; dx2++)
@@ -748,7 +758,7 @@ void populate(World& world, TileMap& map, RNG& rng,
                 if (map.at(tbx, tby).type != TileType::FLOOR_STONE) continue;
                 if (map.at(tbx+1, tby).type != TileType::FLOOR_STONE) continue;
                 // Must be inside a building (adjacent to wall)
-                if (!adjacent_to_wall(tbx, tby)) continue;
+                if (!inside_building(tbx, tby)) continue;
                 bool door_near = false;
                 for (int dy2 = -1; dy2 <= 1 && !door_near; dy2++)
                     for (int dx2 = -1; dx2 <= 2; dx2++)
