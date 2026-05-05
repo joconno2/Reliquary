@@ -1723,7 +1723,7 @@ void populate(World& world, TileMap& map, RNG& rng,
 
             switch (type) {
                 case 0: // Campfire remains (burnt-out fire pit)
-                    place_lore(ox, oy, "cold campfire",
+                    place_lore(ox, oy, "charred journal page",
                                "Ashes and boot prints. Someone camped here recently.");
                     break;
                 case 1: // Abandoned wagon

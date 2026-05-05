@@ -9659,15 +9659,24 @@ void Engine::render_build_panel() {
     SDL_RenderFillRect(renderer_, &accent);
     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_NONE);
 
+    // Helper: estimate wrapped text height
+    int char_w = 8; // approximate pixel width per character
+    auto wrap_h = [&](const char* text) -> int {
+        int len = static_cast<int>(strlen(text));
+        int chars_per_line = std::max(1, text_w / char_w);
+        int lines = (len + chars_per_line - 1) / chars_per_line;
+        return lines * line_h;
+    };
+
     // Class name
     const auto& cls = get_class_info(player.class_id);
     SDL_Color class_col = {ar, ag, ab, 255};
     ui::draw_text_clipped(renderer_, font_, cls.name, class_col, tx, ty, text_w);
-    ty += line_h + 2;
+    ty += line_h + 4;
 
-    // Class description (wrapped)
+    // Class description (wrapped, skip by actual height)
     ui::draw_text_wrapped(renderer_, font_, cls.description, {160, 155, 145, 255}, tx, ty, text_w);
-    ty += line_h * 3 + 8;
+    ty += wrap_h(cls.description) + 8;
 
     // Traits with descriptions
     if (!build_traits_.empty()) {
@@ -9675,9 +9684,9 @@ void Engine::render_build_panel() {
             if (ty >= panel_y + panel_h - line_h * 2) break;
             const auto& tr = get_trait_info(tid);
             ui::draw_text_clipped(renderer_, font_, tr.name, {220, 200, 140, 255}, tx, ty, text_w);
-            ty += line_h;
+            ty += line_h + 2;
             ui::draw_text_wrapped(renderer_, font_, tr.description, {140, 135, 125, 255}, tx, ty, text_w);
-            ty += line_h * 2 + 4;
+            ty += wrap_h(tr.description) + 6;
         }
     }
 
@@ -9685,9 +9694,11 @@ void Engine::render_build_panel() {
     if (ty < panel_y + panel_h - line_h * 2) {
         auto& bg_info = get_background_info(background_);
         ui::draw_text_clipped(renderer_, font_, bg_info.name, {160, 180, 140, 255}, tx, ty, text_w);
-        ty += line_h;
-        if (bg_info.passive_desc[0])
+        ty += line_h + 2;
+        if (bg_info.passive_desc[0]) {
             ui::draw_text_wrapped(renderer_, font_, bg_info.passive_desc, {130, 125, 115, 255}, tx, ty, text_w);
+            ty += wrap_h(bg_info.passive_desc) + 4;
+        }
     }
 }
 
@@ -9805,14 +9816,23 @@ void Engine::render_god_panel() {
     }
     SDL_Color passive_col = {ginfo.color.r * 3/4 + 60, ginfo.color.g * 3/4 + 60,
                              ginfo.color.b * 3/4 + 60, 255};
-    ui::draw_text_wrapped(renderer_, font_, passive_short, passive_col, tx, ty, text_max_w);
-    ty += line_h;
+    // Helper for wrapped height
+    int gchar_w = 8;
+    auto god_wrap_h = [&](const char* text) -> int {
+        int len = static_cast<int>(strlen(text));
+        int cpl = std::max(1, text_max_w / gchar_w);
+        return ((len + cpl - 1) / cpl) * line_h;
+    };
 
-    // Tenets (compact, clipped to panel)
+    ui::draw_text_wrapped(renderer_, font_, passive_short, passive_col, tx, ty, text_max_w);
+    ty += god_wrap_h(passive_short) + 4;
+
+    // Tenets (wrapped, proper spacing)
     SDL_Color tenet_col = {130, 125, 115, 255};
     for (int i = 0; i < tenets.count; i++) {
+        if (ty >= panel_y + panel_h - line_h) break;
         ui::draw_text_wrapped(renderer_, font_, tenets.tenets[i].description, tenet_col, tx, ty, text_max_w);
-        ty += line_h;
+        ty += god_wrap_h(tenets.tenets[i].description) + 4;
     }
 
     // Active buffs/status
