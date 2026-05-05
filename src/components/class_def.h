@@ -95,3 +95,62 @@ inline const ClassInfo& get_class_info(ClassId id) {
     };
     return CLASSES[static_cast<int>(id)];
 }
+
+struct ClassDetails {
+    const char* gear_synergy;  // what weapon type boosts this class
+    const char* level5_ability; // second ability unlocked at level 5
+    const char* scaling_tip;    // how to build around this class
+};
+
+inline ClassDetails get_class_details(ClassId id) {
+    static const ClassDetails DETAILS[] = {
+        // Fighter
+        {"Swords: parry chance +15%", "Lv5: RIPOSTE STANCE (3 guaranteed parries)", "Stack armor. Let enemies hit you. Counter for 2x."},
+        // Rogue
+        {"Daggers: shadow step works vs any HP", "Lv5: VANISH (re-stealth after every kill)", "Open from stealth, kill, vanish, repeat. Chain assassinations."},
+        // Wizard
+        {"Staves: weave counter every 2 hits", "Lv5: OVERLOAD (2x MP cost, 3x spell damage)", "Stack INT. More spells = more power. Never melee."},
+        // Ranger
+        {"Bows: +25% extra mark damage (+75% total)", "Lv5: HUNTER'S FOCUS (marked can't regen)", "Mark the boss. Everything hits it harder. Bow amplifies."},
+        // Barbarian
+        {"Axes: rage threshold 60% (easier to trigger)", "Lv5: CLEAVE (rage kills splash adjacent)", "Get hurt on purpose. Axes make rage easier. Splash clears rooms."},
+        // Knight
+        {"Shields: block gives +2 armor 3 turns", "Lv5: BULWARK (50% block for 3 turns, CD 10)", "Full tank. Shield required. Block + riposte = free damage."},
+        // Monk
+        {"Unarmed: flurry chance 50% (not 40%)", "Lv5: PALM STRIKE (every 5th hit stuns 2 turns)", "Stay unarmed. Speed = more flurries = more stuns."},
+        // Templar
+        {"Maces: smite +4 vs undead", "Lv5: CONSECRATE (kills create holy ground, 3/turn to undead)", "Hunt undead. Mace + smite = instant kills. Holy ground controls space."},
+        // Druid
+        {"Spears: shapeshift at 4 kills (not 5)", "Lv5: NATURE'S CALL (beast form summons 2 wolves)", "Kill fast, transform, wolves + you = room clear. Kills extend form."},
+        // War Cleric
+        {"Maces: fury extends +4 per kill (not +3)", "Lv5: SERMON (fury kills heal 5 HP)", "Chain kills = stacking damage + healing. Mace accelerates the chain."},
+        // Warlock
+        {"Daggers: siphon +3 extra MP per kill", "Lv5: DARK PACT (spend HP to cast when no MP)", "Kill for MP, cast for kills. Infinite loop. Daggers sustain it."},
+        // Dwarf
+        {"Hammers: fortify = TRIPLE damage (not double)", "Lv5: EARTHQUAKE (fortify strike stuns adjacent)", "Wait, strike, stun room. Hammer triples the hit. Repeat."},
+        // Elf
+        {"Bows: weave triggers every 2 ranged hits", "Lv5: SPELL MASTERY (weave spells deal +50%)", "Collect spell tomes. More spells = stronger weave rotation."},
+        // Bandit
+        {"Daggers: exploit threshold 30% (not 25%)", "Lv5: CUTTHROAT (exploit kills = 3 turns invis)", "Poison/bleed enemies low, then execute. Daggers widen the window."},
+        // Necromancer
+        {"Staves: corpse explode radius +1", "Lv5: ARMY (raise dead cap = 3 summons)", "Kill groups. Explosions chain. Raise the dead. Staff widens AoE."},
+        // Schema Monk
+        {"Unarmed: status duration +1 turn per element", "Lv5: CONFLUENCE (every 9th hit = all 3 elements at once)", "Stack statuses. More ailments = more damage. Confluence triples it."},
+        // Heretic
+        {"Any unique item: +5% devour chance", "Lv5: MIMICRY (devoured spells deal +50% damage)", "Kill everything. Steal spells. Each unique item = faster learning."},
+        // Wyrmkin
+        {"Axes: breath counter 4 (not 8, half the hits)", "Lv5: INFERNO (breath leaves burning ground 3 turns)", "Axes halve the wait. Breath every 4 hits + burning ground."},
+        // Revenant
+        {"Heavy armor: death save heals to 25% (not 1 HP)", "Lv5: UNDYING FURY (+100% damage 5 turns after death save)", "Die on purpose. Armor keeps you at 25%. Fury doubles damage."},
+        // Serpentine
+        {"Daggers: +1 extra stack per hit (double speed)", "Lv5: NEUROTOXIN (8+ stacks = stun 3 turns on burst)", "Daggers double stacking. 8 stacks = 64 burst + paralysis."},
+        // Trollblood
+        {"Clubs/Blunt: consume heals 35% (not 25%)", "Lv5: GORGE (eat 3 corpses/floor = permanent +5 max HP)", "Position near corpses. Eat constantly. Clubs heal more. HP grows each floor."},
+    };
+    int idx = static_cast<int>(id);
+    if (idx < 0 || idx >= static_cast<int>(ClassId::COUNT)) {
+        static const ClassDetails NONE = {"", "", ""};
+        return NONE;
+    }
+    return DETAILS[idx];
+}

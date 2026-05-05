@@ -427,13 +427,33 @@ void CreationScreen::render_class_select(SDL_Renderer* renderer, TTF_Font* font,
         auto name_row = info.row(title_h + 2);
         ui::draw_text_in(renderer, font_title, cls.name, sel_col, name_row, ui::Align::CENTER);
 
-        auto desc_row_area = info.row(line_h + 4);
+        // Primary ability
+        auto desc_row_area = info.row(line_h + 2);
         ui::draw_text_in(renderer, font, cls.description, desc_col, desc_row_area, ui::Align::CENTER);
 
+        // Gear synergy + Level 5 ability
+        auto details = get_class_details(static_cast<ClassId>(selected_));
+        SDL_Color gear_col = {180, 200, 140, 255};
+        SDL_Color lv5_col = {200, 180, 255, 255};
+        SDL_Color tip_col = {160, 155, 140, 255};
+        if (details.gear_synergy[0]) {
+            auto gear_row = info.row(line_h + 1);
+            ui::draw_text_in(renderer, font, details.gear_synergy, gear_col, gear_row, ui::Align::CENTER);
+        }
+        if (details.level5_ability[0]) {
+            auto lv5_row = info.row(line_h + 1);
+            ui::draw_text_in(renderer, font, details.level5_ability, lv5_col, lv5_row, ui::Align::CENTER);
+        }
+        if (details.scaling_tip[0]) {
+            auto tip_row = info.row(line_h + 1);
+            ui::draw_text_in(renderer, font, details.scaling_tip, tip_col, tip_row, ui::Align::CENTER);
+        }
+
+        // Stats
         char stat_buf[256];
         snprintf(stat_buf, sizeof(stat_buf),
-            "STR:%d  DEX:%d  CON:%d  INT:%d  WIL:%d  PER:%d  CHA:%d  |  HP:%d  MP:%d",
-            cls.str, cls.dex, cls.con, cls.intel, cls.wil, cls.per, cls.cha, cls.hp, cls.mp);
+            "STR:%d  DEX:%d  CON:%d  INT:%d  WIL:%d  PER:%d  |  HP:%d  MP:%d",
+            cls.str, cls.dex, cls.con, cls.intel, cls.wil, cls.per, cls.hp, cls.mp);
         auto stat_row = info.row();
         ui::draw_text_in(renderer, font, stat_buf, {180, 175, 170, 255}, stat_row, ui::Align::CENTER);
     } else {
