@@ -3434,7 +3434,7 @@ void Engine::try_move_player(int dx, int dy) {
 
         // Background passives on kill
         if (atk_result.killed) {
-            if (background_ == BackgroundId::NOBLE_EXILE) {
+            if (background_ == BackgroundId::GLADIATOR) {
                 // Silver Tongue: +2-5 bonus gold on kill
                 int bonus_gold = rng_.range(2, 5);
                 gold_ += bonus_gold; run_gold_earned_ += bonus_gold;
@@ -6024,7 +6024,7 @@ void Engine::try_pickup() {
 
         // Auto-identify potions: Alchemist background OR Divination 25+
         if (item.type == ItemType::POTION && !item.identified) {
-            bool can_id = (background_ == BackgroundId::ALCHEMISTS_APPRENTICE);
+            bool can_id = (background_ == BackgroundId::ALCHEMIST);
             if (!can_id && world_.has<Skills>(player_)) {
                 int div_lv = world_.get<Skills>(player_).get_level(SkillId::DIVINATION);
                 if (div_lv >= 25) can_id = true;
@@ -6143,7 +6143,7 @@ void Engine::try_rest() {
         auto& ga = world_.get<GodAlignment>(player_);
         if (ga.god == GodId::LETHIS) max_rests = 3;
     }
-    if (background_ == BackgroundId::MONK_OF_ORDER) max_rests = 3;
+    if (background_ == BackgroundId::FARMER) max_rests = 3;
 
     if (dungeon_level_ > 0 && rest_count_this_floor_ >= max_rests) {
         log_.add("You have no rests remaining on this floor.", {200, 120, 100, 255});
@@ -6550,7 +6550,7 @@ void Engine::handle_inventory_action(InvAction action) {
                     } else {
                         // INT-based study check: fail chance = 60 - INT*2 (min 5%)
                         // Disgraced Scholar passive: tomes never fail
-                        int fail_chance = (background_ == BackgroundId::DISGRACED_SCHOLAR)
+                        int fail_chance = (background_ == BackgroundId::SCHOLAR)
                             ? 0
                             : std::max(5, 60 - world_.get<Stats>(player_).attr(Attr::INT) * 2);
                         if (rng_.chance(fail_chance)) {
@@ -8897,7 +8897,7 @@ void Engine::render_hud() {
             auto& ga = world_.get<GodAlignment>(player_);
             if (ga.god == GodId::LETHIS) max_rests = 3;
         }
-        if (background_ == BackgroundId::MONK_OF_ORDER) max_rests = 3;
+        if (background_ == BackgroundId::FARMER) max_rests = 3;
         int rests_left = std::max(0, max_rests - rest_count_this_floor_);
         char rstbuf[24];
         snprintf(rstbuf, sizeof(rstbuf), "REST:%d/%d", rests_left, max_rests);
