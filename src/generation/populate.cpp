@@ -69,8 +69,8 @@ void spawn_monsters(World& world, const TileMap& map,
                      int dungeon_level) {
     // Monster pool range scales with dungeon depth
     // Depth 1: indices 0-7 (rats, bats, kobolds, slimes, goblins, spiders)
-    // Steeper pool unlock for 4-floor dungeons: full table by floor 4
-    int max_idx = std::min(MONSTER_COUNT - 1, 4 + dungeon_level * 6);
+    // Monster pool unlock: early floors safe, full table at high effective levels
+    int max_idx = std::min(MONSTER_COUNT - 1, 4 + dungeon_level * 4);
 
     int dragons_this_floor = 0;
 

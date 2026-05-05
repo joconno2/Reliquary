@@ -1024,9 +1024,11 @@ void populate(World& world, TileMap& map, RNG& rng,
 
     // Place a sign entity at a walkable tile near (x,y)
     auto place_sign = [&](int x, int y) {
+        // Deterministic placement: use position hash for offset so signs don't move
         for (int a = 0; a < 20; a++) {
-            int tx = x + rng.range(-2, 2);
-            int ty = y + rng.range(-2, 2);
+            int hash = (x * 7 + y * 13 + a * 31) & 0xFF;
+            int tx = x + (hash % 5) - 2;
+            int ty = y + ((hash / 5) % 5) - 2;
             if (!map.in_bounds(tx, ty)) continue;
             if (!map.is_walkable(tx, ty)) continue;
             // Don't place on or adjacent to doors (blocks entry)

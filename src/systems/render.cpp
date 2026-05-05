@@ -427,8 +427,8 @@ void draw_entities(SDL_Renderer* renderer, const SpriteManager& sprites,
             sx = static_cast<int>(((ticks + offset * 40) / 150) % 6);
         }
 
-        // Legendary/Relic glow: pulsing circle beneath high-value items
-        if (cmd.z_order >= 2) {
+        // Legendary/Relic glow: only z_order 2-3 (items), not 5+ (creatures)
+        if (cmd.z_order >= 2 && cmd.z_order <= 3) {
             float pulse = 0.5f + 0.5f * sinf(ticks * 0.004f + cmd.dx * 0.1f);
             int glow_alpha = static_cast<int>(40 + 50 * pulse);
             int glow_r = static_cast<int>(TS * (0.6f + 0.3f * pulse));

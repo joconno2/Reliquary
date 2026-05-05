@@ -13,6 +13,7 @@ static TileType char_to_tile(char c) {
         case 'w': return TileType::WALL_WOOD;
         case 'g': return TileType::WALL_GRASS;
         case 'n': return TileType::WALL_SANDSTONE;
+        case 'L': return TileType::WALL_LARGE_STONE;
         case 'T': return TileType::TREE;
         case 't': case '"': case 'b': case 'c': return TileType::BRUSH;
         case '~': return TileType::WATER;
