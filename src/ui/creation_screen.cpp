@@ -3,6 +3,7 @@
 #include "core/input_glyphs.h"
 #include "components/prayer.h"
 #include "components/tenet.h"
+#include "components/background.h"
 #include <cstdio>
 #include <cmath>
 #include <algorithm>
@@ -90,12 +91,74 @@ bool CreationScreen::handle_input(SDL_Event& event) {
         return consumed;
     }
 
+    // === BUILD_SCREEN: combined god + traits + background + name ===
+    if (phase_ == CreationPhase::BUILD_SCREEN) {
+        if (event.type != SDL_KEYDOWN) return false;
+        auto sym = event.key.keysym.sym;
+
+        // Left/Right: switch columns
+        if (sym == SDLK_LEFT || sym == SDLK_a) { if (build_column_ > 0) build_column_--; return true; }
+        if (sym == SDLK_RIGHT || sym == SDLK_d) { if (build_column_ < 2) build_column_++; return true; }
+
+        // Up/Down: navigate within column
+        if (sym == SDLK_UP || sym == SDLK_w) {
+            if (build_column_ == 0 && build_god_cursor_ > 0) build_god_cursor_--;
+            else if (build_column_ == 1 && build_trait_cursor_ > 0) build_trait_cursor_--;
+            else if (build_column_ == 2 && build_bg_cursor_ > 0) build_bg_cursor_--;
+            return true;
+        }
+        if (sym == SDLK_DOWN || sym == SDLK_s) {
+            if (build_column_ == 0 && build_god_cursor_ < GOD_COUNT - 1) build_god_cursor_++;
+            else if (build_column_ == 1 && build_trait_cursor_ < TRAIT_COUNT - 1) build_trait_cursor_++;
+            else if (build_column_ == 2 && build_bg_cursor_ < BACKGROUND_COUNT - 1) build_bg_cursor_++;
+            return true;
+        }
+
+        // Enter: toggle selection in current column
+        if (sym == SDLK_RETURN || sym == SDLK_e) {
+            if (build_column_ == 0) {
+                // Select god
+                build_.god = static_cast<GodId>(build_god_cursor_);
+            } else if (build_column_ == 1) {
+                // Toggle trait
+                TraitId tid = static_cast<TraitId>(build_trait_cursor_);
+                auto it = std::find(build_traits_selected_.begin(), build_traits_selected_.end(), tid);
+                if (it != build_traits_selected_.end()) {
+                    build_traits_selected_.erase(it);
+                } else if (static_cast<int>(build_traits_selected_.size()) < 3) {
+                    build_traits_selected_.push_back(tid);
+                }
+            } else if (build_column_ == 2) {
+                build_.background = static_cast<BackgroundId>(build_bg_cursor_);
+            }
+            return true;
+        }
+
+        // Space: confirm all and start game
+        if (sym == SDLK_SPACE) {
+            build_.god = static_cast<GodId>(build_god_cursor_);
+            build_.traits = build_traits_selected_;
+            build_.background = static_cast<BackgroundId>(build_bg_cursor_);
+            build_.hardcore = true; // always hardcore
+            if (build_.name.empty()) randomize_name();
+            phase_ = CreationPhase::DONE;
+            return true;
+        }
+
+        // Escape: back to class select
+        if (sym == SDLK_ESCAPE || sym == SDLK_BACKSPACE) {
+            phase_ = CreationPhase::CLASS_SELECT;
+            return true;
+        }
+        return false;
+    }
+
     if (phase_ == CreationPhase::TRAIT_SELECT) {
         bool consumed = trait_screen_.handle_input(event);
         if (trait_screen_.is_confirmed()) {
             build_.traits = trait_screen_.get_selected_traits();
-            build_.hardcore = false;
-            phase_ = CreationPhase::HARDCORE_SELECT;
+            build_.hardcore = true; // always hardcore
+            phase_ = CreationPhase::DONE;
             return true;
         }
         if (!consumed && event.type == SDL_KEYDOWN &&
@@ -188,7 +251,7 @@ bool CreationScreen::handle_input(SDL_Event& event) {
                 if (class_unlocked_[selected_]) {
                     build_.class_id = static_cast<ClassId>(selected_);
                     randomize_name();
-                    phase_ = CreationPhase::NAME_ENTRY;
+                    phase_ = CreationPhase::BUILD_SCREEN;
                 }
                 return true;
             }
@@ -245,7 +308,7 @@ bool CreationScreen::handle_input(SDL_Event& event) {
                 if (!class_unlocked_[selected_]) return true;
                 build_.class_id = static_cast<ClassId>(selected_);
                 randomize_name();
-                phase_ = CreationPhase::NAME_ENTRY;
+                phase_ = CreationPhase::BUILD_SCREEN;
             } else if (phase_ == CreationPhase::GOD_SELECT) {
                 build_.god = static_cast<GodId>(selected_);
                 bg_screen_.reset();
@@ -263,7 +326,7 @@ bool CreationScreen::handle_input(SDL_Event& event) {
             if (phase_ == CreationPhase::CLASS_SELECT) {
                 cancelled_ = true;
             } else if (phase_ == CreationPhase::GOD_SELECT) {
-                phase_ = CreationPhase::NAME_ENTRY;
+                phase_ = CreationPhase::BUILD_SCREEN;
             }
             return true;
         default:
@@ -280,6 +343,8 @@ void CreationScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* fo
 
     if (phase_ == CreationPhase::CLASS_SELECT) {
         render_class_select(renderer, font, font_title, sprites, w, h);
+    } else if (phase_ == CreationPhase::BUILD_SCREEN) {
+        render_build_screen(renderer, font, font_title, w, h);
     } else if (phase_ == CreationPhase::NAME_ENTRY) {
         render_name_entry(renderer, font, font_title, sprites, cw, h);
     } else if (phase_ == CreationPhase::GOD_SELECT) {
@@ -1066,4 +1131,84 @@ void CreationScreen::render_character_preview(SDL_Renderer* renderer, TTF_Font* 
                                   trow.x + 4, trow.y, trow.w - 4);
         }
     }
+}
+
+void CreationScreen::render_build_screen(SDL_Renderer* renderer, TTF_Font* font,
+                                          TTF_Font* font_title, int w, int h) const {
+    if (!font) return;
+    int line_h = TTF_FontLineSkip(font);
+    int col_w = w / 3;
+    int top_y = 40;
+
+    SDL_Color sel_col = {255, 240, 140, 255};
+    SDL_Color dim_col = {140, 135, 130, 255};
+    SDL_Color active_col = {220, 210, 200, 255};
+    SDL_Color header_col = {200, 180, 100, 255};
+
+    // Column headers
+    SDL_Color hdr0 = build_column_ == 0 ? sel_col : header_col;
+    SDL_Color hdr1 = build_column_ == 1 ? sel_col : header_col;
+    SDL_Color hdr2 = build_column_ == 2 ? sel_col : header_col;
+    ui::draw_text(renderer, font, "GOD", hdr0, col_w / 2 - 15, top_y);
+    ui::draw_text(renderer, font, "TRAITS", hdr1, col_w + col_w / 2 - 30, top_y);
+    ui::draw_text(renderer, font, "NAME", hdr2, col_w * 2 + col_w / 2 - 20, top_y);
+    int list_y = top_y + line_h + 8;
+
+    // LEFT COLUMN: God list
+    for (int i = 0; i < GOD_COUNT; i++) {
+        auto& gi = get_god_info(static_cast<GodId>(i));
+        bool is_cursor = (build_column_ == 0 && i == build_god_cursor_);
+        bool is_selected = (i == build_god_cursor_);
+        SDL_Color col = is_cursor ? sel_col : is_selected ? active_col : dim_col;
+        int y = list_y + i * (line_h + 2);
+        if (y + line_h > h - 40) break;
+        char buf[32]; snprintf(buf, sizeof(buf), "%s%s", is_selected ? "> " : "  ", gi.name);
+        ui::draw_text_clipped(renderer, font, buf, col, 8, y, col_w - 16);
+    }
+    // Show selected god passive below list
+    if (build_god_cursor_ >= 0 && build_god_cursor_ < GOD_COUNT) {
+        auto& gi = get_god_info(static_cast<GodId>(build_god_cursor_));
+        int py = list_y + GOD_COUNT * (line_h + 2) + 8;
+        SDL_Color gc = {gi.color.r, gi.color.g, gi.color.b, 255};
+        ui::draw_text_clipped(renderer, font, gi.passive_desc, gc, 8, py, col_w - 16);
+    }
+
+    // CENTER COLUMN: Traits
+    for (int i = 0; i < TRAIT_COUNT; i++) {
+        auto& tr = get_trait_info(static_cast<TraitId>(i));
+        bool is_cursor = (build_column_ == 1 && i == build_trait_cursor_);
+        bool is_picked = false;
+        for (auto t : build_traits_selected_) if (t == static_cast<TraitId>(i)) { is_picked = true; break; }
+        SDL_Color col = is_cursor ? sel_col : is_picked ? SDL_Color{220, 200, 140, 255} : dim_col;
+        int y = list_y + i * (line_h + 2);
+        if (y + line_h > h - 40) break;
+        char buf[40]; snprintf(buf, sizeof(buf), "%s %s", is_picked ? "[x]" : "[ ]", tr.name);
+        ui::draw_text_clipped(renderer, font, buf, col, col_w + 8, y, col_w - 16);
+    }
+    // Show focused trait description
+    if (build_trait_cursor_ >= 0 && build_trait_cursor_ < TRAIT_COUNT) {
+        auto& tr = get_trait_info(static_cast<TraitId>(build_trait_cursor_));
+        int py = list_y + TRAIT_COUNT * (line_h + 2) + 8;
+        ui::draw_text_clipped(renderer, font, tr.description, {180, 170, 160, 255}, col_w + 8, py, col_w - 16);
+    }
+
+    // RIGHT COLUMN: Background + Name
+    ui::draw_text(renderer, font, build_.name.c_str(), active_col, col_w * 2 + 8, list_y);
+    int bg_start_y = list_y + line_h + 12;
+    ui::draw_text(renderer, font, "Background:", dim_col, col_w * 2 + 8, bg_start_y);
+    bg_start_y += line_h + 4;
+    for (int i = 0; i < BACKGROUND_COUNT; i++) {
+        auto& bg = get_background_info(static_cast<BackgroundId>(i));
+        bool is_cursor = (build_column_ == 2 && i == build_bg_cursor_);
+        bool is_selected = (i == build_bg_cursor_);
+        SDL_Color col = is_cursor ? sel_col : is_selected ? active_col : dim_col;
+        int y = bg_start_y + i * (line_h + 2);
+        if (y + line_h > h - 60) break;
+        char buf[32]; snprintf(buf, sizeof(buf), "%s%s", is_selected ? "> " : "  ", bg.name);
+        ui::draw_text_clipped(renderer, font, buf, col, col_w * 2 + 8, y, col_w - 16);
+    }
+
+    // Bottom hint
+    ui::draw_text(renderer, font, "[Left/Right] column  [Up/Down] browse  [Enter] toggle  [Space] START",
+                  {120, 115, 110, 255}, 8, h - line_h - 8);
 }

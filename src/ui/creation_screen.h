@@ -14,11 +14,12 @@
 
 enum class CreationPhase {
     CLASS_SELECT,
-    NAME_ENTRY,
-    GOD_SELECT,
-    BACKGROUND_SELECT,
-    TRAIT_SELECT,
-    HARDCORE_SELECT,
+    NAME_ENTRY,       // kept for legacy (unused in new flow)
+    GOD_SELECT,       // kept for legacy (unused in new flow)
+    BACKGROUND_SELECT,// kept for legacy (unused in new flow)
+    TRAIT_SELECT,     // kept for legacy (unused in new flow)
+    HARDCORE_SELECT,  // kept for legacy (unused in new flow)
+    BUILD_SCREEN,     // NEW: combined god + traits + background + name
     DONE
 };
 
@@ -65,7 +66,14 @@ private:
     mutable int grid_cols_ = 6;
     // God select list rects for mouse
     mutable std::vector<SDL_Rect> god_rects_;
-    std::string unlock_progress_[CLASS_COUNT]; // progress text for locked classes
+    std::string unlock_progress_[CLASS_COUNT];
+
+    // BUILD_SCREEN state (combined god + traits + background + name)
+    int build_column_ = 0;  // 0=god, 1=traits, 2=name/bg
+    int build_god_cursor_ = 0;
+    int build_trait_cursor_ = 0;
+    int build_bg_cursor_ = 0;
+    std::vector<TraitId> build_traits_selected_;
 
     void randomize_name();
 
@@ -75,6 +83,8 @@ private:
                             const SpriteManager& sprites, int w, int h) const;
     void render_god_select(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_title,
                             const SpriteManager& sprites, int w, int h) const;
+    void render_build_screen(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_title,
+                              int w, int h) const;
     void render_character_preview(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_title,
                                    const SpriteManager& sprites, int w, int h) const;
 };
