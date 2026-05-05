@@ -1336,11 +1336,11 @@ void CreationScreen::render_build_screen(SDL_Renderer* renderer, TTF_Font* font,
         // Flavor text
         int bdy = bname_y + line_h + 4;
         ui::draw_text_wrapped(renderer, font, bg.description, dim_col, bdx + margin, bdy, desc_w - margin * 2);
-        // Mechanical passive (below flavor, in brighter color)
-        bdy += line_h * 2 + 6;
+        // Mechanical passive (below flavor, generous spacing)
+        bdy += line_h * 3 + 10;
         if (bg.passive_name[0]) {
             ui::draw_text_clipped(renderer, font, bg.passive_name, picked_col, bdx + margin, bdy, desc_w - margin * 2);
-            bdy += line_h + 2;
+            bdy += line_h + 4;
         }
         if (bg.passive_desc[0]) {
             ui::draw_text_wrapped(renderer, font, bg.passive_desc, desc_col, bdx + margin, bdy, desc_w - margin * 2);

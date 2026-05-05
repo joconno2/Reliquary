@@ -625,9 +625,10 @@ void populate(World& world, TileMap& map, RNG& rng,
                 place_lights(tx, ty, 36, rng.range(2, 3), 5); // wall torches
                 place_on_open_ground(tx, ty, 50, rng.range(2, 4), rng.range(0, 15), 19);
                 break;
-            case GodId::GATHRUUN: // Frozen Marches — stone/earth, rocks, sparse
+            case GodId::GATHRUUN: // Frozen Marches — stone/earth, sparse
                 place_lights(tx, ty, 36, rng.range(1, 2), 1); // few braziers
-                place_on_open_ground(tx, ty, 40, rng.range(2, 4), rng.range(0, 1), 18); // large rocks
+                // Only 1 decorative rock near the town, not scattered everywhere
+                place_on_open_ground(tx, ty, 15, 1, rng.range(0, 1), 18);
                 break;
             case GodId::MORRETH: // Heartlands — war, supply depots
                 place_lights(tx, ty, 36, rng.range(2, 3), 1);
@@ -741,11 +742,13 @@ void populate(World& world, TileMap& map, RNG& rng,
                 tcx = rp.first; tcy = rp.second;
             }
             for (int attempt = 0; attempt < 20; attempt++) {
-                int tbx = tcx + rng.range(-5, 5);
-                int tby = tcy + rng.range(-5, 5);
+                int tbx = tcx + rng.range(-4, 4);
+                int tby = tcy + rng.range(-4, 4);
                 if (!map.in_bounds(tbx, tby) || !map.in_bounds(tbx+1, tby)) continue;
                 if (map.at(tbx, tby).type != TileType::FLOOR_STONE) continue;
                 if (map.at(tbx+1, tby).type != TileType::FLOOR_STONE) continue;
+                // Must be inside a building (adjacent to wall)
+                if (!adjacent_to_wall(tbx, tby)) continue;
                 bool door_near = false;
                 for (int dy2 = -1; dy2 <= 1 && !door_near; dy2++)
                     for (int dx2 = -1; dx2 <= 2; dx2++)
