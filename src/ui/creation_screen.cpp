@@ -419,9 +419,9 @@ void CreationScreen::render_class_select(SDL_Renderer* renderer, TTF_Font* font,
     auto title_row = screen.row(title_h + screen.gap);
     ui::draw_text_in(renderer, font_title, "Reliquary", title_col, title_row, ui::Align::CENTER);
 
-    // Reserve bottom for class info + hints
+    // Reserve bottom for class info + hints (generous space for 5 info lines)
     auto hint_row = screen.row_bottom(line_h + 4);
-    auto info_area = screen.row_bottom(title_h + line_h * 3 + 16);
+    auto info_area = screen.row_bottom(title_h + line_h * 6 + 30);
 
     // Grid fills remaining space
     auto grid_rect = screen.cursor;
