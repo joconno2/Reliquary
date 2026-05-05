@@ -1738,7 +1738,7 @@ void populate(World& world, TileMap& map, RNG& rng,
                     if (best_ti >= 0) {
                         Entity e = world.create();
                         world.add<Position>(e, {ox, oy});
-                        world.add<Renderable>(e, {SHEET_TILES, 7, 17, {255,255,255,255}, 3});
+                        world.add<Renderable>(e, {SHEET_TILES, 7, 17, {255,255,255,255}, 4});
                         char sbuf[128];
                         int dist = static_cast<int>(std::sqrt(static_cast<float>(best_d)) / 20);
                         snprintf(sbuf, sizeof(sbuf), "%s, %d leagues %s.",

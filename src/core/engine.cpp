@@ -9542,7 +9542,7 @@ void Engine::render_minimap() {
     if (map_w == 0 || map_h == 0) return;
 
     // Minimap size and position (top-right corner, below HUD)
-    int mm_size = std::min(160, std::min(width_ / 5, height_ / 4));
+    int mm_size = std::min(300, std::min(width_ / 3, height_ / 3));
     int mm_margin = 8;
     int mm_x = width_ - mm_size - mm_margin;
     int mm_y = HUD_HEIGHT + mm_margin;
@@ -9623,8 +9623,8 @@ void Engine::render_build_panel() {
     auto& player = world_.get<Player>(player_);
     int line_h = TTF_FontLineSkip(font_);
 
-    // Panel on left side, below HUD
-    int panel_w = std::min(220, width_ / 5);
+    // Panel on left side, below HUD (large, readable)
+    int panel_w = std::min(320, width_ / 3);
     int panel_x = 6;
     int panel_y = HUD_HEIGHT + 6;
 
@@ -9684,9 +9684,9 @@ void Engine::render_god_panel() {
     Uint32 ticks = SDL_GetTicks();
 
     // Panel dimensions and position (right side, below minimap)
-    int panel_w = std::min(220, width_ / 5);
+    int panel_w = std::min(320, width_ / 3);
     int panel_x = width_ - panel_w - 4;
-    int panel_y = HUD_HEIGHT + 172;
+    int panel_y = HUD_HEIGHT + 310; // below enlarged minimap
     int content_lines = 4 + tenets.count; // name, bar, passive, tenets, status
     if (zealot_fury_turns_ > 0 || (world_.has<Stats>(player_) && world_.get<Stats>(player_).phase_turns > 0))
         content_lines++;

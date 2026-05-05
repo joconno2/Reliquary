@@ -1333,9 +1333,18 @@ void CreationScreen::render_build_screen(SDL_Renderer* renderer, TTF_Font* font,
         int bname_y = bicon_cy + bicon_r + 8;
         ui::draw_text_clipped(renderer, font, bg.name, active_col, bdx + margin, bname_y, desc_w - margin * 2);
 
-        // Wrapped description
+        // Flavor text
         int bdy = bname_y + line_h + 4;
-        ui::draw_text_wrapped(renderer, font, bg.description, desc_col, bdx + margin, bdy, desc_w - margin * 2);
+        ui::draw_text_wrapped(renderer, font, bg.description, dim_col, bdx + margin, bdy, desc_w - margin * 2);
+        // Mechanical passive (below flavor, in brighter color)
+        bdy += line_h * 2 + 6;
+        if (bg.passive_name[0]) {
+            ui::draw_text_clipped(renderer, font, bg.passive_name, picked_col, bdx + margin, bdy, desc_w - margin * 2);
+            bdy += line_h + 2;
+        }
+        if (bg.passive_desc[0]) {
+            ui::draw_text_wrapped(renderer, font, bg.passive_desc, desc_col, bdx + margin, bdy, desc_w - margin * 2);
+        }
     }
 
     // === RIGHT PANEL: Character preview ===
