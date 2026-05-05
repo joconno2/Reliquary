@@ -1138,131 +1138,155 @@ void CreationScreen::render_build_screen(SDL_Renderer* renderer, TTF_Font* font,
     if (!font) return;
     int line_h = TTF_FontLineSkip(font);
     int title_h = font_title ? TTF_FontLineSkip(font_title) : line_h;
-    int col_w = w / 3;
-    int margin = 16;
-    int top_y = margin;
+    int margin = 12;
 
-    // Use full vertical space: calculate row height to fill screen
-    int avail_h = h - top_y - line_h * 3 - margin; // reserve bottom for hints + description
-    int god_row_h = std::max(line_h + 2, avail_h / (GOD_COUNT + 2));
-    int trait_row_h = std::max(line_h + 2, avail_h / (TRAIT_COUNT + 2));
-    int bg_row_h = std::max(line_h + 2, avail_h / (BACKGROUND_COUNT + 4));
+    // Layout: right 1/4 = character preview, left 3/4 split into 3 pairs (name+detail)
+    // Each pair is 1/8 list + 1/8 description = 1/4 total per category
+    int preview_w = w / 4;
+    int content_w = w - preview_w;
+    int pair_w = content_w / 3; // each god/trait/bg pair gets 1/3 of content area
+    int list_w = pair_w / 2;    // left half: names
+    int desc_w = pair_w / 2;    // right half: description
+
+    int top_y = margin;
+    int avail_h = h - top_y - line_h * 2 - margin;
 
     SDL_Color sel_col = {255, 240, 140, 255};
     SDL_Color dim_col = {140, 135, 130, 255};
     SDL_Color active_col = {220, 210, 200, 255};
     SDL_Color header_col = {200, 180, 100, 255};
     SDL_Color picked_col = {220, 200, 140, 255};
+    SDL_Color desc_col = {170, 165, 155, 255};
 
-    // Column separator lines
+    // Vertical separator lines
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(renderer, 60, 55, 65, 180);
-    SDL_RenderDrawLine(renderer, col_w, top_y, col_w, h - line_h * 2);
-    SDL_RenderDrawLine(renderer, col_w * 2, top_y, col_w * 2, h - line_h * 2);
+    SDL_SetRenderDrawColor(renderer, 50, 45, 60, 150);
+    SDL_RenderDrawLine(renderer, pair_w, top_y, pair_w, h - line_h * 2);
+    SDL_RenderDrawLine(renderer, pair_w * 2, top_y, pair_w * 2, h - line_h * 2);
+    SDL_RenderDrawLine(renderer, content_w, top_y, content_w, h - line_h * 2);
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
 
-    // Column headers (use title font if available)
-    TTF_Font* hfont = font_title ? font_title : font;
-    SDL_Color hdr0 = build_column_ == 0 ? sel_col : header_col;
-    SDL_Color hdr1 = build_column_ == 1 ? sel_col : header_col;
-    SDL_Color hdr2 = build_column_ == 2 ? sel_col : header_col;
-    ui::draw_text(renderer, hfont, "GOD", hdr0, margin, top_y);
-    ui::draw_text(renderer, hfont, "TRAITS (3)", hdr1, col_w + margin, top_y);
-    ui::draw_text(renderer, hfont, "BACKGROUND", hdr2, col_w * 2 + margin, top_y);
-    int list_y = top_y + title_h + 8;
+    // Row heights (fill vertical space)
+    int god_row_h = std::max(line_h + 1, avail_h / GOD_COUNT);
+    int trait_row_h = std::max(line_h + 1, avail_h / TRAIT_COUNT);
+    int bg_row_h = std::max(line_h + 1, avail_h / BACKGROUND_COUNT);
 
-    // === LEFT COLUMN: God list (full height) ===
+    // === PAIR 1: Gods (left 1/8 = names, right 1/8 = description) ===
+    int gx = margin;
+    SDL_Color hdr0 = build_column_ == 0 ? sel_col : header_col;
+    ui::draw_text(renderer, font, "GOD", hdr0, gx, top_y);
+    int gy = top_y + line_h + 4;
     for (int i = 0; i < GOD_COUNT; i++) {
         auto& gi = get_god_info(static_cast<GodId>(i));
         bool is_cursor = (build_column_ == 0 && i == build_god_cursor_);
-        bool is_selected = (i == build_god_cursor_);
-        SDL_Color col = is_cursor ? sel_col : is_selected ? active_col : dim_col;
-        int y = list_y + i * god_row_h;
-
-        // Highlight bar for cursor
+        SDL_Color col = is_cursor ? sel_col : (i == build_god_cursor_) ? active_col : dim_col;
+        int y = gy + i * god_row_h;
         if (is_cursor) {
             SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-            SDL_Rect hl = {margin - 4, y - 1, col_w - margin * 2, god_row_h};
-            SDL_SetRenderDrawColor(renderer, 40, 35, 50, 200);
+            SDL_Rect hl = {gx - 2, y, list_w - margin, god_row_h - 1};
+            SDL_SetRenderDrawColor(renderer, 35, 30, 45, 200);
             SDL_RenderFillRect(renderer, &hl);
             SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
         }
-
-        // God-colored accent dot
         SDL_SetRenderDrawColor(renderer, gi.color.r, gi.color.g, gi.color.b, 255);
-        SDL_Rect dot = {margin, y + 2, 6, line_h - 4};
+        SDL_Rect dot = {gx, y + 2, 4, line_h - 4};
         SDL_RenderFillRect(renderer, &dot);
-
-        ui::draw_text_clipped(renderer, font, gi.name, col, margin + 10, y, col_w - margin * 2 - 10);
+        ui::draw_text_clipped(renderer, font, gi.name, col, gx + 7, y, list_w - margin - 10);
     }
-    // God passive description at bottom of left column
-    int god_desc_y = list_y + GOD_COUNT * god_row_h + 8;
-    if (build_god_cursor_ >= 0 && build_god_cursor_ < GOD_COUNT && god_desc_y < h - line_h * 3) {
+    // God description (right half of pair 1)
+    int gdx = list_w;
+    if (build_god_cursor_ >= 0 && build_god_cursor_ < GOD_COUNT) {
         auto& gi = get_god_info(static_cast<GodId>(build_god_cursor_));
         SDL_Color gc = {gi.color.r, gi.color.g, gi.color.b, 255};
-        ui::draw_text_clipped(renderer, font, gi.passive_desc, gc, margin, god_desc_y, col_w - margin * 2);
+        ui::draw_text(renderer, font, gi.name, gc, gdx + margin, top_y);
+        // Wrap description text manually (multiple lines)
+        int dy = top_y + line_h + 8;
+        const char* desc = gi.passive_desc;
+        int max_desc_w = desc_w - margin * 2;
+        // Simple word-wrap: draw in chunks
+        ui::draw_text_wrapped(renderer, font, desc, desc_col, gdx + margin, dy, max_desc_w);
     }
 
-    // === CENTER COLUMN: Traits (full height) ===
+    // === PAIR 2: Traits (next 1/4) ===
+    int tx = pair_w + margin;
+    SDL_Color hdr1 = build_column_ == 1 ? sel_col : header_col;
+    ui::draw_text(renderer, font, "TRAITS", hdr1, tx, top_y);
+    int ty = top_y + line_h + 4;
     for (int i = 0; i < TRAIT_COUNT; i++) {
         auto& tr = get_trait_info(static_cast<TraitId>(i));
         bool is_cursor = (build_column_ == 1 && i == build_trait_cursor_);
         bool is_picked = false;
         for (auto t : build_traits_selected_) if (t == static_cast<TraitId>(i)) { is_picked = true; break; }
         SDL_Color col = is_cursor ? sel_col : is_picked ? picked_col : dim_col;
-        int y = list_y + i * trait_row_h;
-
+        int y = ty + i * trait_row_h;
         if (is_cursor) {
             SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-            SDL_Rect hl = {col_w + margin - 4, y - 1, col_w - margin * 2, trait_row_h};
-            SDL_SetRenderDrawColor(renderer, 40, 35, 50, 200);
+            SDL_Rect hl = {tx - 2, y, list_w - margin, trait_row_h - 1};
+            SDL_SetRenderDrawColor(renderer, 35, 30, 45, 200);
             SDL_RenderFillRect(renderer, &hl);
             SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
         }
-
-        char buf[40]; snprintf(buf, sizeof(buf), "%s %s", is_picked ? "[x]" : "[ ]", tr.name);
-        ui::draw_text_clipped(renderer, font, buf, col, col_w + margin, y, col_w - margin * 2);
+        char buf[32]; snprintf(buf, sizeof(buf), "%s %s", is_picked ? "[x]" : "[ ]", tr.name);
+        ui::draw_text_clipped(renderer, font, buf, col, tx, y, list_w - margin);
     }
-    // Trait description at bottom of center column
-    int trait_desc_y = list_y + TRAIT_COUNT * trait_row_h + 8;
-    if (build_trait_cursor_ >= 0 && build_trait_cursor_ < TRAIT_COUNT && trait_desc_y < h - line_h * 3) {
+    // Trait description (right half of pair 2)
+    int tdx = pair_w + list_w;
+    if (build_trait_cursor_ >= 0 && build_trait_cursor_ < TRAIT_COUNT) {
         auto& tr = get_trait_info(static_cast<TraitId>(build_trait_cursor_));
-        ui::draw_text_clipped(renderer, font, tr.description, {180, 170, 160, 255},
-                              col_w + margin, trait_desc_y, col_w - margin * 2);
+        ui::draw_text(renderer, font, tr.name, picked_col, tdx + margin, top_y);
+        int tdy = top_y + line_h + 8;
+        ui::draw_text_wrapped(renderer, font, tr.description, desc_col, tdx + margin, tdy, desc_w - margin * 2);
     }
 
-    // === RIGHT COLUMN: Name + Background (spread vertically) ===
-    // Name display
-    ui::draw_text(renderer, font, "Name:", dim_col, col_w * 2 + margin, list_y);
-    ui::draw_text(renderer, font, build_.name.c_str(), active_col, col_w * 2 + margin + 50, list_y);
-
-    int bg_start_y = list_y + line_h * 2;
+    // === PAIR 3: Background (next 1/4) ===
+    int bx = pair_w * 2 + margin;
+    SDL_Color hdr2 = build_column_ == 2 ? sel_col : header_col;
+    ui::draw_text(renderer, font, "BACKGROUND", hdr2, bx, top_y);
+    int by = top_y + line_h + 4;
     for (int i = 0; i < BACKGROUND_COUNT; i++) {
         auto& bg = get_background_info(static_cast<BackgroundId>(i));
         bool is_cursor = (build_column_ == 2 && i == build_bg_cursor_);
-        bool is_selected = (i == build_bg_cursor_);
-        SDL_Color col = is_cursor ? sel_col : is_selected ? active_col : dim_col;
-        int y = bg_start_y + i * bg_row_h;
-
+        SDL_Color col = is_cursor ? sel_col : (i == build_bg_cursor_) ? active_col : dim_col;
+        int y = by + i * bg_row_h;
         if (is_cursor) {
             SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-            SDL_Rect hl = {col_w * 2 + margin - 4, y - 1, col_w - margin * 2, bg_row_h};
-            SDL_SetRenderDrawColor(renderer, 40, 35, 50, 200);
+            SDL_Rect hl = {bx - 2, y, list_w - margin, bg_row_h - 1};
+            SDL_SetRenderDrawColor(renderer, 35, 30, 45, 200);
             SDL_RenderFillRect(renderer, &hl);
             SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
         }
-
-        ui::draw_text_clipped(renderer, font, bg.name, col, col_w * 2 + margin, y, col_w - margin * 2);
+        ui::draw_text_clipped(renderer, font, bg.name, col, bx, y, list_w - margin);
     }
     // Background description
-    int bg_desc_y = bg_start_y + BACKGROUND_COUNT * bg_row_h + 8;
-    if (build_bg_cursor_ >= 0 && build_bg_cursor_ < BACKGROUND_COUNT && bg_desc_y < h - line_h * 3) {
+    int bdx = pair_w * 2 + list_w;
+    if (build_bg_cursor_ >= 0 && build_bg_cursor_ < BACKGROUND_COUNT) {
         auto& bg = get_background_info(static_cast<BackgroundId>(build_bg_cursor_));
-        ui::draw_text_clipped(renderer, font, bg.description, {160, 155, 140, 255},
-                              col_w * 2 + margin, bg_desc_y, col_w - margin * 2);
+        ui::draw_text(renderer, font, bg.name, active_col, bdx + margin, top_y);
+        int bdy = top_y + line_h + 8;
+        ui::draw_text_wrapped(renderer, font, bg.description, desc_col, bdx + margin, bdy, desc_w - margin * 2);
     }
 
-    // Bottom hints (full width)
-    ui::draw_text(renderer, font, "[Left/Right] column  [Up/Down] browse  [Enter] select  [Space] START GAME",
+    // === RIGHT PANEL: Character preview ===
+    int px = content_w + margin;
+    auto& cls = get_class_info(build_.class_id);
+    ui::draw_text(renderer, font, cls.name, sel_col, px, top_y);
+    ui::draw_text(renderer, font, build_.name.c_str(), active_col, px, top_y + line_h + 4);
+
+    // Show selected god/traits summary
+    int sy = top_y + line_h * 3 + 8;
+    if (build_god_cursor_ >= 0 && build_god_cursor_ < GOD_COUNT) {
+        auto& gi = get_god_info(static_cast<GodId>(build_god_cursor_));
+        SDL_Color gc = {gi.color.r, gi.color.g, gi.color.b, 255};
+        ui::draw_text_clipped(renderer, font, gi.name, gc, px, sy, preview_w - margin * 2);
+        sy += line_h + 2;
+    }
+    for (auto t : build_traits_selected_) {
+        auto& tr = get_trait_info(t);
+        ui::draw_text_clipped(renderer, font, tr.name, picked_col, px, sy, preview_w - margin * 2);
+        sy += line_h + 2;
+    }
+
+    // Bottom hint
+    ui::draw_text(renderer, font, "[</>] column  [v/^] browse  [Enter] select  [Space] GO",
                   {120, 115, 110, 255}, margin, h - line_h - margin);
 }
