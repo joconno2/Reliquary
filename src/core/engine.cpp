@@ -9623,13 +9623,13 @@ void Engine::render_build_panel() {
     auto& player = world_.get<Player>(player_);
     int line_h = TTF_FontLineSkip(font_);
 
-    // Panel on left side, below HUD
-    int panel_w = std::min(240, width_ / 4);
-    int panel_x = 8;
-    int panel_y = HUD_HEIGHT + 8;
+    // Panel on left side, below HUD (compact to avoid overlap)
+    int panel_w = std::min(160, width_ / 6);
+    int panel_x = 4;
+    int panel_y = HUD_HEIGHT + 4;
 
-    // Count lines: class name + each trait (name + short desc)
-    int content_lines = 1 + static_cast<int>(build_traits_.size()) * 2;
+    // Count lines: class name + trait names
+    int content_lines = 1 + static_cast<int>(build_traits_.size());
     int panel_h = line_h * content_lines + 12;
 
     // Semi-transparent background
@@ -9663,16 +9663,11 @@ void Engine::render_build_panel() {
     ui::draw_text(renderer_, font_, cls.name, class_col, tx, ty);
     ty += line_h;
 
-    // Traits with short upside/downside
+    // Traits (names only, clipped to panel)
+    int clip_w = panel_w - 12;
     for (auto tid : build_traits_) {
         const auto& tr = get_trait_info(tid);
-        // Trait name in white
-        ui::draw_text(renderer_, font_, tr.name, {200, 200, 200, 255}, tx, ty);
-        ty += line_h;
-        // Description truncated (fits panel width)
-        char desc_buf[44];
-        snprintf(desc_buf, sizeof(desc_buf), "%.42s", tr.description);
-        ui::draw_text(renderer_, font_, desc_buf, {140, 130, 120, 255}, tx + 4, ty);
+        ui::draw_text_clipped(renderer_, font_, tr.name, {200, 200, 200, 255}, tx, ty, clip_w);
         ty += line_h;
     }
 }
@@ -9689,13 +9684,16 @@ void Engine::render_god_panel() {
     Uint32 ticks = SDL_GetTicks();
 
     // Panel dimensions and position (right side, below minimap)
-    int panel_w = std::min(180, width_ / 6);
+    int panel_w = std::min(150, width_ / 7);
     int panel_x = width_ - panel_w - 2;
-    int panel_y = HUD_HEIGHT + 176;
+    int panel_y = HUD_HEIGHT + 172;
     int content_lines = 4 + tenets.count; // name, bar, passive, tenets, status
     if (zealot_fury_turns_ > 0 || (world_.has<Stats>(player_) && world_.get<Stats>(player_).phase_turns > 0))
         content_lines++;
     int panel_h = line_h * content_lines + 20;
+    // Clamp panel height to not overlap message log
+    int max_panel_h = height_ - LOG_HEIGHT - panel_y - 8;
+    if (panel_h > max_panel_h) panel_h = max_panel_h;
 
     // Semi-transparent background with god-colored edge glow
     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);

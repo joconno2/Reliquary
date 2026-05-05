@@ -1193,18 +1193,29 @@ void CreationScreen::render_build_screen(SDL_Renderer* renderer, TTF_Font* font,
         SDL_RenderFillRect(renderer, &dot);
         ui::draw_text_clipped(renderer, font, gi.name, col, gx + 7, y, list_w - margin - 10);
     }
-    // God description (right half of pair 1)
+    // God description (right half of pair 1) — icon + wrapped text
     int gdx = list_w;
     if (build_god_cursor_ >= 0 && build_god_cursor_ < GOD_COUNT) {
         auto& gi = get_god_info(static_cast<GodId>(build_god_cursor_));
         SDL_Color gc = {gi.color.r, gi.color.g, gi.color.b, 255};
-        ui::draw_text(renderer, font, gi.name, gc, gdx + margin, top_y);
-        // Wrap description text manually (multiple lines)
-        int dy = top_y + line_h + 8;
-        const char* desc = gi.passive_desc;
-        int max_desc_w = desc_w - margin * 2;
-        // Simple word-wrap: draw in chunks
-        ui::draw_text_wrapped(renderer, font, desc, desc_col, gdx + margin, dy, max_desc_w);
+
+        // Centered god symbol (colored diamond)
+        int icon_cx = gdx + desc_w / 2;
+        int icon_cy = top_y + 30;
+        int icon_sz = 16;
+        SDL_SetRenderDrawColor(renderer, gi.color.r, gi.color.g, gi.color.b, 255);
+        for (int iy = -icon_sz; iy <= icon_sz; iy++) {
+            int hw = icon_sz - std::abs(iy);
+            SDL_RenderDrawLine(renderer, icon_cx - hw, icon_cy + iy, icon_cx + hw, icon_cy + iy);
+        }
+
+        // God name centered below icon
+        int name_y = icon_cy + icon_sz + 8;
+        ui::draw_text_clipped(renderer, font, gi.name, gc, gdx + margin, name_y, desc_w - margin * 2);
+
+        // Wrapped description below name
+        int dy = name_y + line_h + 4;
+        ui::draw_text_wrapped(renderer, font, gi.passive_desc, desc_col, gdx + margin, dy, desc_w - margin * 2);
     }
 
     // === PAIR 2: Traits (next 1/4) ===
@@ -1229,12 +1240,27 @@ void CreationScreen::render_build_screen(SDL_Renderer* renderer, TTF_Font* font,
         char buf[32]; snprintf(buf, sizeof(buf), "%s %s", is_picked ? "[x]" : "[ ]", tr.name);
         ui::draw_text_clipped(renderer, font, buf, col, tx, y, list_w - margin);
     }
-    // Trait description (right half of pair 2)
+    // Trait description (right half of pair 2) — icon + wrapped text
     int tdx = pair_w + list_w;
     if (build_trait_cursor_ >= 0 && build_trait_cursor_ < TRAIT_COUNT) {
         auto& tr = get_trait_info(static_cast<TraitId>(build_trait_cursor_));
-        ui::draw_text(renderer, font, tr.name, picked_col, tdx + margin, top_y);
-        int tdy = top_y + line_h + 8;
+
+        // Centered trait symbol (gold square with inner diamond)
+        int ticon_cx = tdx + desc_w / 2;
+        int ticon_cy = top_y + 30;
+        int ticon_sz = 14;
+        SDL_SetRenderDrawColor(renderer, 220, 200, 100, 255);
+        SDL_Rect tsq = {ticon_cx - ticon_sz, ticon_cy - ticon_sz, ticon_sz * 2, ticon_sz * 2};
+        SDL_RenderDrawRect(renderer, &tsq);
+        SDL_Rect tsq2 = {ticon_cx - ticon_sz + 2, ticon_cy - ticon_sz + 2, ticon_sz * 2 - 4, ticon_sz * 2 - 4};
+        SDL_RenderDrawRect(renderer, &tsq2);
+
+        // Trait name centered below icon
+        int tname_y = ticon_cy + ticon_sz + 8;
+        ui::draw_text_clipped(renderer, font, tr.name, picked_col, tdx + margin, tname_y, desc_w - margin * 2);
+
+        // Wrapped description
+        int tdy = tname_y + line_h + 4;
         ui::draw_text_wrapped(renderer, font, tr.description, desc_col, tdx + margin, tdy, desc_w - margin * 2);
     }
 
@@ -1257,12 +1283,32 @@ void CreationScreen::render_build_screen(SDL_Renderer* renderer, TTF_Font* font,
         }
         ui::draw_text_clipped(renderer, font, bg.name, col, bx, y, list_w - margin);
     }
-    // Background description
+    // Background description (right half of pair 3) — icon + wrapped text
     int bdx = pair_w * 2 + list_w;
     if (build_bg_cursor_ >= 0 && build_bg_cursor_ < BACKGROUND_COUNT) {
         auto& bg = get_background_info(static_cast<BackgroundId>(build_bg_cursor_));
-        ui::draw_text(renderer, font, bg.name, active_col, bdx + margin, top_y);
-        int bdy = top_y + line_h + 8;
+
+        // Centered background symbol (circle)
+        int bicon_cx = bdx + desc_w / 2;
+        int bicon_cy = top_y + 30;
+        int bicon_r = 12;
+        SDL_SetRenderDrawColor(renderer, 160, 155, 140, 255);
+        for (int ba = 0; ba < 32; ba++) {
+            float angle = ba * 6.283f / 32.0f;
+            float next_a = (ba + 1) * 6.283f / 32.0f;
+            int x1 = bicon_cx + static_cast<int>(bicon_r * cosf(angle));
+            int y1 = bicon_cy + static_cast<int>(bicon_r * sinf(angle));
+            int x2 = bicon_cx + static_cast<int>(bicon_r * cosf(next_a));
+            int y2 = bicon_cy + static_cast<int>(bicon_r * sinf(next_a));
+            SDL_RenderDrawLine(renderer, x1, y1, x2, y2);
+        }
+
+        // Background name below icon
+        int bname_y = bicon_cy + bicon_r + 8;
+        ui::draw_text_clipped(renderer, font, bg.name, active_col, bdx + margin, bname_y, desc_w - margin * 2);
+
+        // Wrapped description
+        int bdy = bname_y + line_h + 4;
         ui::draw_text_wrapped(renderer, font, bg.description, desc_col, bdx + margin, bdy, desc_w - margin * 2);
     }
 
