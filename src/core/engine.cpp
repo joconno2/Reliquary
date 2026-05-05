@@ -9615,28 +9615,35 @@ void Engine::render_minimap() {
 }
 
 void Engine::render_build_panel() {
-    if (!font_ || build_traits_.empty()) return;
-    if (!world_.has<Player>(player_)) return;
+    if (!font_ || !world_.has<Player>(player_)) return;
 
     auto& player = world_.get<Player>(player_);
     int line_h = TTF_FontLineSkip(font_);
 
-    // Panel on left side, below HUD (proportional to screen)
-    int panel_w = width_ / 4;
+    // Panel on left side (half previous width, expands vertically)
+    int panel_w = width_ / 8;
     int panel_x = 6;
     int panel_y = HUD_HEIGHT + 6;
+    int text_w = panel_w - 14;
+    int tx = panel_x + 7;
+    int ty = panel_y + 6;
 
-    // Count lines: class name + trait names
-    int content_lines = 1 + static_cast<int>(build_traits_.size());
-    int panel_h = line_h * content_lines + 12;
+    // Measure content height first (class + description + traits + background)
+    int est_lines = 3; // class name + spacing
+    est_lines += 4;    // class description (~3-4 wrapped lines)
+    est_lines += static_cast<int>(build_traits_.size()) * 3; // trait name + desc
+    est_lines += 3;    // background
+    int panel_h = line_h * est_lines + 20;
+    int max_h = height_ - LOG_HEIGHT - panel_y - 8;
+    if (panel_h > max_h) panel_h = max_h;
 
-    // Semi-transparent background
+    // Background
     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
     SDL_Rect bg = {panel_x, panel_y, panel_w, panel_h};
-    SDL_SetRenderDrawColor(renderer_, 10, 8, 14, 160);
+    SDL_SetRenderDrawColor(renderer_, 10, 8, 14, 180);
     SDL_RenderFillRect(renderer_, &bg);
 
-    // Right edge accent (class-colored: warm gold for martial, blue for caster, green for nature)
+    // Accent line
     uint8_t ar = 180, ag = 160, ab = 100;
     switch (player.class_id) {
         case ClassId::WIZARD: case ClassId::WARLOCK: case ClassId::NECROMANCER: case ClassId::SCHEMA_MONK:
@@ -9647,26 +9654,40 @@ void Engine::render_build_panel() {
             ar = 220; ag = 200; ab = 100; break;
         default: break;
     }
-    SDL_SetRenderDrawColor(renderer_, ar, ag, ab, 180);
-    SDL_Rect accent = {panel_x + panel_w - 3, panel_y, 3, panel_h};
+    SDL_SetRenderDrawColor(renderer_, ar, ag, ab, 200);
+    SDL_Rect accent = {panel_x, panel_y, 3, panel_h};
     SDL_RenderFillRect(renderer_, &accent);
     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_NONE);
-
-    int tx = panel_x + 6;
-    int ty = panel_y + 4;
 
     // Class name
     const auto& cls = get_class_info(player.class_id);
     SDL_Color class_col = {ar, ag, ab, 255};
-    ui::draw_text(renderer_, font_, cls.name, class_col, tx, ty);
-    ty += line_h;
+    ui::draw_text_clipped(renderer_, font_, cls.name, class_col, tx, ty, text_w);
+    ty += line_h + 2;
 
-    // Traits (names only, clipped to panel)
-    int clip_w = panel_w - 12;
-    for (auto tid : build_traits_) {
-        const auto& tr = get_trait_info(tid);
-        ui::draw_text_clipped(renderer_, font_, tr.name, {200, 200, 200, 255}, tx, ty, clip_w);
+    // Class description (wrapped)
+    ui::draw_text_wrapped(renderer_, font_, cls.description, {160, 155, 145, 255}, tx, ty, text_w);
+    ty += line_h * 3 + 8;
+
+    // Traits with descriptions
+    if (!build_traits_.empty()) {
+        for (auto tid : build_traits_) {
+            if (ty >= panel_y + panel_h - line_h * 2) break;
+            const auto& tr = get_trait_info(tid);
+            ui::draw_text_clipped(renderer_, font_, tr.name, {220, 200, 140, 255}, tx, ty, text_w);
+            ty += line_h;
+            ui::draw_text_wrapped(renderer_, font_, tr.description, {140, 135, 125, 255}, tx, ty, text_w);
+            ty += line_h * 2 + 4;
+        }
+    }
+
+    // Background
+    if (ty < panel_y + panel_h - line_h * 2) {
+        auto& bg_info = get_background_info(background_);
+        ui::draw_text_clipped(renderer_, font_, bg_info.name, {160, 180, 140, 255}, tx, ty, text_w);
         ty += line_h;
+        if (bg_info.passive_desc[0])
+            ui::draw_text_wrapped(renderer_, font_, bg_info.passive_desc, {130, 125, 115, 255}, tx, ty, text_w);
     }
 }
 
@@ -9680,20 +9701,21 @@ void Engine::render_god_panel() {
     int line_h = TTF_FontLineSkip(font_);
     Uint32 ticks = SDL_GetTicks();
 
-    // Panel dimensions and position (right side, proportional)
-    int panel_w = width_ / 4;
+    // Panel on right side (half previous width, expands vertically)
+    int panel_w = width_ / 8;
     int panel_x = width_ - panel_w - 4;
-    // Position below minimap in dungeons, near top on overworld
     int panel_y = HUD_HEIGHT + 8;
     if (dungeon_level_ > 0) {
         int god_mm = std::min(width_ / 3, height_ / 3);
         panel_y = HUD_HEIGHT + god_mm + 12;
     }
-    int content_lines = 4 + tenets.count; // name, bar, passive, tenets, status
+    // Expand vertically based on content (wrapped text takes more lines)
+    int content_lines = 5 + tenets.count * 2; // name, bar, passive (2 lines), tenets (2 each), status
     if (zealot_fury_turns_ > 0 || (world_.has<Stats>(player_) && world_.get<Stats>(player_).phase_turns > 0))
-        content_lines++;
+        content_lines += 1;
+    if (druid_beast_turns_ > 0) content_lines += 1;
+    if (serpentine_stacks_ > 0) content_lines += 1;
     int panel_h = line_h * content_lines + 20;
-    // Clamp panel height to not overlap message log
     int max_panel_h = height_ - LOG_HEIGHT - panel_y - 8;
     if (panel_h > max_panel_h) panel_h = max_panel_h;
 
@@ -9783,13 +9805,13 @@ void Engine::render_god_panel() {
     }
     SDL_Color passive_col = {ginfo.color.r * 3/4 + 60, ginfo.color.g * 3/4 + 60,
                              ginfo.color.b * 3/4 + 60, 255};
-    ui::draw_text_clipped(renderer_, font_, passive_short, passive_col, tx, ty, text_max_w);
+    ui::draw_text_wrapped(renderer_, font_, passive_short, passive_col, tx, ty, text_max_w);
     ty += line_h;
 
     // Tenets (compact, clipped to panel)
     SDL_Color tenet_col = {130, 125, 115, 255};
     for (int i = 0; i < tenets.count; i++) {
-        ui::draw_text_clipped(renderer_, font_, tenets.tenets[i].description, tenet_col, tx, ty, text_max_w);
+        ui::draw_text_wrapped(renderer_, font_, tenets.tenets[i].description, tenet_col, tx, ty, text_max_w);
         ty += line_h;
     }
 
