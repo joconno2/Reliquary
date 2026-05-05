@@ -1057,7 +1057,7 @@ void populate(World& world, TileMap& map, RNG& rng,
             if (combat::entity_at(world, tx, ty, NULL_ENTITY) != NULL_ENTITY) continue;
             Entity e = world.create();
             world.add<Position>(e, {tx, ty});
-            world.add<Renderable>(e, {SHEET_TILES, 7, 17, {255, 255, 255, 255}, 3});
+            world.add<Renderable>(e, {SHEET_TILES, 7, 17, {255, 255, 255, 255}, 4});
             world.add<Sign>(e, {make_sign_text(tx, ty)});
             return;
         }
@@ -1283,7 +1283,7 @@ void populate(World& world, TileMap& map, RNG& rng,
             if (!map.in_bounds(hx, hy) || !map.is_walkable(hx, hy)) continue;
             Entity e = world.create();
             world.add<Position>(e, {hx, hy});
-            world.add<Renderable>(e, {SHEET_ANIMALS, h.spr_x, h.spr_y, {255,255,255,255}, 3});
+            world.add<Renderable>(e, {SHEET_ANIMALS, h.spr_x, h.spr_y, {255,255,255,255}, 4});
             Stats ds; ds.name = h.name; ds.hp = 6; ds.hp_max = 6;
             ds.base_damage = 0; ds.base_speed = 80; ds.xp_value = 3;
             world.add<Stats>(e, std::move(ds));

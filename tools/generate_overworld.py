@@ -103,19 +103,25 @@ for _ in range(250):
 # === ROCKY AREAS ===
 # Concentrated in mountain bands and desert, sparse elsewhere
 print("Creating rocky areas...", flush=True)
-# Mountain band at north edge of temperate zone (y 350-500)
-for _ in range(40):
+# Mountain band at edges (avoid center where towns are)
+for _ in range(20):
     rx = random.randint(30, W - 30)
-    ry = random.randint(350, 500)
-    rr = random.randint(8, 25)
+    ry = random.randint(100, 250)  # northern mountains only
+    # Skip near any town (within 60 tiles)
+    near_town = False
+    for t in [(500, 375)]:  # avoid center (Thornwall area)
+        if abs(rx - t[0]) < 60 and abs(ry - t[1]) < 60:
+            near_town = True; break
+    if near_town: continue
+    rr = random.randint(5, 15)
     for dy in range(-rr, rr + 1):
         for dx in range(-rr, rr + 1):
             if dx * dx + dy * dy > rr * rr: continue
             nx, ny = rx + dx, ry + dy
             if not (0 <= nx < W and 0 <= ny < H): continue
             r = random.random()
-            if r < 0.3: set_tile(nx, ny, 'R')
-            elif r < 0.5: set_tile(nx, ny, ',')
+            if r < 0.25: set_tile(nx, ny, 'R')
+            elif r < 0.4: set_tile(nx, ny, ',')
 # Desert rocky outcrops
 for _ in range(30):
     rx = random.randint(30, W - 30)
@@ -128,17 +134,22 @@ for _ in range(30):
             if not (0 <= nx < W and 0 <= ny < H): continue
             r = random.random()
             if r < 0.2: set_tile(nx, ny, 'R')
-# Scattered small rocky patches in temperate/warm (much fewer)
-for _ in range(20):
+# Scattered small rocky patches in south (fewer, smaller)
+for _ in range(10):
     rx = random.randint(30, W - 30)
-    ry = random.randint(500, 1200)
-    rr = random.randint(4, 10)
+    ry = random.randint(500, H - 30)
+    near_town = False
+    for t in [(500, 375)]:  # avoid center (Thornwall area)
+        if abs(rx - t[0]) < 50 and abs(ry - t[1]) < 50:
+            near_town = True; break
+    if near_town: continue
+    rr = random.randint(3, 7)
     for dy in range(-rr, rr + 1):
         for dx in range(-rr, rr + 1):
             if dx * dx + dy * dy > rr * rr: continue
             nx, ny = rx + dx, ry + dy
             if not (0 <= nx < W and 0 <= ny < H): continue
-            if random.random() < 0.15: set_tile(nx, ny, 'R')
+            if random.random() < 0.12: set_tile(nx, ny, 'R')
 
 # === RIVERS ===
 print("Drawing rivers...", flush=True)
