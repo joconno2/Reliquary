@@ -489,32 +489,34 @@ void CreationScreen::render_class_select(SDL_Renderer* renderer, TTF_Font* font,
     auto info = ui::Layout::from_rect(info_area, line_h);
 
     if (sel_unlocked) {
-        auto name_row = info.row(title_h + 2);
+        auto name_row = info.row(title_h + 4);
         ui::draw_text_in(renderer, font_title, cls.name, sel_col, name_row, ui::Align::CENTER);
 
-        // Primary ability
-        auto desc_row_area = info.row(line_h + 2);
+        // Primary ability (the main mechanic description)
+        info.skip(4);
+        auto desc_row_area = info.row(line_h + 6);
         ui::draw_text_in(renderer, font, cls.description, desc_col, desc_row_area, ui::Align::CENTER);
 
-        // Gear synergy + Level 5 ability
+        // Gear synergy + Level 5 ability + tip (spaced out)
         auto details = get_class_details(static_cast<ClassId>(selected_));
         SDL_Color gear_col = {180, 200, 140, 255};
         SDL_Color lv5_col = {200, 180, 255, 255};
         SDL_Color tip_col = {160, 155, 140, 255};
         if (details.gear_synergy[0]) {
-            auto gear_row = info.row(line_h + 1);
+            auto gear_row = info.row(line_h + 6);
             ui::draw_text_in(renderer, font, details.gear_synergy, gear_col, gear_row, ui::Align::CENTER);
         }
         if (details.level5_ability[0]) {
-            auto lv5_row = info.row(line_h + 1);
+            auto lv5_row = info.row(line_h + 6);
             ui::draw_text_in(renderer, font, details.level5_ability, lv5_col, lv5_row, ui::Align::CENTER);
         }
         if (details.scaling_tip[0]) {
-            auto tip_row = info.row(line_h + 1);
+            auto tip_row = info.row(line_h + 6);
             ui::draw_text_in(renderer, font, details.scaling_tip, tip_col, tip_row, ui::Align::CENTER);
         }
 
         // Stats
+        info.skip(4);
         char stat_buf[256];
         snprintf(stat_buf, sizeof(stat_buf),
             "STR:%d  DEX:%d  CON:%d  INT:%d  WIL:%d  PER:%d  |  HP:%d  MP:%d",
@@ -1204,7 +1206,7 @@ void CreationScreen::render_build_screen(SDL_Renderer* renderer, TTF_Font* font,
         int anchor_y = gy + build_god_cursor_ * god_row_h;
         // Clamp so icon+desc don't go off screen
         int min_y = top_y + 10;
-        int max_y = h - line_h * 5 - icon_sz * 2;
+        int max_y = h - line_h * 7 - icon_sz * 2; // extra margin for bottom hint
         int block_y = std::max(min_y, std::min(max_y, anchor_y - icon_sz));
 
         // God diamond (filled)
@@ -1255,7 +1257,7 @@ void CreationScreen::render_build_screen(SDL_Renderer* renderer, TTF_Font* font,
         int ticon_sz = 24;
         int tanchor_y = ty + build_trait_cursor_ * trait_row_h;
         int tmin_y = top_y + 10;
-        int tmax_y = h - line_h * 5 - ticon_sz * 2;
+        int tmax_y = h - line_h * 7 - ticon_sz * 2;
         int tblock_y = std::max(tmin_y, std::min(tmax_y, tanchor_y - ticon_sz));
 
         // Trait symbol (nested squares)
@@ -1305,7 +1307,7 @@ void CreationScreen::render_build_screen(SDL_Renderer* renderer, TTF_Font* font,
         int bicon_r = 22;
         int banchor_y = by + build_bg_cursor_ * bg_row_h;
         int bmin_y = top_y + 10;
-        int bmax_y = h - line_h * 5 - bicon_r * 2;
+        int bmax_y = h - line_h * 7 - bicon_r * 2;
         int bblock_y = std::max(bmin_y, std::min(bmax_y, banchor_y - bicon_r));
 
         // Background circle (filled)
