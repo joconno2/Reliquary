@@ -9503,9 +9503,9 @@ void Engine::render_god_panel() {
     int line_h = TTF_FontLineSkip(font_);
     Uint32 ticks = SDL_GetTicks();
 
-    // Panel dimensions and position (right side, below minimap area)
-    int panel_w = std::min(200, width_ / 5);
-    int panel_x = width_ - panel_w - 4;
+    // Panel dimensions and position (right side, below minimap)
+    int panel_w = std::min(180, width_ / 6);
+    int panel_x = width_ - panel_w - 2;
     int panel_y = HUD_HEIGHT + 176;
     int content_lines = 4 + tenets.count; // name, bar, passive, tenets, status
     if (zealot_fury_turns_ > 0 || (world_.has<Stats>(player_) && world_.get<Stats>(player_).phase_turns > 0))
@@ -9537,11 +9537,8 @@ void Engine::render_god_panel() {
 
     // God name + title
     SDL_Color god_col = {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255};
-    char name_buf[64]; snprintf(name_buf, sizeof(name_buf), "%s", ginfo.name);
-    ui::draw_text(renderer_, font_, name_buf, god_col, tx, ty);
-    // Title in dim
-    SDL_Color title_col = {100, 95, 90, 255};
-    ui::draw_text(renderer_, font_, ginfo.title, title_col, tx + 80, ty);
+    int text_max_w = panel_w - 12;
+    ui::draw_text_clipped(renderer_, font_, ginfo.name, god_col, tx, ty, text_max_w);
     ty += line_h;
 
     // Favor bar (wider, more detailed)
@@ -9601,15 +9598,13 @@ void Engine::render_god_panel() {
     }
     SDL_Color passive_col = {ginfo.color.r * 3/4 + 60, ginfo.color.g * 3/4 + 60,
                              ginfo.color.b * 3/4 + 60, 255};
-    ui::draw_text(renderer_, font_, passive_short, passive_col, tx, ty);
+    ui::draw_text_clipped(renderer_, font_, passive_short, passive_col, tx, ty, text_max_w);
     ty += line_h;
 
-    // Tenets (compact)
+    // Tenets (compact, clipped to panel)
     SDL_Color tenet_col = {130, 125, 115, 255};
     for (int i = 0; i < tenets.count; i++) {
-        char tbuf[42];
-        snprintf(tbuf, sizeof(tbuf), "%.26s", tenets.tenets[i].description);
-        ui::draw_text(renderer_, font_, tbuf, tenet_col, tx, ty);
+        ui::draw_text_clipped(renderer_, font_, tenets.tenets[i].description, tenet_col, tx, ty, text_max_w);
         ty += line_h;
     }
 
