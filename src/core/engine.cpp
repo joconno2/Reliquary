@@ -9617,8 +9617,6 @@ void Engine::render_minimap() {
 void Engine::render_build_panel() {
     if (!font_ || build_traits_.empty()) return;
     if (!world_.has<Player>(player_)) return;
-    // Don't render on small screens (< 900px wide)
-    if (width_ < 900) return;
 
     auto& player = world_.get<Player>(player_);
     int line_h = TTF_FontLineSkip(font_);
@@ -9674,9 +9672,8 @@ void Engine::render_build_panel() {
 
 void Engine::render_god_panel() {
     if (!font_ || !world_.has<GodAlignment>(player_)) return;
-    if (width_ < 900) return; // hide on small screens
     auto& ga = world_.get<GodAlignment>(player_);
-    if (ga.god == GodId::NONE) return;
+    if (ga.god == GodId::NONE) return; // heretics have no god panel
 
     auto& ginfo = get_god_info(ga.god);
     auto tenets = get_god_tenets(ga.god);
