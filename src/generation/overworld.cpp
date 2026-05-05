@@ -58,7 +58,7 @@ void populate(World& world, TileMap& map, RNG& rng,
             if (!map.in_bounds(tx, ty) || !map.is_walkable(tx, ty)) continue;
             Entity e = world.create();
             world.add<Position>(e, {tx, ty});
-            world.add<Renderable>(e, {SHEET_ITEMS, 2, 20, {255,255,255,255}, 1});
+            world.add<Renderable>(e, {SHEET_ITEMS, 0, 21, {220,210,180,255}, 1}); // scroll/paper sprite
             Item item;
             item.name = name; item.description = text;
             item.type = ItemType::SCROLL; item.identified = true; item.gold_value = 5;
