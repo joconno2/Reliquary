@@ -2524,25 +2524,48 @@ void Engine::try_move_player(int dx, int dy) {
             }
         }
 
-        // === GEAR INTERACTIONS (class + weapon type = bonus) ===
+        // === GEAR INTERACTIONS (class + weapon type = amplified ability) ===
         if (atk_result.hit && !atk_result.killed && world_.has<Player>(player_) && world_.has<Stats>(target)) {
             auto gcid = world_.get<Player>(player_).class_id;
-            // Barbarian + Axe: rage threshold 60% instead of 50% (handled in combat.cpp via tag)
-            // Templar + Mace: smite damage +4
+
+            // Fighter + Sword: parry counter damage +50% (swords are best for riposte)
+            // (applied in combat.cpp defender section)
+
+            // Ranger + Bow: mark bonus +25% extra (total +75% vs marked)
+            if (gcid == ClassId::RANGER && (player_weapon_tags & TAG_BOW) && ranger_marked_target_ == target) {
+                int bow_bonus = atk_result.damage / 4;
+                world_.get<Stats>(target).hp -= bow_bonus;
+                atk_result.damage += bow_bonus;
+            }
+
+            // Templar + Mace: smite damage +4 vs undead
             if (gcid == ClassId::TEMPLAR && (player_weapon_tags & TAG_BLUNT) &&
-                world_.has<Stats>(target) && is_undead(world_.get<Stats>(target).name.c_str())) {
+                is_undead(world_.get<Stats>(target).name.c_str())) {
                 world_.get<Stats>(target).hp -= 4;
                 atk_result.damage += 4;
             }
-            // Wyrmkin + Axe: breath counter 6 instead of 8
-            // (handled via faster increment in combat.cpp if we add it)
-            // Bandit + Dagger: exploit threshold 30% instead of 25%
-            // (boosted in combat.cpp via broader check)
+
+            // War Cleric + Mace: fury extends +4 turns per kill (not +3)
+            // (applied in on-kill section below)
+
+            // Warlock + Dagger: siphon gives +3 extra MP on kill
+            // (applied in on-kill section below)
+
+            // Wyrmkin + Axe: breath counter counts as 2 per hit (effectively 4 hits)
+            if (gcid == ClassId::WYRMKIN && (player_weapon_tags & TAG_AXE) && world_.has<Stats>(player_)) {
+                world_.get<Stats>(player_).wyrmkin_breath_ctr++; // extra increment
+            }
+
             // Serpentine + Dagger: double stacking
             if (gcid == ClassId::SERPENTINE && (player_weapon_tags & TAG_DAGGER) &&
                 atk_result.poison_stacked) {
-                serpentine_stacks_++; // extra stack with daggers
+                serpentine_stacks_++;
             }
+
+            // Dwarf + Hammer/Blunt: fortify gives TRIPLE damage (not double)
+            // (applied in fortify section above - check player_weapon_tags there)
+
+            // Necromancer + Staff: corpse explode radius +1 (applied in on-kill)
         }
 
         // War Cleric: Zealot's Fury (damage scales with remaining fury turns)
@@ -2902,37 +2925,105 @@ void Engine::try_move_player(int dx, int dy) {
                 }
                 elem_vis++;
             }
-            // Class-specific hit VFX
+            // Class-specific hit VFX (visual signature per class)
             if (world_.has<Player>(player_)) {
                 auto pcid = world_.get<Player>(player_).class_id;
                 float fx = (float)nx, fy = (float)ny;
-                if (pcid == ClassId::BARBARIAN && world_.has<Stats>(player_) &&
-                    world_.get<Stats>(player_).hp * 2 < world_.get<Stats>(player_).hp_max) {
-                    // Rage: red burst + screen shake
-                    particles_.burst(fx, fy, 8, 255, 40, 40, 0.12f, 0.5f, 3);
-                    trigger_screen_shake(3.0f);
-                } else if (pcid == ClassId::TEMPLAR && world_.has<Stats>(target) &&
-                           is_undead(world_.get<Stats>(target).name.c_str())) {
-                    // Holy Smite: golden rising flames
-                    particles_.spell_holy(fx, fy);
-                    particles_.rise(fx, fy, 6, 255, 240, 140, 0.8f, 3);
-                } else if (pcid == ClassId::WYRMKIN) {
-                    // VFX synced with combat counter (fires when counter just reset to 0)
-                    if (world_.has<Stats>(player_) && world_.get<Stats>(player_).wyrmkin_breath_ctr == 0 &&
-                        atk_result.damage > 10) {
-                        // Dragon Breath: big fire burst (only when breath actually fired)
-                        audio_.play(SfxId::SPELL_FIRE);
-                        particles_.spell_fire(fx, fy);
-                        particles_.burst(fx, fy, 15, 255, 120, 20, 0.14f, 0.9f, 4);
-                        trigger_screen_shake(5.0f);
-                    }
-                } else if (pcid == ClassId::SERPENTINE) {
-                    // Venom: green drips
-                    particles_.fall(fx, fy, 4, 80, 200, 40, 0.6f, 2);
-                } else if (pcid == ClassId::DRUID) {
-                    // Thorns: green sparks outward from player
-                    auto& pp = world_.get<Position>(player_);
-                    particles_.burst((float)pp.x, (float)pp.y, 6, 60, 180, 60, 0.08f, 0.5f, 2);
+                auto& pp2 = world_.get<Position>(player_);
+                float px = (float)pp2.x, py = (float)pp2.y;
+
+                switch (pcid) {
+                    case ClassId::FIGHTER:
+                        // Gold flash on every hit (disciplined strikes)
+                        particles_.hit_spark(fx, fy);
+                        break;
+                    case ClassId::ROGUE:
+                        // Purple shadow trail
+                        particles_.trail(px, py, fx, fy, 4, 100, 60, 160, 1);
+                        break;
+                    case ClassId::RANGER:
+                        // Green pulse on marked target
+                        if (ranger_marked_target_ == target)
+                            particles_.burst(fx, fy, 5, 100, 220, 80, 0.08f, 0.4f, 2);
+                        break;
+                    case ClassId::BARBARIAN:
+                        if (world_.has<Stats>(player_) && world_.get<Stats>(player_).hp * 2 < world_.get<Stats>(player_).hp_max) {
+                            particles_.burst(fx, fy, 8, 255, 40, 40, 0.12f, 0.5f, 3);
+                            trigger_screen_shake(3.0f);
+                        }
+                        break;
+                    case ClassId::KNIGHT:
+                        // Blue defensive sparks
+                        particles_.hit_spark(fx, fy);
+                        break;
+                    case ClassId::MONK:
+                        // White speed lines on hit
+                        particles_.directional(px, py, fx - px, fy - py, 3, 220, 220, 240, 0.15f, 0.3f, 1);
+                        break;
+                    case ClassId::TEMPLAR:
+                        if (world_.has<Stats>(target) && is_undead(world_.get<Stats>(target).name.c_str())) {
+                            particles_.spell_holy(fx, fy);
+                            particles_.rise(fx, fy, 6, 255, 240, 140, 0.8f, 3);
+                        }
+                        break;
+                    case ClassId::DRUID:
+                        if (druid_beast_turns_ > 0)
+                            particles_.burst(fx, fy, 6, 60, 200, 40, 0.1f, 0.4f, 3);
+                        else
+                            particles_.burst(px, py, 4, 60, 180, 60, 0.06f, 0.4f, 2);
+                        break;
+                    case ClassId::WAR_CLERIC:
+                        if (zealot_fury_turns_ > 0)
+                            particles_.rise(fx, fy, 3, 255, 220, 80, 0.5f, 2);
+                        break;
+                    case ClassId::WARLOCK:
+                        // Dark purple wisps
+                        particles_.drift(fx, fy, 3, 140, 60, 200, 0.5f, 2);
+                        break;
+                    case ClassId::DWARF:
+                        if (dwarf_fortified_)
+                            particles_.burst(fx, fy, 10, 180, 140, 80, 0.12f, 0.6f, 3);
+                        break;
+                    case ClassId::ELF:
+                        // Blue arcane circles
+                        particles_.orbit(fx, fy, 3, 120, 160, 255, 0.3f, 0.4f, 1);
+                        break;
+                    case ClassId::BANDIT:
+                        // Red slash on exploit crits
+                        if (atk_result.critical)
+                            particles_.directional(px, py, fx - px, fy - py, 5, 255, 80, 40, 0.2f, 0.3f, 2);
+                        break;
+                    case ClassId::NECROMANCER:
+                        particles_.spell_dark(fx, fy);
+                        break;
+                    case ClassId::WYRMKIN:
+                        if (world_.has<Stats>(player_) && world_.get<Stats>(player_).wyrmkin_breath_ctr == 0 &&
+                            atk_result.damage > 10) {
+                            audio_.play(SfxId::SPELL_FIRE);
+                            particles_.spell_fire(fx, fy);
+                            particles_.burst(fx, fy, 15, 255, 120, 20, 0.14f, 0.9f, 4);
+                            trigger_screen_shake(5.0f);
+                        } else {
+                            // Building toward breath: small fire sparks
+                            particles_.burst(fx, fy, 2, 255, 140, 40, 0.06f, 0.3f, 1);
+                        }
+                        break;
+                    case ClassId::REVENANT:
+                        // Dark mist from player
+                        particles_.drift(px, py, 2, 80, 60, 80, 0.6f, 2);
+                        break;
+                    case ClassId::SERPENTINE:
+                        particles_.fall(fx, fy, 4, 80, 200, 40, 0.6f, 2);
+                        break;
+                    case ClassId::TROLLBLOOD:
+                        // Green regen particles
+                        particles_.rise(px, py, 2, 80, 180, 60, 0.4f, 1);
+                        break;
+                    case ClassId::HERETIC:
+                        // Purple absorb sparks
+                        particles_.burst(fx, fy, 3, 180, 80, 220, 0.08f, 0.4f, 2);
+                        break;
+                    default: break;
                 }
             }
             char dbuf[16]; snprintf(dbuf, sizeof(dbuf), "%d", atk_result.damage);
@@ -2966,7 +3057,8 @@ void Engine::try_move_player(int dx, int dy) {
             serpentine_stacks_++;
             // Detonate at 5+ stacks. Damage = stacks SQUARED (exponential scaling)
             if (serpentine_stacks_ >= 5 && world_.has<Stats>(target) && !atk_result.killed) {
-                int burst = serpentine_stacks_ * serpentine_stacks_; // 5=25, 7=49, 10=100
+                int stacks_used = serpentine_stacks_;
+                int burst = stacks_used * stacks_used; // 5=25, 7=49, 10=100
                 world_.get<Stats>(target).hp -= burst;
                 serpentine_stacks_ = 0;
                 char sb[64]; snprintf(sb, sizeof(sb), "VENOM BURST! (%d)", burst);
@@ -2977,6 +3069,12 @@ void Engine::try_move_player(int dx, int dy) {
                     particles_.burst((float)tp.x, (float)tp.y, 15, 80, 220, 40, 0.14f, 0.9f, 4);
                 }
                 trigger_screen_shake(5.0f);
+                // Lv5 NEUROTOXIN: 8+ stacks also paralyzes (stun 3 turns)
+                if (stacks_used >= 8 && world_.has<Stats>(player_) &&
+                    world_.get<Stats>(player_).level >= 5 && world_.has<StatusEffects>(target)) {
+                    world_.get<StatusEffects>(target).add(StatusType::STUNNED, 0, 3);
+                    log_.add("NEUROTOXIN! Paralyzed.", {80, 255, 120, 255});
+                }
                 if (world_.get<Stats>(target).hp <= 0) {
                     combat::kill(world_, target, log_);
                     atk_result.killed = true;
@@ -3095,11 +3193,11 @@ void Engine::try_move_player(int dx, int dy) {
             auto cid = world_.get<Player>(player_).class_id;
             auto& pstats = world_.get<Stats>(player_);
 
-            // War Cleric: ZEALOT'S FURY (stacking: kills during fury extend + amplify)
+            // War Cleric: ZEALOT'S FURY (stacking: kills extend + amplify)
             if (cid == ClassId::WAR_CLERIC) {
+                int fury_ext = (player_weapon_tags & TAG_BLUNT) ? 4 : 3; // Mace: +4 instead of +3
                 if (zealot_fury_turns_ > 0) {
-                    // Kill during fury: EXTEND +3 turns, fury power increases
-                    zealot_fury_turns_ += 3;
+                    zealot_fury_turns_ += fury_ext;
                     log_.add("FURY GROWS!", {255, 200, 60, 255});
                 } else {
                     zealot_fury_turns_ = 5;
@@ -3111,9 +3209,10 @@ void Engine::try_move_player(int dx, int dy) {
                 particles_.rise((float)pp.x, (float)pp.y, 6, 255, 200, 60, 1.0f, 2);
             }
 
-            // Warlock: Soul Siphon (restore MP on kill)
+            // Warlock: Soul Siphon (restore MP on kill, daggers +3 extra)
             if (cid == ClassId::WARLOCK) {
                 int mp_gain = 5 + pstats.eff_attr(Attr::INT) / 4;
+                if (player_weapon_tags & TAG_DAGGER) mp_gain += 3;
                 pstats.mp = std::min(pstats.mp_max, pstats.mp + mp_gain);
                 char sb[64]; snprintf(sb, sizeof(sb), "Soul energy flows into you. (+%d MP)", mp_gain);
                 log_.add(sb, {160, 100, 200, 255});
@@ -3162,6 +3261,53 @@ void Engine::try_move_player(int dx, int dy) {
                     particles_.burst((float)tpos.x, (float)tpos.y, 10, 220, 120, 60, 0.1f, 0.5f, 2);
                 }
             }
+        }
+
+        // === SECOND ABILITIES (Level 5+ unlocks) ===
+        if (atk_result.killed && world_.has<Player>(player_) && world_.has<Stats>(player_) &&
+            world_.get<Stats>(player_).level >= 5) {
+            auto cid2 = world_.get<Player>(player_).class_id;
+
+            // Rogue Lv5: VANISH (re-enter stealth after kill)
+            if (cid2 == ClassId::ROGUE) {
+                sneaking_ = true;
+                if (world_.has<Stats>(player_)) world_.get<Stats>(player_).invisible_turns = 2;
+                log_.add("You vanish into shadow.", {100, 80, 160, 255});
+            }
+
+            // Barbarian Lv5: CLEAVE (rage hits splash adjacent enemies)
+            if (cid2 == ClassId::BARBARIAN && world_.has<Stats>(player_) &&
+                world_.get<Stats>(player_).hp * 2 < world_.get<Stats>(player_).hp_max &&
+                world_.has<Position>(target)) {
+                auto& tp = world_.get<Position>(target);
+                auto& ai_pool = world_.pool<AI>();
+                for (size_t ai = 0; ai < ai_pool.size(); ai++) {
+                    Entity ae = ai_pool.entity_at(ai);
+                    if (ae == target || ai_pool.at_index(ai).friendly) continue;
+                    if (!world_.has<Position>(ae) || !world_.has<Stats>(ae)) continue;
+                    auto& ap = world_.get<Position>(ae);
+                    if (std::abs(ap.x - tp.x) <= 1 && std::abs(ap.y - tp.y) <= 1) {
+                        world_.get<Stats>(ae).hp -= atk_result.damage / 3;
+                    }
+                }
+                log_.add("Cleave!", {255, 80, 80, 255});
+            }
+
+            // Bandit Lv5: CUTTHROAT (exploit kills grant invisibility)
+            if (cid2 == ClassId::BANDIT && atk_result.critical) {
+                if (world_.has<Stats>(player_)) world_.get<Stats>(player_).invisible_turns = 3;
+                sneaking_ = true;
+                log_.add("You disappear into the chaos.", {180, 140, 80, 255});
+            }
+
+            // War Cleric Lv5: SERMON (fury kills heal 5 HP)
+            if (cid2 == ClassId::WAR_CLERIC && zealot_fury_turns_ > 0) {
+                auto& ps = world_.get<Stats>(player_);
+                ps.hp = std::min(ps.hp_max, ps.hp + 5);
+            }
+
+            // Necromancer Lv5: ARMY (raise dead cap 3, handled via MAX_SUMMONS override)
+            // (MAX_SUMMONS check in magic.cpp uses Engine constant; will override in process)
         }
 
         // Bestiary stats (melee has access to victim stats before combat::kill removes them)
