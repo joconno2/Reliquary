@@ -2601,6 +2601,7 @@ void Engine::try_move_player(int dx, int dy) {
             atk_result.damage += fort_bonus;
             dwarf_fortified_ = false;
             log_.add("Fortified strike!", {200, 180, 100, 255});
+                audio_.play(SfxId::CRIT);
             trigger_screen_shake(4.0f);
             if (world_.get<Stats>(target).hp <= 0) {
                 combat::kill(world_, target, log_);
@@ -3317,6 +3318,7 @@ void Engine::try_move_player(int dx, int dy) {
                     }
                 }
                 log_.add("Cleave!", {255, 80, 80, 255});
+                audio_.play(SfxId::SPELL_EARTH);
             }
 
             // Bandit Lv5: CUTTHROAT (exploit kills grant invisibility)
@@ -3361,6 +3363,7 @@ void Engine::try_move_player(int dx, int dy) {
                 world_.add<AI>(wolf, wai);
                 world_.add<Energy>(wolf, {0, 120});
                 log_.add("A wolf answers the call.", {80, 200, 80, 255});
+                audio_.play(SfxId::SPELL_BUFF);
             }
 
             // Wyrmkin Lv5: INFERNO (breath kill leaves burning ground 3 turns)
@@ -5924,6 +5927,7 @@ void Engine::try_interact() {
                     ps2.base_hp_max += 5;
                     ps2.hp += 5;
                     log_.add("GORGED. +5 max HP permanently.", {140, 220, 80, 255});
+                    audio_.play(SfxId::LEVELUP);
                 }
             }
             player_acted_ = true;
