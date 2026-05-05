@@ -1,6 +1,7 @@
 #include "generation/quest_gen.h"
 #include "components/position.h"
 #include "components/renderable.h"
+#include "components/ai.h"
 #include "components/npc.h"
 #include "components/item.h"
 #include "components/quest.h"
@@ -493,6 +494,46 @@ void spawn_quest_content(World& world, const TileMap& map,
         if (dungeon_level >= 1 && dungeon_level <= 9) {
             log.add(SEPULCHRE_ENTRY[dungeon_level - 1], {160, 100, 140, 255});
         }
+
+        // === SEPULCHRE MINI-BOSSES (floors 3 and 6) ===
+
+        // Floor 3: The Bone Colossus (assembled from the dead of floors 1-2)
+        if (dungeon_level == 3 && !rooms.empty()) {
+            auto& boss_room = rooms.back();
+            Entity boss = populate::spawn_boss(world, map, rooms,
+                "The Bone Colossus", SHEET_MONSTERS, 7, 7,  // golem sprite
+                120, 18, 10, 20, 14, 6, 75, 300);
+            if (boss != NULL_ENTITY) {
+                if (world.has<Renderable>(boss))
+                    world.get<Renderable>(boss).tint = {220, 200, 180, 255}; // bone white
+                if (world.has<AI>(boss)) {
+                    world.get<AI>(boss).behavior = BehaviorType::CHARGER; // charges
+                    world.get<AI>(boss).flee_threshold = 0;
+                }
+                log.add("Something massive stirs in the bones ahead.", {200, 180, 160, 255});
+            }
+        }
+
+        // Floor 6: The Ember Wyrm (volcanic serpent from the impossible heat)
+        if (dungeon_level == 6 && !rooms.empty()) {
+            auto& boss_room = rooms.back();
+            Entity boss = populate::spawn_boss(world, map, rooms,
+                "The Ember Wyrm", SHEET_MONSTERS, 2, 8,  // dragon sprite
+                160, 22, 14, 22, 20, 5, 85, 400);
+            if (boss != NULL_ENTITY) {
+                if (world.has<Renderable>(boss))
+                    world.get<Renderable>(boss).tint = {255, 140, 60, 255}; // molten orange
+                if (world.has<AI>(boss)) {
+                    world.get<AI>(boss).behavior = BehaviorType::DRAGON;
+                    world.get<AI>(boss).flee_threshold = 0;
+                    world.get<AI>(boss).ranged_range = 4;
+                    world.get<AI>(boss).ranged_damage = 12;
+                }
+                log.add("The heat intensifies. Something ancient coils in the magma.", {255, 140, 60, 255});
+            }
+        }
+
+        // Floor 9: The Keeper (already spawned via quest item section below)
     }
 
     // Spawn quest items at the bottom of their respective dungeons
