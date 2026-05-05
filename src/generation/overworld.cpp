@@ -134,6 +134,21 @@ void populate(World& world, TileMap& map, RNG& rng,
     spawn_ow_npc(200, 600, "Hermit", "The Reliquary isn't what they think. It was here before the gods.", NPCRole::PRIEST, 4, 6);
     spawn_ow_npc(800, 550, "Madman", "I HEARD IT. Under the stone. Breathing.", NPCRole::FARMER, 1, 6);
 
+    // Road merchants (between major towns)
+    spawn_ow_npc(460, 375, "Traveling Merchant", "Buy something or move along. The road is dangerous.", NPCRole::SHOPKEEPER, 2, 5);
+    spawn_ow_npc(600, 300, "Arms Dealer", "Blades from Ironhearth. Guaranteed to draw blood.", NPCRole::SHOPKEEPER, 4, 5);
+    spawn_ow_npc(380, 440, "Potion Seller", "Healing for coin. Fair trade in unfair times.", NPCRole::SHOPKEEPER, 3, 5);
+
+    // Refugees and displaced people (add world-building)
+    spawn_ow_npc(450, 500, "Refugee", "The Dust Provinces are dying. We came north.", NPCRole::FARMER, 0, 5);
+    spawn_ow_npc(350, 350, "Displaced Farmer", "My fields burned. Something from below.", NPCRole::FARMER, 0, 5);
+    spawn_ow_npc(550, 300, "Soldier", "Garrison sent me to patrol. Haven't seen another soul in days.", NPCRole::GUARD, 0, 1);
+    spawn_ow_npc(700, 300, "Scholar", "I'm cataloging the inscriptions. They change when I'm not looking.", NPCRole::PRIEST, 5, 5);
+
+    // Danger warnings near dungeons
+    spawn_ow_npc(660, 340, "Wounded Adventurer", "Stonekeep. Don't. Just don't.", NPCRole::FARMER, 3, 0);
+    spawn_ow_npc(420, 490, "Gravedigger", "I bury what comes out of the Catacombs. Business is good.", NPCRole::FARMER, 0, 5);
+
     // =============================================
     // PROVINCE-SPECIFIC WANDERING NPCs
     // =============================================
