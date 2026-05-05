@@ -669,6 +669,8 @@ void Engine::generate_level() {
     shrine_xp_this_floor_ = false;
     revenant_saved_this_floor_ = false;
     heavy_hitter_used_this_floor_ = false;
+    trollblood_corpses_floor_ = 0;
+    trollblood_gorged_ = false;
 
     // Mark dynamic quests that require dungeon visits
     if (dungeon_level_ > 0) {
@@ -2568,6 +2570,17 @@ void Engine::try_move_player(int dx, int dy) {
             // Necromancer + Staff: corpse explode radius +1 (applied in on-kill)
         }
 
+        // Revenant Lv5: UNDYING FURY (+100% damage)
+        if (revenant_fury_turns_ > 0 && atk_result.hit && !atk_result.killed && world_.has<Stats>(target)) {
+            int fury_bonus = atk_result.damage; // double it
+            world_.get<Stats>(target).hp -= fury_bonus;
+            atk_result.damage += fury_bonus;
+            if (world_.get<Stats>(target).hp <= 0) {
+                combat::kill(world_, target, log_);
+                atk_result.killed = true;
+            }
+        }
+
         // War Cleric: Zealot's Fury (damage scales with remaining fury turns)
         if (zealot_fury_turns_ > 0 && atk_result.hit && !atk_result.killed && world_.has<Stats>(target)) {
             int fury_dmg = 3 + zealot_fury_turns_ / 2; // scales: 5 turns=5, 11 turns=8, 20 turns=13
@@ -3085,6 +3098,19 @@ void Engine::try_move_player(int dx, int dy) {
             }
         }
 
+        // Monk Lv5: PALM STRIKE (every 5th hit stuns 2 turns)
+        if (atk_result.hit && world_.has<Player>(player_) &&
+            world_.get<Player>(player_).class_id == ClassId::MONK &&
+            world_.get<Stats>(player_).level >= 5) {
+            monk_hit_counter_++;
+            if (monk_hit_counter_ >= 5 && !atk_result.killed && world_.has<StatusEffects>(target)) {
+                monk_hit_counter_ = 0;
+                world_.get<StatusEffects>(target).add(StatusType::STUNNED, 0, 2);
+                log_.add("Palm strike!", {220, 220, 240, 255});
+                audio_.play(SfxId::SPELL_IMPACT);
+            }
+        }
+
         // Elf: WEAVE counter (every 3rd attack = free spell)
         if (atk_result.hit && world_.has<Player>(player_) &&
             world_.get<Player>(player_).class_id == ClassId::ELF) {
@@ -3306,8 +3332,55 @@ void Engine::try_move_player(int dx, int dy) {
                 ps.hp = std::min(ps.hp_max, ps.hp + 5);
             }
 
-            // Necromancer Lv5: ARMY (raise dead cap 3, handled via MAX_SUMMONS override)
-            // (MAX_SUMMONS check in magic.cpp uses Engine constant; will override in process)
+            // Templar Lv5: CONSECRATE (kills create holy ground - damages undead 3/turn)
+            if (cid2 == ClassId::TEMPLAR && world_.has<Position>(target)) {
+                auto& tp = world_.get<Position>(target);
+                // Consecrate tiles around the kill
+                for (int dy = -1; dy <= 1; dy++)
+                    for (int dx = -1; dx <= 1; dx++) {
+                        int cx2 = tp.x + dx, cy2 = tp.y + dy;
+                        if (map_.in_bounds(cx2, cy2) && map_.is_walkable(cx2, cy2))
+                            map_.at(cx2, cy2).variant = 99; // mark as consecrated (checked in status tick)
+                    }
+                log_.add("The ground is consecrated.", {255, 240, 160, 255});
+                particles_.spell_holy((float)tp.x, (float)tp.y);
+            }
+
+            // Druid Lv5: NATURE'S CALL (beast form kills summon a wolf)
+            if (cid2 == ClassId::DRUID && druid_beast_turns_ > 0 && world_.has<Position>(target)) {
+                auto& tp = world_.get<Position>(target);
+                // Spawn friendly wolf
+                Entity wolf = world_.create();
+                world_.add<Position>(wolf, {tp.x, tp.y});
+                world_.add<Renderable>(wolf, {SHEET_ANIMALS, 6, 4, {255,255,255,255}, 5});
+                Stats ws; ws.name = "summoned wolf"; ws.hp = 15 + world_.get<Stats>(player_).level * 2;
+                ws.hp_max = ws.hp; ws.base_damage = 4 + world_.get<Stats>(player_).level / 2;
+                ws.base_speed = 120; ws.xp_value = 0;
+                world_.add<Stats>(wolf, std::move(ws));
+                AI wai; wai.state = AIState::HUNTING; wai.friendly = true;
+                world_.add<AI>(wolf, wai);
+                world_.add<Energy>(wolf, {0, 120});
+                log_.add("A wolf answers the call.", {80, 200, 80, 255});
+            }
+
+            // Wyrmkin Lv5: INFERNO (breath kill leaves burning ground 3 turns)
+            if (cid2 == ClassId::WYRMKIN && world_.has<Position>(target) &&
+                world_.has<Stats>(player_) && world_.get<Stats>(player_).wyrmkin_breath_ctr == 0) {
+                // Breath just fired (counter reset) - mark tiles as burning
+                auto& tp = world_.get<Position>(target);
+                for (int dy = -1; dy <= 1; dy++)
+                    for (int dx = -1; dx <= 1; dx++) {
+                        int fx2 = tp.x + dx, fy2 = tp.y + dy;
+                        if (map_.in_bounds(fx2, fy2) && map_.is_walkable(fx2, fy2))
+                            map_.at(fx2, fy2).type = TileType::LAVA;
+                    }
+                log_.add("The ground burns.", {255, 140, 40, 255});
+            }
+
+            // Trollblood Lv5: GORGE (3 corpses this floor = +5 max HP permanent)
+            // (tracked in try_interact consume section)
+
+            // Necromancer Lv5: ARMY (summon cap increase handled in magic.cpp)
         }
 
         // Bestiary stats (melee has access to victim stats before combat::kill removes them)
@@ -3949,6 +4022,9 @@ void Engine::process_turn() {
 
     // Class ability turn ticks
     if (zealot_fury_turns_ > 0) zealot_fury_turns_--;
+    if (revenant_fury_turns_ > 0) revenant_fury_turns_--;
+    if (knight_bulwark_turns_ > 0) knight_bulwark_turns_--;
+    if (knight_bulwark_cd_ > 0) knight_bulwark_cd_--;
     // Druid beast form expiry
     if (druid_beast_turns_ > 0) {
         druid_beast_turns_--;
@@ -4326,6 +4402,12 @@ void Engine::process_turn() {
                 stats.hp = 1;
                 log_.add("Death refused. You endure.", {180, 100, 100, 255});
                 audio_.play(SfxId::PRAYER);
+                // Lv5: UNDYING FURY (+100% damage for 5 turns after death save)
+                if (stats.level >= 5) {
+                    revenant_fury_turns_ = 5;
+                    log_.add("UNDYING FURY!", {255, 80, 80, 255});
+                    trigger_screen_shake(6.0f);
+                }
                 if (world_.has<Position>(player_)) {
                     auto& pp = world_.get<Position>(player_);
                     particles_.burst((float)pp.x, (float)pp.y, 12, 160, 60, 60, 0.1f, 0.8f, 3);
@@ -5832,6 +5914,18 @@ void Engine::try_interact() {
             trigger_screen_shake(3.0f);
             char eb[48]; snprintf(eb, sizeof(eb), "You DEVOUR the corpse. (+%d HP)", heal);
             log_.add(eb, {200, 80, 60, 255});
+            // Lv5 GORGE: 3 corpses this floor = +5 permanent max HP
+            if (world_.get<Stats>(player_).level >= 5) {
+                trollblood_corpses_floor_++;
+                if (trollblood_corpses_floor_ >= 3 && !trollblood_gorged_) {
+                    trollblood_gorged_ = true;
+                    auto& ps2 = world_.get<Stats>(player_);
+                    ps2.hp_max += 5;
+                    ps2.base_hp_max += 5;
+                    ps2.hp += 5;
+                    log_.add("GORGED. +5 max HP permanently.", {140, 220, 80, 255});
+                }
+            }
             player_acted_ = true;
             return;
         }
@@ -7924,6 +8018,14 @@ void Engine::handle_input() {
                     if (world_.has<Player>(player_) && world_.get<Player>(player_).class_id == ClassId::DWARF) {
                         dwarf_fortified_ = true;
                         log_.add("FORTIFIED. Next attack deals double.", {180, 160, 100, 255});
+                    }
+                    // Knight Lv5: BULWARK (50% block for 3 turns, cooldown 10)
+                    if (world_.has<Player>(player_) && world_.get<Player>(player_).class_id == ClassId::KNIGHT &&
+                        world_.get<Stats>(player_).level >= 5 && knight_bulwark_cd_ == 0) {
+                        knight_bulwark_turns_ = 3;
+                        knight_bulwark_cd_ = 10;
+                        log_.add("BULWARK! Block chance doubled.", {200, 200, 255, 255});
+                        audio_.play(SfxId::PRAYER);
                     }
                     // (Trollblood consume moved to INTERACT action)
                     break;

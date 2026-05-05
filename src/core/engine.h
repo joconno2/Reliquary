@@ -260,13 +260,18 @@ private:
     bool heavy_hitter_used_this_floor_ = false;
     Entity ranger_marked_target_ = 0;
     // New dramatic class state
-    int serpentine_stacks_ = 0;        // poison stacks on current target
-    Entity serpentine_target_ = 0;     // who has the stacks
-    bool dwarf_fortified_ = false;     // fortify stance active
-    int elf_weave_counter_ = 0;        // attacks until free spell
-    int druid_kill_counter_ = 0;       // kills until shapeshift ready
-    int druid_beast_turns_ = 0;        // turns remaining in beast form
-    int trollblood_corpse_count_ = 0;  // tracking (not needed, just eat on demand)
+    int serpentine_stacks_ = 0;
+    Entity serpentine_target_ = 0;
+    bool dwarf_fortified_ = false;
+    int elf_weave_counter_ = 0;
+    int druid_kill_counter_ = 0;
+    int druid_beast_turns_ = 0;
+    int monk_hit_counter_ = 0;         // palm strike every 5th hit
+    int knight_bulwark_cd_ = 0;        // bulwark cooldown
+    int knight_bulwark_turns_ = 0;     // active bulwark duration
+    int revenant_fury_turns_ = 0;      // undying fury after death save
+    int trollblood_corpses_floor_ = 0; // corpses eaten this floor
+    bool trollblood_gorged_ = false;   // already got +5 HP this floor
 
     // UI
     InventoryScreen inventory_screen_;
