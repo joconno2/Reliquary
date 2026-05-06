@@ -2132,6 +2132,17 @@ void Engine::generate_level() {
         }
     }
 
+    // Track The Keeper entity for phase transitions
+    keeper_entity_ = 0;
+    keeper_phase_ = 1;
+    auto& ai_pool_k = world_.pool<AI>();
+    for (size_t i = 0; i < ai_pool_k.size(); i++) {
+        if (ai_pool_k.at_index(i).behavior == BehaviorType::KEEPER) {
+            keeper_entity_ = ai_pool_k.entity_at(i);
+            break;
+        }
+    }
+
     // Compute initial FOV
     auto& pos = world_.get<Position>(player_);
     auto& stats = world_.get<Stats>(player_);
@@ -4042,6 +4053,43 @@ void Engine::process_turn() {
     if (!player_acted_) return;
     player_acted_ = false;
     game_turn_++;
+
+    // === KEEPER PHASE TRANSITIONS ===
+    if (keeper_entity_ != 0 && world_.has<Stats>(keeper_entity_)) {
+        auto& ks = world_.get<Stats>(keeper_entity_);
+        int hp_pct = (ks.hp * 100) / std::max(1, ks.hp_max);
+        if (keeper_phase_ == 1 && hp_pct <= 50) {
+            keeper_phase_ = 2;
+            trigger_screen_shake(10.0f);
+            screen_flash(255, 220, 100, 120);
+            log_.add("THE KEEPER SHEDS ITS ARMOR.", {255, 220, 100, 255});
+            log_.add("Something faster unfolds from the shell.", {200, 180, 140, 255});
+            audio_.play(SfxId::SPELL_IMPACT);
+            ks.base_speed = 110;
+            ks.natural_armor = 3;
+        } else if (keeper_phase_ == 2 && hp_pct <= 25) {
+            keeper_phase_ = 3;
+            trigger_screen_shake(15.0f);
+            screen_flash(255, 255, 255, 160);
+            log_.add("THE RELIQUARY SPEAKS THROUGH IT.", {255, 255, 200, 255});
+            log_.add("The air ignites. This is the final shape.", {255, 200, 100, 255});
+            audio_.play(SfxId::SPELL_FIRE);
+            ks.base_speed = 100;
+            ks.base_damage = 30;
+            ks.natural_armor = 4;
+        }
+    } else if (keeper_entity_ != 0 && !world_.has<Stats>(keeper_entity_)) {
+        // Keeper died
+        if (keeper_phase_ > 0) {
+            trigger_screen_shake(15.0f);
+            screen_flash(255, 255, 255, 200);
+            log_.add("THE KEEPER FALLS.", {255, 240, 180, 255});
+            log_.add("The Reliquary is unguarded.", {255, 220, 100, 255});
+            audio_.play(SfxId::DEATH);
+            keeper_phase_ = 0;
+            keeper_entity_ = 0;
+        }
+    }
 
     // Class ability turn ticks
     if (zealot_fury_turns_ > 0) zealot_fury_turns_--;

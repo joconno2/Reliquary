@@ -19,6 +19,7 @@ enum class BehaviorType : int {
     DRAGON,         // breath AoE cone, flee when low
     WRAITH,         // phase through walls, only hit by silver/magic
     PACK,           // coordinate with same-type, prefer flanking
+    KEEPER,         // final boss: 3-phase (charge -> teleport/drain -> dragon breath)
 };
 
 struct AI {

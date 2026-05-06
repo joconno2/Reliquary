@@ -2,6 +2,7 @@
 #include "components/position.h"
 #include "components/renderable.h"
 #include "components/ai.h"
+#include "components/status_effect.h"
 #include "components/npc.h"
 #include "components/item.h"
 #include "components/quest.h"
@@ -606,13 +607,20 @@ void spawn_quest_content(World& world, const TileMap& map,
                     6, 16, QuestId::MQ_09_CLAIM_RELIQUARY,
                     {255, 220, 100, 255}); // golden tint
 
-                // Spawn The Keeper — final boss guarding the Reliquary
+                // Spawn The Keeper — multi-phase final boss
                 Entity keeper = populate::spawn_boss(world, map, rooms,
                     "The Keeper", SHEET_MONSTERS, 0, 11,
-                    150, 24, 14, 20, 20, 5, 85, 500);
+                    250, 28, 14, 24, 25, 8, 70, 1000);
                 if (keeper != NULL_ENTITY) {
-                    // Give the Keeper a golden tint to match the Reliquary's glow
                     world.get<Renderable>(keeper).tint = {255, 220, 100, 255};
+                    // Set KEEPER behavior for multi-phase AI
+                    if (world.has<AI>(keeper)) {
+                        world.get<AI>(keeper).behavior = BehaviorType::KEEPER;
+                        world.get<AI>(keeper).flee_threshold = 0;
+                        world.get<AI>(keeper).ranged_range = 5;
+                        world.get<AI>(keeper).ranged_damage = 8;
+                    }
+                    world.add<StatusEffects>(keeper);
                 }
             }
         }

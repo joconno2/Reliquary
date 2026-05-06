@@ -520,6 +520,93 @@ void process(World& world, TileMap& map, Entity player, RNG& rng,
                         }
                         break;
 
+                    case BehaviorType::KEEPER: {
+                        // Multi-phase final boss
+                        auto& ks = world.get<Stats>(e);
+                        int hp_pct = (ks.hp * 100) / std::max(1, ks.hp_max);
+                        int tx = player_pos.x, ty = player_pos.y;
+
+                        if (hp_pct > 50) {
+                            // PHASE 1: Armored Guardian - charge behavior
+                            if (can_see && dist >= 2 && dist <= 5 && ai_comp.ability_cooldown == 0) {
+                                // Check cardinal line
+                                bool line = (pos.x == tx || pos.y == ty);
+                                if (line) {
+                                    int dx = 0, dy = 0;
+                                    if (tx > pos.x) dx = 1; else if (tx < pos.x) dx = -1;
+                                    if (ty > pos.y) dy = 1; else if (ty < pos.y) dy = -1;
+                                    for (int step = 0; step < dist - 1; step++) {
+                                        int nx = pos.x + dx * (step + 1);
+                                        int ny = pos.y + dy * (step + 1);
+                                        if (map.is_walkable(nx, ny)) { pos.x = nx; pos.y = ny; }
+                                        else break;
+                                    }
+                                    ai_comp.ability_cooldown = 5;
+                                    // Shockwave stun if adjacent after charge
+                                    if (distance(pos.x, pos.y, tx, ty) <= 1) {
+                                        if (world.has<StatusEffects>(player))
+                                            world.get<StatusEffects>(player).add(StatusType::STUNNED, 0, 1);
+                                        log.add("The Keeper's charge shakes the ground.", {255, 200, 80, 255});
+                                    }
+                                    break;
+                                }
+                            }
+                            move_toward(world, map, e, tx, ty, rng);
+                        } else if (hp_pct > 25) {
+                            // PHASE 2: The Unbound - teleport + ranged drain
+                            if (dist <= 2 && ai_comp.ability_cooldown == 0) {
+                                // Teleport away (5-7 tiles)
+                                for (int a = 0; a < 30; a++) {
+                                    int nx = pos.x + rng.range(-7, 7);
+                                    int ny = pos.y + rng.range(-7, 7);
+                                    int nd = distance(nx, ny, tx, ty);
+                                    if (nd >= 4 && nd <= 8 && map.in_bounds(nx, ny) && map.is_walkable(nx, ny)) {
+                                        pos.x = nx; pos.y = ny;
+                                        log.add("The Keeper vanishes and reappears.", {200, 180, 255, 255});
+                                        ai_comp.ability_cooldown = 4;
+                                        break;
+                                    }
+                                }
+                            } else if (can_see && dist >= 2 && dist <= ai_comp.ranged_range && ai_comp.ability_cooldown == 0) {
+                                // Drain Life at range
+                                if (world.has<Stats>(player)) {
+                                    int drain = ai_comp.ranged_damage;
+                                    world.get<Stats>(player).hp -= drain;
+                                    ks.hp = std::min(ks.hp_max, ks.hp + drain / 2);
+                                    char db[64]; snprintf(db, sizeof(db), "The Keeper drains your life. (%d)", drain);
+                                    log.add(db, {200, 100, 255, 255});
+                                    ai_comp.ability_cooldown = 3;
+                                }
+                            } else if (dist < 3) {
+                                // Back away
+                                int dx = pos.x - tx, dy = pos.y - ty;
+                                int nx = pos.x + (dx > 0 ? 1 : dx < 0 ? -1 : 0);
+                                int ny = pos.y + (dy > 0 ? 1 : dy < 0 ? -1 : 0);
+                                if (map.in_bounds(nx, ny) && map.is_walkable(nx, ny)) { pos.x = nx; pos.y = ny; }
+                            } else {
+                                move_toward(world, map, e, tx, ty, rng);
+                            }
+                        } else {
+                            // PHASE 3: The Vessel - dragon breath + close
+                            if (can_see && dist >= 2 && dist <= 4 && ai_comp.ability_cooldown == 0) {
+                                // Fire breath cone
+                                int breath_dmg = 15;
+                                if (world.has<Stats>(player)) {
+                                    world.get<Stats>(player).hp -= breath_dmg;
+                                    if (world.has<StatusEffects>(player))
+                                        world.get<StatusEffects>(player).add(StatusType::BURN, 3, 3);
+                                    char bb[64]; snprintf(bb, sizeof(bb), "The Keeper unleashes divine fire. (%d)", breath_dmg);
+                                    log.add(bb, {255, 200, 100, 255});
+                                }
+                                ai_comp.ability_cooldown = 3;
+                            } else {
+                                // Close in aggressively
+                                move_toward(world, map, e, tx, ty, rng);
+                            }
+                        }
+                        break;
+                    }
+
                     case BehaviorType::NECROMANCER: {
                         // Stay at range 3-5, cast drain at range, raise nearby corpses
                         // Raise corpse if one is nearby and cooldown ready

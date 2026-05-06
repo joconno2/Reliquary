@@ -267,6 +267,8 @@ private:
     int druid_kill_counter_ = 0;
     int druid_beast_turns_ = 0;
     int monk_hit_counter_ = 0;         // palm strike every 5th hit
+    int keeper_phase_ = 1;             // final boss phase (1/2/3)
+    Entity keeper_entity_ = 0;         // tracked for phase transitions
     int knight_bulwark_cd_ = 0;        // bulwark cooldown
     int knight_bulwark_turns_ = 0;     // active bulwark duration
     int revenant_fury_turns_ = 0;      // undying fury after death save
