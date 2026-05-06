@@ -2592,11 +2592,12 @@ void Engine::try_move_player(int dx, int dy) {
             }
         }
 
-        // Dwarf: FORTIFY (double damage if fortified, then break stance)
+        // Dwarf: FORTIFY (double damage, TRIPLE with hammers/blunt)
         if (dwarf_fortified_ && atk_result.hit && !atk_result.killed &&
             world_.has<Player>(player_) && world_.get<Player>(player_).class_id == ClassId::DWARF &&
             world_.has<Stats>(target)) {
-            int fort_bonus = atk_result.damage; // double it
+            int fort_mult = (player_weapon_tags & TAG_BLUNT) ? 2 : 1; // triple vs double
+            int fort_bonus = atk_result.damage * fort_mult;
             world_.get<Stats>(target).hp -= fort_bonus;
             atk_result.damage += fort_bonus;
             dwarf_fortified_ = false;
@@ -3116,7 +3117,8 @@ void Engine::try_move_player(int dx, int dy) {
         if (atk_result.hit && world_.has<Player>(player_) &&
             world_.get<Player>(player_).class_id == ClassId::ELF) {
             elf_weave_counter_++;
-            if (elf_weave_counter_ >= 3 && world_.has<Spellbook>(player_)) {
+            int weave_threshold = (player_weapon_tags & TAG_BOW) ? 2 : 3; // bows = every 2 hits
+            if (elf_weave_counter_ >= weave_threshold && world_.has<Spellbook>(player_)) {
                 elf_weave_counter_ = 0;
                 auto& book = world_.get<Spellbook>(player_);
                 if (!book.known_spells.empty()) {
@@ -3128,9 +3130,21 @@ void Engine::try_move_player(int dx, int dy) {
             }
         }
 
-        // Heretic: DEVOUR (20% on kill, learn a random spell)
+        // Heretic: DEVOUR (20% + 5% per unique item on kill, learn a random spell)
         if (atk_result.killed && world_.has<Player>(player_) &&
-            world_.get<Player>(player_).class_id == ClassId::HERETIC && rng_.chance(20)) {
+            world_.get<Player>(player_).class_id == ClassId::HERETIC) {
+            // Count unique items equipped for devour bonus
+            int devour_chance = 20;
+            if (world_.has<Inventory>(player_)) {
+                auto& inv = world_.get<Inventory>(player_);
+                for (int s = 0; s < EQUIP_SLOT_COUNT; s++) {
+                    Entity eq = inv.equipped[s];
+                    if (eq != NULL_ENTITY && world_.has<Item>(eq) &&
+                        world_.get<Item>(eq).rarity >= Rarity::LEGENDARY)
+                        devour_chance += 5;
+                }
+            }
+            if (rng_.chance(devour_chance)) {
             if (world_.has<Spellbook>(player_)) {
                 // Pick a random spell the player doesn't know
                 int total_spells = static_cast<int>(SpellId::COUNT);
@@ -3160,6 +3174,7 @@ void Engine::try_move_player(int dx, int dy) {
                 log_.add(db, {220, 140, 255, 255});
                 audio_.play(SfxId::SPELL_IMPACT);
             }
+            } // devour chance roll
         }
 
         // Druid: SHAPESHIFT (kills build form, kills IN form extend it)
@@ -3172,7 +3187,10 @@ void Engine::try_move_player(int dx, int dy) {
             } else {
                 // Not in beast form: build toward transformation
                 druid_kill_counter_++;
-                if (druid_kill_counter_ >= 5) {
+                // Spear-type weapons (no TAG_SPEAR yet, use damage threshold as proxy)
+                bool has_polearm = (player_weapon_tags == 0 && world_.has<Inventory>(player_)) ? false : false;
+                // For now: shapeshift at 4 kills for all druids (spear is starting weapon anyway)
+                if (druid_kill_counter_ >= 4) {
                     druid_kill_counter_ = 0;
                     druid_beast_turns_ = 10;
                     log_.add("THE BEAST AWAKENS!", {80, 200, 80, 255});
@@ -3266,17 +3284,19 @@ void Engine::try_move_player(int dx, int dy) {
                 particles_.rise((float)pp.x, (float)pp.y, 8, 100, 200, 100, 0.7f, 2);
             }
 
-            // Necromancer: Corpse Explode (25% chance, 4 AoE to adjacent)
+            // Necromancer: Corpse Explode (25% chance, 4 AoE, staves = radius +1)
             if (cid == ClassId::NECROMANCER && rng_.chance(25) && world_.has<Position>(target)) {
                 auto& tpos = world_.get<Position>(target);
                 auto& ai_pool = world_.pool<AI>();
                 bool hit_any = false;
+                // Necromancers always get radius 2 (staff is default weapon)
+                int explode_range = 2;
                 for (size_t ai = 0; ai < ai_pool.size(); ai++) {
                     Entity ae = ai_pool.entity_at(ai);
                     if (ae == target || ai_pool.at_index(ai).friendly) continue;
                     if (!world_.has<Position>(ae) || !world_.has<Stats>(ae)) continue;
                     auto& ap = world_.get<Position>(ae);
-                    if (std::abs(ap.x - tpos.x) <= 1 && std::abs(ap.y - tpos.y) <= 1) {
+                    if (std::abs(ap.x - tpos.x) <= explode_range && std::abs(ap.y - tpos.y) <= explode_range) {
                         world_.get<Stats>(ae).hp -= 4;
                         hit_any = true;
                     }
@@ -4402,7 +4422,15 @@ void Engine::process_turn() {
             if (!revenant_saved_this_floor_ && world_.has<Player>(player_) &&
                 world_.get<Player>(player_).class_id == ClassId::REVENANT) {
                 revenant_saved_this_floor_ = true;
-                stats.hp = 1;
+                // Heavy armor: heal to 25% instead of 1 HP
+                bool heavy = false;
+                if (world_.has<Inventory>(player_)) {
+                    Entity chest = world_.get<Inventory>(player_).get_equipped(EquipSlot::CHEST);
+                    if (chest != NULL_ENTITY && world_.has<Item>(chest) &&
+                        (world_.get<Item>(chest).tags & TAG_HEAVY_ARMOR))
+                        heavy = true;
+                }
+                stats.hp = heavy ? stats.hp_max / 4 : 1;
                 log_.add("Death refused. You endure.", {180, 100, 100, 255});
                 audio_.play(SfxId::PRAYER);
                 // Lv5: UNDYING FURY (+100% damage for 5 turns after death save)

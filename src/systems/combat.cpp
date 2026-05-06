@@ -492,7 +492,8 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
                     Entity w = world.get<Inventory>(attacker).get_equipped(EquipSlot::MAIN_HAND);
                     if (w != NULL_ENTITY) unarmed_m = false;
                 }
-                if (unarmed_m && rng.range(1, 100) <= 40 && def.hp > 0) {
+                int flurry_chance = unarmed_m ? 50 : 40; // unarmed = 50%, armed = 40%
+                if (unarmed_m && rng.range(1, 100) <= flurry_chance && def.hp > 0) {
                     int bonus_dmg = std::max(1, dmg / 2);
                     def.hp -= bonus_dmg;
                     result.damage += bonus_dmg;
@@ -525,8 +526,16 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
                 }
             }
 
-            // Bandit: EXPLOIT (attacks always crit vs enemies below 25% HP)
-            if (cid == ClassId::BANDIT && def.hp > 0 && def.hp * 4 < def.hp_max) {
+            // Bandit: EXPLOIT (crit below 25% HP, daggers raise to 30%)
+            if (cid == ClassId::BANDIT && def.hp > 0) {
+                bool has_dagger = false;
+                if (world.has<Inventory>(attacker)) {
+                    Entity bw = world.get<Inventory>(attacker).get_equipped(EquipSlot::MAIN_HAND);
+                    if (bw != NULL_ENTITY && world.has<Item>(bw) && (world.get<Item>(bw).tags & TAG_DAGGER))
+                        has_dagger = true;
+                }
+                int threshold = has_dagger ? 30 : 25;
+                if (def.hp * 100 < def.hp_max * threshold) {
                 // Force critical: double damage
                 if (!result.critical) {
                     int exploit_bonus = result.damage;
@@ -535,6 +544,7 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
                     result.critical = true;
                     log.add("EXPLOIT!", {255, 180, 60, 255});
                 }
+                } // threshold check
             }
 
             // Serpentine: INJECT (stack poison, detonate at 5 stacks handled in engine)
@@ -901,8 +911,14 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
     if (result.hit && world.has<Player>(defender)) {
         auto dcid = world.get<Player>(defender).class_id;
 
-        // Fighter: Parry (25% chance to counter for 2x damage after being hit)
-        if (dcid == ClassId::FIGHTER && world.has<Stats>(attacker) && rng.range(1, 100) <= 25) {
+        // Fighter: Parry (25% base, +15% with sword = 40%)
+        int parry_chance = 25;
+        if (world.has<Inventory>(defender)) {
+            Entity wpn = world.get<Inventory>(defender).get_equipped(EquipSlot::MAIN_HAND);
+            if (wpn != NULL_ENTITY && world.has<Item>(wpn) && (world.get<Item>(wpn).tags & TAG_SWORD))
+                parry_chance = 40;
+        }
+        if (dcid == ClassId::FIGHTER && world.has<Stats>(attacker) && rng.range(1, 100) <= parry_chance) {
             auto& d_stats = world.get<Stats>(defender);
             int counter_dmg = (d_stats.melee_damage() * 2);
             world.get<Stats>(attacker).hp -= counter_dmg;
