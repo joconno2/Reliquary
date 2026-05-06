@@ -78,6 +78,16 @@ enum class EffectType : int {
     SPELL_PIERCE,             // spells ignore N armor
     PATIENT_HUNTER,           // +N% damage vs unaware enemies
 
+    // Class verb amplifiers (boost specific class mechanics)
+    STATUS_DURATION_BONUS,    // +N turns to all applied status effects (Schema Monk, Serpentine)
+    SHAPESHIFT_DAMAGE_BONUS,  // +N damage during beast/transform form (Druid)
+    FURY_CHAIN_BONUS,         // +N fury turns per kill (War Cleric)
+    SIPHON_BONUS,             // +N% MP restored on kill (Warlock)
+    EXPLODE_DAMAGE_BONUS,     // +N corpse explode damage (Necromancer)
+    COUNTER_DAMAGE_BONUS,     // +N% parry/riposte damage (Fighter, Knight)
+    STEALTH_OPENER_BONUS,     // +N% shadow step/ambush damage (Rogue, Bandit)
+    BREATH_DAMAGE_BONUS,      // +N breath/eruption damage (Wyrmkin)
+
     // Keystones (trade-off flags, value usually 1 = active)
     KS_BLOOD_MAGIC,           // spells cost HP, +30% spell power
     KS_GHOST_BLADE,           // attacks scale INT, deal magic damage
@@ -231,6 +241,15 @@ struct TreeBonuses {
     int trap_detection = 0;
     int identify_on_pickup = 0;
     int fov_bonus = 0;
+    // Class verb amplifiers
+    int status_duration_bonus = 0;
+    int shapeshift_dmg_bonus = 0;
+    int fury_chain_bonus = 0;
+    int siphon_bonus_pct = 0;
+    int explode_dmg_bonus = 0;
+    int counter_dmg_bonus_pct = 0;
+    int stealth_opener_bonus_pct = 0;
+    int breath_dmg_bonus = 0;
     // Notable mechanics
     bool riposte = false;
     bool last_stand = false;

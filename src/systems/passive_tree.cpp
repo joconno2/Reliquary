@@ -817,6 +817,15 @@ TreeBonuses compute_bonuses(const PassiveTreeState& state) {
                 case EffectType::TRAP_DETECTION: b.trap_detection += eff.value; break;
                 case EffectType::IDENTIFY_ON_PICKUP_PCT: b.identify_on_pickup += eff.value; break;
                 case EffectType::BONUS_FOV: b.fov_bonus += eff.value; break;
+                // Class verb amplifiers
+                case EffectType::STATUS_DURATION_BONUS: b.status_duration_bonus += eff.value; break;
+                case EffectType::SHAPESHIFT_DAMAGE_BONUS: b.shapeshift_dmg_bonus += eff.value; break;
+                case EffectType::FURY_CHAIN_BONUS: b.fury_chain_bonus += eff.value; break;
+                case EffectType::SIPHON_BONUS: b.siphon_bonus_pct += eff.value; break;
+                case EffectType::EXPLODE_DAMAGE_BONUS: b.explode_dmg_bonus += eff.value; break;
+                case EffectType::COUNTER_DAMAGE_BONUS: b.counter_dmg_bonus_pct += eff.value; break;
+                case EffectType::STEALTH_OPENER_BONUS: b.stealth_opener_bonus_pct += eff.value; break;
+                case EffectType::BREATH_DAMAGE_BONUS: b.breath_dmg_bonus += eff.value; break;
                 // Notable mechanics
                 case EffectType::RIPOSTE: b.riposte = true; break;
                 case EffectType::LAST_STAND: b.last_stand = true; break;

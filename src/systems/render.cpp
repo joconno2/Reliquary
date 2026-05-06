@@ -2,6 +2,7 @@
 #include "components/position.h"
 #include "components/renderable.h"
 #include "components/death_anim.h"
+#include "components/status_effect.h"
 #include <algorithm>
 #include <vector>
 #include <cmath>
@@ -407,6 +408,30 @@ void draw_entities(SDL_Renderer* renderer, const SpriteManager& sprites,
                 float fade = 1.0f - (t - 0.25f) / 0.75f;
                 if (fade < 0.0f) fade = 0.0f;
                 tint.a = static_cast<Uint8>(fade * 255.0f);
+            }
+        }
+
+        // Status effect tinting on entities with active effects
+        if (world.has<StatusEffects>(e) && !world.has<DeathAnim>(e)) {
+            auto& fx = world.get<StatusEffects>(e);
+            if (!fx.effects.empty()) {
+                // Blend toward the dominant status color
+                auto st = fx.effects[0].type;
+                uint8_t sr = tint.r, sg = tint.g, sb = tint.b;
+                switch (st) {
+                    case StatusType::POISON:  sr = 80; sg = 220; sb = 80; break;
+                    case StatusType::BURN:    sr = 255; sg = 140; sb = 40; break;
+                    case StatusType::BLEED:   sr = 220; sg = 60; sb = 60; break;
+                    case StatusType::FROZEN:  sr = 140; sg = 200; sb = 255; break;
+                    case StatusType::STUNNED: sr = 255; sg = 255; sb = 100; break;
+                    case StatusType::CONFUSED:sr = 200; sg = 100; sb = 255; break;
+                    case StatusType::BLIND:   sr = 80; sg = 80; sb = 80; break;
+                    case StatusType::FEARED:  sr = 255; sg = 255; sb = 255; break;
+                }
+                // 40% blend toward status color (visible but not overwhelming)
+                tint.r = static_cast<uint8_t>(tint.r * 60 / 100 + sr * 40 / 100);
+                tint.g = static_cast<uint8_t>(tint.g * 60 / 100 + sg * 40 / 100);
+                tint.b = static_cast<uint8_t>(tint.b * 60 / 100 + sb * 40 / 100);
             }
         }
 
