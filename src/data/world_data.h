@@ -16,49 +16,71 @@ struct TownData {
     const char* rumor2;
     const char* rumor3;
     const char* nearby_warning;  // what NPCs warn you about nearby
+    const char* rumor4;          // additional local color
+    const char* rumor5;
 };
 
 static constexpr TownData ALL_TOWNS[] = {
     {500, 375, "Thornwall", true,
      "The crossroads. Every road meets here.", "The Barrow woke something.",
      "Scholar Aldric paces and mutters.", "The priests look afraid.",
-     "Something beneath us stirs."},
+     "Something beneath us stirs.",
+     "Elder Maren has been saying strange things. Stranger than usual.",
+     "A branded one came through years ago. They didn't come back."},
     {425, 475, "Millhaven", true,
      "Farmland in every direction.", "The Catacombs south are unsealed.",
      "Tremors at night.", "The old gate groans.",
-     "Underground, the dead are restless."},
+     "Underground, the dead are restless.",
+     "Crops grow in spirals near the dungeon entrance. Nobody plants them that way.",
+     "Three farmers vanished last month. Their tools were left standing upright."},
     {725, 250, "Candlemere", true,
      "A temple city. The flame burns eternal.", "The priests weep.",
      "Greywatch garrison is on alert.", "Something in the north calls.",
-     "The flame flickers. It never used to."},
+     "The flame flickers. It never used to.",
+     "The temple bells ring on their own now. Always at midnight.",
+     "They found scorch marks inside the sanctum. Shaped like hands."},
     {525, 225, "Frostmere", true,
      "Ice clings to rooftops. Frostmere endures.", "Sage Yeva knows old things.",
      "The frozen depths are restless.", "Strange reports from the peaks.",
-     "Cold beyond cold."},
+     "Cold beyond cold.",
+     "The lake froze solid overnight. In summer.",
+     "Yeva's apprentice went north three weeks ago. She hasn't slept since."},
     {650, 335, "Greywatch", true,
      "Grey stone walls. A fortress town.", "Stonekeep northeast is groaning.",
      "Patrols return with fewer men.", "The dungeon below the watchtower...",
-     "Captain Voss says prepare."},
+     "Captain Voss says prepare.",
+     "The garrison's doubled since spring. Voss knows something he won't say.",
+     "They sealed the lowest cell. Whatever's in there stopped screaming."},
     {400, 200, "Whitepeak", false,
      "High in the frozen peaks. Stone and silence.", "The mountain trembles.",
      "Nothing grows but everything endures.", "Deeper stone, deeper silence.",
-     "The cold is patient here."},
+     "The cold is patient here.",
+     "Old Halvard says the glacier moved. Nobody believes him. Nobody checks.",
+     "Sound carries wrong up here. You hear things that haven't happened yet."},
     {325, 400, "Bramblewood", true,
      "The forest presses in. Moss and green.", "Animals act strangely.",
      "The deep woods are darker.", "Hollowgate is near. Sealed tight.",
-     "Nature watches."},
+     "Nature watches.",
+     "Ranger Fael won't say what he saw in the deep wood. He won't go back either.",
+     "The trees grew over the old road in a single night. The forest is deciding."},
     {275, 275, "Hollowgate", true,
      "Deep in the Greenwood. Ancient and sealed.", "The seal hums.",
      "Nobody goes below.", "The fragments will open it.",
-     "Something vast waits."},
+     "Something vast waits.",
+     "The seal is warm to the touch. Stone shouldn't be warm.",
+     "Daven reads the old inscriptions. He says they're instructions, not warnings."},
     {700, 375, "Ironhearth", true,
      "Hammers never stop. Forge and flame.", "The Molten Depths burn hotter.",
      "The craft blesses the steel.", "The coast road is dangerous.",
-     "Something pulls at metal."},
+     "Something pulls at metal.",
+     "Brynn's best blades crack for no reason. The ore is changing.",
+     "The forges run themselves at night. Nobody lights them."},
     {500, 550, "Dustfall", false,
      "Dry wind and empty wells.", "The rot creeps north.",
      "The ground is sick.", "Nothing heals here.",
-     "Plague-touched soil."},
+     "Plague-touched soil.",
+     "Kess burns three pyres a week now. She stopped counting bodies.",
+     "Rain fell once last month. It was the wrong color."},
 };
 
 static constexpr int TOWN_COUNT = sizeof(ALL_TOWNS) / sizeof(ALL_TOWNS[0]);
@@ -120,11 +142,11 @@ inline const char* compass_dir(int from_x, int from_y, int to_x, int to_y) {
 
 // Province name from world position (matches get_town_god zones).
 inline const char* get_province_name(int x, int y) {
-    if (y < 400) return "Frozen Marches";
-    if (y < 600 && x > 900) return "Pale Reach";
-    if (x < 700) return "Greenwood";
-    if (y > 1000) return "Dust Provinces";
-    if (x > 1100) return "Iron Coast";
+    if (y < 200) return "Frozen Marches";
+    if (y < 300 && x > 450) return "Pale Reach";
+    if (x < 350) return "Greenwood";
+    if (y > 500) return "Dust Provinces";
+    if (x > 550) return "Iron Coast";
     return "Heartlands";
 }
 
@@ -138,11 +160,11 @@ struct ChurchLocation {
 // 6 churches, one per province god
 static constexpr ChurchLocation CHURCH_LOCATIONS[] = {
     { 0, GodId::MORRETH},   // Thornwall (Heartlands)
-    {12, GodId::SOLETH},     // Candlemere (Pale Reach)
-    { 5, GodId::GATHRUUN},   // Frostmere (Frozen Marches)
+    { 2, GodId::SOLETH},     // Candlemere (Pale Reach)
+    { 3, GodId::GATHRUUN},   // Frostmere (Frozen Marches)
     { 6, GodId::KHAEL},      // Bramblewood (Greenwood)
-    { 7, GodId::OSSREN},     // Ironhearth (Iron Coast)
-    { 8, GodId::SYTHARA},    // Dustfall (Dust Provinces)
+    { 8, GodId::OSSREN},     // Ironhearth (Iron Coast)
+    { 9, GodId::SYTHARA},    // Dustfall (Dust Provinces)
 };
 static constexpr int CHURCH_COUNT = sizeof(CHURCH_LOCATIONS) / sizeof(CHURCH_LOCATIONS[0]);
 

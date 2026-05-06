@@ -242,8 +242,8 @@ CastResult cast(World& world, Entity caster, SpellId spell,
     if (tree_bonuses.blood_magic) power = power * 130 / 100;
     // Tree spell damage percent bonus
     if (tree_bonuses.spell_dmg_pct > 0) power = power * (100 + tree_bonuses.spell_dmg_pct) / 100;
-    // Spell cost reduction from tree
-    // (already handled via actual_cost for Arcane Overload; general reduction TODO)
+    // Spell Pierce: flat bonus damage (represents bypassing armor)
+    power += tree_bonuses.spell_pierce;
     // Arcane Overload: 2x damage
     if (arcane_overload) {
         power *= 2;
@@ -256,6 +256,15 @@ CastResult cast(World& world, Entity caster, SpellId spell,
         log.add("Arcane Overload!", {100, 160, 255, 255});
     }
     bool is_player = world.has<Player>(caster);
+    // Elf Lv5 SPELL MASTERY: weave spells deal +50%
+    if (is_player) {
+        auto& pl = world.get<Player>(caster);
+        if (pl.weave_cast && stats.level >= 5)
+            power = power * 150 / 100;
+        // Heretic Lv5 MIMICRY: all spells deal +50%
+        if (pl.class_id == ClassId::HERETIC && stats.level >= 5)
+            power = power * 150 / 100;
+    }
 
     // Helper: handle spell kill XP grant
     auto spell_kill_xp = [&](Entity target) {
@@ -350,11 +359,21 @@ CastResult cast(World& world, Entity caster, SpellId spell,
                     snprintf(buf, sizeof(buf), "Fireball hits the %s. %d dmg, burning.", tgt.name.c_str(), dmg);
                 log.add(buf, {255, 160, 60, 255});
             }
-            // Leave burning ground on target tile
+            // Leave burning ground on target tile + ignite nearby grass
             if (world.has<Position>(target)) {
                 auto& tp = world.get<Position>(target);
                 if (map.in_bounds(tp.x, tp.y) && map.is_walkable(tp.x, tp.y))
-                    map.at(tp.x, tp.y).type = TileType::LAVA; // burning ground
+                    map.at(tp.x, tp.y).type = TileType::LAVA;
+                // Spread fire to adjacent grass/brush
+                for (int dx = -1; dx <= 1; dx++) {
+                    for (int dy = -1; dy <= 1; dy++) {
+                        int gx = tp.x + dx, gy = tp.y + dy;
+                        if (!map.in_bounds(gx, gy)) continue;
+                        auto tt = map.at(gx, gy).type;
+                        if (tt == TileType::FLOOR_GRASS || tt == TileType::BRUSH)
+                            map.at(gx, gy).type = TileType::LAVA;
+                    }
+                }
             }
             if (tgt.hp <= 0 && !world.has<Player>(target)) spell_kill_xp(target);
             result.success = true;
@@ -474,6 +493,21 @@ CastResult cast(World& world, Entity caster, SpellId spell,
                         if (world.has<StatusEffects>(adj))
                             world.get<StatusEffects>(adj).add(StatusType::BURN, 2, 2);
                         splash++;
+                    }
+                }
+            }
+            // Leave burning ground at impact + ignite nearby grass
+            if (world.has<Position>(target)) {
+                auto& tp = world.get<Position>(target);
+                if (map.in_bounds(tp.x, tp.y) && map.is_walkable(tp.x, tp.y))
+                    map.at(tp.x, tp.y).type = TileType::LAVA;
+                for (int dx = -1; dx <= 1; dx++) {
+                    for (int dy = -1; dy <= 1; dy++) {
+                        int gx = tp.x + dx, gy = tp.y + dy;
+                        if (!map.in_bounds(gx, gy)) continue;
+                        auto tt = map.at(gx, gy).type;
+                        if (tt == TileType::FLOOR_GRASS || tt == TileType::BRUSH)
+                            map.at(gx, gy).type = TileType::LAVA;
                     }
                 }
             }
@@ -906,8 +940,17 @@ CastResult cast(World& world, Entity caster, SpellId spell,
                 Entity wolf = world.create();
                 world.add<Position>(wolf, {tx, ty});
                 world.add<Renderable>(wolf, {SHEET_ANIMALS, 4, 2, {255,255,255,255}, 5});
-                Stats ws; ws.name = "summoned wolf"; ws.hp = 15 + power; ws.hp_max = ws.hp;
-                ws.base_damage = 4 + power / 3; ws.base_speed = 110; ws.xp_value = 0;
+                Stats ws; ws.name = "summoned wolf";
+                // Avatar of the Wild keystone: summons inherit caster stats
+                if (tree_bonuses.avatar_of_wild) {
+                    ws.hp = stats.hp_max; ws.hp_max = stats.hp_max;
+                    ws.base_damage = stats.melee_damage(); ws.base_speed = stats.base_speed;
+                    for (int a = 0; a < ATTR_COUNT; a++) ws.attributes[a] = stats.attributes[a];
+                } else {
+                    ws.hp = 15 + power; ws.hp_max = ws.hp;
+                    ws.base_damage = 4 + power / 3; ws.base_speed = 110;
+                }
+                ws.xp_value = 0;
                 world.add<Stats>(wolf, std::move(ws));
                 AI wai; wai.state = AIState::HUNTING; wai.friendly = true;
                 world.add<AI>(wolf, wai);

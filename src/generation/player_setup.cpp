@@ -87,6 +87,8 @@ PlayerResult create_player(World& world, const CharacterBuild& build,
         player_stats.fire_resist += tr.fire_resist;
         player_stats.poison_resist += tr.poison_resist;
         player_stats.bleed_resist += tr.bleed_resist;
+        player_stats.fov_bonus += tr.bonus_fov;
+        player_stats.base_damage += tr.bonus_damage;
     }
 
     // Minimum HP floor after trait penalties (prevent starting at 0 or negative)

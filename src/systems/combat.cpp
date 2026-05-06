@@ -137,6 +137,11 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
     get_equip_bonuses(world, attacker, atk_eq_dmg, atk_eq_arm, atk_eq_atk, atk_eq_dodge);
     get_equip_bonuses(world, defender, def_eq_dmg, def_eq_arm, def_eq_atk, def_eq_dodge);
 
+    // Aspect of Beast capstone: natural attacks replace weapon damage
+    if (world.has<Player>(attacker) && world.get<Player>(attacker).beast_form_turns > 0) {
+        atk_eq_dmg = atk.eff_attr(Attr::STR) / 2 + 5; // STR-scaled claws
+    }
+
     // Equipment attribute bonuses (from affixes and relics)
     int atk_eq_str, atk_eq_dex, atk_eq_con, atk_eq_hp, atk_eq_mp, atk_eq_spd;
     int def_eq_str, def_eq_dex, def_eq_con, def_eq_hp, def_eq_mp, def_eq_spd;
@@ -201,8 +206,10 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
         Entity shield = world.get<Inventory>(defender).get_equipped(EquipSlot::OFF_HAND);
         if (shield != NULL_ENTITY && world.has<Item>(shield) &&
             world.get<Item>(shield).type == ItemType::SHIELD) {
-            if (rng.range(1, 100) <= 30) {
+            int block_pct = (world.get<Player>(defender).bulwark_turns > 0) ? 50 : 30;
+            if (rng.range(1, 100) <= block_pct) {
                 knight_blocked = true;
+                result.shield_blocked = true;
                 log.add("Shield blocks!", {200, 200, 255, 255});
             }
         }
@@ -214,6 +221,8 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
         // Riposte also triggers on shield block (not just dodge)
         if (def_tree.riposte && world.has<Stats>(attacker)) {
             int riposte_dmg = std::max(1, def.melee_damage() + def_eq_dmg - atk.protection());
+            if (def_tree.counter_dmg_bonus_pct > 0)
+                riposte_dmg = riposte_dmg * (100 + def_tree.counter_dmg_bonus_pct) / 100;
             atk.hp -= riposte_dmg;
             char rbuf[128]; snprintf(rbuf, sizeof(rbuf), "You counter off the block! (%d)", riposte_dmg);
             log.add(rbuf, {220, 200, 140, 255});
@@ -276,6 +285,10 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
         if (atk_tree.melee_dmg_pct > 0) {
             dmg = dmg * (100 + atk_tree.melee_dmg_pct) / 100;
         }
+        // Patient Hunter: bonus damage to unaware enemies (sleeping or full HP)
+        if (atk_tree.patient_hunter_pct > 0 && (def.sleep_turns > 0 || def.hp >= def.hp_max)) {
+            dmg = dmg * (100 + atk_tree.patient_hunter_pct) / 100;
+        }
 
         // Skill bonuses (attacker only)
         if (world.has<Player>(attacker) && world.has<Skills>(attacker)) {
@@ -337,6 +350,10 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
 
         dmg -= (def.protection() + def_eq_arm + def_tree.armor + def_armor_bonus);
         if (dmg < 1) dmg = 1;
+
+        // Unbreakable capstone: halve all incoming damage
+        if (world.has<Player>(defender) && world.get<Player>(defender).unbreakable_turns > 0)
+            dmg = std::max(1, dmg / 2);
 
         result.damage = dmg;
         def.hp -= dmg;
@@ -441,19 +458,21 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
                 int active_statuses = static_cast<int>(world.get<StatusEffects>(defender).effects.size());
                 int bonus = 2 + atk.eff_attr(Attr::INT) / 5 + active_statuses * 3;
                 def.hp -= bonus;
+                int sd_bonus = atk_tree.status_duration_bonus;
+                result.cycled_element = true;
                 switch (elem) {
                     case 0: // Fire
-                        world.get<StatusEffects>(defender).add(StatusType::BURN, 2, 2);
+                        world.get<StatusEffects>(defender).add(StatusType::BURN, 2, 2 + sd_bonus);
                         { char eb[80]; snprintf(eb, sizeof(eb), "Your fist ignites! +%d fire.", bonus);
                           log.add(eb, {255, 140, 40, 255}); }
                         break;
                     case 1: // Ice
-                        world.get<StatusEffects>(defender).add(StatusType::FROZEN, 0, 1);
+                        world.get<StatusEffects>(defender).add(StatusType::FROZEN, 0, 1 + sd_bonus);
                         { char eb[80]; snprintf(eb, sizeof(eb), "Your fist freezes! +%d cold.", bonus);
                           log.add(eb, {140, 200, 255, 255}); }
                         break;
                     case 2: // Lightning
-                        world.get<StatusEffects>(defender).add(StatusType::STUNNED, 0, 1);
+                        world.get<StatusEffects>(defender).add(StatusType::STUNNED, 0, 1 + sd_bonus);
                         { char eb[80]; snprintf(eb, sizeof(eb), "Your fist crackles! +%d shock.", bonus);
                           log.add(eb, {200, 200, 255, 255}); }
                         break;
@@ -467,11 +486,14 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
 
             // Rogue: Shadow Step (first strike vs full HP = teleport behind + 2x damage)
             if (cid == ClassId::ROGUE && (def.hp + result.damage >= def.hp_max) && def.hp > 0) {
-                // Double the damage
+                // Double the damage + tree opener bonus
                 int shadow_bonus = result.damage;
+                if (atk_tree.stealth_opener_bonus_pct > 0)
+                    shadow_bonus = shadow_bonus * (100 + atk_tree.stealth_opener_bonus_pct) / 100;
                 def.hp -= shadow_bonus;
                 result.damage += shadow_bonus;
                 result.teleport_behind = true;
+                result.shadow_stepped = true;
                 log.add("Shadow step!", {100, 80, 160, 255});
             }
 
@@ -482,6 +504,7 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
                 int rage_bonus = dmg / 2;
                 def.hp -= rage_bonus;
                 result.damage += rage_bonus;
+                result.raged = true;
                 log.add("Rage!", {255, 80, 80, 255});
             }
 
@@ -497,6 +520,7 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
                     int bonus_dmg = std::max(1, dmg / 2);
                     def.hp -= bonus_dmg;
                     result.damage += bonus_dmg;
+                    result.flurried = true;
                     log.add("Flurry!", {220, 200, 140, 255});
                 }
             }
@@ -507,6 +531,7 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
                 if (is_undead(ds.name.c_str())) {
                     def.hp -= 6;
                     result.damage += 6;
+                    result.smited = true;
                     if (def.hp > 0 && def.hp * 5 < def.hp_max) {
                         def.hp = 0; // execute
                         log.add("Holy smite! Purified.", {255, 255, 200, 255});
@@ -539,9 +564,12 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
                 // Force critical: double damage
                 if (!result.critical) {
                     int exploit_bonus = result.damage;
+                    if (atk_tree.stealth_opener_bonus_pct > 0)
+                        exploit_bonus = exploit_bonus * (100 + atk_tree.stealth_opener_bonus_pct) / 100;
                     def.hp -= exploit_bonus;
                     result.damage += exploit_bonus;
                     result.critical = true;
+                    result.exploited = true;
                     log.add("EXPLOIT!", {255, 180, 60, 255});
                 }
                 } // threshold check
@@ -549,7 +577,7 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
 
             // Serpentine: INJECT (stack poison, detonate at 5 stacks handled in engine)
             if (cid == ClassId::SERPENTINE && def.hp > 0 && world.has<StatusEffects>(defender)) {
-                world.get<StatusEffects>(defender).add(StatusType::POISON, 2, 3);
+                world.get<StatusEffects>(defender).add(StatusType::POISON, 2, 3 + atk_tree.status_duration_bonus);
                 result.poison_stacked = true; // signal to engine for stack tracking
             }
 
@@ -558,7 +586,7 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
                 atk.wyrmkin_breath_ctr++;
                 if (atk.wyrmkin_breath_ctr >= 8) {
                     atk.wyrmkin_breath_ctr = 0;
-                    int breath_dmg = 6 + atk.level;
+                    int breath_dmg = 6 + atk.level + atk_tree.breath_dmg_bonus;
                     // Damage target extra
                     def.hp -= breath_dmg;
                     result.damage += breath_dmg;
@@ -855,6 +883,8 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
                 int riposte_dmg = def.melee_damage() + def_eq_dmg + def_tree.damage;
                 riposte_dmg -= (atk.protection() + atk_eq_arm);
                 if (riposte_dmg < 1) riposte_dmg = 1;
+                if (def_tree.counter_dmg_bonus_pct > 0)
+                    riposte_dmg = riposte_dmg * (100 + def_tree.counter_dmg_bonus_pct) / 100;
                 atk.hp -= riposte_dmg;
                 char rbuf[128];
                 snprintf(rbuf, sizeof(rbuf), "You riposte the %s! (%d)", atk.name.c_str(), riposte_dmg);
@@ -921,7 +951,10 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
         if (dcid == ClassId::FIGHTER && world.has<Stats>(attacker) && rng.range(1, 100) <= parry_chance) {
             auto& d_stats = world.get<Stats>(defender);
             int counter_dmg = (d_stats.melee_damage() * 2);
+            if (def_tree.counter_dmg_bonus_pct > 0)
+                counter_dmg = counter_dmg * (100 + def_tree.counter_dmg_bonus_pct) / 100;
             world.get<Stats>(attacker).hp -= counter_dmg;
+            result.parried = true;
             char pb[64]; snprintf(pb, sizeof(pb), "PARRY! (%d)", counter_dmg);
             log.add(pb, {255, 220, 140, 255});
             if (world.get<Stats>(attacker).hp <= 0) result.attacker_killed = true;

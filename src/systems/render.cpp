@@ -379,6 +379,8 @@ void draw_entities(SDL_Renderer* renderer, const SpriteManager& sprites,
         int dx, dy;
         SDL_Color tint;
         bool flip_h;
+        bool has_status;
+        StatusType status;
     };
     std::vector<DrawCmd> cmds;
 
@@ -411,32 +413,17 @@ void draw_entities(SDL_Renderer* renderer, const SpriteManager& sprites,
             }
         }
 
-        // Status effect tinting on entities with active effects
-        if (world.has<StatusEffects>(e) && !world.has<DeathAnim>(e)) {
+        // Status effect: track for icon drawing after sprite (no tinting)
+        bool has_status = world.has<StatusEffects>(e) && !world.has<DeathAnim>(e);
+        StatusType primary_status = StatusType::POISON;
+        if (has_status) {
             auto& fx = world.get<StatusEffects>(e);
-            if (!fx.effects.empty()) {
-                // Blend toward the dominant status color
-                auto st = fx.effects[0].type;
-                uint8_t sr = tint.r, sg = tint.g, sb = tint.b;
-                switch (st) {
-                    case StatusType::POISON:  sr = 80; sg = 220; sb = 80; break;
-                    case StatusType::BURN:    sr = 255; sg = 140; sb = 40; break;
-                    case StatusType::BLEED:   sr = 220; sg = 60; sb = 60; break;
-                    case StatusType::FROZEN:  sr = 140; sg = 200; sb = 255; break;
-                    case StatusType::STUNNED: sr = 255; sg = 255; sb = 100; break;
-                    case StatusType::CONFUSED:sr = 200; sg = 100; sb = 255; break;
-                    case StatusType::BLIND:   sr = 80; sg = 80; sb = 80; break;
-                    case StatusType::FEARED:  sr = 255; sg = 255; sb = 255; break;
-                }
-                // 40% blend toward status color (visible but not overwhelming)
-                tint.r = static_cast<uint8_t>(tint.r * 60 / 100 + sr * 40 / 100);
-                tint.g = static_cast<uint8_t>(tint.g * 60 / 100 + sg * 40 / 100);
-                tint.b = static_cast<uint8_t>(tint.b * 60 / 100 + sb * 40 / 100);
-            }
+            has_status = !fx.effects.empty();
+            if (has_status) primary_status = fx.effects[0].type;
         }
 
         cmds.push_back({rend.z_order, rend.sprite_sheet, rend.sprite_x, rend.sprite_y,
-                         screen_x, screen_y, tint, rend.flip_h});
+                         screen_x, screen_y, tint, rend.flip_h, has_status, primary_status});
     }
 
     std::sort(cmds.begin(), cmds.end(),
@@ -473,6 +460,100 @@ void draw_entities(SDL_Renderer* renderer, const SpriteManager& sprites,
 
         sprites.draw_sprite_sized(renderer, cmd.sheet, sx, sy,
                                    cmd.dx, cmd.dy, TS, cmd.tint, cmd.flip_h);
+
+        // Animated status icon overlay (top-right corner of tile)
+        if (cmd.has_status) {
+            int ix = cmd.dx + TS - 8; // top-right corner
+            int iy = cmd.dy;
+            int isz = 7; // icon size
+            float anim = static_cast<float>(ticks % 600) / 600.0f; // 0-1 cycle
+
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+            switch (cmd.status) {
+                case StatusType::BURN: {
+                    // Animated flame: triangle that flickers
+                    int fh = isz + static_cast<int>(3.0f * sinf(anim * 6.283f));
+                    SDL_SetRenderDrawColor(renderer, 255, 140, 40, 220);
+                    for (int fy = 0; fy < fh; fy++) {
+                        int fw = (fh - fy) * isz / fh;
+                        SDL_RenderDrawLine(renderer, ix + isz/2 - fw/2, iy + isz - fy,
+                                           ix + isz/2 + fw/2, iy + isz - fy);
+                    }
+                    break;
+                }
+                case StatusType::POISON: {
+                    // Dripping green droplet
+                    int dy2 = static_cast<int>(anim * 8.0f) % 8;
+                    SDL_SetRenderDrawColor(renderer, 80, 220, 60, 200);
+                    SDL_Rect drop = {ix + 2, iy + dy2, 4, 3};
+                    SDL_RenderFillRect(renderer, &drop);
+                    break;
+                }
+                case StatusType::FROZEN: {
+                    // Snowflake: rotating plus sign
+                    SDL_SetRenderDrawColor(renderer, 140, 210, 255, 220);
+                    int cx2 = ix + isz/2, cy2 = iy + isz/2;
+                    int r2 = isz/2;
+                    SDL_RenderDrawLine(renderer, cx2 - r2, cy2, cx2 + r2, cy2);
+                    SDL_RenderDrawLine(renderer, cx2, cy2 - r2, cx2, cy2 + r2);
+                    int d2 = static_cast<int>(r2 * 0.7f);
+                    SDL_RenderDrawLine(renderer, cx2 - d2, cy2 - d2, cx2 + d2, cy2 + d2);
+                    SDL_RenderDrawLine(renderer, cx2 + d2, cy2 - d2, cx2 - d2, cy2 + d2);
+                    break;
+                }
+                case StatusType::STUNNED: {
+                    // Spinning stars (2 small dots orbiting)
+                    SDL_SetRenderDrawColor(renderer, 255, 255, 100, 220);
+                    int cx2 = ix + isz/2, cy2 = iy + isz/2;
+                    for (int si = 0; si < 3; si++) {
+                        float sa = anim * 6.283f + si * 2.094f;
+                        int sx2 = cx2 + static_cast<int>(3.0f * cosf(sa));
+                        int sy2 = cy2 + static_cast<int>(3.0f * sinf(sa));
+                        SDL_Rect star = {sx2, sy2, 2, 2};
+                        SDL_RenderFillRect(renderer, &star);
+                    }
+                    break;
+                }
+                case StatusType::BLEED: {
+                    // Red drip
+                    int dy2 = static_cast<int>(anim * 10.0f) % 10;
+                    SDL_SetRenderDrawColor(renderer, 220, 40, 40, 200);
+                    SDL_Rect drop = {ix + 2, iy + dy2, 3, 4};
+                    SDL_RenderFillRect(renderer, &drop);
+                    break;
+                }
+                case StatusType::CONFUSED: {
+                    // Purple spiral (question mark shape)
+                    SDL_SetRenderDrawColor(renderer, 200, 100, 255, 200);
+                    int cx2 = ix + isz/2, cy2 = iy + isz/2;
+                    for (int sp = 0; sp < 6; sp++) {
+                        float sa = anim * 6.283f + sp * 1.047f;
+                        float sr = 1.0f + sp * 0.5f;
+                        int sx2 = cx2 + static_cast<int>(sr * cosf(sa));
+                        int sy2 = cy2 + static_cast<int>(sr * sinf(sa));
+                        SDL_RenderDrawPoint(renderer, sx2, sy2);
+                    }
+                    break;
+                }
+                case StatusType::FEARED: {
+                    // White exclamation mark
+                    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 220);
+                    SDL_Rect bar = {ix + isz/2 - 1, iy, 2, isz - 3};
+                    SDL_RenderFillRect(renderer, &bar);
+                    SDL_Rect dot = {ix + isz/2 - 1, iy + isz - 2, 2, 2};
+                    SDL_RenderFillRect(renderer, &dot);
+                    break;
+                }
+                case StatusType::BLIND: {
+                    // Dark X
+                    SDL_SetRenderDrawColor(renderer, 80, 80, 80, 200);
+                    SDL_RenderDrawLine(renderer, ix, iy, ix + isz, iy + isz);
+                    SDL_RenderDrawLine(renderer, ix + isz, iy, ix, iy + isz);
+                    break;
+                }
+            }
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+        }
     }
 }
 

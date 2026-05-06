@@ -21,28 +21,54 @@ struct ShopItemDef {
     int gold_value;
 };
 
+// tags field packed into heal_amount for weapons (repurposed since weapons don't heal)
 static const ShopItemDef SHOP_WEAPONS[] = {
-    {"dagger",        "+2 dmg, +1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 0,  2, 0, 1, 0, 0,  15},
-    {"short sword",   "+3 dmg.",                         ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 0,  3, 0, 0, 0, 0,  30},
-    {"mace",          "+4 dmg.",                         ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 5,  4, 0, 0, 0, 0,  40},
-    {"spear",         "+4 dmg, +1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 6,  4, 0, 1, 0, 0,  35},
-    {"long sword",    "+5 dmg.",                         ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 0,  5, 0, 0, 0, 0,  60},
+    // Daggers (TAG_DAGGER)
+    {"dagger",        "+2 dmg, +2 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 0,  2, 0, 2, 0, 0,  15},
+    {"stiletto",      "+3 dmg, +3 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 0,  3, 0, 3, 0, 0,  35},
+    // Swords (TAG_SWORD)
+    {"short sword",   "+3 dmg, +1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 0,  3, 0, 1, 0, 0,  30},
+    {"long sword",    "+5 dmg, +1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 0,  5, 0, 1, 0, 0,  60},
+    {"falchion",      "+6 dmg.",                         ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 0,  6, 0, 0, 0, 0,  75},
+    // Axes (TAG_AXE)
+    {"hand axe",      "+3 dmg.",                         ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 3,  3, 0, 0, 0, 0,  25},
     {"battle axe",    "+6 dmg, -1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 3,  6, 0,-1, 0, 0,  55},
+    // Blunt (TAG_BLUNT)
+    {"mace",          "+4 dmg.",                         ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 5,  4, 0, 0, 0, 0,  40},
+    {"warhammer",     "+7 dmg, -1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 5,  7, 0,-1, 0, 0,  70},
+    // Spears
+    {"spear",         "+4 dmg, +1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 6,  4, 0, 1, 0, 0,  35},
+    // Bows (TAG_BOW)
+    {"short bow",     "+2 dmg, +2 atk, range 6.",       ItemType::WEAPON, EquipSlot::MAIN_HAND, 2, 6,  2, 0, 2, 0, 0,  30},
+    {"hunting bow",   "+4 dmg, +3 atk, range 6.",       ItemType::WEAPON, EquipSlot::MAIN_HAND, 2, 6,  4, 0, 3, 0, 0,  55},
 };
 
 static const ShopItemDef SHOP_ARMOR[] = {
-    {"leather armor", "AC +2, light armor.",            ItemType::ARMOR_CHEST, EquipSlot::CHEST,    1, 12, 0, 2, 0, 0, 0, 40},
-    {"chain mail",    "AC +4, -1 dodge, medium armor.", ItemType::ARMOR_CHEST, EquipSlot::CHEST,    3, 12, 0, 4, 0,-1, 0, 80},
-    {"leather helm",  "AC +1.",                         ItemType::ARMOR_HEAD,  EquipSlot::HEAD,     1, 15, 0, 1, 0, 0, 0, 20},
+    // Chest
+    {"leather vest",  "AC +2.",                         ItemType::ARMOR_CHEST, EquipSlot::CHEST,    1, 12, 0, 2, 0, 0, 0, 35},
+    {"chain shirt",   "AC +3.",                         ItemType::ARMOR_CHEST, EquipSlot::CHEST,    3, 12, 0, 3, 0, 0, 0, 60},
+    {"chain mail",    "AC +4, -1 dodge.",               ItemType::ARMOR_CHEST, EquipSlot::CHEST,    3, 12, 0, 4, 0,-1, 0, 80},
+    {"scale armor",   "AC +5, -2 dodge.",               ItemType::ARMOR_CHEST, EquipSlot::CHEST,    4, 12, 0, 5, 0,-2, 0,100},
+    // Head
+    {"leather cap",   "AC +1.",                         ItemType::ARMOR_HEAD,  EquipSlot::HEAD,     1, 15, 0, 1, 0, 0, 0, 20},
     {"iron helm",     "AC +3.",                         ItemType::ARMOR_HEAD,  EquipSlot::HEAD,     4, 15, 0, 3, 0, 0, 0, 55},
-    {"buckler",       "AC +2, +1 dodge, light.",        ItemType::SHIELD,      EquipSlot::OFF_HAND, 0, 11, 0, 2, 0, 1, 0, 30},
+    // Hands
+    {"leather gloves","AC +1.",                         ItemType::ARMOR_HANDS, EquipSlot::HANDS,    1, 13, 0, 1, 0, 0, 0, 20},
+    {"iron gauntlets","AC +2.",                         ItemType::ARMOR_HANDS, EquipSlot::HANDS,    4, 13, 0, 2, 0, 0, 0, 45},
+    // Feet
     {"leather boots", "AC +1.",                         ItemType::ARMOR_FEET,  EquipSlot::FEET,     1, 14, 0, 1, 0, 0, 0, 20},
+    {"iron greaves",  "AC +2.",                         ItemType::ARMOR_FEET,  EquipSlot::FEET,     4, 14, 0, 2, 0, 0, 0, 45},
+    // Shields
+    {"buckler",       "AC +2, +1 dodge.",               ItemType::SHIELD,      EquipSlot::OFF_HAND, 0, 11, 0, 2, 0, 1, 0, 30},
+    {"kite shield",   "AC +3.",                         ItemType::SHIELD,      EquipSlot::OFF_HAND, 1, 11, 0, 3, 0, 0, 0, 55},
 };
 
 static const ShopItemDef SHOP_CONSUMABLES[] = {
     {"healing potion", "Restores 15 HP.",               ItemType::POTION, EquipSlot::NONE, 1, 19, 0, 0, 0, 0, 15, 25},
     {"strong healing", "Restores 30 HP.",               ItemType::POTION, EquipSlot::NONE, 1, 19, 0, 0, 0, 0, 30, 50},
-    {"bread",          "Restores 5 HP. Stale.",         ItemType::FOOD,   EquipSlot::NONE, 1, 25, 0, 0, 0, 0,  5,  5},
+    {"bread",          "Restores 5 HP.",                ItemType::FOOD,   EquipSlot::NONE, 1, 25, 0, 0, 0, 0,  5,  5},
+    {"dried meat",     "Restores 8 HP.",                ItemType::FOOD,   EquipSlot::NONE, 1, 25, 0, 0, 0, 0,  8, 10},
+    {"herbal poultice","Restores 10 HP.",               ItemType::POTION, EquipSlot::NONE, 1, 19, 0, 0, 0, 0, 10, 15},
 };
 
 static constexpr int SHOP_WEAPON_COUNT = sizeof(SHOP_WEAPONS) / sizeof(SHOP_WEAPONS[0]);
@@ -64,6 +90,22 @@ static ShopItem make_shop_item(const ShopItemDef& def) {
     si.item.identified = true;
     si.sprite_x = def.sprite_x;
     si.sprite_y = def.sprite_y;
+    // Auto-assign weapon tags and properties from name
+    if (def.type == ItemType::WEAPON) {
+        std::string n = def.name;
+        if (n.find("dagger") != std::string::npos || n.find("stiletto") != std::string::npos)
+            si.item.tags |= TAG_DAGGER;
+        else if (n.find("sword") != std::string::npos || n.find("falchion") != std::string::npos)
+            si.item.tags |= TAG_SWORD;
+        else if (n.find("axe") != std::string::npos)
+            si.item.tags |= TAG_AXE;
+        else if (n.find("mace") != std::string::npos || n.find("hammer") != std::string::npos)
+            si.item.tags |= TAG_BLUNT;
+        else if (n.find("bow") != std::string::npos) {
+            si.item.tags |= TAG_BOW;
+            si.item.range = 6;
+        }
+    }
     return si;
 }
 
@@ -80,13 +122,19 @@ void ShopScreen::generate_stock(RNG& rng, int difficulty, GodId province_god) {
     // Province modifiers: more weapons/less on Iron Coast, more potions in Greenwood, etc.
     int extra_weapons = 0, extra_armor = 0, extra_potions = 0;
     bool stock_antidote = false;
-    if (province_god == GodId::OSSREN) { extra_weapons = 2; extra_armor = 1; } // Iron Coast — forge/craft
-    else if (province_god == GodId::KHAEL) { extra_potions = 2; stock_antidote = true; } // Greenwood — nature/herbs
-    else if (province_god == GodId::MORRETH) { extra_weapons = 1; extra_armor = 1; } // Heartlands — war
-    else if (province_god == GodId::SYTHARA) { stock_antidote = true; } // Dust Provinces — plague
+    bool stock_bows = false;     // Greenwood/Finesse provinces
+    bool stock_heavy = false;    // Iron Coast / Heartlands
+    if (province_god == GodId::OSSREN) { extra_weapons = 2; extra_armor = 1; stock_heavy = true; }
+    else if (province_god == GodId::KHAEL) { extra_potions = 2; stock_antidote = true; stock_bows = true; }
+    else if (province_god == GodId::MORRETH) { extra_weapons = 1; extra_armor = 1; stock_heavy = true; }
+    else if (province_god == GodId::SYTHARA) { stock_antidote = true; extra_potions = 1; }
+    else if (province_god == GodId::GATHRUUN) { extra_armor = 1; } // cold = more armor
 
-    // Bonus damage/armor on items from higher-difficulty shops
-    int stat_bonus = difficulty / 3; // +0 at diff 0-2, +1 at 3-5, +2 at 6-8
+    // Stat scaling: steeper curve so distant towns feel meaningfully stronger
+    // diff 0: +0, diff 1-2: +1, diff 3-4: +2, diff 5-6: +3, diff 7-8: +4
+    int stat_bonus = (difficulty + 1) / 2;
+    // Price multiplier from distance (further = more expensive but better gear)
+    int price_scale = 100 + difficulty * 12; // 100% at diff 0, 196% at diff 8
 
     // Pick 3-4 weapons (+ province bonus) — assign materials based on town difficulty
     int n_weapons = rng.range(3, 4) + extra_weapons;
@@ -94,26 +142,36 @@ void ShopScreen::generate_stock(RNG& rng, int difficulty, GodId province_god) {
         int idx = rng.range(min_weapon, SHOP_WEAPON_COUNT - 1);
         auto si = make_shop_item(SHOP_WEAPONS[idx]);
         si.item.damage_bonus += stat_bonus;
-        si.item.gold_value += stat_bonus * 15;
+        si.item.gold_value = si.item.gold_value * price_scale / 100;
 
         // Material based on difficulty
-        // 0-2: iron (default), 3-4: steel, 5-6: silver/obsidian, 7-8: silver/obsidian (mithril/adamantine stay dungeon-only)
-        if (difficulty >= 5) {
+        // 0-1: iron, 2-3: steel, 4-5: steel/silver, 6+: silver/obsidian
+        if (difficulty >= 6) {
             int mroll = rng.range(1, 100);
-            if (mroll <= 40) {
+            if (mroll <= 35) {
+                si.item.material = MaterialType::SILVER;
+                si.item.damage_bonus += material_damage_mod(MaterialType::SILVER);
+                si.item.gold_value += 40;
+            } else if (mroll <= 60) {
+                si.item.material = MaterialType::OBSIDIAN;
+                si.item.damage_bonus += material_damage_mod(MaterialType::OBSIDIAN);
+                si.item.gold_value += 50;
+            } else {
+                si.item.material = MaterialType::STEEL;
+                si.item.damage_bonus += material_damage_mod(MaterialType::STEEL);
+                si.item.gold_value += 20;
+            }
+        } else if (difficulty >= 4) {
+            if (rng.chance(50)) {
                 si.item.material = MaterialType::SILVER;
                 si.item.damage_bonus += material_damage_mod(MaterialType::SILVER);
                 si.item.gold_value += 30;
-            } else if (mroll <= 70) {
-                si.item.material = MaterialType::OBSIDIAN;
-                si.item.damage_bonus += material_damage_mod(MaterialType::OBSIDIAN);
-                si.item.gold_value += 40;
             } else {
                 si.item.material = MaterialType::STEEL;
                 si.item.damage_bonus += material_damage_mod(MaterialType::STEEL);
                 si.item.gold_value += 15;
             }
-        } else if (difficulty >= 3) {
+        } else if (difficulty >= 2) {
             si.item.material = MaterialType::STEEL;
             si.item.damage_bonus += material_damage_mod(MaterialType::STEEL);
             si.item.gold_value += 15;
@@ -122,6 +180,8 @@ void ShopScreen::generate_stock(RNG& rng, int difficulty, GodId province_god) {
         // Update display name with material
         if (si.item.material != MaterialType::NONE && si.item.material != MaterialType::IRON) {
             si.item.name = std::string(material_name(si.item.material)) + " " + si.item.name;
+        } else if (stat_bonus >= 3) {
+            si.item.name = "Superior " + si.item.name;
         } else if (stat_bonus >= 2) {
             si.item.name = "Fine " + si.item.name;
         } else if (stat_bonus >= 1) {
@@ -135,21 +195,67 @@ void ShopScreen::generate_stock(RNG& rng, int difficulty, GodId province_god) {
     for (int i = 0; i < n_armor; i++) {
         int idx = rng.range(min_armor, SHOP_ARMOR_COUNT - 1);
         auto si = make_shop_item(SHOP_ARMOR[idx]);
-        si.item.armor_bonus += stat_bonus;
-        si.item.gold_value += stat_bonus * 12;
-        if (stat_bonus >= 2) si.item.name = "Fine " + si.item.name;
-        else if (stat_bonus >= 1) si.item.name = "Sturdy " + si.item.name;
+        si.item.armor_bonus += stat_bonus / 2; // armor scales slower than damage
+        si.item.gold_value = si.item.gold_value * price_scale / 100;
+        // Material upgrade for armor
+        if (difficulty >= 6 && rng.chance(50)) {
+            si.item.material = MaterialType::STEEL;
+            si.item.armor_bonus += 1;
+            si.item.gold_value += 30;
+            si.item.name = "Steel " + si.item.name;
+        } else if (difficulty >= 4 && rng.chance(40)) {
+            si.item.material = MaterialType::STEEL;
+            si.item.armor_bonus += 1;
+            si.item.gold_value += 20;
+            si.item.name = "Steel " + si.item.name;
+        } else if (stat_bonus >= 3) {
+            si.item.name = "Reinforced " + si.item.name;
+        } else if (stat_bonus >= 2) {
+            si.item.name = "Sturdy " + si.item.name;
+        }
         stock_.push_back(std::move(si));
     }
-    // Pick 2-3 consumables (+ province bonus) — more potent at higher difficulty
+
+    // Province specialty: bows guaranteed in Greenwood
+    if (stock_bows) {
+        // Pick bow from weapon table (indices 10-11 are bows)
+        int bow_idx = rng.range(SHOP_WEAPON_COUNT - 2, SHOP_WEAPON_COUNT - 1);
+        auto si = make_shop_item(SHOP_WEAPONS[bow_idx]);
+        si.item.damage_bonus += stat_bonus;
+        si.item.gold_value += stat_bonus * 10;
+        stock_.push_back(std::move(si));
+    }
+
+    // Province specialty: extra heavy weapons/armor in forge towns
+    if (stock_heavy && difficulty >= 2) {
+        // Add a high-end weapon (warhammer, battle axe, falchion)
+        int heavy_choices[] = {4, 6, 8}; // falchion, battle axe, warhammer
+        int idx = heavy_choices[rng.range(0, 2)];
+        if (idx < SHOP_WEAPON_COUNT) {
+            auto si = make_shop_item(SHOP_WEAPONS[idx]);
+            si.item.damage_bonus += stat_bonus + 1;
+            si.item.gold_value += stat_bonus * 15 + 20;
+            if (difficulty >= 5) {
+                si.item.material = MaterialType::STEEL;
+                si.item.damage_bonus += material_damage_mod(MaterialType::STEEL);
+                si.item.name = "Forged " + si.item.name;
+            }
+            stock_.push_back(std::move(si));
+        }
+    }
+    // Pick 2-3 consumables (+ province bonus) — skip weak food at high difficulty
     int n_cons = rng.range(2, 3) + extra_potions;
     for (int i = 0; i < n_cons; i++) {
-        int idx = rng.range(0, SHOP_CONS_COUNT - 1);
+        // At higher difficulty, bias toward healing potions over food
+        int min_cons = (difficulty >= 4) ? 0 : 0; // always full range
+        int max_cons = SHOP_CONS_COUNT - 1;
+        if (difficulty >= 4) min_cons = 0; // keep strong healing accessible
+        int idx = rng.range(min_cons, max_cons);
         auto si = make_shop_item(SHOP_CONSUMABLES[idx]);
-        // Better healing potions in harder areas
+        // Potion healing scales with difficulty
         if (si.item.heal_amount > 0) {
-            si.item.heal_amount += difficulty * 2;
-            si.item.gold_value += difficulty * 5;
+            si.item.heal_amount += difficulty * 3;
+            si.item.gold_value = si.item.gold_value * price_scale / 100;
         }
         stock_.push_back(std::move(si));
     }
@@ -207,7 +313,7 @@ void ShopScreen::generate_stock(RNG& rng, int difficulty, GodId province_god) {
         int max_a = std::min(difficulty / 2 + 1, 4);
         int idx = rng.range(0, max_a);
         auto si = make_shop_item(SHOP_AMULETS[idx]);
-        si.item.gold_value += difficulty * 8;
+        si.item.gold_value = si.item.gold_value * price_scale / 100;
         si.item.identified = true;
         stock_.push_back(std::move(si));
     }
@@ -222,7 +328,7 @@ void ShopScreen::generate_stock(RNG& rng, int difficulty, GodId province_god) {
         int max_r = std::min(difficulty / 2, 3);
         int idx = rng.range(0, max_r);
         auto si = make_shop_item(SHOP_RINGS[idx]);
-        si.item.gold_value += difficulty * 6;
+        si.item.gold_value = si.item.gold_value * price_scale / 100;
         si.item.identified = true;
         stock_.push_back(std::move(si));
     }
@@ -237,7 +343,8 @@ void ShopScreen::generate_stock(RNG& rng, int difficulty, GodId province_god) {
         int max_s = std::min((difficulty - 2) / 2, 3);
         int idx = rng.range(0, max_s);
         auto si = make_shop_item(SHOP_STAVES[idx]);
-        si.item.gold_value += difficulty * 5;
+        si.item.damage_bonus += stat_bonus;
+        si.item.gold_value = si.item.gold_value * price_scale / 100;
         stock_.push_back(std::move(si));
     }
 }

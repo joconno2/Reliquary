@@ -229,6 +229,7 @@ struct TreeBonuses {
     int spell_dmg_pct = 0;    // percent
     int fire_resist = 0, poison_resist = 0, bleed_resist = 0;
     int spell_cost_reduce = 0;
+    int prayer_cost_reduce = 0;
     int on_kill_heal_pct = 0;
     int on_hit_bleed_chance = 0;
     int on_hit_poison_chance = 0;

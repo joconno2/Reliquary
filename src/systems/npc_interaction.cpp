@@ -49,9 +49,15 @@ bool interact(Context& ctx, Entity target, int target_x, int target_y) {
         if (ctx.dungeon_level > 0) return 0;
         if (!ctx.world.has<Position>(target)) return 0;
         auto& sp = ctx.world.get<Position>(target);
-        float d = std::sqrt(static_cast<float>((sp.x - 1000) * (sp.x - 1000) +
-                                                (sp.y - 750) * (sp.y - 750)));
-        return std::min(8, static_cast<int>(d / 80.0f));
+        // Distance from Thornwall (500, 375) = starter town center
+        float d = std::sqrt(static_cast<float>((sp.x - 500) * (sp.x - 500) +
+                                                (sp.y - 375) * (sp.y - 375)));
+        // Also factor in player level for late-game shop scaling
+        int dist_diff = std::min(6, static_cast<int>(d / 40.0f));
+        int level_diff = 0;
+        if (ctx.world.has<Stats>(ctx.player))
+            level_diff = ctx.world.get<Stats>(ctx.player).level / 2;
+        return std::min(8, std::max(dist_diff, level_diff));
     };
 
     // Province god for shop stock variety
@@ -95,7 +101,14 @@ bool interact(Context& ctx, Entity target, int target_x, int target_y) {
 
     // Innkeeper — rest and heal for gold
     if (npc.role == NPCRole::INNKEEPER && ctx.world.has<Stats>(ctx.player)) {
-        int cost = 10;
+        // Inn cost scales with distance from Thornwall
+        int base_cost = 10;
+        if (ctx.world.has<Position>(ctx.player)) {
+            auto& ip = ctx.world.get<Position>(ctx.player);
+            float id = std::sqrt(static_cast<float>((ip.x - 500) * (ip.x - 500) +
+                                                      (ip.y - 375) * (ip.y - 375)));
+            base_cost = 10 + static_cast<int>(id / 30.0f); // 10 at start, 15-25 at far towns
+        }
         auto& ps = ctx.world.get<Stats>(ctx.player);
         bool full_hp = (ps.hp >= ps.hp_max && ps.mp >= ps.mp_max);
         bool night = ctx.dungeon_level == 0 && (ctx.game_turn % 200) >= 140;
@@ -107,15 +120,15 @@ bool interact(Context& ctx, Entity target, int target_x, int target_y) {
             ctx.log.add(buf, {180, 170, 140, 255});
             return true;
         }
-        if (ctx.gold < cost) {
+        if (ctx.gold < base_cost) {
             char buf[128];
             snprintf(buf, sizeof(buf), "%s: \"A room costs %d gold. You don't have it.\"",
-                     npc.name.c_str(), cost);
+                     npc.name.c_str(), base_cost);
             ctx.log.add(buf, {180, 120, 120, 255});
             return true;
         }
         // Pay and rest
-        ctx.gold -= cost;
+        ctx.gold -= base_cost;
         int healed = ps.hp_max - ps.hp;
         int mp_restored = ps.mp_max - ps.mp;
         ps.hp = ps.hp_max;
@@ -123,6 +136,8 @@ bool interact(Context& ctx, Entity target, int target_x, int target_y) {
         // Clear status effects
         if (ctx.world.has<StatusEffects>(ctx.player))
             ctx.world.get<StatusEffects>(ctx.player).effects.clear();
+        // Well Rested: temporary overheal (+10 HP above max, decays naturally)
+        ps.hp = ps.hp_max + 10;
 
         // Advance to morning if night
         if (night) {
@@ -130,15 +145,15 @@ bool interact(Context& ctx, Entity target, int target_x, int target_y) {
             ctx.game_turn += turns_left;
         }
 
-        char buf[128];
+        char buf[160];
         if (night)
             snprintf(buf, sizeof(buf),
-                     "%s: \"Sleep well.\" (-%dg, +%d HP, +%d MP, rested until morning)",
-                     npc.name.c_str(), cost, healed, mp_restored);
+                     "%s: \"Sleep well.\" (-%dg, +%d HP, +%d MP, Well Rested, morning)",
+                     npc.name.c_str(), base_cost, healed, mp_restored);
         else
             snprintf(buf, sizeof(buf),
-                     "%s: \"Take your time.\" (-%dg, +%d HP, +%d MP)",
-                     npc.name.c_str(), cost, healed, mp_restored);
+                     "%s: \"Take your time.\" (-%dg, +%d HP, +%d MP, Well Rested)",
+                     npc.name.c_str(), base_cost, healed, mp_restored);
         ctx.log.add(buf, {140, 200, 160, 255});
         ctx.audio.play(SfxId::REST);
         ctx.meta.total_hp_healed += healed;

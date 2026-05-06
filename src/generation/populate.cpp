@@ -64,13 +64,60 @@ static constexpr int MONSTER_COUNT = sizeof(MONSTER_TABLE) / sizeof(MONSTER_TABL
 const MonsterDef* get_monster_table() { return MONSTER_TABLE; }
 int get_monster_count() { return MONSTER_COUNT; }
 
+// Indices into MONSTER_TABLE for thematic filtering
+// Undead: skeleton(8), zombie(9), wraith(14), ghoul(16), lich(17), death_knight(18)
+static const int UNDEAD_INDICES[] = {8, 9, 14, 16, 17, 18};
+static const int UNDEAD_COUNT = 6;
+// Fire/volcanic: manticore(19), basilisk(26), gargoyle(30), golem(25), imp(29)
+static const int FIRE_INDICES[] = {19, 25, 26, 29, 30};
+static const int FIRE_COUNT = 5;
+// Late/eldritch: wraith(14), lich(17), death_knight(18), naga(21), golem(25), gargoyle(30)
+static const int ELDRITCH_INDICES[] = {14, 17, 18, 21, 25, 30};
+static const int ELDRITCH_COUNT = 6;
+// Beasts/warrens: giant_rat(0), bat(1), slime(3), giant_spider(5), warg(10), myconid(23)
+static const int BEAST_INDICES[] = {0, 1, 3, 5, 10, 23};
+static const int BEAST_COUNT = 6;
+// Catacombs: skeleton(8), zombie(9), ghoul(16), wraith(14), goblin_shaman(13)
+static const int CATACOMB_INDICES[] = {8, 9, 13, 14, 16};
+static const int CATACOMB_COUNT = 5;
+// Stonekeep/fortress: orc(7), orc_warchief(11), goblin(4), goblin_archer(6), ogre(24), bandit(15)
+static const int FORTRESS_INDICES[] = {4, 6, 7, 11, 15, 24};
+static const int FORTRESS_COUNT = 6;
+// Sunken/swamp: naga(21), lizardfolk(31), slime(3), myconid(23), giant_spider(5)
+static const int SWAMP_INDICES[] = {3, 5, 21, 23, 31};
+static const int SWAMP_COUNT = 5;
+// Deep halls: troll(12), minotaur(20), ogre(24), golem(25), yeti(27)
+static const int DEEP_INDICES[] = {12, 20, 24, 25, 27};
+static const int DEEP_COUNT = 5;
+
 void spawn_monsters(World& world, const TileMap& map,
                      const std::vector<Room>& rooms, RNG& rng,
-                     int dungeon_level) {
+                     int dungeon_level,
+                     const std::string& zone,
+                     int floor_in_dungeon) {
     // Monster pool range scales with dungeon depth
     // Depth 1: indices 0-7 (rats, bats, kobolds, slimes, goblins, spiders)
     // Monster pool unlock: early floors safe, full table at high effective levels
     int max_idx = std::min(MONSTER_COUNT - 1, 4 + dungeon_level * 4);
+
+    // Zone-themed monster selection helper
+    // Returns -1 if no themed pick (use general pool)
+    auto pick_themed = [&](const std::string& z, int floor) -> int {
+        if (z == "sepulchre") {
+            if (floor <= 3) return UNDEAD_INDICES[rng.range(0, UNDEAD_COUNT - 1)];
+            if (floor <= 6) return FIRE_INDICES[rng.range(0, FIRE_COUNT - 1)];
+            return ELDRITCH_INDICES[rng.range(0, ELDRITCH_COUNT - 1)];
+        }
+        if (z == "warrens") return BEAST_INDICES[rng.range(0, BEAST_COUNT - 1)];
+        if (z == "catacombs") return CATACOMB_INDICES[rng.range(0, CATACOMB_COUNT - 1)];
+        if (z == "stonekeep") return FORTRESS_INDICES[rng.range(0, FORTRESS_COUNT - 1)];
+        if (z == "molten") return FIRE_INDICES[rng.range(0, FIRE_COUNT - 1)];
+        if (z == "sunken") return SWAMP_INDICES[rng.range(0, SWAMP_COUNT - 1)];
+        if (z == "deep_halls") return DEEP_INDICES[rng.range(0, DEEP_COUNT - 1)];
+        return -1;
+    };
+
+    bool has_zone_theme = !zone.empty() && pick_themed(zone, floor_in_dungeon) >= 0;
 
     int dragons_this_floor = 0;
 
@@ -84,8 +131,14 @@ void spawn_monsters(World& world, const TileMap& map,
 
             if (!map.is_walkable(x, y)) continue;
 
-            // Single roll — depth gating handles difficulty curve
-            int idx = rng.range(0, max_idx);
+            int idx;
+            if (has_zone_theme && rng.chance(65)) {
+                // 65% themed, 35% general pool for variety
+                idx = pick_themed(zone, floor_in_dungeon);
+            } else {
+                // General pool roll
+                idx = rng.range(0, max_idx);
+            }
 
             // Dragon: max 1 per floor, only depth 3+
             bool is_dragon = (std::string(MONSTER_TABLE[idx].name) == "dragon");
@@ -1413,6 +1466,45 @@ void spawn_doodads(World& world, TileMap& map,
             world.add<Position>(e, {x, y});
             world.add<Renderable>(e, {sheet, sx, sy, {255,255,255,255}, 0});
         };
+
+        // === FURNITURE CLUSTERS: grouped doodads that look intentional ===
+        // Rooms large enough (>= 7x7) get a furniture cluster 40% of the time
+        if (room.w >= 7 && room.h >= 7 && rng.chance(40)) {
+            // Pick cluster center (avoiding edges)
+            int cx = rng.range(room.x + 2, room.x + room.w - 3);
+            int cy = rng.range(room.y + 2, room.y + room.h - 3);
+            auto place_at = [&](int ox, int oy, int sx, int sy) {
+                int px = cx + ox, py = cy + oy;
+                if (map.is_walkable(px, py)) {
+                    Entity e = world.create();
+                    world.add<Position>(e, {px, py});
+                    world.add<Renderable>(e, {SHEET_TILES, sx, sy, {255,255,255,255}, 0});
+                }
+            };
+            int cluster_type = rng.range(0, 5);
+            switch (cluster_type) {
+                case 0: // Storage: barrels + sack
+                    place_at(0, 0, 4, 17); place_at(1, 0, 4, 17);
+                    place_at(0, 1, 5, 17); break;
+                case 1: // Burial: coffin + bones + blood
+                    place_at(0, 0, rng.range(0, 2), 23);
+                    place_at(1, 0, rng.range(0, 1), 21);
+                    place_at(0, 1, rng.range(0, 1), 22); break;
+                case 2: // Camp: log pile + barrel + mushroom
+                    place_at(0, 0, 6, 17); place_at(1, 0, 4, 17);
+                    place_at(-1, 0, 0, 20); break;
+                case 3: // Rubble: rocks + bones
+                    place_at(0, 0, 0, 18); place_at(1, 0, 1, 18);
+                    place_at(0, 1, rng.range(0, 1), 21); break;
+                case 4: // Shrine: sarcophagus + candles (bones flanking)
+                    place_at(0, 0, 3, 23);
+                    place_at(-1, 0, rng.range(0, 1), 21);
+                    place_at(1, 0, rng.range(0, 1), 21); break;
+                case 5: // Supplies: ore + barrel + log
+                    place_at(0, 0, 5, 17); place_at(1, 0, 5, 17);
+                    place_at(0, 1, 6, 17); place_at(1, 1, 4, 17); break;
+            }
+        }
 
         // === GUARANTEED MINIMUM: every room gets 1-2 doodads ===
         int min_doodads = 1 + rng.range(0, 1);

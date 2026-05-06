@@ -140,8 +140,8 @@ static const PassiveNode TREE[] = {
  {24, 33, NC, NC, NC, NC},
  static_cast<int>(SkillId::BLADES), 25},
 
-{30, NT, Sector::MIGHT, "Iron Skin", "+2 armor, +1 CON",
- 0.8f, 5.5f, {EFF(BONUS_ARMOR, 2), EFF(BONUS_CON, 1), NOEFF, NOEFF},
+{30, NT, Sector::MIGHT, "Iron Skin", "+2 armor, +1 CON, +15% counter dmg",
+ 0.8f, 5.5f, {EFF(BONUS_ARMOR, 2), EFF(BONUS_CON, 1), EFF(COUNTER_DAMAGE_BONUS, 15), NOEFF},
  {25, 26, 33, NC, NC, NC}},
 
 // Pre-capstone
@@ -149,8 +149,8 @@ static const PassiveNode TREE[] = {
  0.0f, 6.0f, {EFF(BONUS_MELEE_DAMAGE_PCT, 5), NOEFF, NOEFF, NOEFF},
  {28, 33, NC, NC, NC, NC}},
 
-{33, NT, Sector::MIGHT, "Berserker", "+15% melee damage when below 30% HP",
- 0.0f, 6.8f, {EFF(LOW_HP_DAMAGE_BONUS, 15), NOEFF, NOEFF, NOEFF},
+{33, NT, Sector::MIGHT, "Berserker", "+15% melee dmg when low HP, +1 fury chain",
+ 0.0f, 6.8f, {EFF(LOW_HP_DAMAGE_BONUS, 15), EFF(FURY_CHAIN_BONUS, 1), NOEFF, NOEFF},
  {29, 30, 32, 34, NC, NC}},
 
 // Capstone
@@ -245,12 +245,12 @@ static const PassiveNode TREE[] = {
  -1.2f, -4.2f, {EFF(BONUS_INT, 1), NOEFF, NOEFF, NOEFF},
  {81, 87, NC, NC, NC, NC}},
 
-{84, NT, Sector::ARCANE, "Mana Siphon", "Killing blows restore 15% max MP",
- -0.4f, -4.5f, {EFF(MANA_SIPHON, 15), EFF(BONUS_MP, 2), NOEFF, NOEFF},
+{84, NT, Sector::ARCANE, "Mana Siphon", "Kills restore 15% MP, +10% siphon",
+ -0.4f, -4.5f, {EFF(MANA_SIPHON, 15), EFF(BONUS_MP, 2), EFF(SIPHON_BONUS, 10), NOEFF},
  {81, 88, NC, NC, NC, NC}},
 
-{85, NT, Sector::ARCANE, "Spell Pierce", "Spells ignore 2 armor",
- 0.4f, -4.5f, {EFF(SPELL_PIERCE, 2), EFF(BONUS_SPELL_DAMAGE_PCT, 5), NOEFF, NOEFF},
+{85, NT, Sector::ARCANE, "Spell Pierce", "Spells ignore 2 armor, +5 explode dmg",
+ 0.4f, -4.5f, {EFF(SPELL_PIERCE, 2), EFF(BONUS_SPELL_DAMAGE_PCT, 5), EFF(EXPLODE_DAMAGE_BONUS, 5), NOEFF},
  {82, 88, NC, NC, NC, NC},
  static_cast<int>(SkillId::CONJURATION), 25},
 
@@ -381,8 +381,8 @@ static const PassiveNode TREE[] = {
  4.2f, -1.0f, {EFF(BONUS_CON, 1), NOEFF, NOEFF, NOEFF},
  {141, 147, NC, NC, NC, NC}},
 
-{144, NT, Sector::FORTITUDE, "Thick Skin", "+3 armor, +5 HP",
- 4.5f, -0.2f, {EFF(BONUS_ARMOR, 3), EFF(BONUS_HP, 5), NOEFF, NOEFF},
+{144, NT, Sector::FORTITUDE, "Thick Skin", "+3 armor, +5 HP, +5 breath dmg",
+ 4.5f, -0.2f, {EFF(BONUS_ARMOR, 3), EFF(BONUS_HP, 5), EFF(BREATH_DAMAGE_BONUS, 5), NOEFF},
  {141, 148, NC, NC, NC, NC}},
 
 {145, NT, Sector::FORTITUDE, "Resist All", "+10% fire, poison, bleed resist",
@@ -462,8 +462,8 @@ static const PassiveNode TREE[] = {
  3.0f, 4.0f, {EFF(BONUS_HP, 2), NOEFF, NOEFF, NOEFF},
  {173, 174, 177, NC, NC, NC}},
 
-{177, NT, Sector::NATURE, "Spirit Bond", "On kill: heal 8% max HP",
- 3.0f, 4.8f, {EFF(ON_KILL_HEAL_PCT, 8), NOEFF, NOEFF, NOEFF},
+{177, NT, Sector::NATURE, "Spirit Bond", "Kill heals 8% HP, +3 shapeshift dmg",
+ 3.0f, 4.8f, {EFF(ON_KILL_HEAL_PCT, 8), EFF(SHAPESHIFT_DAMAGE_BONUS, 3), NOEFF, NOEFF},
  {176, 178, NC, NC, NC, NC}},
 
 {178, CAP, Sector::NATURE, "Aspect of the Beast",
@@ -503,8 +503,8 @@ static const PassiveNode TREE[] = {
  -3.2f, -2.0f, {EFF(BONUS_DODGE_CHANCE, 2), NOEFF, NOEFF, NOEFF},
  {200, 205, NC, NC, NC, NC}},
 
-{203, NT, Sector::SHADOW, "Patient Hunter", "+50% damage to unaware enemies",
- -3.0f, -3.5f, {EFF(PATIENT_HUNTER, 50), NOEFF, NOEFF, NOEFF},
+{203, NT, Sector::SHADOW, "Patient Hunter", "+50% dmg to unaware, +20% opener dmg",
+ -3.0f, -3.5f, {EFF(PATIENT_HUNTER, 50), EFF(STEALTH_OPENER_BONUS, 20), NOEFF, NOEFF},
  {201, 206, NC, NC, NC, NC},
  static_cast<int>(SkillId::STEALTH), 25},
 
@@ -562,8 +562,8 @@ static const PassiveNode TREE[] = {
  -3.0f, 2.0f, {EFF(BONUS_DAMAGE, 1), NOEFF, NOEFF, NOEFF},
  {230, 235, NC, NC, NC, NC}},
 
-{233, NT, Sector::VENOM, "Envenom", "15% chance to poison on melee hit",
- -3.2f, 3.2f, {EFF(ON_HIT_POISON_CHANCE, 15), NOEFF, NOEFF, NOEFF},
+{233, NT, Sector::VENOM, "Envenom", "15% poison on hit, +1 status duration",
+ -3.2f, 3.2f, {EFF(ON_HIT_POISON_CHANCE, 15), EFF(STATUS_DURATION_BONUS, 1), NOEFF, NOEFF},
  {231, 236, NC, NC, NC, NC}},
 
 {234, NT, Sector::VENOM, "Hemorrhage", "10% chance to bleed on melee hit",
@@ -682,6 +682,57 @@ static const PassiveNode TREE[] = {
  "+50% damage at range 1. -50% damage at range 5+.",
  -3.5f, 0.0f, {EFF(KS_POINT_BLANK, 1), NOEFF, NOEFF, NOEFF},
  {205, 232, NC, NC, NC, NC}},
+
+// Between Faith and Arcane: Zealot
+{266, KS, Sector::FAITH, "Zealot",
+ "Prayer power doubled. Favor decays twice as fast.",
+ 1.5f, -2.5f, {EFF(KS_ZEALOT, 1), NOEFF, NOEFF, NOEFF},
+ {113, 270, NC, NC, NC, NC}},
+
+// Between Nature and Fortitude: Avatar of the Wild
+{267, KS, Sector::NATURE, "Avatar of the Wild",
+ "Summons inherit your stats. Cannot wear armor.",
+ 3.5f, 1.5f, {EFF(KS_AVATAR_OF_WILD, 1), NOEFF, NOEFF, NOEFF},
+ {146, 181, NC, NC, NC, NC}},
+
+// ── CROSS-SECTOR HYBRID NOTABLES ─────────────────────────────────────
+// Reward multi-sector pathing with unique combined effects.
+
+// Arcane + Venom: Toxic Sorcery (poison + spell synergy)
+{280, NT, Sector::ARCANE, "Toxic Sorcery",
+ "+10% spell dmg, +10% on-hit poison chance",
+ -2.0f, -1.5f, {EFF(BONUS_SPELL_DAMAGE_PCT, 10), EFF(ON_HIT_POISON_CHANCE, 10), NOEFF, NOEFF},
+ {87, 230, NC, NC, NC, NC}},
+
+// Might + Finesse: Controlled Fury
+{281, NT, Sector::MIGHT, "Controlled Fury",
+ "+5% melee dmg, +3% crit chance, +5 speed",
+ -0.5f, 3.0f, {EFF(BONUS_MELEE_DAMAGE_PCT, 5), EFF(BONUS_CRIT_CHANCE, 3), EFF(BONUS_SPEED, 5), NOEFF},
+ {21, 57, NC, NC, NC, NC}},
+
+// Faith + Shadow: Dark Devotion
+{282, NT, Sector::FAITH, "Dark Devotion",
+ "-8% prayer cost, +3% dodge, +1 spell pierce",
+ 2.0f, -2.5f, {EFF(PRAYER_COST_REDUCE_PCT, 8), EFF(BONUS_DODGE_CHANCE, 3), EFF(SPELL_PIERCE, 1), NOEFF},
+ {113, 200, NC, NC, NC, NC}},
+
+// Fortitude + Might: War Machine
+{283, NT, Sector::FORTITUDE, "War Machine",
+ "+2 armor, +2 damage, +3 HP",
+ 2.5f, 1.5f, {EFF(BONUS_ARMOR, 2), EFF(BONUS_DAMAGE, 2), EFF(BONUS_HP, 3), NOEFF},
+ {31, 146, NC, NC, NC, NC}},
+
+// Nature + Venom: Festering Growth
+{284, NT, Sector::NATURE, "Festering Growth",
+ "Kill heals 5% HP, +10% on-hit poison, +1 status duration",
+ 2.0f, 2.5f, {EFF(ON_KILL_HEAL_PCT, 5), EFF(ON_HIT_POISON_CHANCE, 10), EFF(STATUS_DURATION_BONUS, 1), NOEFF},
+ {179, 231, NC, NC, NC, NC}},
+
+// Finesse + Fortitude: Armored Agility
+{285, NT, Sector::FINESSE, "Armored Agility",
+ "+3% dodge, +2 armor, +5 HP",
+ 3.0f, 0.0f, {EFF(BONUS_DODGE_CHANCE, 3), EFF(BONUS_ARMOR, 2), EFF(BONUS_HP, 5), NOEFF},
+ {56, 140, NC, NC, NC, NC}},
 
 };
 
@@ -810,7 +861,7 @@ TreeBonuses compute_bonuses(const PassiveTreeState& state) {
                 case EffectType::LOW_HP_DAMAGE_BONUS: b.low_hp_dmg_bonus += eff.value; break;
                 case EffectType::DAMAGE_VS_LOW_HP: b.dmg_vs_low_hp += eff.value; break;
                 case EffectType::SPELL_COST_REDUCE_PCT: b.spell_cost_reduce += eff.value; break;
-                case EffectType::PRAYER_COST_REDUCE_PCT: break; // TODO
+                case EffectType::PRAYER_COST_REDUCE_PCT: b.prayer_cost_reduce += eff.value; break;
                 case EffectType::REST_EFFICIENCY: b.rest_efficiency += eff.value; break;
                 case EffectType::POTION_EFFECTIVENESS: b.potion_effectiveness += eff.value; break;
                 case EffectType::XP_GAIN_BONUS: b.xp_gain_bonus += eff.value; break;

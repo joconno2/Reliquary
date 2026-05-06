@@ -1965,21 +1965,26 @@ void try_spawn_overworld_enemy(World& world, TileMap& map, RNG& rng,
         }
         auto& def = OW_TABLE[table[rng.range(0, table_size - 1)]];
 
+        // Distance scaling: enemies get tougher further from Thornwall
+        float dist_from_start = std::sqrt(
+            static_cast<float>((sx - 500) * (sx - 500) + (sy - 375) * (sy - 375)));
+        float scale = 1.0f + std::min(dist_from_start / 150.0f, 2.0f); // 1.0x near start, up to 3.0x at edges
+
         Entity e = world.create();
         world.add<Position>(e, {sx, sy});
         world.add<Renderable>(e, {def.sheet, def.sx, def.sy,
                                     {255, 255, 255, 255}, 5});
         Stats stats;
         stats.name = def.name;
-        stats.hp = def.hp;
-        stats.hp_max = def.hp;
-        stats.set_attr(Attr::STR, def.str);
-        stats.set_attr(Attr::DEX, def.dex);
-        stats.set_attr(Attr::CON, def.con);
-        stats.base_damage = def.dmg;
-        stats.natural_armor = def.armor;
+        stats.hp = static_cast<int>(def.hp * scale);
+        stats.hp_max = stats.hp;
+        stats.set_attr(Attr::STR, static_cast<int>(def.str * (1.0f + (scale - 1.0f) * 0.3f)));
+        stats.set_attr(Attr::DEX, static_cast<int>(def.dex * (1.0f + (scale - 1.0f) * 0.2f)));
+        stats.set_attr(Attr::CON, static_cast<int>(def.con * (1.0f + (scale - 1.0f) * 0.3f)));
+        stats.base_damage = static_cast<int>(def.dmg * scale);
+        stats.natural_armor = def.armor + static_cast<int>((scale - 1.0f) * 1.5f);
         stats.base_speed = def.speed;
-        stats.xp_value = def.xp;
+        stats.xp_value = static_cast<int>(def.xp * scale);
         world.add<Stats>(e, std::move(stats));
         { AI ow_ai; ow_ai.flee_threshold = def.flee; world.add<AI>(e, ow_ai); }
         world.add<Energy>(e, {0, def.speed});

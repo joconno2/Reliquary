@@ -232,111 +232,276 @@ towns = [
     (CX,        CY + 175,"Dustfall",      False, True, 5),   # Capital
 ]
 
+def place_building(ax, ay, bw, bh, wall_ch, door_south=True, npc=None):
+    """Place a single building with walls, floor, door, optional NPC."""
+    if not (2 < ax < W - 2 and 2 < ay < H - 2): return
+    fill_rect(ax, ay, ax + bw, ay + bh, wall_ch)
+    fill_rect(ax + 1, ay + 1, ax + bw - 1, ay + bh - 1, ':')
+    if door_south:
+        set_tile(ax + bw // 2, ay + bh - 1, '+')
+    else:
+        set_tile(ax + bw // 2, ay, '+')
+    if npc:
+        set_tile(ax + bw // 2, ay + bh // 2, npc)
+
 def place_town(tx, ty, is_start, town_rng, is_city=False, province_idx=2):
-    """Place a town or city with structured grid layout."""
-    lat = ty / H
-    # Regional wall types based on province god affiliation:
-    #   Pale Reach (0, Soleth) → stone brick '#' (clean masonry, purification)
-    #   Frozen Marches (1, Gathruun) → large stone '#' (earth/stone god, fortress-like)
-    #   Heartlands (2, Morreth) → stone brick '#' (war/iron, strong construction)
-    #   Greenwood (3, Khael) → grass walls 'g' (nature god, organic)
-    #   Iron Coast (4, Ossren) → stone brick '#' (forge/craft, well-built)
-    #   Dust Provinces (5, Sythara) → sandstone walls 'n' (plague/decay, desert)
-    # Each province has DISTINCT visual identity
+    """Place a town with province-specific layout and visual identity."""
     PROVINCE_WALLS = {
-        0: '#',  # Pale Reach (Soleth) — clean white stone, braziers
-        1: 'L',  # Frozen Marches (Gathruun) — large rough stone blocks
-        2: '#',  # Heartlands (Morreth) — iron-reinforced stone brick
-        3: 'w',  # Greenwood (Khael) — wood walls, organic
-        4: 'L',  # Iron Coast (Ossren) — heavy hewn stone, forge-built
-        5: 'n',  # Dust Provinces (Sythara) — crumbling sandstone
+        0: '#',  # Pale Reach (Soleth) — clean white stone
+        1: 'L',  # Frozen Marches (Gathruun) — rough stone blocks
+        2: '#',  # Heartlands (Morreth) — iron-reinforced brick
+        3: 'w',  # Greenwood (Khael) — wood walls
+        4: 'L',  # Iron Coast (Ossren) — hewn stone
+        5: 'n',  # Dust Provinces (Sythara) — sandstone
     }
     PROVINCE_GROUND = {
-        0: ':',  # Pale Reach — clean stone floor
-        1: ':',  # Frozen Marches — stone (snow outside)
+        0: ':',  # Pale Reach — clean stone
+        1: ':',  # Frozen Marches — stone
         2: ':',  # Heartlands — cobblestone
-        3: '.',  # Greenwood — dirt paths (nature)
-        4: ':',  # Iron Coast — stone floor
-        5: ',',  # Dust Provinces — sand/dirt
+        3: '.',  # Greenwood — dirt
+        4: ':',  # Iron Coast — stone
+        5: ',',  # Dust Provinces — sand
     }
     wall_ch = PROVINCE_WALLS.get(province_idx, '#')
-    floor_ch = ':'  # stone floor inside buildings always
+    ground_ch = PROVINCE_GROUND.get(province_idx, ':')
 
-    if is_city:
-        # Cities: large walled compound with stone ground
-        half_w, half_h = 24, 18
-        building_slots = [
-            (-20, -14, 7, 5), (-11, -14, 7, 5), (-2, -14, 7, 5), (7, -14, 7, 5),
-            (-20, -7, 7, 5), (13, -7, 7, 5),
-            (-20, 4, 7, 5), (-11, 4, 7, 5), (4, 4, 7, 5), (13, 4, 7, 5),
+    # Province-specific town layouts
+    if province_idx == 2:  # Heartlands (Morreth) — military/organized
+        half_w, half_h = (24, 18) if is_city else (16, 12)
+        # Clear ground
+        for dy in range(-half_h - 2, half_h + 3):
+            for dx in range(-half_w - 2, half_w + 3):
+                set_tile(tx + dx, ty + dy, ground_ch)
+        # Outer wall for cities
+        if is_city:
+            for dx in range(-half_w - 1, half_w + 2):
+                set_tile(tx + dx, ty - half_h - 1, wall_ch)
+                set_tile(tx + dx, ty + half_h + 1, wall_ch)
+            for dy in range(-half_h - 1, half_h + 2):
+                set_tile(tx - half_w - 1, ty + dy, wall_ch)
+                set_tile(tx + half_w + 1, ty + dy, wall_ch)
+            set_tile(tx, ty - half_h - 1, '+')
+            set_tile(tx, ty + half_h + 1, '+')
+            set_tile(tx - half_w - 1, ty, '+')
+            set_tile(tx + half_w + 1, ty, '+')
+        # Central parade ground (open square)
+        for dy in range(-3, 4):
+            for dx in range(-4, 5):
+                set_tile(tx + dx, ty + dy, ',')
+        # Main road through center
+        for dx in range(-half_w - 4, half_w + 5):
+            set_tile(tx + dx, ty, ',')
+            set_tile(tx + dx, ty + 1, ',')
+        # Buildings arranged around parade ground
+        npcs = ['G', 'S', 'B', 'P', 'F', 'G', 'S', 'F'] if is_city else ['G', 'S', 'B', 'P', 'F']
+        town_rng.shuffle(npcs)
+        # Barracks-style: long buildings north and south, smaller ones east/west
+        slots = [
+            (-half_w + 2, -half_h + 2, 9, 5, False),     # north long barracks
+            (-half_w + 13, -half_h + 2, 7, 5, False),    # north right
+            (half_w - 9, -half_h + 2, 7, 5, False),      # north far right
+            (-half_w + 2, half_h - 6, 8, 5, True),       # south left
+            (half_w - 10, half_h - 6, 8, 5, True),       # south right
+            (-half_w + 2, -2, 6, 5, True),                # west mid
+            (half_w - 7, -2, 6, 5, True),                 # east mid
+        ] if is_city else [
+            (-13, -9, 7, 5, False), (-4, -9, 7, 5, False),
+            (-13, 4, 7, 5, True), (5, 4, 7, 5, True), (5, -9, 6, 5, False),
         ]
-    else:
-        # Regular towns: smaller
-        size = town_rng.choice(['small', 'medium'])
-        if size == 'small':
-            half_w, half_h = 12, 10
-            building_slots = [(-9, -7, 6, 5), (3, -7, 6, 5), (-9, 3, 6, 5), (3, 3, 6, 5)]
-        else:
-            half_w, half_h = 16, 12
-            building_slots = [(-13, -9, 7, 5), (-4, -9, 7, 5), (5, -9, 7, 5),
-                              (-13, 4, 7, 5), (5, 4, 7, 5)]
+        for i, slot in enumerate(slots):
+            bx, by, bw, bh, ds = slot
+            npc = npcs[i] if i < len(npcs) else None
+            place_building(tx + bx, ty + by, bw, bh, wall_ch, ds, npc)
 
-    # Clear ground — province-specific
-    ground_ch = PROVINCE_GROUND.get(province_idx, ':') if not is_city else ':'
-    for dy in range(-half_h - 2, half_h + 3):
-        for dx in range(-half_w - 2, half_w + 3):
-            set_tile(tx + dx, ty + dy, ground_ch)
+    elif province_idx == 0:  # Pale Reach (Soleth) — temple/symmetrical
+        half_w, half_h = (22, 16) if is_city else (14, 11)
+        for dy in range(-half_h - 2, half_h + 3):
+            for dx in range(-half_w - 2, half_w + 3):
+                set_tile(tx + dx, ty + dy, ground_ch)
+        # Central temple (large, double-width building)
+        temple_w, temple_h = 11, 7
+        place_building(tx - temple_w // 2, ty - temple_h // 2, temple_w, temple_h, wall_ch, True, 'P')
+        # Symmetrical approach road
+        for dy in range(temple_h // 2, half_h + 4):
+            set_tile(tx, ty + dy, ',')
+            set_tile(tx + 1, ty + dy, ',')
+        for dy in range(-half_h - 4, -temple_h // 2):
+            set_tile(tx, ty + dy, ',')
+            set_tile(tx + 1, ty + dy, ',')
+        for dx in range(-half_w - 4, half_w + 5):
+            set_tile(tx + dx, ty + half_h - 2, ',')
+        # Flanking buildings (mirror left/right)
+        npcs = ['S', 'G', 'B', 'F', 'S', 'G', 'F'] if is_city else ['S', 'G', 'B', 'F']
+        town_rng.shuffle(npcs)
+        left_slots = [(-half_w + 2, -8, 6, 5), (-half_w + 2, 4, 6, 5)]
+        right_slots = [(half_w - 7, -8, 6, 5), (half_w - 7, 4, 6, 5)]
+        if is_city:
+            left_slots += [(-half_w + 10, -half_h + 2, 6, 5)]
+            right_slots += [(half_w - 15, -half_h + 2, 6, 5)]
+            left_slots += [(-half_w + 2, half_h - 6, 7, 5)]
+        all_slots = []
+        for s in left_slots: all_slots.append(s + (True,))
+        for s in right_slots: all_slots.append(s + (True,))
+        for i, (bx, by, bw, bh, ds) in enumerate(all_slots):
+            npc = npcs[i] if i < len(npcs) else None
+            place_building(tx + bx, ty + by, bw, bh, wall_ch, by >= 0, npc)
 
-    # City outer wall
-    if is_city:
+    elif province_idx == 1:  # Frozen Marches (Gathruun) — compact fortress
+        half_w, half_h = (18, 14) if is_city else (12, 10)
+        for dy in range(-half_h - 2, half_h + 3):
+            for dx in range(-half_w - 2, half_w + 3):
+                set_tile(tx + dx, ty + dy, ground_ch)
+        # Thick double outer wall
         for dx in range(-half_w - 1, half_w + 2):
-            set_tile(tx + dx, ty - half_h - 1, '#')
-            set_tile(tx + dx, ty + half_h + 1, '#')
+            set_tile(tx + dx, ty - half_h - 1, wall_ch)
+            set_tile(tx + dx, ty - half_h, wall_ch)
+            set_tile(tx + dx, ty + half_h, wall_ch)
+            set_tile(tx + dx, ty + half_h + 1, wall_ch)
         for dy in range(-half_h - 1, half_h + 2):
-            set_tile(tx - half_w - 1, ty + dy, '#')
-            set_tile(tx + half_w + 1, ty + dy, '#')
-        # Gates: north, south, east, west
-        set_tile(tx, ty - half_h - 1, '+')
+            set_tile(tx - half_w - 1, ty + dy, wall_ch)
+            set_tile(tx - half_w, ty + dy, wall_ch)
+            set_tile(tx + half_w, ty + dy, wall_ch)
+            set_tile(tx + half_w + 1, ty + dy, wall_ch)
+        set_tile(tx, ty + half_h, '+')
         set_tile(tx, ty + half_h + 1, '+')
-        set_tile(tx - half_w - 1, ty, '+')
-        set_tile(tx + half_w + 1, ty, '+')
+        # Single narrow road
+        for dy in range(-half_h + 2, half_h + 4):
+            set_tile(tx, ty + dy, ',')
+        # Tight clustered buildings (small, packed)
+        npcs = ['S', 'B', 'P', 'G', 'F'] if not is_city else ['S', 'B', 'P', 'G', 'F', 'S', 'G']
+        town_rng.shuffle(npcs)
+        slots = [
+            (-half_w + 3, -half_h + 3, 6, 4, True),
+            (half_w - 8, -half_h + 3, 6, 4, True),
+            (-half_w + 3, 0, 6, 4, True),
+            (half_w - 8, 0, 6, 4, True),
+            (-half_w + 3, half_h - 6, 6, 4, False),
+        ]
+        if is_city:
+            slots += [(half_w - 8, half_h - 6, 6, 4, False), (2, -half_h + 3, 6, 4, True)]
+        for i, (bx, by, bw, bh, ds) in enumerate(slots):
+            npc = npcs[i] if i < len(npcs) else None
+            place_building(tx + bx, ty + by, bw, bh, wall_ch, ds, npc)
 
-    # Main road — east-west through center, 2 tiles wide
-    road_extent = half_w + (6 if is_city else 4)
-    for dx in range(-road_extent, road_extent + 1):
-        set_tile(tx + dx, ty, ',')
-        set_tile(tx + dx, ty + 1, ',')
+    elif province_idx == 3:  # Greenwood (Khael) — organic, irregular
+        half_w, half_h = (20, 16) if is_city else (14, 11)
+        for dy in range(-half_h - 2, half_h + 3):
+            for dx in range(-half_w - 2, half_w + 3):
+                set_tile(tx + dx, ty + dy, '.')  # dirt everywhere
+        # Winding path (not straight road)
+        px = -half_w - 3
+        py = 0
+        for step in range(2 * half_w + 6):
+            set_tile(tx + px, ty + py, ',')
+            set_tile(tx + px, ty + py + 1, ',')
+            px += 1
+            py += town_rng.choice([-1, 0, 0, 0, 1])
+            py = max(-3, min(3, py))
+        # Central clearing (circular-ish)
+        for dy in range(-4, 5):
+            for dx in range(-5, 6):
+                if dx*dx + dy*dy <= 20:
+                    set_tile(tx + dx, ty + dy, '.')
+        # Scattered buildings (irregular placement, different sizes)
+        npcs = ['S', 'B', 'P', 'G', 'F'] if not is_city else ['S', 'B', 'P', 'G', 'F', 'S', 'F', 'G']
+        town_rng.shuffle(npcs)
+        placed = 0
+        for _ in range(40):
+            bx = town_rng.randint(-half_w + 2, half_w - 8)
+            by = town_rng.randint(-half_h + 2, half_h - 7)
+            bw = town_rng.choice([5, 6, 7])
+            bh = town_rng.choice([4, 5])
+            # Don't overlap clearing
+            if abs(bx) < 7 and abs(by) < 6: continue
+            npc = npcs[placed] if placed < len(npcs) else None
+            place_building(tx + bx, ty + by, bw, bh, wall_ch, by >= 0, npc)
+            placed += 1
+            if placed >= len(npcs) + 2: break
 
-    # Cross road — north-south
-    cross_x = town_rng.choice([-2, 0, 2])
-    road_extent_v = half_h + (6 if is_city else 4)
-    for dy in range(-road_extent_v, road_extent_v + 1):
-        set_tile(tx + cross_x, ty + dy, ',')
-        set_tile(tx + cross_x + 1, ty + dy, ',')
+    elif province_idx == 4:  # Iron Coast (Ossren) — industrial
+        half_w, half_h = (22, 16) if is_city else (15, 11)
+        for dy in range(-half_h - 2, half_h + 3):
+            for dx in range(-half_w - 2, half_w + 3):
+                set_tile(tx + dx, ty + dy, ground_ch)
+        # Wide main road
+        for dx in range(-half_w - 4, half_w + 5):
+            set_tile(tx + dx, ty, ',')
+            set_tile(tx + dx, ty + 1, ',')
+            set_tile(tx + dx, ty - 1, ',')
+        # Large forge building (center-north, double size)
+        forge_w, forge_h = 10, 6
+        place_building(tx - forge_w // 2, ty - half_h + 2, forge_w, forge_h, wall_ch, True, 'B')
+        # Warehouses (long, narrow)
+        npcs = ['S', 'G', 'P', 'F', 'S', 'G', 'F'] if is_city else ['S', 'G', 'P', 'F']
+        town_rng.shuffle(npcs)
+        slots = [
+            (-half_w + 2, 3, 9, 4, False),     # south warehouse
+            (half_w - 10, 3, 9, 4, False),      # south warehouse
+            (-half_w + 2, -half_h + 2, 7, 5, True),  # north left
+            (half_w - 8, -half_h + 2, 7, 5, True),   # north right
+        ]
+        if is_city:
+            slots += [(-half_w + 2, half_h - 6, 8, 5, False), (half_w - 9, half_h - 6, 8, 5, False)]
+            slots += [(2, half_h - 6, 7, 5, False)]
+        for i, (bx, by, bw, bh, ds) in enumerate(slots):
+            npc = npcs[i] if i < len(npcs) else None
+            place_building(tx + bx, ty + by, bw, bh, wall_ch, ds, npc)
 
-    # Place buildings on grid slots
-    npcs = ['S', 'B', 'P', 'G', 'F']
-    if is_city:
-        npcs = ['S', 'B', 'P', 'G', 'F', 'S', 'B', 'G', 'F', 'P']  # more NPCs in cities
-    town_rng.shuffle(npcs)
+    elif province_idx == 5:  # Dust Provinces (Sythara) — decaying
+        half_w, half_h = (18, 14) if is_city else (13, 10)
+        for dy in range(-half_h - 2, half_h + 3):
+            for dx in range(-half_w - 2, half_w + 3):
+                set_tile(tx + dx, ty + dy, ',')  # sand everywhere
+        # Broken road (gaps)
+        for dx in range(-half_w - 3, half_w + 4):
+            if town_rng.random() < 0.8:
+                set_tile(tx + dx, ty, ',')
+                set_tile(tx + dx, ty + 1, ',')
+        # Asymmetric buildings (some with broken walls)
+        npcs = ['S', 'P', 'G', 'F', 'B'] if not is_city else ['S', 'P', 'G', 'F', 'B', 'S', 'F']
+        town_rng.shuffle(npcs)
+        placed = 0
+        for _ in range(30):
+            bx = town_rng.randint(-half_w + 2, half_w - 7)
+            by = town_rng.randint(-half_h + 2, half_h - 6)
+            bw = town_rng.choice([5, 6, 7])
+            bh = town_rng.choice([4, 5])
+            if abs(bx) < 4 and abs(by) < 3: continue
+            npc = npcs[placed] if placed < len(npcs) else None
+            ax, ay = tx + bx, ty + by
+            if not (2 < ax < W - 2 and 2 < ay < H - 2): continue
+            # Build with random wall gaps (decay)
+            fill_rect(ax, ay, ax + bw, ay + bh, wall_ch)
+            fill_rect(ax + 1, ay + 1, ax + bw - 1, ay + bh - 1, ':')
+            # Random wall damage (1-3 holes)
+            for _ in range(town_rng.randint(0, 2)):
+                side = town_rng.choice(['n', 's', 'e', 'w'])
+                if side == 'n': set_tile(ax + town_rng.randint(1, bw - 1), ay, ',')
+                elif side == 's': set_tile(ax + town_rng.randint(1, bw - 1), ay + bh, ',')
+                elif side == 'e': set_tile(ax + bw, ay + town_rng.randint(1, bh - 1), ',')
+                elif side == 'w': set_tile(ax, ay + town_rng.randint(1, bh - 1), ',')
+            # Door
+            set_tile(ax + bw // 2, ay + bh - 1 if by >= 0 else ay, '+')
+            if npc: set_tile(ax + bw // 2, ay + bh // 2, npc)
+            placed += 1
+            if placed >= len(npcs) + 1: break
 
-    for idx, (bx, by, bw, bh) in enumerate(building_slots):
-        bx += town_rng.randint(-1, 1)
-        by += town_rng.randint(-1, 1)
-        ax, ay = tx + bx, ty + by
-
-        if not (2 < ax < W - 2 and 2 < ay < H - 2): continue
-
-        fill_rect(ax, ay, ax + bw, ay + bh, wall_ch)
-        fill_rect(ax + 1, ay + 1, ax + bw - 1, ay + bh - 1, ':')
-
-        if by < 0:
-            set_tile(ax + bw // 2, ay + bh - 1, '+')
-        else:
-            set_tile(ax + bw // 2, ay, '+')
-
-        if idx < len(npcs):
-            set_tile(ax + bw // 2, ay + bh // 2, npcs[idx])
+    else:
+        # Fallback: simple grid
+        half_w, half_h = 14, 10
+        for dy in range(-half_h - 2, half_h + 3):
+            for dx in range(-half_w - 2, half_w + 3):
+                set_tile(tx + dx, ty + dy, ground_ch)
+        for dx in range(-half_w - 4, half_w + 5):
+            set_tile(tx + dx, ty, ',')
+            set_tile(tx + dx, ty + 1, ',')
+        npcs = ['S', 'B', 'P', 'G', 'F']
+        town_rng.shuffle(npcs)
+        slots = [(-11, -7, 7, 5, False), (4, -7, 7, 5, False),
+                 (-11, 3, 7, 5, True), (4, 3, 7, 5, True), (-3, -7, 6, 5, False)]
+        for i, (bx, by, bw, bh, ds) in enumerate(slots):
+            npc = npcs[i] if i < len(npcs) else None
+            place_building(tx + bx, ty + by, bw, bh, wall_ch, ds, npc)
 
 for i, (tx, ty, name, is_start, is_city, prov_idx) in enumerate(towns):
     if 25 < tx < W - 25 and 25 < ty < H - 25:

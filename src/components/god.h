@@ -143,7 +143,7 @@ inline const GodInfo& get_god_info(GodId id) {
             "You reject the gods. No divine aid. No tenets. No mercy.",
             "No passives. No prayers. No favor. Pure self-reliance.",
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            {128, 128, 128}
+            {128, 128, 128}, 0, 100
         };
         return NONE_GOD;
     }

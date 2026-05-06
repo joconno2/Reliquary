@@ -732,6 +732,14 @@ void Engine::generate_level() {
         // handled in AI code
     }
 
+    // Reset per-floor capstones (Divine Intervention)
+    if (player_ != NULL_ENTITY && world_.has<PassiveTreeState>(player_)) {
+        auto& tree = world_.get<PassiveTreeState>(player_);
+        int di_idx = static_cast<int>(EffectType::CAP_DIVINE_INTERVENTION) - static_cast<int>(EffectType::CAP_WHIRLWIND);
+        if (tree.capstone_cooldowns[di_idx] == 999)
+            tree.capstone_cooldowns[di_idx] = 0;
+    }
+
     // Clear old monsters/items but keep player
     // Note: cache_current_floor() is called from stair handlers BEFORE generate_level()
     if (player_ != NULL_ENTITY) {
@@ -912,6 +920,32 @@ void Engine::generate_level() {
             "I've lived here all my life. Never seen times like these.",
             "Prices at the shops keep climbing.", "We used to trade with the southern towns. Not anymore.",
         };
+        // Province-specific farmer lines (indexed by god)
+        static const char* FARMER_GREENWOOD[] = {
+            "The forest gives us everything. We owe it respect.",
+            "Mushrooms growing in patterns. Not natural ones.",
+            "My goats won't graze near the old trees anymore.",
+        };
+        static const char* FARMER_DUST[] = {
+            "The ground won't hold seed. Third season running.",
+            "We boil the water twice now. It still tastes wrong.",
+            "The vultures circle lower each day.",
+        };
+        static const char* FARMER_FROST[] = {
+            "The ice came early. It always comes early now.",
+            "We store what we can. The thaw never lasts.",
+            "The peaks groan at night. Stone shouldn't sound like that.",
+        };
+        static const char* FARMER_COAST[] = {
+            "The forges buy everything we grow. Not enough hands to harvest.",
+            "Soot in the rain. It stains the crops grey.",
+            "The mine carts don't stop. Day and night.",
+        };
+        static const char* FARMER_HEARTLANDS[] = {
+            "The garrison takes half. Protection tax, they call it.",
+            "Soldiers march through every other day. Something's coming.",
+            "Used to be quiet here. I miss quiet.",
+        };
         static const char* GUARD_DIALOGUE[] = {
             "Keep your blade sheathed in town.",
             "Something's been killing livestock east of here. Stay sharp.",
@@ -967,6 +1001,40 @@ void Engine::generate_level() {
             "Travelers bring news. Mostly bad news, these days.",
             "Rest up. The road doesn't get easier from here.",
         };
+        // Province-specific opening lines for merchants/herbalists
+        struct ProvinceDialogue {
+            const char* shopkeeper;
+            const char* herbalist;
+            const char* innkeeper;
+        };
+        auto get_province_dialogue = [](GodId god) -> ProvinceDialogue {
+            switch (god) {
+                case GodId::KHAEL: return {
+                    "Trade goods from the deep wood. Nothing forged, nothing mined.",
+                    "The Greenwood teaches patience. Every root has a use.",
+                    "Rooms are simple. Walls are living wood. You'll sleep well."};
+                case GodId::SYTHARA: return {
+                    "What I have is what's left. Take it or leave it.",
+                    "Remedies are scarce here. The ground poisons what it grows.",
+                    "Water costs extra. Don't ask why."};
+                case GodId::GATHRUUN: return {
+                    "Furs, tools, and preserved rations. Nothing fancy survives the cold.",
+                    "Frostbite remedies and warming draughts. You'll need both.",
+                    "The hearth is the only warm thing in this town. Stay close to it."};
+                case GodId::OSSREN: return {
+                    "Forged steel and mining supplies. The coast provides.",
+                    "Burns and lung sickness. That's what I treat, mostly.",
+                    "Hot food and a cot near the forge wall. Warmest spot in town."};
+                case GodId::SOLETH: return {
+                    "Blessed goods only. The temple inspects everything I sell.",
+                    "The priests handle most healing. I cover what prayer can't.",
+                    "Pilgrims and soldiers. That's all we get these days."};
+                default: return {
+                    "Browse, if you like. I don't haggle.",
+                    "The wilds hold remedies for every ill, if you know where to look.",
+                    "10 gold for a room. Best deal you'll find."};
+            }
+        };
 
         // Helper: deterministic dialogue pick from position hash
         auto pick_dialogue = [](const char* pool[], int pool_size, int x, int y) -> const char* {
@@ -989,6 +1057,8 @@ void Engine::generate_level() {
             npc.idle_lines.push_back(td.rumor2);
             npc.idle_lines.push_back(td.rumor3);
             npc.idle_lines.push_back(td.nearby_warning);
+            npc.idle_lines.push_back(td.rumor4);
+            npc.idle_lines.push_back(td.rumor5);
         };
 
         // NPC name generator: deterministic from position hash
@@ -1033,7 +1103,7 @@ void Engine::generate_level() {
                 case 'S':
                     npc_comp.role = NPCRole::SHOPKEEPER;
                     npc_comp.name = gen_npc_name("Shopkeeper", me.x, me.y);
-                    npc_comp.dialogue = "Browse, if you like. I don't haggle.";
+                    npc_comp.dialogue = get_province_dialogue(get_town_god(me.x, me.y)).shopkeeper;
                     set_idle(npc_comp, SHOPKEEPER_IDLE, 6);
                     { int sv = (me.x * 11 + me.y * 7) % 2;
                       if (sv == 0) { sx = 2; sy = 6; }      // shopkeep
@@ -1200,14 +1270,14 @@ void Engine::generate_level() {
                 case 'H':
                     npc_comp.role = NPCRole::PRIEST; // herbalist uses priest role
                     npc_comp.name = gen_npc_name("Herbalist", me.x, me.y);
-                    npc_comp.dialogue = "The wilds hold remedies for every ill, if you know where to look.";
+                    npc_comp.dialogue = get_province_dialogue(get_town_god(me.x, me.y)).herbalist;
                     set_idle(npc_comp, HERBALIST_IDLE, 4);
                     sx = 3; sy = 6;
                     break;
                 case 'M':
                     npc_comp.role = NPCRole::SHOPKEEPER;
                     npc_comp.name = gen_npc_name("Merchant", me.x, me.y);
-                    npc_comp.dialogue = "I trade in what the road provides. Take a look.";
+                    npc_comp.dialogue = get_province_dialogue(get_town_god(me.x, me.y)).shopkeeper;
                     set_idle(npc_comp, SHOPKEEPER_IDLE, 6);
                     sx = 2; sy = 6;
                     break;
@@ -1226,6 +1296,20 @@ void Engine::generate_level() {
             npc_comp.home_y = me.y;
             npc_comp.god_affiliation = get_town_god(me.x, me.y);
             add_town_rumors(npc_comp, me.x, me.y);
+            // Province-specific idle lines for farmers/villagers
+            if (npc_comp.role == NPCRole::FARMER) {
+                GodId pg = get_town_god(me.x, me.y);
+                const char** plines = nullptr; int pcount = 0;
+                switch (pg) {
+                    case GodId::KHAEL:    plines = FARMER_GREENWOOD; pcount = 3; break;
+                    case GodId::SYTHARA:  plines = FARMER_DUST;      pcount = 3; break;
+                    case GodId::GATHRUUN: plines = FARMER_FROST;     pcount = 3; break;
+                    case GodId::OSSREN:   plines = FARMER_COAST;     pcount = 3; break;
+                    case GodId::MORRETH:  plines = FARMER_HEARTLANDS;pcount = 3; break;
+                    default: break;
+                }
+                if (plines) for (int pi = 0; pi < pcount; pi++) npc_comp.idle_lines.push_back(plines[pi]);
+            }
             world_.add<NPC>(npc, std::move(npc_comp));
             // Province tint: subtle color shift per region
             SDL_Color npc_tint = {255, 255, 255, 255};
@@ -1249,6 +1333,37 @@ void Engine::generate_level() {
 
             // Energy for NPC wandering (slow — acts every ~3 turns)
             world_.add<Energy>(npc, {0, 35});
+
+            // Building sign: placed outside the door (find door near NPC, sign one tile beyond)
+            const char* sign_label = nullptr;
+            switch (me.glyph) {
+                case 'S': sign_label = "General Store"; break;
+                case 'B': sign_label = "Smithy"; break;
+                case 'P': sign_label = "Temple"; break;
+                case 'H': sign_label = "Herbalist"; break;
+                case 'M': sign_label = "Trading Post"; break;
+                default: break;
+            }
+            if (sign_label) {
+                // Search around NPC for a door, then place sign one tile beyond it
+                for (int dy = -3; dy <= 3 && sign_label; dy++) {
+                    for (int dx = -3; dx <= 3; dx++) {
+                        int sx2 = me.x + dx, sy2 = me.y + dy;
+                        if (!map_.in_bounds(sx2, sy2)) continue;
+                        if (map_.at(sx2, sy2).type != TileType::DOOR_CLOSED &&
+                            map_.at(sx2, sy2).type != TileType::DOOR_OPEN) continue;
+                        // Found door. Place sign one tile beyond it (away from NPC)
+                        int sign_x = sx2 + (sx2 > me.x ? 1 : sx2 < me.x ? -1 : 0);
+                        int sign_y = sy2 + (sy2 > me.y ? 1 : sy2 < me.y ? -1 : 0);
+                        if (!map_.in_bounds(sign_x, sign_y) || !map_.is_walkable(sign_x, sign_y)) break;
+                        Entity se = world_.create();
+                        world_.add<Position>(se, {sign_x, sign_y});
+                        world_.add<Renderable>(se, {SHEET_TILES, 7, 17, {255,255,255,255}, 4});
+                        world_.add<Sign>(se, {sign_label});
+                        sign_label = nullptr; break;
+                    }
+                }
+            }
         }
 
         // Spawn Herbalist and Merchant NPCs at each town (not in map file)
@@ -1310,13 +1425,55 @@ void Engine::generate_level() {
             auto herb_name = gen_npc_name("Herbalist", ALL_TOWNS[i].x + 1, ALL_TOWNS[i].y);
             auto merch_name = gen_npc_name("Merchant", ALL_TOWNS[i].x, ALL_TOWNS[i].y + 1);
             auto inn_name = gen_npc_name("Innkeeper", ALL_TOWNS[i].x + 2, ALL_TOWNS[i].y + 2);
+            auto pd = get_province_dialogue(get_town_god(ALL_TOWNS[i].x, ALL_TOWNS[i].y));
             spawn_extra_npc(ALL_TOWNS[i].x, ALL_TOWNS[i].y, herb_name.c_str(), NPCRole::PRIEST,
-                            HERBALIST_LINES[rng_.range(0, 2)], 3, 6);
+                            pd.herbalist, 3, 6);
             spawn_extra_npc(ALL_TOWNS[i].x, ALL_TOWNS[i].y, merch_name.c_str(), NPCRole::SHOPKEEPER,
-                            MERCHANT_LINES[rng_.range(0, 2)], 2, 6);
+                            pd.shopkeeper, 2, 6);
             spawn_extra_npc(ALL_TOWNS[i].x, ALL_TOWNS[i].y, inn_name.c_str(), NPCRole::INNKEEPER,
-                            INNKEEPER_IDLE[rng_.range(0, 3)], 1, 6);
+                            pd.innkeeper, 1, 6);
         }
+
+        // Named NPCs for towns that lack unique characters
+        // Candlemere (idx 2) - Temple city, Soleth
+        spawn_extra_npc(ALL_TOWNS[2].x, ALL_TOWNS[2].y,
+            "High Priestess Valara", NPCRole::PRIEST,
+            "The eternal flame dims. Something in the Sepulchre draws its light.",
+            5, 5);
+        spawn_extra_npc(ALL_TOWNS[2].x, ALL_TOWNS[2].y,
+            "Acolyte Theren", NPCRole::PRIEST,
+            "We pray louder each day. The silence between prayers grows longer.",
+            3, 4);
+
+        // Whitepeak (idx 5) - Frozen peaks, Gathruun
+        spawn_extra_npc(ALL_TOWNS[5].x, ALL_TOWNS[5].y,
+            "Stonemason Greth", NPCRole::BLACKSMITH,
+            "I carve names into the mountain. Most are for the dead.",
+            4, 5);
+        spawn_extra_npc(ALL_TOWNS[5].x, ALL_TOWNS[5].y,
+            "Old Halvard", NPCRole::ELDER,
+            "I've watched the glacier for sixty years. It moved last week.",
+            4, 6);
+
+        // Bramblewood (idx 6) - Greenwood, Khael
+        spawn_extra_npc(ALL_TOWNS[6].x, ALL_TOWNS[6].y,
+            "Ranger Fael", NPCRole::GUARD,
+            "The deep wood is off limits. Not by our law. By theirs.",
+            2, 1);
+        spawn_extra_npc(ALL_TOWNS[6].x, ALL_TOWNS[6].y,
+            "Hedge Witch Nessa", NPCRole::PRIEST,
+            "The trees are talking again. Not to us. To each other.",
+            3, 6);
+
+        // Dustfall (idx 9) - Dust Provinces, Sythara
+        spawn_extra_npc(ALL_TOWNS[9].x, ALL_TOWNS[9].y,
+            "Plague Warden Kess", NPCRole::GUARD,
+            "We burn the dead now. No exceptions. I don't care whose god disapproves.",
+            0, 1);
+        spawn_extra_npc(ALL_TOWNS[9].x, ALL_TOWNS[9].y,
+            "Apothecary Mave", NPCRole::PRIEST,
+            "Every cure I make slows it down. Nothing stops it. Not yet.",
+            3, 6);
 
         // Populate overworld with wilderness content
         populate_overworld();
@@ -2046,7 +2203,12 @@ void Engine::generate_level() {
             zone_diff = dungeon_registry_[current_dungeon_idx_].zone_difficulty;
         int effective_level = dungeon_level_ + zone_diff;
 
-        populate::spawn_monsters(world_, map_, rooms_, rng_, effective_level);
+        std::string spawn_zone;
+        if (current_dungeon_idx_ >= 0 &&
+            current_dungeon_idx_ < static_cast<int>(dungeon_registry_.size()))
+            spawn_zone = dungeon_registry_[current_dungeon_idx_].zone;
+        populate::spawn_monsters(world_, map_, rooms_, rng_, effective_level,
+                                  spawn_zone, dungeon_level_);
         populate::spawn_items(world_, map_, rooms_, rng_, effective_level);
         populate::spawn_traps(world_, map_, rooms_, rng_, effective_level);
 
@@ -2558,6 +2720,19 @@ void Engine::try_move_player(int dx, int dy) {
             Entity wpn = world_.get<Inventory>(player_).get_equipped(EquipSlot::MAIN_HAND);
             if (wpn != NULL_ENTITY && world_.has<Item>(wpn))
                 player_weapon_tags = world_.get<Item>(wpn).tags;
+        }
+
+        // Class ability audio from combat triggers
+        if (atk_result.shadow_stepped) audio_.play(SfxId::SPELL);
+        if (atk_result.parried) audio_.play(SfxId::BLOCK1);
+        if (atk_result.flurried) audio_.play(SfxId::HIT2);
+        if (atk_result.smited) audio_.play(SfxId::PRAYER);
+        if (atk_result.exploited) audio_.play(SfxId::CRIT);
+        if (atk_result.raged) audio_.play(SfxId::CRIT);
+        if (atk_result.shield_blocked) audio_.play(SfxId::BLOCK2);
+        if (atk_result.cycled_element) {
+            static const SfxId ELEM_SFX[] = {SfxId::SPELL_FIRE, SfxId::SPELL_ICE, SfxId::SPELL_IMPACT};
+            audio_.play(ELEM_SFX[rng_.range(0, 2)]);
         }
 
         // Tutorial: first combat
@@ -3187,7 +3362,10 @@ void Engine::try_move_player(int dx, int dy) {
                 if (!book.known_spells.empty()) {
                     // Cast a random known spell for free at the target
                     SpellId free_spell = book.known_spells[rng_.range(0, static_cast<int>(book.known_spells.size()) - 1)];
+                    auto& pl = world_.get<Player>(player_);
+                    pl.weave_cast = true;
                     magic::cast(world_, player_, free_spell, map_, rng_, log_);
+                    pl.weave_cast = false;
                     log_.add("Arcane weave!", {140, 180, 255, 255});
                 }
             }
@@ -3251,8 +3429,7 @@ void Engine::try_move_player(int dx, int dy) {
                 // Not in beast form: build toward transformation
                 druid_kill_counter_++;
                 // Spear-type weapons (no TAG_SPEAR yet, use damage threshold as proxy)
-                bool has_polearm = (player_weapon_tags == 0 && world_.has<Inventory>(player_)) ? false : false;
-                // For now: shapeshift at 4 kills for all druids (spear is starting weapon anyway)
+                // Shapeshift at 4 kills
                 if (druid_kill_counter_ >= 4) {
                     druid_kill_counter_ = 0;
                     druid_beast_turns_ = 10;
@@ -3265,7 +3442,10 @@ void Engine::try_move_player(int dx, int dy) {
                     }
                     if (world_.has<Stats>(player_)) {
                         auto& ps = world_.get<Stats>(player_);
-                        ps.base_damage += 8;
+                        int shape_bonus = 0;
+                        if (world_.has<PassiveTreeState>(player_))
+                            shape_bonus = passive_tree::compute_bonuses(world_.get<PassiveTreeState>(player_)).shapeshift_dmg_bonus;
+                        ps.base_damage += 8 + shape_bonus;
                         ps.base_speed += 30;
                     }
                 } else {
@@ -3300,10 +3480,14 @@ void Engine::try_move_player(int dx, int dy) {
         if (atk_result.killed && world_.has<Player>(player_) && world_.has<Stats>(player_)) {
             auto cid = world_.get<Player>(player_).class_id;
             auto& pstats = world_.get<Stats>(player_);
+            passive_tree::TreeBonuses kill_tb{};
+            if (world_.has<PassiveTreeState>(player_))
+                kill_tb = passive_tree::compute_bonuses(world_.get<PassiveTreeState>(player_));
 
             // War Cleric: ZEALOT'S FURY (stacking: kills extend + amplify)
             if (cid == ClassId::WAR_CLERIC) {
                 int fury_ext = (player_weapon_tags & TAG_BLUNT) ? 4 : 3; // Mace: +4 instead of +3
+                fury_ext += kill_tb.fury_chain_bonus;
                 if (zealot_fury_turns_ > 0) {
                     zealot_fury_turns_ += fury_ext;
                     log_.add("FURY GROWS!", {255, 200, 60, 255});
@@ -3321,9 +3505,12 @@ void Engine::try_move_player(int dx, int dy) {
             if (cid == ClassId::WARLOCK) {
                 int mp_gain = 5 + pstats.eff_attr(Attr::INT) / 4;
                 if (player_weapon_tags & TAG_DAGGER) mp_gain += 3;
+                if (kill_tb.siphon_bonus_pct > 0)
+                    mp_gain = mp_gain * (100 + kill_tb.siphon_bonus_pct) / 100;
                 pstats.mp = std::min(pstats.mp_max, pstats.mp + mp_gain);
                 char sb[64]; snprintf(sb, sizeof(sb), "Soul energy flows into you. (+%d MP)", mp_gain);
                 log_.add(sb, {160, 100, 200, 255});
+                audio_.play(SfxId::SPELL);
                 // Purple soul trail from corpse to player
                 auto& pp = world_.get<Position>(player_);
                 if (world_.has<Position>(target)) {
@@ -3360,7 +3547,7 @@ void Engine::try_move_player(int dx, int dy) {
                     if (!world_.has<Position>(ae) || !world_.has<Stats>(ae)) continue;
                     auto& ap = world_.get<Position>(ae);
                     if (std::abs(ap.x - tpos.x) <= explode_range && std::abs(ap.y - tpos.y) <= explode_range) {
-                        world_.get<Stats>(ae).hp -= 4;
+                        world_.get<Stats>(ae).hp -= (4 + kill_tb.explode_dmg_bonus);
                         hit_any = true;
                     }
                 }
@@ -4130,6 +4317,17 @@ void Engine::process_turn() {
             ks.base_damage = 30;
             ks.natural_armor = 4;
         }
+        // Phase 3: adjacency aura (2 damage/turn if next to player)
+        if (keeper_phase_ == 3 && world_.has<Position>(keeper_entity_) && world_.has<Position>(player_)) {
+            auto& kp = world_.get<Position>(keeper_entity_);
+            auto& pp = world_.get<Position>(player_);
+            if (std::abs(kp.x - pp.x) <= 1 && std::abs(kp.y - pp.y) <= 1) {
+                if (world_.has<Stats>(player_)) {
+                    world_.get<Stats>(player_).hp -= 2;
+                    log_.add("The Keeper's aura sears you. (2)", {255, 160, 60, 255});
+                }
+            }
+        }
     } else if (keeper_entity_ != 0 && !world_.has<Stats>(keeper_entity_)) {
         // Keeper died
         if (keeper_phase_ > 0) {
@@ -4146,14 +4344,28 @@ void Engine::process_turn() {
     // Class ability turn ticks
     if (zealot_fury_turns_ > 0) zealot_fury_turns_--;
     if (revenant_fury_turns_ > 0) revenant_fury_turns_--;
-    if (knight_bulwark_turns_ > 0) knight_bulwark_turns_--;
+    if (knight_bulwark_turns_ > 0) {
+        knight_bulwark_turns_--;
+        if (world_.has<Player>(player_))
+            world_.get<Player>(player_).bulwark_turns = knight_bulwark_turns_;
+    }
     if (knight_bulwark_cd_ > 0) knight_bulwark_cd_--;
+    // Unbreakable capstone tick
+    if (world_.has<Player>(player_) && world_.get<Player>(player_).unbreakable_turns > 0) {
+        auto& pl = world_.get<Player>(player_);
+        pl.unbreakable_turns--;
+        if (pl.unbreakable_turns == 0)
+            log_.add("Unbreakable fades.", {140, 120, 100, 255});
+    }
     // Druid beast form expiry
     if (druid_beast_turns_ > 0) {
         druid_beast_turns_--;
         if (druid_beast_turns_ == 0 && world_.has<Stats>(player_)) {
             auto& ps = world_.get<Stats>(player_);
-            ps.base_damage -= 8;
+            int shape_bonus = 0;
+            if (world_.has<PassiveTreeState>(player_))
+                shape_bonus = passive_tree::compute_bonuses(world_.get<PassiveTreeState>(player_)).shapeshift_dmg_bonus;
+            ps.base_damage -= (8 + shape_bonus);
             ps.base_speed -= 30;
             log_.add("The beast recedes. You return to yourself.", {80, 160, 80, 255});
         }
@@ -4370,6 +4582,46 @@ void Engine::process_turn() {
                     rooms_explored_.insert(static_cast<int>(ri));
                     int xp = 3 + dungeon_level_;
                     world_.get<Stats>(player_).grant_xp(xp);
+                    // Named room descriptions based on zone + room size
+                    if (ri > 0) { // skip start room
+                        std::string zk;
+                        if (current_dungeon_idx_ >= 0 &&
+                            current_dungeon_idx_ < static_cast<int>(dungeon_registry_.size()))
+                            zk = dungeon_registry_[current_dungeon_idx_].zone;
+                        bool large = (r.w >= 9 && r.h >= 9);
+                        unsigned rh = static_cast<unsigned>(r.x * 31 + r.y * 17 + ri * 7);
+                        const char* rname = nullptr;
+                        if (zk == "warrens") {
+                            static const char* W_SM[] = {"A narrow burrow.", "Roots hang from the ceiling.", "Rat droppings everywhere."};
+                            static const char* W_LG[] = {"A wide nest chamber.", "The floor is slick with slime.", "Something large lived here."};
+                            rname = large ? W_LG[rh % 3] : W_SM[rh % 3];
+                        } else if (zk == "stonekeep") {
+                            static const char* S_SM[] = {"A guard post.", "Old weapon racks line the walls.", "Arrow slits face the corridor."};
+                            static const char* S_LG[] = {"A garrison hall.", "A war room. Maps rotted on the table.", "The barracks. Bunks collapsed."};
+                            rname = large ? S_LG[rh % 3] : S_SM[rh % 3];
+                        } else if (zk == "catacombs") {
+                            static const char* C_SM[] = {"A burial niche.", "Names carved in every surface.", "Offerings left for the dead."};
+                            static const char* C_LG[] = {"An ossuary. Bones stacked floor to ceiling.", "A sealed tomb, now open.", "A funerary chapel."};
+                            rname = large ? C_LG[rh % 3] : C_SM[rh % 3];
+                        } else if (zk == "molten") {
+                            static const char* M_SM[] = {"A heat vent.", "Slag crusts the floor.", "The stone glows dull red."};
+                            static const char* M_LG[] = {"A magma chamber.", "A collapsed forge.", "An ore processing hall."};
+                            rname = large ? M_LG[rh % 3] : M_SM[rh % 3];
+                        } else if (zk == "sunken") {
+                            static const char* U_SM[] = {"Ankle-deep water.", "Waterlogged shelves.", "The walls weep moisture."};
+                            static const char* U_LG[] = {"A flooded cistern.", "A drowned library.", "A reservoir. The water is black."};
+                            rname = large ? U_LG[rh % 3] : U_SM[rh % 3];
+                        } else if (zk == "deep_halls") {
+                            static const char* D_SM[] = {"A carved alcove.", "The ceiling vanishes above.", "Old mining supports."};
+                            static const char* D_LG[] = {"A cathedral-sized chamber.", "A throne room, empty.", "Pillars taller than trees."};
+                            rname = large ? D_LG[rh % 3] : D_SM[rh % 3];
+                        } else if (zk == "sepulchre") {
+                            static const char* P_SM[] = {"The walls pulse faintly.", "Inscriptions you can't read.", "Something was kept here."};
+                            static const char* P_LG[] = {"A ritual chamber.", "The geometry is wrong.", "An altar to nothing you recognize."};
+                            rname = large ? P_LG[rh % 3] : P_SM[rh % 3];
+                        }
+                        if (rname) log_.add(rname, {140, 135, 125, 255});
+                    }
                 }
                 break;
             }
@@ -4474,6 +4726,8 @@ void Engine::process_turn() {
                     pstats.hp_max -= 15;
                     if (pstats.hp > pstats.hp_max) pstats.hp = pstats.hp_max;
                     tree.capstone_cooldowns[i] = 50; // start real cooldown
+                    if (world_.has<Player>(player_))
+                        world_.get<Player>(player_).beast_form_turns = 0;
                     log_.add("The beast within subsides.", {80, 160, 80, 255});
                 }
             }
@@ -4627,21 +4881,21 @@ void Engine::process_turn() {
         && world_.has<Position>(player_) && world_.has<Stats>(player_)) {
         auto& pp = world_.get<Position>(player_);
         auto& ps = world_.get<Stats>(player_);
+        // Distance scaling for rewards (further from start = better rewards)
+        float ow_dist = std::sqrt(static_cast<float>((pp.x - 500) * (pp.x - 500) +
+                                                       (pp.y - 375) * (pp.y - 375)));
+        int ow_scale = std::max(1, static_cast<int>(1.0f + ow_dist / 100.0f)); // 1x near, 3-4x at edges
         int roll = rng_.range(1, 100);
 
         if (roll <= 25) {
-            // Merchant caravan: sell a rare item
-            static const char* WARES[] = {
-                "a silver dagger", "a mithril ring", "a Tome of Phase",
-                "a strong healing potion", "a blessed amulet", "an antidote bundle"
-            };
-            int ware = rng_.range(0, 5);
-            char ebuf[128];
-            snprintf(ebuf, sizeof(ebuf), "A merchant caravan passes. They offer %s for %d gold.",
-                     WARES[ware], 30 + ps.level * 10);
-            log_.add(ebuf, {200, 190, 140, 255});
-            log_.add("(They vanish before you can respond.)", {140, 135, 120, 255});
-            // TODO: actual trade interaction
+            // Merchant caravan: shop scales with distance + level
+            int caravan_diff = std::max(ps.level, ow_scale * 2);
+            int price_mult = 120 + caravan_diff * 5; // caravans charge a premium
+            GodId province = GodId::NONE;
+            if (world_.has<GodAlignment>(player_))
+                province = world_.get<GodAlignment>(player_).god;
+            log_.add("A merchant caravan passes. They spread their wares.", {200, 190, 140, 255});
+            shop_screen_.open(player_, world_, rng_, &gold_, caravan_diff, price_mult, province);
         } else if (roll <= 45) {
             // Wounded traveler
             bool can_heal = false;
@@ -4651,7 +4905,7 @@ void Engine::process_turn() {
                 if (heal_lv >= 10 || nat_lv >= 10) can_heal = true;
             }
             if (can_heal) {
-                int reward = rng_.range(15, 40);
+                int reward = rng_.range(15, 40) * ow_scale;
                 gold_ += reward;
                 log_.add("A wounded traveler lies by the road. You tend their injuries.", {140, 200, 140, 255});
                 char rbuf[64];
@@ -4689,20 +4943,22 @@ void Engine::process_turn() {
                 auto& ga = world_.get<GodAlignment>(player_);
                 if (ga.god != GodId::NONE) {
                     auto& ginfo = get_god_info(ga.god);
-                    god_system::adjust_favor(world_, player_, log_, 3);
-                    ps.hp = std::min(ps.hp + 10, ps.hp_max);
+                    int favor_gain = 2 + ow_scale;
+                    int shrine_heal = 5 + ow_scale * 5;
+                    god_system::adjust_favor(world_, player_, log_, favor_gain);
+                    ps.hp = std::min(ps.hp + shrine_heal, ps.hp_max);
                     char sbuf[96];
-                    snprintf(sbuf, sizeof(sbuf), "You find a roadside shrine to %s. (+3 favor, +10 HP)", ginfo.name);
+                    snprintf(sbuf, sizeof(sbuf), "You find a roadside shrine to %s. (+%d favor, +%d HP)", ginfo.name, favor_gain, shrine_heal);
                     log_.add(sbuf, {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255});
                 } else {
                     log_.add("You pass an old shrine. It means nothing to you.", {130, 130, 120, 255});
                 }
             }
         } else if (roll <= 85) {
-            // Lost supply cache: free consumables
-            int heal = rng_.range(10, 25);
+            // Lost supply cache: free consumables (scales with distance)
+            int heal = rng_.range(10, 25) * ow_scale;
             ps.hp = std::min(ps.hp + heal, ps.hp_max);
-            int gfind = rng_.range(5, 20);
+            int gfind = rng_.range(5, 20) * ow_scale;
             gold_ += gfind;
             char cbuf[96];
             snprintf(cbuf, sizeof(cbuf), "You stumble on an abandoned pack. (+%d HP, +%d gold)", heal, gfind);
@@ -4779,6 +5035,9 @@ void Engine::process_turn() {
         if (dist <= 1 && dist > 0) {
             // Melee attack
             auto mresult = combat::melee_attack(world_, e, player_, rng_, log_);
+            // Defensive ability audio
+            if (mresult.parried) audio_.play(SfxId::BLOCK1);
+            if (mresult.shield_blocked) audio_.play(SfxId::BLOCK2);
             // Riposte killed the attacker
             if (mresult.attacker_killed) {
                 audio_.play(SfxId::DEATH);
@@ -6420,8 +6679,13 @@ void Engine::try_rest() {
     if (stats.hp * 4 > stats.hp_max * 3)
         turn_actions_.healed_above_75pct = true;
 
-    // Costs 10 turns
-    game_turn_ += 10;
+    // Costs 10 turns (reduced by rest efficiency from passive tree)
+    int rest_turns = 10;
+    if (world_.has<PassiveTreeState>(player_)) {
+        int eff = passive_tree::compute_bonuses(world_.get<PassiveTreeState>(player_)).rest_efficiency;
+        if (eff > 0) rest_turns = std::max(4, rest_turns * (100 - eff) / 100);
+    }
+    game_turn_ += rest_turns;
 
     // Clear non-permanent status effects on rest
     if (world_.has<StatusEffects>(player_)) {
@@ -6530,6 +6794,15 @@ void Engine::handle_inventory_action(InvAction action) {
                     log_.add("EXCOMMUNICATED.", {255, 40, 40, 255});
                     trigger_screen_shake(8.0f);
                     screen_flash(60, 60, 100, 120);
+                    break;
+                }
+            }
+            // Avatar of the Wild keystone: no armor
+            if (!inv.is_equipped(item_e) && world_.has<PassiveTreeState>(player_)) {
+                bool is_armor_slot = (item.type == ItemType::ARMOR_CHEST || item.type == ItemType::ARMOR_HEAD ||
+                                      item.type == ItemType::ARMOR_HANDS || item.type == ItemType::ARMOR_FEET);
+                if (is_armor_slot && passive_tree::compute_bonuses(world_.get<PassiveTreeState>(player_)).avatar_of_wild) {
+                    log_.add("The wild rejects armor. Your summons are your shield.", {80, 200, 80, 255});
                     break;
                 }
             }
@@ -6687,6 +6960,11 @@ void Engine::handle_inventory_action(InvAction action) {
                             log_.add("The berserker rage rejects healing.", {200, 80, 80, 255});
                             heal_amt = 0; break;
                         }
+                    }
+                    // Passive tree: potion effectiveness bonus
+                    if (heal_amt > 0 && world_.has<PassiveTreeState>(player_)) {
+                        int eff = passive_tree::compute_bonuses(world_.get<PassiveTreeState>(player_)).potion_effectiveness;
+                        if (eff > 0) heal_amt = heal_amt * (100 + eff) / 100;
                     }
                     int healed = std::min(heal_amt, stats.hp_max - stats.hp);
                     stats.hp += healed;
@@ -7529,7 +7807,7 @@ void Engine::handle_input() {
                             case GodId::GATHRUUN: {
                                 // Stone Wall: create 3 wall tiles in front of player
                                 // Direction: based on last movement or facing
-                                int dx = 1, dy = 0; // default east
+                                int dx = 1; // default east
                                 for (int step = 1; step <= 3; step++) {
                                     int wx = pp.x + dx * step, wy = pp.y;
                                     if (map_.in_bounds(wx, wy) && map_.is_walkable(wx, wy)
@@ -8156,6 +8434,7 @@ void Engine::handle_input() {
                         world_.get<Stats>(player_).level >= 5 && knight_bulwark_cd_ == 0) {
                         knight_bulwark_turns_ = 3;
                         knight_bulwark_cd_ = 10;
+                        world_.get<Player>(player_).bulwark_turns = 3;
                         log_.add("BULWARK! Block chance doubled.", {200, 200, 255, 255});
                         audio_.play(SfxId::PRAYER);
                     }
@@ -8310,30 +8589,46 @@ void Engine::handle_input() {
                             world_.get<StatusEffects>(player_).effects.clear();
                         log_.add("Divine light fills you. Fully restored.", {255, 240, 160, 255});
                         audio_.play(SfxId::HEAL);
-                        used = true;
+                        screen_flash(255, 255, 200, 180);
+                        if (world_.has<Position>(player_)) {
+                            auto& pp = world_.get<Position>(player_);
+                            particles_.burst((float)pp.x, (float)pp.y, 20, 255, 240, 160, 0.15f, 1.0f, 4);
+                        }
+                        // Once per floor: set huge cooldown, reset on floor change
+                        tree.capstone_cooldowns[cd_idx] = 999;
+                        process_turn();
+                        break; // skip normal cooldown set
                     }
                     else if (active_type == EffectType::CAP_UNBREAKABLE) {
-                        // Add a buff for 8 turns that halves damage
-                        if (world_.has<Buffs>(player_)) {
-                            world_.get<Buffs>(player_).add(BuffType::SANCTUARY, 8, 10);
-                            // Borrowing SANCTUARY buff type for armor; +10 armor for 8 turns
-                            auto& stats = world_.get<Stats>(player_);
-                            stats.natural_armor += 10;
-                        }
+                        // Halve all incoming damage for 8 turns
+                        if (world_.has<Player>(player_))
+                            world_.get<Player>(player_).unbreakable_turns = 8;
                         log_.add("You become unbreakable. Damage halved.", {180, 140, 100, 255});
+                        audio_.play(SfxId::BLOCK1);
+                        if (world_.has<Position>(player_)) {
+                            auto& pp = world_.get<Position>(player_);
+                            particles_.burst((float)pp.x, (float)pp.y, 12, 180, 160, 120, 0.12f, 0.8f, 3);
+                        }
                         used = true;
                     }
                     else if (active_type == EffectType::CAP_ASPECT_OF_BEAST) {
                         auto& stats = world_.get<Stats>(player_);
-                        // +5 all stats for 15 turns
+                        // +5 all stats for 15 turns, natural attacks
                         for (int a = 0; a < ATTR_COUNT; a++)
                             stats.attributes[a] += 5;
                         stats.base_damage += 3;
                         stats.hp_max += 15; stats.hp += 15;
-                        // These will need to be removed after 15 turns
+                        if (world_.has<Player>(player_))
+                            world_.get<Player>(player_).beast_form_turns = 15;
                         // Use capstone_cooldowns[5] as remaining duration (negative = active)
                         tree.capstone_cooldowns[cd_idx] = -15; // negative = duration remaining
-                        log_.add("The beast within awakens.", {80, 200, 80, 255});
+                        log_.add("The beast within awakens. Claws and fangs replace steel.", {80, 200, 80, 255});
+                        audio_.play(SfxId::SPELL_IMPACT);
+                        trigger_screen_shake(4.0f);
+                        if (world_.has<Position>(player_)) {
+                            auto& pp = world_.get<Position>(player_);
+                            particles_.burst((float)pp.x, (float)pp.y, 15, 60, 200, 60, 0.14f, 1.0f, 4);
+                        }
                         used = true;
                     }
                     else if (active_type == EffectType::CAP_DEATH_MARK) {

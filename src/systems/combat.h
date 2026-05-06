@@ -15,6 +15,15 @@ struct AttackResult {
     bool teleport_behind = false;
     int gold_stolen = 0;
     bool poison_stacked = false; // serpentine inject
+    // VFX trigger flags (played by engine after combat returns)
+    bool parried = false;
+    bool shadow_stepped = false;
+    bool flurried = false;
+    bool smited = false;
+    bool exploited = false;
+    bool raged = false;
+    bool shield_blocked = false;
+    bool cycled_element = false;
 };
 
 // Resolve a melee attack from attacker to defender

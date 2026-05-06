@@ -19,6 +19,8 @@
 #include "components/inventory.h"
 #include "components/item.h"
 #include "components/status_effect.h"
+#include "components/passive_tree.h"
+#include "components/player.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -175,6 +177,11 @@ void check_tenets(World& world, Entity player, const PlayerActions& actions,
     // Passive favor gain: +1 every N turns (per-god rate) with no violations
     auto& ginfo = get_god_info(align.god);
     int regen = ginfo.regen_rate;
+    // Zealot keystone: favor regenerates at half speed (doubled interval)
+    if (world.has<PassiveTreeState>(player)) {
+        auto tb = passive_tree::compute_bonuses(world.get<PassiveTreeState>(player));
+        if (tb.zealot) regen *= 2;
+    }
     if (regen > 0 && game_turn % regen == 0 && align.favor < 100) {
         bool clean = !turn_actions.killed_animal && !turn_actions.used_dark_arts
             && !turn_actions.fled_combat && !turn_actions.used_stealth_attack;
@@ -208,9 +215,20 @@ bool execute_prayer(World& world, Entity player, TileMap& map, RNG& rng,
         log.add(buf, {180, 120, 120, 255});
         return false;
     }
-    // Negative favor — prayer costs doubled
+    // Prayer cost with reductions
     int cost = prayer.favor_cost;
-    if (align.favor < 0) cost *= 2;
+    if (align.favor < 0) cost *= 2; // negative favor doubles cost
+    // Skill reduction
+    if (world.has<Skills>(player)) {
+        int reduce = skill_bonus::prayer_cost_reduce(world.get<Skills>(player).get_level(SkillId::PRAYER));
+        if (reduce > 0) cost = cost * (100 - reduce) / 100;
+    }
+    // Passive tree reduction
+    if (world.has<PassiveTreeState>(player)) {
+        auto tb = passive_tree::compute_bonuses(world.get<PassiveTreeState>(player));
+        if (tb.prayer_cost_reduce > 0) cost = cost * (100 - tb.prayer_cost_reduce) / 100;
+    }
+    if (cost < 1) cost = 1;
     if (align.favor < cost) {
         log.add("Not enough favor.", {180, 120, 120, 255});
         return false;
@@ -219,6 +237,13 @@ bool execute_prayer(World& world, Entity player, TileMap& map, RNG& rng,
     align.favor -= cost;
     bool acted = true;
     audio.play(SfxId::PRAYER);
+
+    // Zealot keystone: prayer power multiplier
+    int prayer_mult = 100;
+    if (world.has<PassiveTreeState>(player)) {
+        auto tb = passive_tree::compute_bonuses(world.get<PassiveTreeState>(player));
+        if (tb.zealot) prayer_mult = 200;
+    }
 
     auto& ppos = world.get<Position>(player);
 
@@ -232,7 +257,7 @@ bool execute_prayer(World& world, Entity player, TileMap& map, RNG& rng,
         case GodId::VETHRIK:
             if (prayer_idx == 0) {
                 // Lay to Rest — heal
-                int heal = 5 + stats.attr(Attr::WIL) / 2;
+                int heal = (5 + stats.attr(Attr::WIL) / 2) * prayer_mult / 100;
                 stats.hp = std::min(stats.hp + heal, stats.hp_max);
                 char buf[128];
                 snprintf(buf, sizeof(buf), "The dead grant you respite. (+%d HP)", heal);
@@ -242,7 +267,7 @@ bool execute_prayer(World& world, Entity player, TileMap& map, RNG& rng,
                 // Death's Grasp — damage nearest
                 Entity target = magic::nearest_enemy(world, player, map, 8);
                 if (target != NULL_ENTITY && world.has<Stats>(target)) {
-                    int dmg = stats.attr(Attr::WIL) * 2;
+                    int dmg = stats.attr(Attr::WIL) * 2 * prayer_mult / 100;
                     auto& tgt = world.get<Stats>(target);
                     tgt.hp -= dmg;
                     char buf[128];
@@ -282,7 +307,7 @@ bool execute_prayer(World& world, Entity player, TileMap& map, RNG& rng,
         case GodId::MORRETH:
             if (prayer_idx == 0) {
                 // Iron Resolve — heal
-                int heal = 10 + stats.attr(Attr::STR) / 2;
+                int heal = (10 + stats.attr(Attr::STR) / 2) * prayer_mult / 100;
                 stats.hp = std::min(stats.hp + heal, stats.hp_max);
                 char buf[128];
                 snprintf(buf, sizeof(buf), "Iron will sustains you. (+%d HP)", heal);
@@ -365,7 +390,7 @@ bool execute_prayer(World& world, Entity player, TileMap& map, RNG& rng,
         case GodId::KHAEL:
             if (prayer_idx == 0) {
                 // Regrowth — heal 30%
-                int heal = stats.hp_max * 3 / 10;
+                int heal = stats.hp_max * 3 / 10 * prayer_mult / 100;
                 stats.hp = std::min(stats.hp + heal, stats.hp_max);
                 char buf[128];
                 snprintf(buf, sizeof(buf), "Green light mends your wounds. (+%d HP)", heal);
