@@ -1523,6 +1523,58 @@ void Engine::generate_level() {
         start_x = result.start_x;
         start_y = result.start_y;
 
+        // Boss room: enlarge and decorate last room on bottom floor of quest dungeons
+        bool is_quest_bottom = at_zone_bottom && current_dungeon_idx_ >= 0 &&
+            current_dungeon_idx_ < static_cast<int>(dungeon_registry_.size()) &&
+            !dungeon_registry_[current_dungeon_idx_].quest.empty();
+        if (is_quest_bottom && rooms_.size() >= 2) {
+            auto& boss_rm = rooms_.back();
+            // Carve arena: expand the room by 2 tiles in each direction
+            for (int dy = -2; dy < boss_rm.h + 2; dy++) {
+                for (int dx = -2; dx < boss_rm.w + 2; dx++) {
+                    int tx = boss_rm.x + dx, ty = boss_rm.y + dy;
+                    if (map_.in_bounds(tx, ty) && !map_.is_walkable(tx, ty)) {
+                        // Only expand into walls, not void
+                        if (map_.at(tx, ty).type != TileType::VOID)
+                            map_.at(tx, ty).type = params.floor_type;
+                    }
+                }
+            }
+            // Pillar ring around the arena (4 pillars for cover)
+            int cx = boss_rm.x + boss_rm.w / 2;
+            int cy = boss_rm.y + boss_rm.h / 2;
+            int pr = std::min(boss_rm.w, boss_rm.h) / 2 - 1;
+            for (int pi = 0; pi < 4; pi++) {
+                float angle = pi * 1.5708f; // 90 degrees
+                int px = cx + static_cast<int>(pr * cosf(angle));
+                int py = cy + static_cast<int>(pr * sinf(angle));
+                if (map_.in_bounds(px, py))
+                    map_.at(px, py).type = params.wall_type;
+            }
+            // Zone-themed floor decoration in arena center
+            if (zone_key == "molten") {
+                // Lava ring
+                for (int a = 0; a < 8; a++) {
+                    float ang = a * 0.7854f;
+                    int lx = cx + static_cast<int>((pr - 2) * cosf(ang));
+                    int ly = cy + static_cast<int>((pr - 2) * sinf(ang));
+                    if (map_.in_bounds(lx, ly)) map_.at(lx, ly).type = TileType::LAVA;
+                }
+            } else if (zone_key == "catacombs") {
+                // Bone floor center
+                for (int dy2 = -1; dy2 <= 1; dy2++)
+                    for (int dx2 = -1; dx2 <= 1; dx2++)
+                        if (map_.in_bounds(cx+dx2, cy+dy2))
+                            map_.at(cx+dx2, cy+dy2).type = TileType::FLOOR_BONE;
+            } else if (zone_key == "sepulchre") {
+                // Red stone altar center
+                for (int dy2 = -1; dy2 <= 1; dy2++)
+                    for (int dx2 = -1; dx2 <= 1; dx2++)
+                        if (map_.in_bounds(cx+dx2, cy+dy2))
+                            map_.at(cx+dx2, cy+dy2).type = TileType::FLOOR_RED_STONE;
+            }
+        }
+
         // Zone-specific terrain features (post-carving)
         if (zone_key == "sunken") {
             // Shallow water pools along room edges

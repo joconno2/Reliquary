@@ -539,6 +539,24 @@ CastResult cast(World& world, Entity caster, SpellId spell,
                 world.get<StatusEffects>(e).add(StatusType::FROZEN, 0, 1);
                 if (tgt.hp <= 0 && !world.has<Player>(e)) spell_kill_xp(e);
             });
+            // Freeze nearby water tiles into walkable ice (ice bridge)
+            if (world.has<Position>(caster)) {
+                auto& cp = world.get<Position>(caster);
+                int frozen_tiles = 0;
+                for (int dy = -3; dy <= 3; dy++)
+                    for (int dx = -3; dx <= 3; dx++) {
+                        int fx = cp.x + dx, fy = cp.y + dy;
+                        if (map.in_bounds(fx, fy) &&
+                            (map.at(fx, fy).type == TileType::WATER || map.at(fx, fy).type == TileType::DEEP_WATER)) {
+                            map.at(fx, fy).type = TileType::FLOOR_ICE;
+                            frozen_tiles++;
+                        }
+                    }
+                if (frozen_tiles > 0 && is_player) {
+                    char fb[48]; snprintf(fb, sizeof(fb), "Water freezes solid. (%d tiles)", frozen_tiles);
+                    log.add(fb, {140, 200, 255, 255});
+                }
+            }
             if (is_player) { char buf[64]; snprintf(buf, sizeof(buf), "Frost explodes outward. %d frozen.", count); log.add(buf, {140, 200, 255, 255}); }
             result.success = count > 0;
             break;
@@ -947,9 +965,22 @@ CastResult cast(World& world, Entity caster, SpellId spell,
                 if (es.hp <= 0 && !world.has<Player>(e)) spell_kill_xp(e);
                 count++;
             }
-            // Create rubble: 3-5 random walkable tiles near caster become ROCK (impassable)
+            // Collapse nearby walls (opens paths): 1-3 wall tiles become floor
+            int collapsed = 0;
+            for (int a = 0; a < 20 && collapsed < rng.range(1, 3); a++) {
+                int wx = cpos.x + rng.range(-3, 3);
+                int wy = cpos.y + rng.range(-3, 3);
+                if (!map.in_bounds(wx, wy)) continue;
+                auto wt = map.at(wx, wy).type;
+                if (wt == TileType::WALL_STONE_BRICK || wt == TileType::WALL_STONE_ROUGH ||
+                    wt == TileType::WALL_CATACOMB || wt == TileType::WALL_IGNEOUS) {
+                    map.at(wx, wy).type = TileType::FLOOR_STONE;
+                    collapsed++;
+                }
+            }
+            // Create rubble on open tiles
             int rubble = 0;
-            for (int a = 0; a < 30 && rubble < rng.range(3, 5); a++) {
+            for (int a = 0; a < 30 && rubble < rng.range(2, 4); a++) {
                 int rx = cpos.x + rng.range(-3, 3);
                 int ry = cpos.y + rng.range(-3, 3);
                 if (rx == cpos.x && ry == cpos.y) continue;
@@ -959,8 +990,8 @@ CastResult cast(World& world, Entity caster, SpellId spell,
                 rubble++;
             }
             if (is_player) {
-                char buf[96];
-                snprintf(buf, sizeof(buf), "The earth splits! %d hit, %d rubble tiles created.", count, rubble);
+                char buf[128];
+                snprintf(buf, sizeof(buf), "The earth splits! %d hit, %d walls collapsed, %d rubble.", count, collapsed, rubble);
                 log.add(buf, {180, 140, 80, 255});
             }
             result.success = count > 0 || rubble > 0;
