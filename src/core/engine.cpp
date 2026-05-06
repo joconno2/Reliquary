@@ -1149,6 +1149,7 @@ void Engine::generate_level() {
                         npc_comp.name = "Scholar Aldric";
                         npc_comp.dialogue = "That brand... I've seen drawings of it. "
                                             "You're not the first. The others didn't survive.";
+                        sx = 5; sy = 5; // always scholar sprite
                         mq_assigned[1] = true;
                     }
                     // MQ_03: Greywatch scholar (Stonekeep / first fragment)
@@ -1281,6 +1282,27 @@ void Engine::generate_level() {
                     set_idle(npc_comp, SHOPKEEPER_IDLE, 6);
                     sx = 2; sy = 6;
                     break;
+                case 'N':
+                    npc_comp.role = NPCRole::INNKEEPER;
+                    npc_comp.name = gen_npc_name("Innkeeper", me.x, me.y);
+                    npc_comp.dialogue = get_province_dialogue(get_town_god(me.x, me.y)).innkeeper;
+                    set_idle(npc_comp, INNKEEPER_IDLE, 4);
+                    sx = 1; sy = 6;
+                    break;
+                case 'C': {
+                    // Church priest (has Church component, opens church screen)
+                    GodId church_god = get_town_god(me.x, me.y);
+                    auto& cginfo = get_god_info(church_god);
+                    npc_comp.role = NPCRole::PRIEST;
+                    char cname[64]; snprintf(cname, sizeof(cname), "High Priest of %s", cginfo.name);
+                    npc_comp.name = cname;
+                    char cdial[128]; snprintf(cdial, sizeof(cdial),
+                        "Welcome to the Church of %s. %s", cginfo.name, cginfo.description);
+                    npc_comp.dialogue = cdial;
+                    sx = 1; sy = 4; // priest sprite
+                    // Church component added after the NPC is created (below)
+                    break;
+                }
                 case 'E':
                     npc_comp.role = NPCRole::ELDER;
                     npc_comp.name = "Elder Maren";
@@ -1334,14 +1356,22 @@ void Engine::generate_level() {
             // Energy for NPC wandering (slow — acts every ~3 turns)
             world_.add<Energy>(npc, {0, 35});
 
+            // Church component for 'C' glyph NPCs
+            if (me.glyph == 'C') {
+                GodId cg = get_town_god(me.x, me.y);
+                world_.add<Church>(npc, {cg, false});
+            }
+
             // Building sign: placed 2 tiles outside the door (not blocking entry)
             const char* sign_label = nullptr;
             switch (me.glyph) {
                 case 'S': sign_label = "General Store"; break;
                 case 'B': sign_label = "Smithy"; break;
-                case 'P': sign_label = "Temple"; break;
+                case 'P': sign_label = "Scholar"; break;
                 case 'H': sign_label = "Herbalist"; break;
                 case 'M': sign_label = "Trading Post"; break;
+                case 'N': sign_label = "Inn"; break;
+                case 'C': sign_label = "Church"; break;
                 default: break;
             }
             if (sign_label) {
@@ -1380,13 +1410,22 @@ void Engine::generate_level() {
             // Find a tile near town center. Shopkeepers/innkeepers go inside
             // buildings (stone floor); herbalists can be outdoor.
             bool needs_indoor = (role == NPCRole::SHOPKEEPER || role == NPCRole::INNKEEPER);
-            for (int attempt = 0; attempt < 60; attempt++) {
-                int tx = cx + rng_.range(-12, 12);
-                int ty = cy + rng_.range(-12, 12);
+            for (int attempt = 0; attempt < 80; attempt++) {
+                int tx = cx + rng_.range(-15, 15);
+                int ty = cy + rng_.range(-15, 15);
                 if (!map_.in_bounds(tx, ty) || !map_.is_walkable(tx, ty)) continue;
                 if (needs_indoor) {
                     auto tt = map_.at(tx, ty).type;
                     if (tt != TileType::FLOOR_STONE && tt != TileType::FLOOR_COBBLE) continue;
+                    // Must be inside a building (2+ adjacent walls)
+                    int adj_walls = 0;
+                    for (int dy2 = -1; dy2 <= 1; dy2++)
+                        for (int dx2 = -1; dx2 <= 1; dx2++) {
+                            if (dx2 == 0 && dy2 == 0) continue;
+                            if (map_.in_bounds(tx+dx2, ty+dy2) && !map_.is_walkable(tx+dx2, ty+dy2))
+                                adj_walls++;
+                        }
+                    if (adj_walls < 2) continue;
                 }
                 // Check no entity already there
                 if (combat::entity_at(world_, tx, ty, player_) != NULL_ENTITY) continue;
@@ -1492,48 +1531,7 @@ void Engine::generate_level() {
                 ALL_TOWNS[i].x, ALL_TOWNS[i].y, ALL_TOWNS[i].name);
         }
 
-        // Spawn church high priests at province capitals
-        for (int ci = 0; ci < CHURCH_COUNT; ci++) {
-            auto& cl = CHURCH_LOCATIONS[ci];
-            auto& town = ALL_TOWNS[cl.town_idx];
-            auto& ginfo = get_god_info(cl.god);
-
-            // Place church priest near the town center
-            int cx = town.x + rng_.range(-5, 5);
-            int cy = town.y + rng_.range(-5, 5);
-            // Find walkable spot
-            for (int a = 0; a < 30; a++) {
-                int tx = town.x + rng_.range(-8, 8);
-                int ty = town.y + rng_.range(-8, 8);
-                if (map_.is_walkable(tx, ty)) {
-                    cx = tx; cy = ty; break;
-                }
-            }
-
-            Entity priest = world_.create();
-            world_.add<Position>(priest, {cx, cy});
-            world_.add<Renderable>(priest, {SHEET_ROGUES, 1, 4,
-                {ginfo.color.r, ginfo.color.g, ginfo.color.b, 255}, 8});
-
-            NPC npc_comp;
-            npc_comp.role = NPCRole::PRIEST;
-            char name_buf[64];
-            snprintf(name_buf, sizeof(name_buf), "High Priest of %s", ginfo.name);
-            npc_comp.name = name_buf;
-            char dial_buf[128];
-            snprintf(dial_buf, sizeof(dial_buf),
-                "Welcome to the Church of %s. %s", ginfo.name, ginfo.description);
-            npc_comp.dialogue = dial_buf;
-            npc_comp.god_affiliation = cl.god;
-            npc_comp.quest_id = -1;
-            world_.add<NPC>(priest, npc_comp);
-
-            { Stats ps; ps.name = name_buf; ps.hp = 999; ps.hp_max = 999;
-              world_.add<Stats>(priest, std::move(ps)); }
-            world_.add<Energy>(priest, {0, 35});
-
-            world_.add<Church>(priest, {cl.god, false});
-        }
+        // Church priests are now spawned from 'C' glyph in the map (placed by generate_overworld.py)
     } else {
         // Dungeon zone themes — keyed by name for registry lookup
         struct ZoneTheme {
@@ -2660,19 +2658,74 @@ void Engine::try_move_player(int dx, int dy) {
                     input_glyphs_.label(Action::INTERACT).c_str());
                   tutorial_popup_.show("NPCs", tb); }
             }
-            // Church high priest: open church screen
-            if (world_.has<Church>(target) && world_.has<GodAlignment>(player_)) {
-                auto& church = world_.get<Church>(target);
-                auto& ga = world_.get<GodAlignment>(player_);
-                if (ga.god == church.god || ga.god == GodId::NONE) {
-                    church_screen_.open(player_, &world_, church.god,
-                                         ga.god == church.god ? ga.favor : 0);
-                    return;
-                } else {
-                    auto& ginfo = get_god_info(church.god);
-                    char buf[128];
-                    snprintf(buf, sizeof(buf), "This is the Church of %s. You serve another god.", ginfo.name);
-                    log_.add(buf, {180, 140, 120, 255});
+            // Open dialogue screen for role-based NPCs (including church priests)
+            if (world_.has<NPC>(target) && !dialogue_screen_.is_open()) {
+                auto& npc = world_.get<NPC>(target);
+                std::vector<DialogueOption> opts;
+                // Church priest: add church services to dialogue
+                if (world_.has<Church>(target) && world_.has<GodAlignment>(player_)) {
+                    auto& church = world_.get<Church>(target);
+                    auto& ga = world_.get<GodAlignment>(player_);
+                    if (ga.god == church.god || ga.god == GodId::NONE) {
+                        opts.push_back({"Church services", 5, true});
+                        opts.push_back({"Talk", 2, true});
+                        dialogue_screen_.open(npc.name, npc.dialogue, opts);
+                        dialogue_npc_ = target;
+                        return;
+                    } else {
+                        auto& ginfo = get_god_info(church.god);
+                        char buf[128];
+                        snprintf(buf, sizeof(buf), "This is the Church of %s. You serve another god.", ginfo.name);
+                        opts.push_back({"Talk", 2, true});
+                        dialogue_screen_.open(npc.name, buf, opts);
+                        dialogue_npc_ = target;
+                        return;
+                    }
+                }
+                if (npc.role == NPCRole::SHOPKEEPER) {
+                    opts.push_back({"Browse wares", 1, true});
+                    opts.push_back({"Talk", 2, true});
+                } else if (npc.role == NPCRole::INNKEEPER) {
+                    int inn_cost = 10;
+                    if (world_.has<Position>(player_)) {
+                        auto& ip = world_.get<Position>(player_);
+                        float id = std::sqrt(static_cast<float>((ip.x-500)*(ip.x-500)+(ip.y-375)*(ip.y-375)));
+                        inn_cost = 10 + static_cast<int>(id / 30.0f);
+                    }
+                    char rest_label[48]; snprintf(rest_label, sizeof(rest_label), "Rest (%d gold)", inn_cost);
+                    opts.push_back({rest_label, 3, gold_ >= inn_cost});
+                    opts.push_back({"Talk", 2, true});
+                } else if (npc.role == NPCRole::BLACKSMITH) {
+                    opts.push_back({"Browse wares", 1, true});
+                    opts.push_back({"Talk", 2, true});
+                } else if (npc.role == NPCRole::PRIEST) {
+                    opts.push_back({"Talk", 2, true});
+                } else if (npc.role == NPCRole::ELDER) {
+                    opts.push_back({"Talk", 2, true});
+                } else if (npc.role == NPCRole::FARMER || npc.role == NPCRole::GUARD) {
+                    opts.push_back({"Talk", 2, true});
+                }
+                // Quest option if NPC has a quest
+                if (npc.quest_id >= 0) {
+                    auto qid = static_cast<QuestId>(npc.quest_id);
+                    // Check prerequisite before showing quest option
+                    int qidx = static_cast<int>(qid);
+                    bool prereq_ok = true;
+                    if (qidx > 0 && qidx <= static_cast<int>(QuestId::MQ_09_CLAIM_RELIQUARY)) {
+                        auto prereq = static_cast<QuestId>(qidx - 1);
+                        if (!journal_.has_quest(prereq) || journal_.get_state(prereq) != QuestState::FINISHED)
+                            prereq_ok = false;
+                    }
+                    if (journal_.get_state(qid) == QuestState::COMPLETE)
+                        opts.push_back({"Turn in quest", 4, true});
+                    else if (!journal_.has_quest(qid) && prereq_ok)
+                        opts.push_back({"Ask about work", 4, true});
+                    else if (journal_.get_state(qid) == QuestState::ACTIVE)
+                        opts.push_back({"Ask about quest", 4, true});
+                }
+                if (!opts.empty()) {
+                    dialogue_screen_.open(npc.name, npc.dialogue, opts);
+                    dialogue_npc_ = target;
                     return;
                 }
             }
@@ -7492,23 +7545,133 @@ void Engine::handle_input() {
             continue;
         }
 
+        // Dialogue screen
+        if (dialogue_screen_.is_open()) {
+            int dact = dialogue_screen_.handle_input(event);
+            if (dact == -2) {
+                // Leave
+                dialogue_screen_.close();
+            } else if (dact == 1) {
+                // Shop: check cannibal trait first
+                bool cannibal_blocked = false;
+                if (world_.has<Player>(player_)) {
+                    for (auto tid : world_.get<Player>(player_).traits) {
+                        if (tid == TraitId::CANNIBAL) { cannibal_blocked = true; break; }
+                    }
+                }
+                if (cannibal_blocked) {
+                    dialogue_screen_.open(dialogue_screen_.get_npc_name(),
+                        "The merchant recoils. \"Get away from me, flesh-eater.\"", {});
+                } else {
+                dialogue_screen_.close();
+                if (world_.has<NPC>(dialogue_npc_) && world_.has<Stats>(player_)) {
+                    auto& ps = world_.get<Stats>(player_);
+                    GodId province = GodId::NONE;
+                    if (world_.has<Position>(dialogue_npc_))
+                        province = get_town_god(world_.get<Position>(dialogue_npc_).x,
+                                                 world_.get<Position>(dialogue_npc_).y);
+                    int shop_diff = ps.level;
+                    if (world_.has<Position>(dialogue_npc_)) {
+                        auto& sp = world_.get<Position>(dialogue_npc_);
+                        float sd = std::sqrt(static_cast<float>((sp.x-500)*(sp.x-500)+(sp.y-375)*(sp.y-375)));
+                        shop_diff = std::max(shop_diff, static_cast<int>(sd / 40.0f));
+                    }
+                    shop_screen_.open(player_, world_, rng_, &gold_, shop_diff, 100, province);
+                }
+                } // end cannibal else
+            } else if (dact == 2) {
+                // Talk: cycle to next idle line, stay in dialogue
+                if (world_.has<NPC>(dialogue_npc_)) {
+                    auto& npc = world_.get<NPC>(dialogue_npc_);
+                    std::string line = npc.dialogue;
+                    if (!npc.idle_lines.empty()) {
+                        int idx = rng_.range(0, static_cast<int>(npc.idle_lines.size()) - 1);
+                        if (!npc.idle_lines[idx].empty()) line = npc.idle_lines[idx];
+                    }
+                    // Rebuild options (same as original open)
+                    std::vector<DialogueOption> opts;
+                    if (npc.role == NPCRole::SHOPKEEPER || npc.role == NPCRole::BLACKSMITH)
+                        opts.push_back({"Browse wares", 1, true});
+                    if (npc.role == NPCRole::INNKEEPER) {
+                        int inn_cost = 10;
+                        if (world_.has<Position>(player_)) {
+                            auto& ip = world_.get<Position>(player_);
+                            float id = std::sqrt(static_cast<float>((ip.x-500)*(ip.x-500)+(ip.y-375)*(ip.y-375)));
+                            inn_cost = 10 + static_cast<int>(id / 30.0f);
+                        }
+                        char rl[48]; snprintf(rl, sizeof(rl), "Rest (%d gold)", inn_cost);
+                        opts.push_back({rl, 3, gold_ >= inn_cost});
+                    }
+                    opts.push_back({"Talk", 2, true});
+                    if (npc.quest_id >= 0) {
+                        auto qid = static_cast<QuestId>(npc.quest_id);
+                        if (journal_.get_state(qid) == QuestState::COMPLETE)
+                            opts.push_back({"Turn in quest", 4, true});
+                        else if (!journal_.has_quest(qid))
+                            opts.push_back({"Ask about work", 4, true});
+                        else if (journal_.get_state(qid) == QuestState::ACTIVE)
+                            opts.push_back({"Ask about quest", 4, true});
+                    }
+                    dialogue_screen_.open(npc.name, line, opts);
+                }
+            } else if (dact == 5) {
+                // Church services: open the church screen
+                dialogue_screen_.close();
+                if (world_.has<Church>(dialogue_npc_) && world_.has<GodAlignment>(player_)) {
+                    auto& church = world_.get<Church>(dialogue_npc_);
+                    auto& ga = world_.get<GodAlignment>(player_);
+                    church_screen_.open(player_, &world_, church.god,
+                                         ga.god == church.god ? ga.favor : 0);
+                }
+            } else if (dact == 3 || dact == 4) {
+                // Inn rest or Quest: delegate to npc_interaction
+                dialogue_screen_.close();
+                if (world_.has<NPC>(dialogue_npc_) && world_.has<Position>(dialogue_npc_)) {
+                    auto& dp = world_.get<Position>(dialogue_npc_);
+                    npc_interaction::Context dctx {
+                        world_, player_, log_, audio_, rng_, particles_,
+                        shop_screen_, quest_offer_, levelup_screen_, journal_,
+                        meta_, gold_, game_turn_, dungeon_level_,
+                        pending_levelup_, pending_quest_npc_
+                    };
+                    npc_interaction::interact(dctx, dialogue_npc_, dp.x, dp.y);
+                }
+            }
+            continue;
+        }
+
         // Church screen
         if (church_screen_.is_open()) {
             ChurchAction cact = church_screen_.handle_input(event);
             if (cact == ChurchAction::CLOSE) {
                 church_screen_.close();
             } else if (cact == ChurchAction::REST) {
-                // Full heal, no exhaustion
-                if (world_.has<Stats>(player_)) {
-                    auto& ps = world_.get<Stats>(player_);
-                    ps.hp = ps.hp_max;
-                    ps.mp = ps.mp_max;
-                    log_.add("You rest in the church. Fully restored.", {100, 200, 140, 255});
-                    audio_.play(SfxId::HEAL);
+                // Full heal, costs 5 favor
+                if (world_.has<Stats>(player_) && world_.has<GodAlignment>(player_)) {
+                    auto& ga = world_.get<GodAlignment>(player_);
+                    if (ga.favor < 5) {
+                        log_.add("Not enough favor. (5 required)", {180, 120, 120, 255});
+                    } else {
+                        ga.favor -= 5;
+                        auto& ps = world_.get<Stats>(player_);
+                        ps.hp = ps.hp_max;
+                        ps.mp = ps.mp_max;
+                        if (world_.has<StatusEffects>(player_))
+                            world_.get<StatusEffects>(player_).effects.clear();
+                        log_.add("You rest in the church. Fully restored. (-5 favor)", {100, 200, 140, 255});
+                        audio_.play(SfxId::HEAL);
+                        auto& gi = get_god_info(church_screen_.get_god());
+                        particles_.heal_effect(world_.get<Position>(player_).x, world_.get<Position>(player_).y);
+                    }
                 }
                 church_screen_.close();
             } else if (cact == ChurchAction::IDENTIFY) {
-                // Identify all items
+                // Identify all items, costs 8 favor
+                if (!world_.has<GodAlignment>(player_) || world_.get<GodAlignment>(player_).favor < 8) {
+                    log_.add("Not enough favor. (8 required)", {180, 120, 120, 255});
+                    church_screen_.close(); continue;
+                }
+                world_.get<GodAlignment>(player_).favor -= 8;
                 if (world_.has<Inventory>(player_)) {
                     auto& inv = world_.get<Inventory>(player_);
                     int id_count = 0;
@@ -7531,7 +7694,12 @@ void Engine::handle_input() {
                 }
                 church_screen_.close();
             } else if (cact == ChurchAction::ENCHANT) {
-                // Enchant main-hand weapon
+                // Enchant main-hand weapon, costs 12 favor
+                if (!world_.has<GodAlignment>(player_) || world_.get<GodAlignment>(player_).favor < 12) {
+                    log_.add("Not enough favor. (12 required)", {180, 120, 120, 255});
+                    church_screen_.close(); continue;
+                }
+                world_.get<GodAlignment>(player_).favor -= 12;
                 auto& rewards = get_church_rewards(church_screen_.get_god());
                 if (world_.has<Inventory>(player_)) {
                     Entity wpn = world_.get<Inventory>(player_).get_equipped(EquipSlot::MAIN_HAND);
@@ -7591,7 +7759,26 @@ void Engine::handle_input() {
                 audio_.play(SfxId::PICKUP);
                 church_screen_.close();
             } else if (cact == ChurchAction::CLAIM_BLESSING) {
+                // One-time blessing, costs 20 favor
                 auto& rewards = get_church_rewards(church_screen_.get_god());
+                // Find the church entity to check blessing_given
+                Entity church_e = NULL_ENTITY;
+                auto& church_pool = world_.pool<Church>();
+                for (size_t ci = 0; ci < church_pool.size(); ci++) {
+                    if (church_pool.at_index(ci).god == church_screen_.get_god()) {
+                        church_e = church_pool.entity_at(ci); break;
+                    }
+                }
+                if (church_e != NULL_ENTITY && world_.get<Church>(church_e).blessing_given) {
+                    log_.add("You have already received this blessing.", {180, 140, 120, 255});
+                    church_screen_.close(); continue;
+                }
+                if (!world_.has<GodAlignment>(player_) || world_.get<GodAlignment>(player_).favor < 20) {
+                    log_.add("Not enough favor. (20 required)", {180, 120, 120, 255});
+                    church_screen_.close(); continue;
+                }
+                world_.get<GodAlignment>(player_).favor -= 20;
+                if (church_e != NULL_ENTITY) world_.get<Church>(church_e).blessing_given = true;
                 if (world_.has<Stats>(player_)) {
                     auto& ps = world_.get<Stats>(player_);
                     ps.set_attr(Attr::STR, ps.attr(Attr::STR) + rewards.blessing_str);
@@ -9797,17 +9984,15 @@ void Engine::render() {
                 }
             } else {
                 // Quest not in journal: check prerequisites
-                // If prereq not met, don't show marker
-                auto quest_prereq = [](QuestId id) -> QuestId {
-                    int idx = static_cast<int>(id);
-                    if (idx <= 0 || idx > static_cast<int>(QuestId::MQ_09_CLAIM_RELIQUARY))
-                        return QuestId::COUNT;
-                    return static_cast<QuestId>(idx - 1);
-                };
-                auto prereq = quest_prereq(qid);
-                if (prereq != QuestId::COUNT &&
-                    (!journal_.has_quest(prereq) || journal_.get_state(prereq) != QuestState::FINISHED)) {
-                    continue; // prereq not met, hide marker
+                int qidx = static_cast<int>(qid);
+                bool is_main = (qidx >= 0 && qidx <= static_cast<int>(QuestId::MQ_09_CLAIM_RELIQUARY));
+                if (is_main) {
+                    // Main quest: previous quest must be FINISHED
+                    if (qidx > 0) {
+                        auto prereq = static_cast<QuestId>(qidx - 1);
+                        if (!journal_.has_quest(prereq) || journal_.get_state(prereq) != QuestState::FINISHED)
+                            continue;
+                    }
                 }
                 // Gold ! for available quest
                 symbol = "!";
@@ -10004,7 +10189,7 @@ void Engine::render() {
     help_screen_.render(renderer_, font_, font_title_, width_, height_);
     passive_tree_screen_.render(renderer_, font_, font_title_, width_, height_);
     church_screen_.render(renderer_, font_, font_title_, width_, height_);
-    // Old levelup_screen_ removed; passive tree replaces it
+    dialogue_screen_.render(renderer_, font_, font_title_, width_, height_);
     shop_screen_.render(renderer_, font_, sprites_, world_, width_, height_);
 
     // World map overlay — needs player position and tilemap

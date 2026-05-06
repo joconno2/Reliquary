@@ -25,17 +25,17 @@ static TileType char_to_tile(char c) {
         case '+': return TileType::DOOR_CLOSED;
         case '>': return TileType::STAIRS_DOWN;
         case '<': return TileType::STAIRS_UP;
-        // NPCs and player start are placed on dirt/grass
+        // NPCs and player start are placed on stone floor (inside buildings)
         case '@': case 'S': case 'B': case 'P': case 'F': case 'G':
-        case 'W': case 'H': case 'M': case 'E':
-            return TileType::FLOOR_DIRT;
+        case 'W': case 'H': case 'M': case 'E': case 'C': case 'N':
+            return TileType::FLOOR_STONE;
         default:  return TileType::VOID;
     }
 }
 
 static bool is_entity_char(char c) {
     return c == '@' || c == 'S' || c == 'B' || c == 'P' || c == 'F' || c == 'G' || c == 'E'
-        || c == 'W' || c == 'H' || c == 'M';
+        || c == 'W' || c == 'H' || c == 'M' || c == 'C' || c == 'N';
 }
 
 MapFileResult load(const std::string& path) {

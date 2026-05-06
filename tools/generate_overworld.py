@@ -292,26 +292,40 @@ def place_town(tx, ty, is_start, town_rng, is_city=False, province_idx=2):
         for dx in range(-half_w - 4, half_w + 5):
             set_tile(tx + dx, ty, ',')
             set_tile(tx + dx, ty + 1, ',')
-        # Buildings arranged around parade ground
-        npcs = ['G', 'S', 'B', 'P', 'F', 'G', 'S', 'F'] if is_city else ['G', 'S', 'B', 'P', 'F']
-        town_rng.shuffle(npcs)
-        # Barracks-style: long buildings north and south, smaller ones east/west
-        slots = [
-            (-half_w + 2, -half_h + 2, 9, 5, False),     # north long barracks
-            (-half_w + 13, -half_h + 2, 7, 5, False),    # north right
-            (half_w - 9, -half_h + 2, 7, 5, False),      # north far right
-            (-half_w + 2, half_h - 6, 8, 5, True),       # south left
-            (half_w - 10, half_h - 6, 8, 5, True),       # south right
-            (-half_w + 2, -2, 6, 5, True),                # west mid
-            (half_w - 7, -2, 6, 5, True),                 # east mid
-        ] if is_city else [
-            (-13, -9, 7, 5, False), (-4, -9, 7, 5, False),
-            (-13, 4, 7, 5, True), (5, 4, 7, 5, True), (5, -9, 6, 5, False),
-        ]
-        for i, slot in enumerate(slots):
-            bx, by, bw, bh, ds = slot
-            npc = npcs[i] if i < len(npcs) else None
-            place_building(tx + bx, ty + by, bw, bh, wall_ch, ds, npc)
+        # City: 12 buildings. Town: 7. Each NPC has a dedicated building.
+        # M=Merchant, H=Herbalist, W=Villager/Inn spot
+        if is_city:
+            npcs_and_slots = [
+                # North row
+                ('G', -16, -half_h + 2, 8, 5, False),   # guard barracks
+                ('S', -5, -half_h + 2, 8, 5, False),    # general store
+                ('B', 6, -half_h + 2, 8, 5, False),     # smithy
+                # South row
+                ('M', -16, half_h - 6, 8, 5, True),     # merchant
+                ('H', -5, half_h - 6, 8, 5, True),      # herbalist
+                ('F', 6, half_h - 6, 8, 5, True),       # farmer house
+                # West side
+                ('P', -half_w + 2, -10, 7, 5, True),    # scholar
+                ('N', -half_w + 2, 5, 7, 5, False),     # inn
+                # East side
+                ('G', half_w - 9, -10, 7, 5, True),     # guard post
+                ('F', half_w - 9, 5, 7, 5, False),      # farmer
+                # Inner (closer to center)
+                ('W', 12, -6, 6, 5, True),               # villager
+                ('S', -17, -6, 6, 5, True),              # second shop
+            ]
+        else:
+            npcs_and_slots = [
+                ('S', -13, -9, 7, 5, False),
+                ('B', -3, -9, 7, 5, False),
+                ('G', 7, -9, 6, 5, False),
+                ('P', -13, 4, 7, 5, True),
+                ('F', -3, 4, 7, 5, True),
+                ('H', 7, 4, 6, 5, True),
+                ('M', -8, -2, 6, 4, True),  # merchant near center
+            ]
+        for npc_ch, bx, by, bw, bh, ds in npcs_and_slots:
+            place_building(tx + bx, ty + by, bw, bh, wall_ch, ds, npc_ch)
 
     elif province_idx == 0:  # Pale Reach (Soleth) — temple/symmetrical
         half_w, half_h = (22, 16) if is_city else (14, 11)
@@ -488,6 +502,29 @@ def place_town(tx, ty, is_start, town_rng, is_city=False, province_idx=2):
 for i, (tx, ty, name, is_start, is_city, prov_idx) in enumerate(towns):
     if 25 < tx < W - 25 and 25 < ty < H - 25:
         place_town(tx, ty, is_start, random.Random(42 + i * 7), is_city, prov_idx)
+        wall_ch = {0:'#', 1:'L', 2:'#', 3:'w', 4:'L', 5:'n'}.get(prov_idx, '#')
+        if is_city:
+            # Church building (prominent, east of center)
+            place_building(tx + 8, ty - 6, 9, 6, wall_ch, True, 'C')
+        # All towns get inn, merchant, herbalist buildings if not already placed by layout
+        # Check which glyphs are already in the town area
+        trng = random.Random(42 + i * 13)
+        existing = set()
+        for dy2 in range(-20, 21):
+            for dx2 in range(-20, 21):
+                gx, gy = tx + dx2, ty + dy2
+                if 0 <= gx < W and 0 <= gy < H:
+                    ch = grid[gy][gx]
+                    if ch in 'NMBHC': existing.add(ch)
+        # Add missing buildings along the south/east edges
+        extra_y = 10 if is_city else 7
+        extra_offset = 0
+        for glyph, label_w, label_h in [('N', 7, 5), ('M', 7, 5), ('H', 6, 5)]:
+            if glyph in existing: continue
+            bx = -12 + extra_offset * 9
+            by = extra_y
+            place_building(tx + bx, ty + by, label_w, label_h, wall_ch, False, glyph)
+            extra_offset += 1
 
 # === NAMED QUEST DUNGEONS + GENERIC DUNGEONS ===
 print("Placing dungeons...", flush=True)

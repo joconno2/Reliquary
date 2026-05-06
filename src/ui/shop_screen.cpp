@@ -110,7 +110,9 @@ static ShopItem make_shop_item(const ShopItemDef& def) {
 }
 
 void ShopScreen::generate_stock(RNG& rng, int difficulty, GodId province_god) {
-    stock_.clear();
+    // Don't regenerate if stock still exists (prevents reroll on re-talk)
+    if (!stock_.empty()) return;
+
 
     // Difficulty scales: 0 = starting area, 4 = mid-game, 8 = endgame
     // Higher difficulty = bias toward better items + bonus stats + higher prices

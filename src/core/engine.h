@@ -36,6 +36,7 @@
 #include "components/skills.h"
 #include "components/church.h"
 #include "ui/church_screen.h"
+#include "ui/dialogue_screen.h"
 #include "components/tenet.h"
 #include "components/traits.h"
 #include "components/background.h"
@@ -300,6 +301,8 @@ private:
     WorldMap world_map_;
     PassiveTreeScreen passive_tree_screen_;
     ChurchScreen church_screen_;
+    DialogueScreen dialogue_screen_;
+    Entity dialogue_npc_ = 0; // which NPC the dialogue is with
 
     // Track where Settings should return to
     GameState return_from_settings_ = GameState::MAIN_MENU;
