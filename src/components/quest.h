@@ -52,7 +52,7 @@ inline const QuestInfo& get_quest_info(QuestId id) {
          "The brand on your face burns when you face east. Something in the Barrow "
          "woke the same night you appeared. The elder says a wight walks there.",
          "Enter The Barrow east of Thornwall. Kill the wight on floor 3.",
-         "The wight crumbles. Your brand flares. Something deeper answered.",
+         "The wight crumbles. Your brand flares. Find Scholar Aldric in Thornwall. He studies the old texts.",
          true, 50, 30},
 
         // MQ_02_SCHOLAR_CLUE

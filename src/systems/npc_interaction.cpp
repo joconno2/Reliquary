@@ -372,7 +372,7 @@ bool interact(Context& ctx, Entity target, int target_x, int target_y) {
                 ctx.log.add(qinfo.complete_text, {180, 200, 160, 255});
             ctx.audio.play(SfxId::QUEST);
             ctx.gold += qinfo.gold_reward;
-            god_system::adjust_favor(ctx.world, ctx.player, ctx.log, 5);
+            god_system::adjust_favor(ctx.world, ctx.player, ctx.log, 3);
             if (ctx.world.has<Stats>(ctx.player) && qinfo.xp_reward > 0) {
                 if (ctx.world.get<Stats>(ctx.player).grant_xp(qinfo.xp_reward)) {
                     if (ctx.world.has<PassiveTreeState>(ctx.player))
@@ -383,6 +383,16 @@ bool interact(Context& ctx, Entity target, int target_x, int target_y) {
             }
             // Clear quest marker (set quest_id to -1 so NPC stops offering)
             npc.quest_id = -1;
+            // Hint: point player to next quest NPC
+            QuestId next_qid = static_cast<QuestId>(static_cast<int>(qid) + 1);
+            if (next_qid < QuestId::COUNT && static_cast<int>(next_qid) <= static_cast<int>(QuestId::MQ_09_CLAIM_RELIQUARY)) {
+                auto& nqinfo = get_quest_info(next_qid);
+                if (nqinfo.name) {
+                    char nbuf[128];
+                    snprintf(nbuf, sizeof(nbuf), "Next: %s", nqinfo.objective);
+                    ctx.log.add(nbuf, {180, 200, 140, 255});
+                }
+            }
         } else if (ctx.journal.has_quest(qid) &&
                    ctx.journal.get_state(qid) == QuestState::ACTIVE &&
                    is_auto_complete_quest(qid)) {
@@ -397,7 +407,7 @@ bool interact(Context& ctx, Entity target, int target_x, int target_y) {
                 ctx.log.add(qinfo.complete_text, {180, 200, 160, 255});
             ctx.audio.play(SfxId::QUEST);
             ctx.gold += qinfo.gold_reward;
-            god_system::adjust_favor(ctx.world, ctx.player, ctx.log, 5);
+            god_system::adjust_favor(ctx.world, ctx.player, ctx.log, 3);
             if (ctx.world.has<Stats>(ctx.player) && qinfo.xp_reward > 0)
                 ctx.world.get<Stats>(ctx.player).grant_xp(qinfo.xp_reward);
             npc.quest_id = -1;

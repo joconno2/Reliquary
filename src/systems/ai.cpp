@@ -386,6 +386,9 @@ void process(World& world, TileMap& map, Entity player, RNG& rng,
                             ps.hp -= drain;
                             ls.hp = std::min(ls.hp + drain / 2, ls.hp_max);
                             ai_comp.ability_cooldown = 3;
+                            ai_comp.last_spell = AI::SpellVFX::DRAIN;
+                            char db[64]; snprintf(db, sizeof(db), "The %s drains your life! (%d)", ls.name.c_str(), drain);
+                            log.add(db, {200, 100, 255, 255});
                             break;
                         }
                         // Summon skeleton if no ability used and cooldown ready
@@ -410,6 +413,8 @@ void process(World& world, TileMap& map, Entity player, RNG& rng,
                                     world.add<Energy>(sk, {0, 90});
                                     world.add<StatusEffects>(sk);
                                     ai_comp.ability_cooldown = 10;
+                                    ai_comp.last_spell = AI::SpellVFX::SUMMON;
+                                    log.add("The lich raises a skeleton!", {200, 180, 255, 255});
                                     break;
                                 }
                             }
@@ -456,15 +461,16 @@ void process(World& world, TileMap& map, Entity player, RNG& rng,
                             && world.has<Stats>(e)) {
                             auto& ds = world.get<Stats>(e);
                             int breath_dmg = ds.base_damage * 2 / 3;
-                            // Damage player
                             if (world.has<Stats>(player)) {
                                 world.get<Stats>(player).hp -= breath_dmg;
                             }
-                            // Apply burn
                             if (world.has<StatusEffects>(player)) {
                                 world.get<StatusEffects>(player).add(StatusType::BURN, 3, 4);
                             }
                             ai_comp.ability_cooldown = 3;
+                            ai_comp.last_spell = AI::SpellVFX::BREATH_FIRE;
+                            char bb[64]; snprintf(bb, sizeof(bb), "The %s breathes fire! (%d)", ds.name.c_str(), breath_dmg);
+                            log.add(bb, {255, 140, 40, 255});
                             break;
                         }
                         // Dragons don't flee. They close and fight.
@@ -634,6 +640,8 @@ void process(World& world, TileMap& map, Entity player, RNG& rng,
                                     // Remove the corpse
                                     world.destroy(ce);
                                     ai_comp.ability_cooldown = 8;
+                                    ai_comp.last_spell = AI::SpellVFX::SUMMON;
+                                    log.add("The death knight raises the dead!", {200, 160, 255, 255});
                                     break;
                                 }
                             }
@@ -649,6 +657,9 @@ void process(World& world, TileMap& map, Entity player, RNG& rng,
                                 world.get<Stats>(player).hp -= drain;
                                 ns.hp = std::min(ns.hp + drain / 2, ns.hp_max);
                                 ai_comp.ability_cooldown = 3;
+                                ai_comp.last_spell = AI::SpellVFX::DRAIN;
+                                char db[64]; snprintf(db, sizeof(db), "The %s drains your life! (%d)", ns.name.c_str(), drain);
+                                log.add(db, {200, 100, 255, 255});
                             }
                         } else {
                             move_toward(world, map, e, tx, ty, rng);
@@ -674,15 +685,19 @@ void process(World& world, TileMap& map, Entity player, RNG& rng,
                                     int heal = 5 + as.hp_max / 10;
                                     as.hp = std::min(as.hp + heal, as.hp_max);
                                     ai_comp.ability_cooldown = 4;
+                                    ai_comp.last_spell = AI::SpellVFX::HEAL_ALLY;
+                                    char hb[64]; snprintf(hb, sizeof(hb), "The shaman heals the %s!", as.name.c_str());
+                                    log.add(hb, {120, 200, 120, 255});
                                     acted = true;
                                     break;
                                 }
-                                // Buff damage if at full health (+2 base damage, 8 turns)
-                                // Simple: just boost damage directly. It won't stack
-                                // because cooldown prevents re-buffing.
+                                // Buff damage if at full health
                                 if (as.hp >= as.hp_max * 3 / 4 && rng.chance(30)) {
                                     as.base_damage += 2;
                                     ai_comp.ability_cooldown = 8;
+                                    ai_comp.last_spell = AI::SpellVFX::BUFF_ALLY;
+                                    char bb[64]; snprintf(bb, sizeof(bb), "The shaman empowers the %s!", as.name.c_str());
+                                    log.add(bb, {255, 200, 100, 255});
                                     acted = true;
                                     break;
                                 }

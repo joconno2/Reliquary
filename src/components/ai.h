@@ -36,4 +36,7 @@ struct AI {
     int regen_per_turn = 0;   // HP regen (troll)
     bool friendly = false;    // summoned by player, attacks enemies instead
     Entity target = 0;
+    // VFX flags (set by AI, consumed by engine each tick)
+    enum class SpellVFX : int { NONE=0, DRAIN, SUMMON, HEAL_ALLY, BUFF_ALLY, BREATH_FIRE, BREATH_ICE };
+    SpellVFX last_spell = SpellVFX::NONE;
 };

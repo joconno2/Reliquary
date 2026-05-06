@@ -759,17 +759,20 @@ static void apply_curse_bless(Item& item, int dungeon_level, RNG& rng) {
     if (dungeon_level < 3) return;
     if (item.type != ItemType::WEAPON && item.type != ItemType::ARMOR_CHEST &&
         item.type != ItemType::ARMOR_HEAD && item.type != ItemType::ARMOR_FEET &&
-        item.type != ItemType::SHIELD) return;
+        item.type != ItemType::ARMOR_HANDS && item.type != ItemType::SHIELD) return;
 
     // 10% cursed, 8% blessed
     int roll = rng.range(1, 100);
     if (roll <= 10) {
-        item.curse_state = 1; // cursed
+        item.curse_state = 1; // cursed (can't unequip)
         // Cursed items have slightly better stats as bait
         if (item.type == ItemType::WEAPON)
             item.damage_bonus += 1;
         else
             item.armor_bonus += 1;
+        // Cursed items are always unidentified (you can't see the curse)
+        item.identified = false;
+        item.unid_name = "glowing " + std::string(item.name);
     } else if (roll <= 18) {
         item.curse_state = 2; // blessed
         item.name = "Blessed " + item.name;
@@ -777,6 +780,26 @@ static void apply_curse_bless(Item& item, int dungeon_level, RNG& rng) {
             item.damage_bonus += 1;
         else
             item.armor_bonus += 1;
+        // Blessed items also start unidentified (reward for identifying)
+        item.identified = false;
+        item.unid_name = "glowing " + std::string(item.name);
+    }
+}
+
+// Make items with affixes unidentified (they have hidden bonuses worth discovering)
+static void apply_identification(Item& item, RNG& rng) {
+    // Items that already have curse/bless state are handled in apply_curse_bless
+    if (item.curse_state != 0) return;
+    // Items with affixes start unidentified
+    if (!item.affixes.empty()) {
+        item.identified = false;
+        // Generic unid name based on type
+        std::string base = item.name;
+        if (item.type == ItemType::WEAPON) item.unid_name = base;
+        else if (item.type == ItemType::ARMOR_CHEST) item.unid_name = base;
+        else if (item.type == ItemType::RING) item.unid_name = "ring";
+        else if (item.type == ItemType::AMULET) item.unid_name = "amulet";
+        else item.unid_name = base;
     }
 }
 
@@ -1006,6 +1029,7 @@ void spawn_items(World& world, const TileMap& map,
             apply_quality(item, dungeon_level, rng);
             apply_curse_bless(item, dungeon_level, rng);
             apply_affixes(item, dungeon_level, rng);
+            apply_identification(item, rng);
         } else if (roll <= 21) {
             // Ranged weapon
             int idx = weighted_item_pick(rng, dungeon_level, RANGED_COUNT, 3);
@@ -1015,6 +1039,7 @@ void spawn_items(World& world, const TileMap& map,
             apply_tags(item);
             apply_quality(item, dungeon_level, rng);
             apply_affixes(item, dungeon_level, rng);
+            apply_identification(item, rng);
         } else if (roll <= 25) {
             // Staff (mage weapon)
             int idx = weighted_item_pick(rng, dungeon_level, STAFF_COUNT, 3);
@@ -1022,6 +1047,7 @@ void spawn_items(World& world, const TileMap& map,
             auto& item = world.get<Item>(e);
             apply_tags(item);
             apply_affixes(item, dungeon_level, rng);
+            apply_identification(item, rng);
         } else if (roll <= 44) {
             // Armor — no material, the sprite IS the tier
             int idx = weighted_item_pick(rng, dungeon_level, ARMOR_COUNT, 2);
@@ -1031,6 +1057,7 @@ void spawn_items(World& world, const TileMap& map,
             apply_quality(item, dungeon_level, rng);
             apply_curse_bless(item, dungeon_level, rng);
             apply_affixes(item, dungeon_level, rng);
+            apply_identification(item, rng);
         } else if (roll <= 56) {
             // Spellbook — teaches a random spell (increased: tomes are primary spell source)
             // Ordered by power — weak first, powerful last. 50 spells.
@@ -1083,6 +1110,7 @@ void spawn_items(World& world, const TileMap& map,
             auto& item = world.get<Item>(e);
             apply_curse_bless(item, dungeon_level, rng);
             apply_affixes(item, dungeon_level, rng);
+            apply_identification(item, rng);
         } else if (roll <= 64 && dungeon_level >= 2) {
             // Ring — depth 2+
             int idx = weighted_item_pick(rng, dungeon_level, RING_COUNT, 3);
@@ -1090,6 +1118,7 @@ void spawn_items(World& world, const TileMap& map,
             auto& item = world.get<Item>(e);
             apply_curse_bless(item, dungeon_level, rng);
             apply_affixes(item, dungeon_level, rng);
+            apply_identification(item, rng);
         } else if (roll <= 67) {
             // Lore item — readable journal/inscription
             struct LoreEntry { const char* name; const char* text; };

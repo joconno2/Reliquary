@@ -1334,7 +1334,7 @@ void Engine::generate_level() {
             // Energy for NPC wandering (slow — acts every ~3 turns)
             world_.add<Energy>(npc, {0, 35});
 
-            // Building sign: placed outside the door (find door near NPC, sign one tile beyond)
+            // Building sign: placed 2 tiles outside the door (not blocking entry)
             const char* sign_label = nullptr;
             switch (me.glyph) {
                 case 'S': sign_label = "General Store"; break;
@@ -1345,17 +1345,25 @@ void Engine::generate_level() {
                 default: break;
             }
             if (sign_label) {
-                // Search around NPC for a door, then place sign one tile beyond it
                 for (int dy = -3; dy <= 3 && sign_label; dy++) {
                     for (int dx = -3; dx <= 3; dx++) {
                         int sx2 = me.x + dx, sy2 = me.y + dy;
                         if (!map_.in_bounds(sx2, sy2)) continue;
                         if (map_.at(sx2, sy2).type != TileType::DOOR_CLOSED &&
                             map_.at(sx2, sy2).type != TileType::DOOR_OPEN) continue;
-                        // Found door. Place sign one tile beyond it (away from NPC)
-                        int sign_x = sx2 + (sx2 > me.x ? 1 : sx2 < me.x ? -1 : 0);
-                        int sign_y = sy2 + (sy2 > me.y ? 1 : sy2 < me.y ? -1 : 0);
+                        // Door direction: which side faces away from NPC
+                        int out_dx = (sx2 > me.x) ? 1 : (sx2 < me.x) ? -1 : 0;
+                        int out_dy = (sy2 > me.y) ? 1 : (sy2 < me.y) ? -1 : 0;
+                        // Place sign 2 tiles out (skip the tile right in front of door)
+                        int sign_x = sx2 + out_dx * 2;
+                        int sign_y = sy2 + out_dy * 2;
+                        // Try adjacent if 2-out fails
+                        if (!map_.in_bounds(sign_x, sign_y) || !map_.is_walkable(sign_x, sign_y)) {
+                            sign_x = sx2 + out_dx * 2 + 1;
+                            sign_y = sy2 + out_dy * 2;
+                        }
                         if (!map_.in_bounds(sign_x, sign_y) || !map_.is_walkable(sign_x, sign_y)) break;
+                        if (combat::entity_at(world_, sign_x, sign_y, player_) != NULL_ENTITY) break;
                         Entity se = world_.create();
                         world_.add<Position>(se, {sign_x, sign_y});
                         world_.add<Renderable>(se, {SHEET_TILES, 7, 17, {255,255,255,255}, 4});
@@ -3729,7 +3737,7 @@ void Engine::try_move_player(int dx, int dy) {
                 "A rival paragon falls. The servant of %s is no more.", ginfo.name);
             log_.add(rbuf, {220, 200, 100, 255});
             if (world_.has<GodAlignment>(player_)) {
-                god_system::adjust_favor(world_, player_, log_, 10); // large favor bonus
+                god_system::adjust_favor(world_, player_, log_, 5); // paragon kill bonus
             }
         }
 
@@ -4823,6 +4831,60 @@ void Engine::process_turn() {
 
     // Process AI — each monster acts at most once per player turn
     ai::process(world_, map_, player_, rng_, log_, sneaking_);
+
+    // Enemy spell VFX: scan for entities that cast spells this tick
+    {
+        auto& ai_pool = world_.pool<AI>();
+        auto& pp = world_.get<Position>(player_);
+        for (size_t i = 0; i < ai_pool.size(); i++) {
+            auto& aic = ai_pool.at_index(i);
+            if (aic.last_spell == AI::SpellVFX::NONE) continue;
+            Entity ae = ai_pool.entity_at(i);
+            if (!world_.has<Position>(ae)) { aic.last_spell = AI::SpellVFX::NONE; continue; }
+            auto& ap = world_.get<Position>(ae);
+            float fx = (float)ap.x, fy = (float)ap.y;
+            float px = (float)pp.x, py = (float)pp.y;
+            switch (aic.last_spell) {
+                case AI::SpellVFX::DRAIN:
+                    // Purple bolt from caster to player + screen flash
+                    particles_.projectile(fx, fy, px, py, 10, 160, 60, 220, 0.2f, 3);
+                    particles_.burst(px, py, 6, 140, 40, 200, 0.1f, 0.5f, 2);
+                    screen_flash(100, 40, 160, 60);
+                    audio_.play(SfxId::SPELL);
+                    break;
+                case AI::SpellVFX::SUMMON:
+                    // Dark burst at caster position
+                    particles_.burst(fx, fy, 12, 120, 80, 180, 0.12f, 0.8f, 3);
+                    particles_.rise(fx, fy, 6, 160, 100, 220, 0.8f, 3);
+                    audio_.play(SfxId::SPELL_IMPACT);
+                    break;
+                case AI::SpellVFX::HEAL_ALLY:
+                    // Green glow at caster
+                    particles_.burst(fx, fy, 8, 80, 220, 80, 0.1f, 0.6f, 2);
+                    audio_.play(SfxId::HEAL);
+                    break;
+                case AI::SpellVFX::BUFF_ALLY:
+                    // Orange glow at caster
+                    particles_.rise(fx, fy, 6, 255, 200, 80, 0.6f, 2);
+                    audio_.play(SfxId::SPELL_BUFF);
+                    break;
+                case AI::SpellVFX::BREATH_FIRE:
+                    particles_.spell_fire(fx, fy);
+                    particles_.burst(px, py, 10, 255, 120, 40, 0.15f, 0.8f, 3);
+                    screen_flash(200, 80, 20, 60);
+                    trigger_screen_shake(4.0f);
+                    audio_.play(SfxId::SPELL_FIRE);
+                    break;
+                case AI::SpellVFX::BREATH_ICE:
+                    particles_.burst(px, py, 10, 140, 200, 255, 0.12f, 0.7f, 3);
+                    screen_flash(80, 120, 200, 50);
+                    audio_.play(SfxId::SPELL_ICE);
+                    break;
+                default: break;
+            }
+            aic.last_spell = AI::SpellVFX::NONE;
+        }
+    }
 
     // NPC wandering (overworld only, every 3 turns to reduce CPU)
     if (dungeon_level_ == 0 && game_turn_ % 3 == 0) {

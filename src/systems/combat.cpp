@@ -198,7 +198,7 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
 
     bool natural_20 = (raw_roll == 20);
 
-    // Knight: Shield Wall (30% block if shield equipped)
+    // Knight: Shield Wall (20% block if shield equipped, 40% during Bulwark)
     bool knight_blocked = false;
     if (world.has<Player>(defender) &&
         world.get<Player>(defender).class_id == ClassId::KNIGHT &&
@@ -206,7 +206,7 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
         Entity shield = world.get<Inventory>(defender).get_equipped(EquipSlot::OFF_HAND);
         if (shield != NULL_ENTITY && world.has<Item>(shield) &&
             world.get<Item>(shield).type == ItemType::SHIELD) {
-            int block_pct = (world.get<Player>(defender).bulwark_turns > 0) ? 50 : 30;
+            int block_pct = (world.get<Player>(defender).bulwark_turns > 0) ? 40 : 20;
             if (rng.range(1, 100) <= block_pct) {
                 knight_blocked = true;
                 result.shield_blocked = true;
