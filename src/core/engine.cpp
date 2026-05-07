@@ -527,7 +527,15 @@ void Engine::save_floor_cache(const std::string& path) {
                 ej["imat"] = static_cast<int>(ce.item.material); ej["itags"] = ce.item.tags;
                 ej["iid"] = ce.item.identified; ej["icurse"] = ce.item.curse_state;
             }
-            if (ce.has_god) { ej["god"] = static_cast<int>(ce.god_align.god); ej["gfav"] = ce.god_align.favor; }
+            if (ce.has_god) {
+                ej["god"] = static_cast<int>(ce.god_align.god); ej["gfav"] = ce.god_align.favor;
+                ej["crank"] = ce.god_align.church_rank;
+                ej["ctask"] = ce.god_align.task_active ? 1 : 0;
+                ej["cprog"] = ce.god_align.task_progress;
+                ej["ccomp"] = ce.god_align.task_complete ? 1 : 0;
+                ej["citem"] = ce.god_align.church_item_claimed ? 1 : 0;
+                ej["cbless"] = ce.god_align.church_blessing_claimed ? 1 : 0;
+            }
             if (ce.has_container) {
                 ej["cont_open"] = ce.container.opened;
                 ej["cont_osx"] = ce.container.open_sprite_x;
@@ -626,6 +634,12 @@ void Engine::load_floor_cache(const std::string& path) {
                     ce.has_god = true;
                     ce.god_align.god = static_cast<GodId>(ej.value("god", 0));
                     ce.god_align.favor = ej.value("gfav", 0);
+                    ce.god_align.church_rank = ej.value("crank", 0);
+                    ce.god_align.task_active = ej.value("ctask", 0) != 0;
+                    ce.god_align.task_progress = ej.value("cprog", 0);
+                    ce.god_align.task_complete = ej.value("ccomp", 0) != 0;
+                    ce.god_align.church_item_claimed = ej.value("citem", 0) != 0;
+                    ce.god_align.church_blessing_claimed = ej.value("cbless", 0) != 0;
                 }
                 if (ej.contains("cont_open")) {
                     ce.has_container = true;
@@ -688,10 +702,27 @@ void Engine::generate_level() {
         if (align.god == GodId::THESSARKA) {
             god_system::adjust_favor(world_, player_, log_, 2);
             align.items_identified_floor = 0; // reset auto-ID for new floor
+            // Auto-map: reveal entire floor layout
+            for (int my = 0; my < map_.height(); my++)
+                for (int mx = 0; mx < map_.width(); mx++)
+                    map_.at(mx, my).explored = true;
         }
         // Gathruun gains favor from depth
         if (align.god == GodId::GATHRUUN) {
             god_system::adjust_favor(world_, player_, log_, 1);
+        }
+        // Church task: floor descent tracking (Gathruun, Thessarka)
+        if (align.task_active && !align.task_complete) {
+            auto next = static_cast<ChurchRank>(align.church_rank + 1);
+            auto& task = get_church_task(align.god, next);
+            if (task.is_dungeon_quest || (task.items_donated > 0 && align.god == GodId::GATHRUUN)) {
+                align.task_progress++;
+                int target = task.items_donated > 0 ? task.items_donated : 1;
+                if (align.task_progress >= target) {
+                    align.task_complete = true; align.task_active = false;
+                    log_.add("Church task complete. Return to the church.", {255, 220, 80, 255});
+                }
+            }
         }
         // Lethis: reset lethal save per floor
         if (align.god == GodId::LETHIS) {
@@ -2076,6 +2107,7 @@ void Engine::generate_level() {
 
     // Create or reposition player
     if (player_ == NULL_ENTITY) {
+        shop_screen_.clear_cache();
         auto build = creation_screen_.get_build();
         auto result = player_setup::create_player(world_, build, start_x, start_y);
         player_ = result.entity;
@@ -2217,6 +2249,96 @@ void Engine::generate_level() {
                                   spawn_zone, dungeon_level_);
         populate::spawn_items(world_, map_, rooms_, rng_, effective_level);
         populate::spawn_traps(world_, map_, rooms_, rng_, effective_level);
+
+        // Special rooms (20% chance per eligible room, skip first and last)
+        for (size_t sri = 2; sri + 1 < rooms_.size(); sri++) {
+            if (!rng_.chance(20)) continue;
+            auto& sr = rooms_[sri];
+            int room_type = rng_.range(0, 2);
+
+            if (room_type == 0) {
+                // Treasure Vault: extra gold pile + rare item
+                int gx = rng_.range(sr.x + 1, sr.x + sr.w - 2);
+                int gy = rng_.range(sr.y + 1, sr.y + sr.h - 2);
+                if (map_.is_walkable(gx, gy)) {
+                    Entity ge = world_.create();
+                    world_.add<Position>(ge, {gx, gy});
+                    Item gi; gi.name = "gold cache"; gi.type = ItemType::GOLD;
+                    gi.gold_value = 30 + effective_level * 15; gi.stack = gi.gold_value;
+                    gi.stackable = true; gi.identified = true;
+                    world_.add<Item>(ge, std::move(gi));
+                    world_.add<Renderable>(ge, {SHEET_ITEMS, 0, 24, {255,220,80,255}, 1});
+                }
+                // Decorative: extra barrels
+                for (int d = 0; d < 3; d++) {
+                    int dx = rng_.range(sr.x + 1, sr.x + sr.w - 2);
+                    int dy = rng_.range(sr.y + 1, sr.y + sr.h - 2);
+                    if (map_.is_walkable(dx, dy)) {
+                        Entity de = world_.create();
+                        world_.add<Position>(de, {dx, dy});
+                        world_.add<Renderable>(de, {SHEET_TILES, 4, 17, {255,255,255,255}, 0});
+                    }
+                }
+            } else if (room_type == 1 && sr.w >= 6 && sr.h >= 6) {
+                // Monster Closet: pack of enemies + guaranteed loot
+                int pack_size = 3 + effective_level / 2;
+                for (int pi = 0; pi < pack_size; pi++) {
+                    int mx = rng_.range(sr.x + 1, sr.x + sr.w - 2);
+                    int my = rng_.range(sr.y + 1, sr.y + sr.h - 2);
+                    if (!map_.is_walkable(mx, my)) continue;
+                    if (combat::entity_at(world_, mx, my, player_) != NULL_ENTITY) continue;
+                    // Spawn a tough enemy (use higher index from monster table)
+                    int idx = rng_.range(std::min(8, effective_level), std::min(29, 8 + effective_level * 3));
+                    auto& def = populate::get_monster_table()[idx];
+                    Entity me = world_.create();
+                    world_.add<Position>(me, {mx, my});
+                    world_.add<Renderable>(me, {def.sheet, def.sprite_x, def.sprite_y, {255,255,255,255}, 5});
+                    float hps = 1.0f + effective_level * 0.5f;
+                    Stats ms; ms.name = def.name;
+                    ms.hp = static_cast<int>(def.hp * hps); ms.hp_max = ms.hp;
+                    ms.base_damage = static_cast<int>(def.base_damage * (1.0f + effective_level * 0.35f));
+                    ms.natural_armor = def.natural_armor; ms.base_speed = def.speed;
+                    ms.xp_value = def.xp_value;
+                    world_.add<Stats>(me, std::move(ms));
+                    AI mai; mai.state = AIState::HUNTING; mai.flee_threshold = def.flee_threshold;
+                    world_.add<AI>(me, mai);
+                    world_.add<Energy>(me, {0, def.speed});
+                }
+                // Guaranteed item in center
+                int cx2 = sr.x + sr.w / 2, cy2 = sr.y + sr.h / 2;
+                if (map_.is_walkable(cx2, cy2))
+                    populate::spawn_items(world_, map_, {sr}, rng_, effective_level + 2);
+            } else if (room_type == 2) {
+                // Trap Gauntlet: dense traps + reward
+                for (int ti = 0; ti < 4 + effective_level; ti++) {
+                    int tx2 = rng_.range(sr.x + 1, sr.x + sr.w - 2);
+                    int ty2 = rng_.range(sr.y + 1, sr.y + sr.h - 2);
+                    if (map_.is_walkable(tx2, ty2) && combat::entity_at(world_, tx2, ty2, player_) == NULL_ENTITY) {
+                        Entity te = world_.create();
+                        world_.add<Position>(te, {tx2, ty2});
+                        int trap_dmg = 3 + effective_level;
+                        Trap trap; trap.damage = trap_dmg;
+                        trap.revealed = false;
+                        world_.add<Trap>(te, trap);
+                    }
+                }
+                // Reward chest at far end
+                int rx = sr.x + sr.w - 2, ry = sr.y + sr.h / 2;
+                if (map_.is_walkable(rx, ry)) {
+                    Entity ce = world_.create();
+                    world_.add<Position>(ce, {rx, ry});
+                    world_.add<Renderable>(ce, {SHEET_TILES, 2, 17, {255,255,255,255}, 1});
+                    Container cont;
+                    cont.open_sprite_x = 3; cont.open_sprite_y = 17;
+                    Item ci; ci.name = "gold coins"; ci.type = ItemType::GOLD;
+                    ci.gold_value = 40 + effective_level * 20; ci.stack = ci.gold_value;
+                    ci.stackable = true; ci.identified = true;
+                    cont.contents = std::move(ci);
+                    world_.add<Container>(ce, std::move(cont));
+                }
+            }
+            break; // only one special room per floor
+        }
 
         // Dungeon doodads (chests, jars, mushrooms, coffins, god shrines, etc.)
         {
@@ -2658,77 +2780,8 @@ void Engine::try_move_player(int dx, int dy) {
                     input_glyphs_.label(Action::INTERACT).c_str());
                   tutorial_popup_.show("NPCs", tb); }
             }
-            // Open dialogue screen for role-based NPCs (including church priests)
-            if (world_.has<NPC>(target) && !dialogue_screen_.is_open()) {
-                auto& npc = world_.get<NPC>(target);
-                std::vector<DialogueOption> opts;
-                // Church priest: add church services to dialogue
-                if (world_.has<Church>(target) && world_.has<GodAlignment>(player_)) {
-                    auto& church = world_.get<Church>(target);
-                    auto& ga = world_.get<GodAlignment>(player_);
-                    if (ga.god == church.god || ga.god == GodId::NONE) {
-                        opts.push_back({"Church services", 5, true});
-                        opts.push_back({"Talk", 2, true});
-                        dialogue_screen_.open(npc.name, npc.dialogue, opts);
-                        dialogue_npc_ = target;
-                        return;
-                    } else {
-                        auto& ginfo = get_god_info(church.god);
-                        char buf[128];
-                        snprintf(buf, sizeof(buf), "This is the Church of %s. You serve another god.", ginfo.name);
-                        opts.push_back({"Talk", 2, true});
-                        dialogue_screen_.open(npc.name, buf, opts);
-                        dialogue_npc_ = target;
-                        return;
-                    }
-                }
-                if (npc.role == NPCRole::SHOPKEEPER) {
-                    opts.push_back({"Browse wares", 1, true});
-                    opts.push_back({"Talk", 2, true});
-                } else if (npc.role == NPCRole::INNKEEPER) {
-                    int inn_cost = 10;
-                    if (world_.has<Position>(player_)) {
-                        auto& ip = world_.get<Position>(player_);
-                        float id = std::sqrt(static_cast<float>((ip.x-500)*(ip.x-500)+(ip.y-375)*(ip.y-375)));
-                        inn_cost = 10 + static_cast<int>(id / 30.0f);
-                    }
-                    char rest_label[48]; snprintf(rest_label, sizeof(rest_label), "Rest (%d gold)", inn_cost);
-                    opts.push_back({rest_label, 3, gold_ >= inn_cost});
-                    opts.push_back({"Talk", 2, true});
-                } else if (npc.role == NPCRole::BLACKSMITH) {
-                    opts.push_back({"Browse wares", 1, true});
-                    opts.push_back({"Talk", 2, true});
-                } else if (npc.role == NPCRole::PRIEST) {
-                    opts.push_back({"Talk", 2, true});
-                } else if (npc.role == NPCRole::ELDER) {
-                    opts.push_back({"Talk", 2, true});
-                } else if (npc.role == NPCRole::FARMER || npc.role == NPCRole::GUARD) {
-                    opts.push_back({"Talk", 2, true});
-                }
-                // Quest option if NPC has a quest
-                if (npc.quest_id >= 0) {
-                    auto qid = static_cast<QuestId>(npc.quest_id);
-                    // Check prerequisite before showing quest option
-                    int qidx = static_cast<int>(qid);
-                    bool prereq_ok = true;
-                    if (qidx > 0 && qidx <= static_cast<int>(QuestId::MQ_09_CLAIM_RELIQUARY)) {
-                        auto prereq = static_cast<QuestId>(qidx - 1);
-                        if (!journal_.has_quest(prereq) || journal_.get_state(prereq) != QuestState::FINISHED)
-                            prereq_ok = false;
-                    }
-                    if (journal_.get_state(qid) == QuestState::COMPLETE)
-                        opts.push_back({"Turn in quest", 4, true});
-                    else if (!journal_.has_quest(qid) && prereq_ok)
-                        opts.push_back({"Ask about work", 4, true});
-                    else if (journal_.get_state(qid) == QuestState::ACTIVE)
-                        opts.push_back({"Ask about quest", 4, true});
-                }
-                if (!opts.empty()) {
-                    dialogue_screen_.open(npc.name, npc.dialogue, opts);
-                    dialogue_npc_ = target;
-                    return;
-                }
-            }
+            open_npc_dialogue(target);
+            if (dialogue_screen_.is_open()) return;
             if (npc_interaction::interact(npc_ctx, target, nx, ny))
                 return;
         }
@@ -3071,7 +3124,10 @@ void Engine::try_move_player(int dx, int dy) {
                 }
                 case GodId::YASHKHET: {
                     auto& ps = world_.get<Stats>(player_);
-                    // Low-HP bonus: 15% base, 25% at favor 25; threshold 50% base, 75% at favor 50
+                    // Lifesteal: heal 15% of damage dealt
+                    int steal = std::max(1, atk_result.damage * 15 / 100);
+                    ps.hp = std::min(ps.hp + steal, ps.hp_max);
+                    // Low-HP bonus: +25% damage below 50% HP (75% at favor 50)
                     int threshold_pct = (fav >= 50) ? 75 : 50;
                     int dmg_pct = (fav >= 25) ? 25 : 15;
                     if (ps.hp * 100 < ps.hp_max * threshold_pct)
@@ -3356,6 +3412,21 @@ void Engine::try_move_player(int dx, int dy) {
         // Bandit pickpocket gold (legacy, kept for any remaining gold_stolen usage)
         if (atk_result.gold_stolen > 0) {
             gold_ += atk_result.gold_stolen;
+            // Church task: Zhavek steal tracking
+            if (world_.has<GodAlignment>(player_)) {
+                auto& ga = world_.get<GodAlignment>(player_);
+                if (ga.task_active && !ga.task_complete && ga.god == GodId::ZHAVEK) {
+                    auto next = static_cast<ChurchRank>(ga.church_rank + 1);
+                    auto& task = get_church_task(ga.god, next);
+                    if (task.items_donated > 0) {
+                        ga.task_progress += atk_result.gold_stolen;
+                        if (ga.task_progress >= task.items_donated) {
+                            ga.task_complete = true; ga.task_active = false;
+                            log_.add("Church task complete. Return to the church.", {255, 220, 80, 255});
+                        }
+                    }
+                }
+            }
             char gbuf[48]; snprintf(gbuf, sizeof(gbuf), "Stole %d gold!", atk_result.gold_stolen);
             log_.add(gbuf, {255, 220, 80, 255});
             audio_.play(SfxId::GOLD);
@@ -3537,6 +3608,36 @@ void Engine::try_move_player(int dx, int dy) {
                 turn_actions_.used_stealth_attack = true;
         }
 
+        // Church task: track kill progress
+        if (atk_result.killed && world_.has<GodAlignment>(player_)) {
+            auto& ga = world_.get<GodAlignment>(player_);
+            if (ga.task_active && !ga.task_complete) {
+                auto next = static_cast<ChurchRank>(ga.church_rank + 1);
+                auto& task = get_church_task(ga.god, next);
+                if (task.kill_target > 0) {
+                    ga.task_progress++;
+                    if (ga.task_progress >= task.kill_target) {
+                        ga.task_complete = true;
+                        ga.task_active = false;
+                        log_.add("Church task complete. Return to the church.", {255, 220, 80, 255});
+                        audio_.play(SfxId::QUEST);
+                    }
+                }
+                // Dungeon floor clear (boss kill counts)
+                if (task.dungeon_clears > 0 || task.is_dungeon_quest) {
+                    if (world_.has<Stats>(target) && world_.get<Stats>(target).xp_value >= 50) {
+                        ga.task_progress++;
+                        if (ga.task_progress >= std::max(1, task.dungeon_clears)) {
+                            ga.task_complete = true;
+                            ga.task_active = false;
+                            log_.add("Church task complete. Return to the church.", {255, 220, 80, 255});
+                            audio_.play(SfxId::QUEST);
+                        }
+                    }
+                }
+            }
+        }
+
         // === CLASS ON-KILL ABILITIES ===
         if (atk_result.killed && world_.has<Player>(player_) && world_.has<Stats>(player_)) {
             auto cid = world_.get<Player>(player_).class_id;
@@ -3626,11 +3727,15 @@ void Engine::try_move_player(int dx, int dy) {
             world_.get<Stats>(player_).level >= 5) {
             auto cid2 = world_.get<Player>(player_).class_id;
 
-            // Rogue Lv5: VANISH (re-enter stealth after kill)
+            // Rogue Lv5: VANISH (re-enter stealth after kill, 3-turn cooldown)
             if (cid2 == ClassId::ROGUE) {
-                sneaking_ = true;
-                if (world_.has<Stats>(player_)) world_.get<Stats>(player_).invisible_turns = 2;
-                log_.add("You vanish into shadow.", {100, 80, 160, 255});
+                auto& pc = world_.get<Player>(player_);
+                if (pc.vanish_cooldown <= 0) {
+                    sneaking_ = true;
+                    if (world_.has<Stats>(player_)) world_.get<Stats>(player_).invisible_turns = 2;
+                    pc.vanish_cooldown = 3;
+                    log_.add("You vanish into shadow.", {100, 80, 160, 255});
+                }
             }
 
             // Barbarian Lv5: CLEAVE (rage hits splash adjacent enemies)
@@ -3729,6 +3834,35 @@ void Engine::try_move_player(int dx, int dy) {
             if (world_.has<Inventory>(player_)) {
                 Entity wpn = world_.get<Inventory>(player_).get_equipped(EquipSlot::MAIN_HAND);
                 if (wpn == NULL_ENTITY) meta_.killed_unarmed = true;
+            }
+        }
+
+        // Boss loot drops
+        if (atk_result.killed && world_.has<Position>(target)) {
+            auto& tp = world_.get<Position>(target);
+            auto spawn_boss_loot = [&](const char* name, const char* desc, ItemType type,
+                                        EquipSlot slot, int dmg, int arm, UniqueEffect ue,
+                                        int sx, int sy) {
+                Entity le = world_.create();
+                world_.add<Position>(le, {tp.x, tp.y});
+                Item li;
+                li.name = name; li.description = desc;
+                li.type = type; li.slot = slot;
+                li.damage_bonus = dmg; li.armor_bonus = arm;
+                li.unique_effect = ue; li.identified = true;
+                li.rarity = Rarity::LEGENDARY; li.gold_value = 300;
+                world_.add<Item>(le, std::move(li));
+                world_.add<Renderable>(le, {SHEET_ITEMS, sx, sy, {255, 220, 100, 255}, 2});
+                char lbuf[96]; snprintf(lbuf, sizeof(lbuf), "%s drops %s!", victim_name.c_str(), name);
+                log_.add(lbuf, {255, 220, 80, 255});
+            };
+            if (victim_name == "The Bone Colossus") {
+                spawn_boss_loot("Colossus Skull", "+6 AC. Reflect 3 damage.",
+                    ItemType::ARMOR_HEAD, EquipSlot::HEAD, 0, 6, UniqueEffect::THORNS, 4, 15);
+            } else if (victim_name == "The Ember Wyrm") {
+                spawn_boss_loot("Wyrm Fang", "+9 dmg. +5 fire on hit.",
+                    ItemType::WEAPON, EquipSlot::MAIN_HAND, 9, 0, UniqueEffect::FIRE_DAMAGE_BONUS, 3, 0);
+                world_.get<Item>(world_.pool<Item>().entity_at(world_.pool<Item>().size()-1)).tags |= TAG_SWORD;
             }
         }
 
@@ -3946,6 +4080,29 @@ void Engine::try_move_player(int dx, int dy) {
     player_acted_ = true;
     last_bumped_npc_ = NULL_ENTITY;
     npc_bump_count_ = 0;
+
+    // Show items on ground at new position
+    {
+        auto& all_pos = world_.pool<Position>();
+        std::string first_name;
+        int item_count = 0;
+        for (size_t gi = 0; gi < all_pos.size(); gi++) {
+            Entity ge = all_pos.entity_at(gi);
+            if (ge == player_ || !world_.has<Item>(ge)) continue;
+            auto& gp = all_pos.at_index(gi);
+            if (gp.x == nx && gp.y == ny) {
+                if (item_count == 0) first_name = world_.get<Item>(ge).display_name();
+                item_count++;
+            }
+        }
+        if (item_count == 1) {
+            char gbuf[128]; snprintf(gbuf, sizeof(gbuf), "You see %s here.", first_name.c_str());
+            log_.add(gbuf, {180, 180, 160, 255});
+        } else if (item_count > 1) {
+            char gbuf[128]; snprintf(gbuf, sizeof(gbuf), "You see %s and %d more items here.", first_name.c_str(), item_count - 1);
+            log_.add(gbuf, {180, 180, 160, 255});
+        }
+    }
 
     // Sneaking: costs extra turn time, grants stealth XP
     if (sneaking_) {
@@ -4418,6 +4575,10 @@ void Engine::process_turn() {
         if (pl.unbreakable_turns == 0)
             log_.add("Unbreakable fades.", {140, 120, 100, 255});
     }
+    // Rogue vanish cooldown tick
+    if (world_.has<Player>(player_) && world_.get<Player>(player_).vanish_cooldown > 0) {
+        world_.get<Player>(player_).vanish_cooldown--;
+    }
     // Druid beast form expiry
     if (druid_beast_turns_ > 0) {
         druid_beast_turns_--;
@@ -4564,6 +4725,39 @@ void Engine::process_turn() {
             }
         }
 
+        // Thalara: 3 damage/turn in molten zones
+        if (ga.god == GodId::THALARA && dungeon_level_ > 0) {
+            std::string zk2;
+            if (current_dungeon_idx_ >= 0 &&
+                current_dungeon_idx_ < static_cast<int>(dungeon_registry_.size()))
+                zk2 = dungeon_registry_[current_dungeon_idx_].zone;
+            if (zk2 == "molten" && game_turn_ % 3 == 0) {
+                ps.hp -= 3;
+                if (game_turn_ % 15 == 0)
+                    log_.add("The heat sears you. Thalara and fire do not mix.", {255, 140, 80, 255});
+            }
+        }
+
+        // Lethis: enemies that haven't seen you for 5 turns forget you
+        if (ga.god == GodId::LETHIS) {
+            auto& ai_pool = world_.pool<AI>();
+            for (size_t ai = 0; ai < ai_pool.size(); ai++) {
+                auto& aic = ai_pool.at_index(ai);
+                if (aic.friendly) continue;
+                if (aic.state == AIState::HUNTING && aic.alert_turns >= 5) {
+                    Entity ae = ai_pool.entity_at(ai);
+                    if (!world_.has<Position>(ae)) continue;
+                    auto& ap = world_.get<Position>(ae);
+                    int d = std::max(std::abs(ap.x - pp.x), std::abs(ap.y - pp.y));
+                    // If not adjacent and haven't been hit, forget
+                    if (d > 2) {
+                        aic.state = AIState::IDLE;
+                        aic.alert_turns = 0;
+                    }
+                }
+            }
+        }
+
         // Thessarka FOV reduction moved to after equipment recalc (see below)
 
         // Morreth: speed drops to 60 when enemies visible (can't flee)
@@ -4694,7 +4888,7 @@ void Engine::process_turn() {
         auto& pstats = world_.get<Stats>(player_);
         auto& pinv = world_.get<Inventory>(player_);
 
-        // Reset equipment bonuses
+        // Reset equipment bonuses and god-derived armor
         pstats.fov_bonus = 0;
         pstats.equip_str = 0;
         pstats.equip_dex = 0;
@@ -4702,6 +4896,7 @@ void Engine::process_turn() {
         pstats.equip_hp = 0;
         pstats.equip_mp = 0;
         pstats.equip_speed = 0;
+        pstats.god_armor = 0; // reset god armor before reapplying
 
         for (int s = 0; s < EQUIP_SLOT_COUNT; s++) {
             Entity eq = pinv.equipped[s];
@@ -4722,11 +4917,28 @@ void Engine::process_turn() {
         }
 
         // Ossren: -2 speed per equipped slot (weight of permanence)
-        if (world_.has<GodAlignment>(player_) && world_.get<GodAlignment>(player_).god == GodId::OSSREN) {
-            int equipped_count = 0;
-            for (int s = 0; s < EQUIP_SLOT_COUNT; s++)
-                if (pinv.equipped[s] != NULL_ENTITY) equipped_count++;
-            pstats.equip_speed -= equipped_count * 2;
+        if (world_.has<GodAlignment>(player_)) {
+            auto pgod = world_.get<GodAlignment>(player_).god;
+            // Morreth: +3 armor
+            if (pgod == GodId::MORRETH) pstats.god_armor += 3;
+            // Gathruun: +5 armor
+            if (pgod == GodId::GATHRUUN) pstats.god_armor += 5;
+            // Ossren: -2 speed per equipped slot, +1 armor per equipped slot
+            if (pgod == GodId::OSSREN) {
+                int equipped_count = 0;
+                for (int s = 0; s < EQUIP_SLOT_COUNT; s++)
+                    if (pinv.equipped[s] != NULL_ENTITY) equipped_count++;
+                pstats.equip_speed -= equipped_count * 2;
+                pstats.god_armor += equipped_count;
+            }
+            // Thalara: +20 speed
+            if (pgod == GodId::THALARA) {
+                pstats.equip_speed += 20;
+            }
+            // Gathruun: surface = 2x energy cost (halve speed)
+            if (pgod == GodId::GATHRUUN && dungeon_level_ <= 0) {
+                pstats.equip_speed -= pstats.base_speed / 2;
+            }
         }
 
         // Apply HP/MP bonuses to max values
@@ -5511,6 +5723,7 @@ void Engine::process_turn() {
                 pstats.hp -= dmg;
                 int healed = std::min(dmg / 2, mstats.hp_max - mstats.hp);
                 mstats.hp += healed;
+                audio_.play(SfxId::SPELL_IMPACT);
                 char mbuf[128];
                 snprintf(mbuf, sizeof(mbuf),
                     "The lich drains your life force. (%d)", dmg);
@@ -5521,8 +5734,10 @@ void Engine::process_turn() {
                 if (world_.has<StatusEffects>(player_)) {
                     bool immune = false;
                     for (auto tid : build_traits_) if (get_trait_info(tid).immune_fear) immune = true;
-                    if (!immune) world_.get<StatusEffects>(player_).add(StatusType::FEARED, 0, 3);
-                    else log_.add("Your iron will resists the fear.", {200, 200, 140, 255});
+                    if (!immune) {
+                        world_.get<StatusEffects>(player_).add(StatusType::FEARED, 0, 3);
+                        audio_.play(SfxId::CURSE);
+                    } else log_.add("Your iron will resists the fear.", {200, 200, 140, 255});
                 }
                 log_.add("The death knight's presence freezes your courage.", {160, 100, 160, 255});
             } else if (mstats.name == "naga" && dist <= 4 && rng_.chance(30)) {
@@ -5531,6 +5746,7 @@ void Engine::process_turn() {
                     int dur = 2;
                     for (auto tid : build_traits_) if (tid == TraitId::PARANOID) dur += 2; // Glass Jaw
                     world_.get<StatusEffects>(player_).add(StatusType::STUNNED, 0, dur);
+                    audio_.play(SfxId::SPELL_IMPACT);
                 }
                 log_.add("The naga's gaze locks your muscles.", {255, 255, 100, 255});
             } else if (mstats.name == "wraith" && dist <= 3 && rng_.chance(30)) {
@@ -5542,6 +5758,7 @@ void Engine::process_turn() {
                         int dur = 4;
                         for (auto tid : build_traits_) if (tid == TraitId::SPELL_GLUTTON) dur += 2;
                         world_.get<StatusEffects>(player_).add(StatusType::CONFUSED, 0, dur);
+                        audio_.play(SfxId::CURSE);
                     }
                     else log_.add("Your mind holds firm against the wail.", {200, 200, 140, 255});
                 }
@@ -5552,18 +5769,22 @@ void Engine::process_turn() {
                 world_.get<Stats>(player_).hp -= dmg;
                 if (world_.has<StatusEffects>(player_))
                     world_.get<StatusEffects>(player_).add(StatusType::FROZEN, 0, 2);
+                audio_.play(SfxId::SPELL_FREEZE);
                 char mbuf[128];
                 snprintf(mbuf, sizeof(mbuf), "A wave of cold hits you. (%d)", dmg);
                 log_.add(mbuf, {140, 200, 255, 255});
             } else if (mstats.name == "basilisk" && dist <= 4 && rng_.chance(20)) {
                 // Basilisk gaze — BLIND
-                if (world_.has<StatusEffects>(player_))
+                if (world_.has<StatusEffects>(player_)) {
                     world_.get<StatusEffects>(player_).add(StatusType::BLIND, 0, 5);
+                    audio_.play(SfxId::CURSE);
+                }
                 log_.add("The basilisk's gaze sears your vision.", {120, 120, 120, 255});
             } else if (mstats.name == "dragon" && dist <= 3 && rng_.chance(35)) {
                 // Dragon breathes fire
                 int dmg = 10 + rng_.range(0, 10);
                 world_.get<Stats>(player_).hp -= dmg;
+                audio_.play(SfxId::SPELL_FIRE);
                 char mbuf[128];
                 snprintf(mbuf, sizeof(mbuf),
                     "The dragon breathes fire! (%d)", dmg);
@@ -5638,6 +5859,22 @@ void Engine::process_turn() {
 
     particles_.update();
     log_.set_turn(game_turn_);
+
+    // Low HP warning (once per run)
+    if (!tips_shown_.first_low_hp && world_.has<Stats>(player_)) {
+        auto& pst = world_.get<Stats>(player_);
+        if (pst.hp > 0 && pst.hp * 100 / std::max(1, pst.hp_max) <= 30) {
+            tips_shown_.first_low_hp = true;
+            char tb[200];
+            snprintf(tb, sizeof(tb),
+                "Your HP is low.\n\n"
+                "%s - Rest to heal (when no enemies are near)\n"
+                "Use potions from your inventory for emergencies.\n"
+                "Retreat to the surface if overwhelmed.",
+                input_glyphs_.label(Action::REST).c_str());
+            tutorial_popup_.show("Danger", tb);
+        }
+    }
 }
 
 void Engine::process_npc_wander() {
@@ -5915,6 +6152,25 @@ void Engine::describe_tile(int x, int y) {
                     snprintf(buf, sizeof(buf), "%s. HP %d/%d, Dmg %d, Arm %d.%s",
                              st.name.c_str(), st.hp, st.hp_max, st.melee_damage(), st.protection(), note);
                     log_.add(buf, {220, 140, 140, 255});
+                    // Show active status effects
+                    if (world_.has<StatusEffects>(e)) {
+                        auto& sfx = world_.get<StatusEffects>(e);
+                        if (!sfx.effects.empty()) {
+                            std::string sfx_str = "  Status:";
+                            for (auto& fx : sfx.effects) {
+                                switch (fx.type) {
+                                    case StatusType::POISON: sfx_str += " Poisoned"; break;
+                                    case StatusType::BURN:   sfx_str += " Burning"; break;
+                                    case StatusType::BLEED:  sfx_str += " Bleeding"; break;
+                                    case StatusType::FROZEN: sfx_str += " Frozen"; break;
+                                    case StatusType::STUNNED:sfx_str += " Stunned"; break;
+                                    default: break;
+                                }
+                            }
+                            if (sfx_str.size() > 9)
+                                log_.add(sfx_str, {200, 180, 100, 255});
+                        }
+                    }
                 }
                 auto ins = meta_.examined_creature_names.insert(st.name);
                 meta_.total_creatures_examined = static_cast<int>(meta_.examined_creature_names.size());
@@ -6460,26 +6716,9 @@ void Engine::try_interact() {
             if (!map_.in_bounds(nx, ny)) continue;
             Entity target = combat::entity_at(world_, nx, ny, player_);
             if (target != NULL_ENTITY && world_.has<NPC>(target) && !world_.has<AI>(target)) {
-                npc_interaction::Context npc_ctx {
-                    world_, player_, log_, audio_, rng_, particles_,
-                    shop_screen_, quest_offer_, levelup_screen_,
-                    journal_, meta_, gold_, game_turn_, dungeon_level_,
-                    pending_levelup_, pending_quest_npc_
-                };
-                // Church priest
-                if (world_.has<Church>(target) && world_.has<GodAlignment>(player_)) {
-                    auto& church = world_.get<Church>(target);
-                    auto& ga = world_.get<GodAlignment>(player_);
-                    if (ga.god == church.god || ga.god == GodId::NONE) {
-                        church_screen_.open(player_, &world_, church.god,
-                                             ga.god == church.god ? ga.favor : 0);
-                        return;
-                    }
-                }
-                if (npc_interaction::interact(npc_ctx, target, nx, ny)) {
-                    player_acted_ = true;
-                    return;
-                }
+                // Use the same dialogue system as bump interaction
+                open_npc_dialogue(target);
+                return;
             }
         }
     }
@@ -6601,6 +6840,16 @@ void Engine::try_pickup() {
         log_.add(buf, pickup_col);
         audio_.play(SfxId::PICKUP);
 
+        // First potion tip
+        if (!tips_shown_.first_potion && (item.type == ItemType::POTION || item.type == ItemType::FOOD)) {
+            tips_shown_.first_potion = true;
+            tutorial_popup_.show("Consumables",
+                "Potions and food heal you when used.\n\n"
+                "Open inventory and select an item to use it.\n"
+                "Potion names are randomized each run.\n"
+                "Identify them by drinking or with spells.");
+        }
+
         // Sacred/profane check on pickup
         if (world_.has<GodAlignment>(player_) && item.tags != 0) {
             auto& ga = world_.get<GodAlignment>(player_);
@@ -6617,6 +6866,7 @@ void Engine::try_pickup() {
 
         // Remove from ground (remove Position only — keep Renderable for paper doll)
         world_.remove<Position>(e);
+        if (world_.has<Item>(e)) world_.get<Item>(e).new_pickup = true;
         inv.add(e);
 
         // Potions must be identified each run (no meta-save carry-over)
@@ -6760,14 +7010,38 @@ void Engine::try_rest() {
 
     // Spend the rest charge
     rest_count_this_floor_++;
+    // Church task: rest tracking (Lethis)
+    if (world_.has<GodAlignment>(player_)) {
+        auto& ga = world_.get<GodAlignment>(player_);
+        if (ga.task_active && !ga.task_complete) {
+            auto next = static_cast<ChurchRank>(ga.church_rank + 1);
+            auto& task = get_church_task(ga.god, next);
+            if (task.items_donated > 0 && ga.god == GodId::LETHIS) {
+                ga.task_progress++;
+                if (ga.task_progress >= task.items_donated) {
+                    ga.task_complete = true; ga.task_active = false;
+                    log_.add("Church task complete. Return to the church.", {255, 220, 80, 255});
+                }
+            }
+        }
+    }
 
-    // Full heal: restore all HP and MP
+    // Heal HP (depth-scaled percentage) and restore all MP
     bool is_vampire = world_.has<Diseases>(player_) &&
                       world_.get<Diseases>(player_).has(DiseaseId::VAMPIRISM);
 
     // Yashkhet: CANNOT heal from rest (only lifesteal)
     bool yashkhet_block = world_.has<GodAlignment>(player_) &&
                           world_.get<GodAlignment>(player_).god == GodId::YASHKHET;
+    // Thalara: dry rest heals no HP (MP only)
+    bool thalara_dry = false;
+    if (world_.has<GodAlignment>(player_) && world_.get<GodAlignment>(player_).god == GodId::THALARA) {
+        // Check if in a water-themed zone (sunken = ok, others = dry)
+        std::string rzone;
+        if (current_dungeon_idx_ >= 0 && current_dungeon_idx_ < static_cast<int>(dungeon_registry_.size()))
+            rzone = dungeon_registry_[current_dungeon_idx_].zone;
+        if (rzone != "sunken") thalara_dry = true;
+    }
 
     int hp_actual = 0;
     int mp_actual = 0;
@@ -6779,8 +7053,18 @@ void Engine::try_rest() {
     if (yashkhet_block) {
         // Yashkhet forbids rest healing
         log_.add("Yashkhet rejects your rest. Only blood heals.", {200, 60, 60, 255});
+    } else if (thalara_dry) {
+        // Thalara: dry rest only restores MP
+        log_.add("The land is too dry. Thalara grants no healing here.", {80, 160, 200, 255});
     } else if (!is_vampire) {
-        hp_actual = stats.hp_max - stats.hp;
+        // Rest heals a percentage of max HP (scales down with depth)
+        // Overworld: 100%, Depth 1: 80%, Depth 2: 70%, Depth 3: 60%, Depth 4: 50%
+        int heal_pct = (dungeon_level_ <= 0) ? 100 : std::max(50, 90 - dungeon_level_ * 10);
+        // Lethis passive: full rest heal always
+        if (world_.has<GodAlignment>(player_) && world_.get<GodAlignment>(player_).god == GodId::LETHIS)
+            heal_pct = 100;
+        int max_heal = stats.hp_max * heal_pct / 100;
+        hp_actual = std::min(max_heal, stats.hp_max - stats.hp);
         if (sythara_halve) hp_actual = hp_actual / 2;
         stats.hp = std::min(stats.hp_max, stats.hp + hp_actual);
     }
@@ -6817,8 +7101,16 @@ void Engine::try_rest() {
     else if (is_vampire && hp_actual == 0 && mp_actual == 0)
         snprintf(buf, sizeof(buf), "You rest, but nothing heals. The hunger gnaws.");
     else
-        snprintf(buf, sizeof(buf), "You rest. Fully restored. (+%d HP, +%d MP)", hp_actual, mp_actual);
+        snprintf(buf, sizeof(buf), "You rest. (+%d HP, +%d MP)", hp_actual, mp_actual);
     log_.add(buf, {100, 220, 100, 255});
+
+    if (!tips_shown_.first_rest) {
+        tips_shown_.first_rest = true;
+        tutorial_popup_.show("Resting",
+            "Resting heals HP and restores MP.\n\n"
+            "In dungeons, you have limited rests per floor.\n"
+            "Deeper floors heal less. Plan your fights.");
+    }
 
     // Prominent rest counter feedback
     if (rests_left > 0) {
@@ -7189,6 +7481,17 @@ void Engine::handle_inventory_action(InvAction action) {
                             snprintf(buf, sizeof(buf), "You learn %s.", sinfo.name);
                             log_.add(buf, {160, 140, 220, 255});
                             audio_.play(SfxId::SPELL);
+                            if (!tips_shown_.first_spell) {
+                                tips_shown_.first_spell = true;
+                                char stb[256]; snprintf(stb, sizeof(stb),
+                                    "You learned a spell!\n\n"
+                                    "%s - Open spellbook to cast\n"
+                                    "Q in spellbook - Set as quick-cast\n"
+                                    "%s - Quick-cast the set spell",
+                                    input_glyphs_.label(Action::SPELLBOOK).c_str(),
+                                    input_glyphs_.label(Action::QUICK_CAST).c_str());
+                                tutorial_popup_.show("Spells", stb);
+                            }
                             inv.remove(item_e);
                             world_.destroy(item_e);
                             player_acted_ = true;
@@ -7363,6 +7666,7 @@ void Engine::handle_input() {
 
         // Main menu state
         if (state_ == GameState::MAIN_MENU) {
+            // "Overwrite save?" confirmation sub-dialog
             MenuChoice choice = main_menu_.handle_input(event);
             switch (choice) {
                 case MenuChoice::NEW_GAME: {
@@ -7407,6 +7711,7 @@ void Engine::handle_input() {
                       creation_screen_.set_unlock_progress(static_cast<int>(ClassId::HERETIC),
                         prog(gc, GOD_COUNT, "gods")); }
 
+                    start_transition(TransitionType::FADE_OUT, 400);
                     state_ = GameState::CREATING;
                     audio_.stop_all_ambient(500);
                     audio_.stop_music(1500);
@@ -7534,7 +7839,26 @@ void Engine::handle_input() {
         if (state_ == GameState::INTRO) {
             intro_screen_.handle_input(event);
             if (intro_screen_.is_done()) {
+                start_transition(TransitionType::FADE_IN, 500);
                 state_ = GameState::PLAYING;
+                // Welcome tip on first game
+                if (!tips_shown_.first_overworld) {
+                    tips_shown_.first_overworld = true;
+                    char tb[300];
+                    snprintf(tb, sizeof(tb),
+                        "Talk to the townsfolk. The elder has a task.\n\n"
+                        "%s - Move and bump to interact\n"
+                        "%s - Open inventory\n"
+                        "%s - View quests\n"
+                        "%s - Open world map\n"
+                        "%s - Help / all controls",
+                        input_glyphs_.label(Action::MOVE_UP).c_str(),
+                        input_glyphs_.label(Action::INVENTORY).c_str(),
+                        input_glyphs_.label(Action::QUEST_LOG).c_str(),
+                        input_glyphs_.label(Action::WORLD_MAP).c_str(),
+                        input_glyphs_.label(Action::HELP).c_str());
+                    tutorial_popup_.show("Welcome", tb);
+                }
             }
             continue;
         }
@@ -7564,6 +7888,14 @@ void Engine::handle_input() {
                         "The merchant recoils. \"Get away from me, flesh-eater.\"", {});
                 } else {
                 dialogue_screen_.close();
+                if (!tips_shown_.first_shop) {
+                    tips_shown_.first_shop = true;
+                    tutorial_popup_.show("Shopping",
+                        "Buy tab: purchase items from the shopkeeper.\n"
+                        "Sell tab: sell your items for half their value.\n\n"
+                        "Shops in distant towns carry better gear\n"
+                        "at higher prices. Each shop has fixed stock.");
+                }
                 if (world_.has<NPC>(dialogue_npc_) && world_.has<Stats>(player_)) {
                     auto& ps = world_.get<Stats>(player_);
                     GodId province = GodId::NONE;
@@ -7576,7 +7908,7 @@ void Engine::handle_input() {
                         float sd = std::sqrt(static_cast<float>((sp.x-500)*(sp.x-500)+(sp.y-375)*(sp.y-375)));
                         shop_diff = std::max(shop_diff, static_cast<int>(sd / 40.0f));
                     }
-                    shop_screen_.open(player_, world_, rng_, &gold_, shop_diff, 100, province);
+                    shop_screen_.open(player_, world_, rng_, &gold_, shop_diff, 100, province, dialogue_npc_);
                 }
                 } // end cannibal else
             } else if (dact == 2) {
@@ -7585,8 +7917,8 @@ void Engine::handle_input() {
                     auto& npc = world_.get<NPC>(dialogue_npc_);
                     std::string line = npc.dialogue;
                     if (!npc.idle_lines.empty()) {
-                        int idx = rng_.range(0, static_cast<int>(npc.idle_lines.size()) - 1);
-                        if (!npc.idle_lines[idx].empty()) line = npc.idle_lines[idx];
+                        npc.line_idx = (npc.line_idx + 1) % static_cast<int>(npc.idle_lines.size());
+                        if (!npc.idle_lines[npc.line_idx].empty()) line = npc.idle_lines[npc.line_idx];
                     }
                     // Rebuild options (same as original open)
                     std::vector<DialogueOption> opts;
@@ -7617,12 +7949,36 @@ void Engine::handle_input() {
             } else if (dact == 5) {
                 // Church services: open the church screen
                 dialogue_screen_.close();
+                if (!tips_shown_.first_church) {
+                    tips_shown_.first_church = true;
+                    tutorial_popup_.show("Church",
+                        "Churches offer services based on your rank.\n"
+                        "Rank up by completing tasks and gaining favor.\n\n"
+                        "Initiate: rest + heal.\n"
+                        "Acolyte: identify, enchant, learn spell.\n"
+                        "Devoted: exclusive holy item.\n"
+                        "Champion: legendary god weapon.");
+                }
                 if (world_.has<Church>(dialogue_npc_) && world_.has<GodAlignment>(player_)) {
                     auto& church = world_.get<Church>(dialogue_npc_);
                     auto& ga = world_.get<GodAlignment>(player_);
                     church_screen_.open(player_, &world_, church.god,
                                          ga.god == church.god ? ga.favor : 0);
                 }
+            } else if (dact == 10 || dact == 11) {
+                // Prayer 1 or 2
+                dialogue_screen_.close();
+                execute_prayer(dact - 10);
+                process_turn();
+            } else if (dact == 12) {
+                // God mastery: inject key '3' into prayer_mode handler
+                dialogue_screen_.close();
+                prayer_mode_ = true;
+                // Inject a synthetic SDL_KEYDOWN event for '3'
+                SDL_Event synth;
+                synth.type = SDL_KEYDOWN;
+                synth.key.keysym.sym = SDLK_3;
+                SDL_PushEvent(&synth);
             } else if (dact == 3 || dact == 4) {
                 // Inn rest or Quest: delegate to npc_interaction
                 dialogue_screen_.close();
@@ -7691,6 +8047,21 @@ void Engine::handle_input() {
                     char buf[64];
                     snprintf(buf, sizeof(buf), "%d items identified.", id_count);
                     log_.add(buf, {140, 200, 200, 255});
+                    // Church task: identify tracking (Thessarka)
+                    if (id_count > 0 && world_.has<GodAlignment>(player_)) {
+                        auto& ga = world_.get<GodAlignment>(player_);
+                        if (ga.task_active && !ga.task_complete) {
+                            auto next = static_cast<ChurchRank>(ga.church_rank + 1);
+                            auto& task = get_church_task(ga.god, next);
+                            if (task.items_donated > 0 && ga.god == GodId::THESSARKA) {
+                                ga.task_progress += id_count;
+                                if (ga.task_progress >= task.items_donated) {
+                                    ga.task_complete = true; ga.task_active = false;
+                                    log_.add("Church task complete. Return to the church.", {255, 220, 80, 255});
+                                }
+                            }
+                        }
+                    }
                 }
                 church_screen_.close();
             } else if (cact == ChurchAction::ENCHANT) {
@@ -7707,7 +8078,7 @@ void Engine::handle_input() {
                         auto& item = world_.get<Item>(wpn);
                         item.damage_bonus += rewards.enchant_bonus;
                         char buf[96];
-                        snprintf(buf, sizeof(buf), "%s enchanted with %s (+%d damage, 50 turns).",
+                        snprintf(buf, sizeof(buf), "%s enchanted with %s (+%d damage).",
                                  item.name.c_str(), rewards.enchant_name, rewards.enchant_bonus);
                         log_.add(buf, {200, 200, 140, 255});
                         audio_.play(SfxId::SPELL_BUFF);
@@ -7733,8 +8104,21 @@ void Engine::handle_input() {
                 }
                 church_screen_.close();
             } else if (cact == ChurchAction::CLAIM_ITEM) {
+                // One-time Devoted item, costs 10 favor
+                if (!world_.has<GodAlignment>(player_)) { church_screen_.close(); continue; }
+                auto& ga_item = world_.get<GodAlignment>(player_);
+                if (ga_item.church_item_claimed) {
+                    log_.add("You have already received this item.", {180, 140, 120, 255});
+                    church_screen_.close(); continue;
+                }
+                if (ga_item.favor < 10) {
+                    log_.add("Not enough favor. (10 required)", {180, 120, 120, 255});
+                    church_screen_.close(); continue;
+                }
+                ga_item.favor -= 10;
+                ga_item.church_item_claimed = true;
+
                 auto& rewards = get_church_rewards(church_screen_.get_god());
-                // Create and give the exclusive item
                 Entity item_e = world_.create();
                 Item ci;
                 ci.name = rewards.exclusive_item_name;
@@ -7742,10 +8126,29 @@ void Engine::handle_input() {
                 ci.damage_bonus = rewards.exclusive_item_damage;
                 ci.armor_bonus = rewards.exclusive_item_armor;
                 ci.identified = true;
+                ci.rarity = Rarity::RARE;
                 ci.gold_value = 200;
-                if (ci.damage_bonus > 0) {
+                // Determine slot from item name/stats
+                if (ci.damage_bonus > 0 && ci.armor_bonus == 0) {
                     ci.type = ItemType::WEAPON;
                     ci.slot = EquipSlot::MAIN_HAND;
+                } else if (std::string(rewards.exclusive_item_name).find("Shield") != std::string::npos ||
+                           std::string(rewards.exclusive_item_name).find("Aegis") != std::string::npos) {
+                    ci.type = ItemType::SHIELD;
+                    ci.slot = EquipSlot::OFF_HAND;
+                } else if (std::string(rewards.exclusive_item_name).find("Ring") != std::string::npos ||
+                           std::string(rewards.exclusive_item_name).find("Signet") != std::string::npos) {
+                    ci.type = ItemType::RING;
+                    ci.slot = EquipSlot::RING_1;
+                } else if (std::string(rewards.exclusive_item_name).find("Gauntlet") != std::string::npos) {
+                    ci.type = ItemType::ARMOR_HANDS;
+                    ci.slot = EquipSlot::HANDS;
+                } else if (std::string(rewards.exclusive_item_name).find("Helm") != std::string::npos ||
+                           std::string(rewards.exclusive_item_name).find("Cowl") != std::string::npos ||
+                           std::string(rewards.exclusive_item_name).find("Circlet") != std::string::npos ||
+                           std::string(rewards.exclusive_item_name).find("Crown") != std::string::npos) {
+                    ci.type = ItemType::ARMOR_HEAD;
+                    ci.slot = EquipSlot::HEAD;
                 } else {
                     ci.type = ItemType::ARMOR_CHEST;
                     ci.slot = EquipSlot::CHEST;
@@ -7759,43 +8162,143 @@ void Engine::handle_input() {
                 audio_.play(SfxId::PICKUP);
                 church_screen_.close();
             } else if (cact == ChurchAction::CLAIM_BLESSING) {
-                // One-time blessing, costs 20 favor
+                // One-time Champion legendary, costs 20 favor
                 auto& rewards = get_church_rewards(church_screen_.get_god());
-                // Find the church entity to check blessing_given
-                Entity church_e = NULL_ENTITY;
-                auto& church_pool = world_.pool<Church>();
-                for (size_t ci = 0; ci < church_pool.size(); ci++) {
-                    if (church_pool.at_index(ci).god == church_screen_.get_god()) {
-                        church_e = church_pool.entity_at(ci); break;
-                    }
-                }
-                if (church_e != NULL_ENTITY && world_.get<Church>(church_e).blessing_given) {
-                    log_.add("You have already received this blessing.", {180, 140, 120, 255});
+                if (!world_.has<GodAlignment>(player_)) { church_screen_.close(); continue; }
+                auto& ga_bless = world_.get<GodAlignment>(player_);
+                if (ga_bless.church_blessing_claimed) {
+                    log_.add("You have already received this reward.", {180, 140, 120, 255});
                     church_screen_.close(); continue;
                 }
-                if (!world_.has<GodAlignment>(player_) || world_.get<GodAlignment>(player_).favor < 20) {
+                if (ga_bless.favor < 20) {
                     log_.add("Not enough favor. (20 required)", {180, 120, 120, 255});
                     church_screen_.close(); continue;
                 }
-                world_.get<GodAlignment>(player_).favor -= 20;
-                if (church_e != NULL_ENTITY) world_.get<Church>(church_e).blessing_given = true;
-                if (world_.has<Stats>(player_)) {
-                    auto& ps = world_.get<Stats>(player_);
-                    ps.set_attr(Attr::STR, ps.attr(Attr::STR) + rewards.blessing_str);
-                    ps.set_attr(Attr::DEX, ps.attr(Attr::DEX) + rewards.blessing_dex);
-                    ps.set_attr(Attr::CON, ps.attr(Attr::CON) + rewards.blessing_con);
-                    ps.set_attr(Attr::INT, ps.attr(Attr::INT) + rewards.blessing_int);
-                    ps.set_attr(Attr::WIL, ps.attr(Attr::WIL) + rewards.blessing_wil);
-                    ps.set_attr(Attr::PER, ps.attr(Attr::PER) + rewards.blessing_per);
-                    ps.base_hp_max += rewards.blessing_hp; ps.hp_max += rewards.blessing_hp; ps.hp += rewards.blessing_hp;
-                    ps.base_mp_max += rewards.blessing_mp; ps.mp_max += rewards.blessing_mp; ps.mp += rewards.blessing_mp;
+                ga_bless.favor -= 20;
+                ga_bless.church_blessing_claimed = true;
+                // Champion reward: legendary item themed to god
+                {
+                    auto god = church_screen_.get_god();
+                    auto& gi = get_god_info(god);
+                    Entity item_e = world_.create();
+                    Item ci;
+                    ci.identified = true;
+                    ci.rarity = Rarity::LEGENDARY;
+                    ci.gold_value = 500;
+                    // Each god grants a unique legendary
+                    switch (god) {
+                        case GodId::VETHRIK:
+                            ci.name = "Ossuary Crown"; ci.description = "+5 AC. Kills heal 10% max HP.";
+                            ci.type = ItemType::ARMOR_HEAD; ci.slot = EquipSlot::HEAD;
+                            ci.armor_bonus = 5; ci.unique_effect = UniqueEffect::ON_KILL_HEAL; break;
+                        case GodId::THESSARKA:
+                            ci.name = "Eye of the Eyeless"; ci.description = "+3 AC, +2 dodge. Auto-identify on pickup.";
+                            ci.type = ItemType::AMULET; ci.slot = EquipSlot::AMULET;
+                            ci.armor_bonus = 3; ci.dodge_bonus = 2; ci.unique_effect = UniqueEffect::IDENTIFY_ON_PICKUP; break;
+                        case GodId::MORRETH:
+                            ci.name = "Iron Father's Greatsword"; ci.description = "+10 dmg, +3 STR. Cannot be unequipped.";
+                            ci.type = ItemType::WEAPON; ci.slot = EquipSlot::MAIN_HAND;
+                            ci.damage_bonus = 10; ci.str_bonus = 3; ci.curse_state = 1; ci.tags |= TAG_SWORD; break;
+                        case GodId::YASHKHET:
+                            ci.name = "The Wound's Edge"; ci.description = "+7 dmg. Heals 20% of damage dealt.";
+                            ci.type = ItemType::WEAPON; ci.slot = EquipSlot::MAIN_HAND;
+                            ci.damage_bonus = 7; ci.tags |= TAG_DAGGER; ci.unique_effect = UniqueEffect::LIFESTEAL; break;
+                        case GodId::KHAEL:
+                            ci.name = "Verdant Mantle"; ci.description = "+4 AC. Immune to poison.";
+                            ci.type = ItemType::ARMOR_CHEST; ci.slot = EquipSlot::CHEST;
+                            ci.armor_bonus = 4; ci.unique_effect = UniqueEffect::POISON_IMMUNE; break;
+                        case GodId::SOLETH:
+                            ci.name = "Sunforged Crown"; ci.description = "+4 AC. +5 fire damage on all melee hits.";
+                            ci.type = ItemType::ARMOR_HEAD; ci.slot = EquipSlot::HEAD;
+                            ci.armor_bonus = 4; ci.unique_effect = UniqueEffect::FIRE_DAMAGE_BONUS; break;
+                        case GodId::IXUUL:
+                            ci.name = "Entropic Signet"; ci.description = "+3 STR, +3 DEX, +3 CON. +50 speed on kill.";
+                            ci.type = ItemType::RING; ci.slot = EquipSlot::RING_1;
+                            ci.str_bonus = 3; ci.dex_bonus = 3; ci.con_bonus = 3; ci.unique_effect = UniqueEffect::KILL_HASTE; break;
+                        case GodId::ZHAVEK:
+                            ci.name = "Nightcloak"; ci.description = "+4 AC, +3 DEX. Invisible 2 turns after kill.";
+                            ci.type = ItemType::ARMOR_CHEST; ci.slot = EquipSlot::CHEST;
+                            ci.armor_bonus = 4; ci.dex_bonus = 3; ci.unique_effect = UniqueEffect::KILL_INVIS; break;
+                        case GodId::THALARA:
+                            ci.name = "Tidecaller Trident"; ci.description = "+8 dmg. Freeze on hit.";
+                            ci.type = ItemType::WEAPON; ci.slot = EquipSlot::MAIN_HAND;
+                            ci.damage_bonus = 8; ci.unique_effect = UniqueEffect::FREEZE_ON_HIT; break;
+                        case GodId::OSSREN:
+                            ci.name = "Hammerforged Gauntlets"; ci.description = "+4 AC, +4 dmg. Thorns (3 reflect).";
+                            ci.type = ItemType::ARMOR_HANDS; ci.slot = EquipSlot::HANDS;
+                            ci.armor_bonus = 4; ci.damage_bonus = 4; ci.unique_effect = UniqueEffect::THORNS; break;
+                        case GodId::LETHIS:
+                            ci.name = "Dreamer's Cowl"; ci.description = "+4 AC, +3 CON. Survive lethal 1/floor.";
+                            ci.type = ItemType::ARMOR_HEAD; ci.slot = EquipSlot::HEAD;
+                            ci.armor_bonus = 4; ci.con_bonus = 3; ci.unique_effect = UniqueEffect::DEATHWARD; break;
+                        case GodId::GATHRUUN:
+                            ci.name = "Granite Aegis"; ci.description = "+8 AC. Reflect 3 damage to attackers.";
+                            ci.type = ItemType::SHIELD; ci.slot = EquipSlot::OFF_HAND;
+                            ci.armor_bonus = 8; ci.unique_effect = UniqueEffect::THORNS; break;
+                        case GodId::SYTHARA:
+                            ci.name = "Blightbringer"; ci.description = "+6 dmg. All hits poison + bleed.";
+                            ci.type = ItemType::WEAPON; ci.slot = EquipSlot::MAIN_HAND;
+                            ci.damage_bonus = 6; ci.tags |= TAG_DAGGER; ci.unique_effect = UniqueEffect::POISON_BLEED_HIT; break;
+                        default: ci.name = "Divine Token"; ci.description = "A symbol of devotion.";
+                            ci.type = ItemType::AMULET; ci.slot = EquipSlot::AMULET; break;
+                    }
+                    world_.add<Item>(item_e, std::move(ci));
+                    if (world_.has<Inventory>(player_))
+                        world_.get<Inventory>(player_).add(item_e);
+                    world_.add<Renderable>(item_e, {SHEET_ITEMS, 0, 16, {gi.color.r, gi.color.g, gi.color.b, 255}, 2});
                     char buf[128];
-                    snprintf(buf, sizeof(buf), "You receive %s: %s",
-                             rewards.blessing_name, rewards.blessing_desc);
-                    log_.add(buf, {255, 220, 100, 255});
+                    snprintf(buf, sizeof(buf), "The Champion's reward: %s", ci.name.c_str());
+                    log_.add(buf, {255, 220, 80, 255});
                     audio_.play(SfxId::LEVELUP);
-                    auto& gi = get_god_info(church_screen_.get_god());
-                    screen_flash(gi.color.r, gi.color.g, gi.color.b, 80);
+                    screen_flash(gi.color.r, gi.color.g, gi.color.b, 120);
+                    trigger_screen_shake(5.0f);
+                    if (world_.has<Position>(player_)) {
+                        auto& pp = world_.get<Position>(player_);
+                        particles_.burst((float)pp.x, (float)pp.y, 20, gi.color.r, gi.color.g, gi.color.b, 0.2f, 1.2f, 5);
+                    }
+                }
+                church_screen_.close();
+            } else if (cact == ChurchAction::ACCEPT_TASK) {
+                // Accept the next rank-up task
+                if (world_.has<GodAlignment>(player_)) {
+                    auto& ga = world_.get<GodAlignment>(player_);
+                    auto next = static_cast<ChurchRank>(ga.church_rank + 1);
+                    if (next < ChurchRank::RANK_COUNT) {
+                        ga.task_active = true;
+                        ga.task_progress = 0;
+                        ga.task_complete = false;
+                        auto& task = get_church_task(ga.god, next);
+                        char tbuf[128];
+                        snprintf(tbuf, sizeof(tbuf), "Church task accepted: %s", task.description);
+                        log_.add(tbuf, {200, 200, 140, 255});
+                        audio_.play(SfxId::QUEST);
+                    }
+                }
+                church_screen_.close();
+            } else if (cact == ChurchAction::RANK_UP) {
+                // Advance church rank
+                if (world_.has<GodAlignment>(player_)) {
+                    auto& ga = world_.get<GodAlignment>(player_);
+                    ga.church_rank++;
+                    ga.task_active = false;
+                    ga.task_complete = false;
+                    ga.task_progress = 0;
+                    auto rank = static_cast<ChurchRank>(ga.church_rank);
+                    char rbuf[64];
+                    snprintf(rbuf, sizeof(rbuf), "Promoted to %s of %s!",
+                             church_rank_name(rank), get_god_info(ga.god).name);
+                    log_.add(rbuf, {255, 220, 80, 255});
+                    audio_.play(SfxId::LEVELUP);
+                    auto& gi = get_god_info(ga.god);
+                    screen_flash(gi.color.r, gi.color.g, gi.color.b, 100);
+                    trigger_screen_shake(3.0f);
+                    if (world_.has<Position>(player_)) {
+                        auto& pp = world_.get<Position>(player_);
+                        particles_.burst((float)pp.x, (float)pp.y, 15, gi.color.r, gi.color.g, gi.color.b, 0.15f, 1.0f, 4);
+                    }
+                    // Grant passive tree point on rank up
+                    if (world_.has<PassiveTreeState>(player_))
+                        world_.get<PassiveTreeState>(player_).grant_point();
                 }
                 church_screen_.close();
             }
@@ -7875,6 +8378,17 @@ void Engine::handle_input() {
                         settings_.reset();
                         return_from_settings_ = GameState::PLAYING;
                         state_ = GameState::SETTINGS;
+                        break;
+                    case PauseChoice::SAVE_AND_QUIT:
+                        do_save();
+                        pause_menu_.close();
+                        floor_cache_.clear();
+                        main_menu_.set_can_continue(true);
+                        state_ = GameState::MAIN_MENU;
+                        audio_.stop_all_ambient(500);
+                        audio_.play_music(MusicId::TITLE, 1500);
+                        audio_.play_ambient(AmbientId::FIRE_CRACKLE, 1000);
+                        audio_.play_ambient(AmbientId::FOREST_NIGHT_RAIN, 1000);
                         break;
                     case PauseChoice::EXIT_TO_MENU:
                         pause_menu_.close();
@@ -8634,12 +9148,10 @@ void Engine::handle_input() {
 
             // Dead state — any key returns to main menu (after a delay)
             if (state_ == GameState::DEAD) {
-                if (SDL_GetTicks() - end_screen_time_ < 3000) return; // 3 second delay
-                // Hardcore: delete save on death
+                if (SDL_GetTicks() - end_screen_time_ < 3000) return;
                 if (hardcore_) {
                     std::filesystem::remove(save::default_path());
                 }
-                // Save meta-progression
                 if (dungeon_level_ >= 4) meta_.died_deep = true;
                 update_meta_on_end();
                 reset_to_main_menu();
@@ -8954,43 +9466,31 @@ void Engine::handle_input() {
                         log_.add("You have no god to pray to.", {150, 140, 130, 255});
                         break;
                     }
+                    if (!tips_shown_.first_prayer) {
+                        tips_shown_.first_prayer = true;
+                        tutorial_popup_.show("Prayer",
+                            "Prayers cost favor. Each god has 2 prayers\n"
+                            "and a mastery at 75+ favor.\n\n"
+                            "Favor rises slowly over time if you follow\n"
+                            "your god's tenets. Violations lose favor.\n\n"
+                            "Visit a church to access rank services.");
+                    }
                     auto& ginfo = get_god_info(align.god);
                     auto prayers = get_prayers(align.god);
                     if (!prayers) break;
-                    char pbuf[128];
-                    snprintf(pbuf, sizeof(pbuf), "Pray to %s (favor: %d):", ginfo.name, align.favor);
-                    log_.add(pbuf, {200, 190, 160, 255});
-                    snprintf(pbuf, sizeof(pbuf), "  1. %s (%d favor) - %s",
-                             prayers[0].name, prayers[0].favor_cost, prayers[0].description);
-                    log_.add(pbuf, {180, 175, 150, 255});
-                    snprintf(pbuf, sizeof(pbuf), "  2. %s (%d favor) - %s",
-                             prayers[1].name, prayers[1].favor_cost, prayers[1].description);
-                    log_.add(pbuf, {180, 175, 150, 255});
-                    // God mastery ability at favor 75+
+                    // Open prayer dialogue screen
+                    char title[64]; snprintf(title, sizeof(title), "Pray to %s", ginfo.name);
+                    char desc[96]; snprintf(desc, sizeof(desc), "Favor: %d. Choose a prayer.", align.favor);
+                    std::vector<DialogueOption> opts;
+                    char p1[80]; snprintf(p1, sizeof(p1), "%s (%d favor)", prayers[0].name, prayers[0].favor_cost);
+                    opts.push_back({p1, 10, align.favor >= prayers[0].favor_cost});
+                    char p2[80]; snprintf(p2, sizeof(p2), "%s (%d favor)", prayers[1].name, prayers[1].favor_cost);
+                    opts.push_back({p2, 11, align.favor >= prayers[1].favor_cost});
                     if (align.favor >= 75) {
-                        const char* mastery_name = "Divine Mastery";
-                        const char* mastery_desc = "Unknown power";
-                        switch (align.god) {
-                            case GodId::YASHKHET: mastery_name = "Sacrifice Corpse"; mastery_desc = "consume nearest corpse for +1 max HP"; break;
-                            case GodId::ZHAVEK:   mastery_name = "Shadow Step"; mastery_desc = "teleport behind nearest enemy, free attack"; break;
-                            case GodId::KHAEL:    mastery_name = "Tame Beast"; mastery_desc = "pacify nearest animal permanently"; break;
-                            case GodId::MORRETH:  mastery_name = "War Cry"; mastery_desc = "stun adjacent, +3 damage 10 turns"; break;
-                            case GodId::SOLETH:   mastery_name = "Consecrate"; mastery_desc = "undead in 5x5 take 5 damage"; break;
-                            case GodId::GATHRUUN: mastery_name = "Stone Wall"; mastery_desc = "create 3 wall tiles in a line"; break;
-                            case GodId::VETHRIK:  mastery_name = "Raise Dead"; mastery_desc = "raise nearest corpse as ally"; break;
-                            case GodId::THESSARKA:mastery_name = "Omniscience"; mastery_desc = "reveal all enemies, identify inventory"; break;
-                            case GodId::IXUUL:    mastery_name = "Mutate"; mastery_desc = "+3 random stat, -1 another (permanent)"; break;
-                            case GodId::THALARA:  mastery_name = "Tidal Freeze"; mastery_desc = "freeze all visible enemies 3 turns"; break;
-                            case GodId::OSSREN:   mastery_name = "Temper"; mastery_desc = "+2 permanent weapon damage"; break;
-                            case GodId::LETHIS:   mastery_name = "Dream Walk"; mastery_desc = "phase through walls 5 turns"; break;
-                            case GodId::SYTHARA:  mastery_name = "Plague Burst"; mastery_desc = "poison all visible enemies"; break;
-                            default: mastery_name = "Ascendant Prayer"; mastery_desc = "+10 favor, full MP restore"; break;
-                        }
-                        snprintf(pbuf, sizeof(pbuf), "  3. %s (15 favor) - %s",
-                                 mastery_name, mastery_desc);
-                        log_.add(pbuf, {220, 200, 100, 255});
+                        opts.push_back({"Mastery (15 favor)", 12, align.favor >= 15});
                     }
-                    prayer_mode_ = true;
+                    dialogue_screen_.open(title, desc, opts);
+                    dialogue_npc_ = 0; // no NPC, prayer mode
                     break;
                 }
 
@@ -9105,6 +9605,10 @@ void Engine::handle_input() {
 
                 case Action::WORLD_MAP:
                     if (dungeon_level_ <= 0) {
+                        if (!world_map_.is_open() && world_.has<Position>(player_)) {
+                            auto& wmp = world_.get<Position>(player_);
+                            world_map_.center_on(wmp.x, wmp.y);
+                        }
                         world_map_.toggle();
                     } else {
                         log_.add("You can't see the world map underground.", {150, 140, 130, 255});
@@ -9146,6 +9650,10 @@ void Engine::handle_input() {
                         }
                         cache_current_floor(); // persist current floor before leaving
                         ascending_ = false; // going down
+                        // Brief black frame to cover synchronous generation
+                        SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
+                        SDL_RenderClear(renderer_);
+                        SDL_RenderPresent(renderer_);
                         generate_level(); // increments dungeon_level_ + repositions summons
                         audio_.play(SfxId::STAIRS);
                         start_transition(TransitionType::FADE_IN, 400);
@@ -9162,7 +9670,7 @@ void Engine::handle_input() {
                                 { char tb[256];
                               snprintf(tb, sizeof(tb),
                                 "Watch for traps. High PER helps detect them.\n\n"
-                                "%s - Rest (heals fully, limited uses per floor)\n"
+                                "%s - Rest (heals HP + MP, limited uses per floor)\n"
                                 "%s - Toggle sneak\n"
                                 "%s - Interact with items, NPCs, containers\n"
                                 "%s - Return to the surface",
@@ -9630,23 +10138,25 @@ void Engine::render_hud() {
     snprintf(lvl_text, sizeof(lvl_text), "Lv%d", stats.level);
     draw_bar(lvl_text, stats.xp, stats.xp_next, {15, 15, 40, 255}, {80, 80, 180, 255}, xp_bar_w);
 
-    // Status effects
+    // Status effects (abbreviate if many active)
     if (world_.has<StatusEffects>(player_)) {
         auto& fx = world_.get<StatusEffects>(player_);
+        bool abbrev = fx.effects.size() > 4;
         for (auto& eff : fx.effects) {
             const char* tag = "";
+            const char* short_tag = "";
             SDL_Color col = {200, 200, 200, 255};
             switch (eff.type) {
-                case StatusType::POISON:   tag = "PSN"; col = {100, 200, 100, 255}; break;
-                case StatusType::BURN:     tag = "BRN"; col = {255, 160, 60, 255}; break;
-                case StatusType::BLEED:    tag = "BLD"; col = {200, 80, 80, 255}; break;
-                case StatusType::FROZEN:   tag = "FRZ"; col = {140, 200, 255, 255}; break;
-                case StatusType::STUNNED:  tag = "STN"; col = {255, 255, 100, 255}; break;
-                case StatusType::CONFUSED: tag = "CNF"; col = {200, 140, 255, 255}; break;
-                case StatusType::BLIND:    tag = "BLN"; col = {120, 120, 120, 255}; break;
-                case StatusType::FEARED:   tag = "FER"; col = {255, 255, 255, 255}; break;
+                case StatusType::POISON:   tag = "Poison"; short_tag = "PSN"; col = {100, 200, 100, 255}; break;
+                case StatusType::BURN:     tag = "Burn";   short_tag = "BRN"; col = {255, 160, 60, 255}; break;
+                case StatusType::BLEED:    tag = "Bleed";  short_tag = "BLD"; col = {200, 80, 80, 255}; break;
+                case StatusType::FROZEN:   tag = "Frozen"; short_tag = "FRZ"; col = {140, 200, 255, 255}; break;
+                case StatusType::STUNNED:  tag = "Stun";   short_tag = "STN"; col = {255, 255, 100, 255}; break;
+                case StatusType::CONFUSED: tag = "Confuse";short_tag = "CNF"; col = {200, 140, 255, 255}; break;
+                case StatusType::BLIND:    tag = "Blind";  short_tag = "BLN"; col = {120, 120, 120, 255}; break;
+                case StatusType::FEARED:   tag = "Fear";   short_tag = "FER"; col = {255, 255, 255, 255}; break;
             }
-            draw_tag(tag, col);
+            draw_tag(abbrev ? short_tag : tag, col);
         }
     }
 
@@ -9747,7 +10257,8 @@ void Engine::render_hud() {
         draw_tag(qbuf, {120, 140, 180, 255});
     }
 
-    // Help hint (only if space remains)
+    // Key hints
+    draw_tag("x look", {100, 95, 85, 255});
     draw_tag("? help", {100, 95, 85, 255});
 
     // Right side: god + location + gold + turn
@@ -10184,7 +10695,15 @@ void Engine::render() {
     inventory_screen_.render(renderer_, font_, sprites_, world_, width_, height_);
     spell_screen_.render(renderer_, font_, world_, width_, height_);
     char_sheet_.render(renderer_, font_, font_title_, sprites_, world_, width_, height_);
-    quest_log_.render(renderer_, font_, font_title_, journal_, width_, height_, &world_);
+    { int qpx = 0, qpy = 0;
+      if (dungeon_level_ > 0) {
+          qpx = overworld_return_x_;
+          qpy = overworld_return_y_;
+      } else if (world_.has<Position>(player_)) {
+          qpx = world_.get<Position>(player_).x;
+          qpy = world_.get<Position>(player_).y;
+      }
+      quest_log_.render(renderer_, font_, font_title_, journal_, width_, height_, &world_, qpx, qpy); }
     quest_offer_.render(renderer_, font_, font_title_, width_, height_);
     help_screen_.render(renderer_, font_, font_title_, width_, height_);
     passive_tree_screen_.render(renderer_, font_, font_title_, width_, height_);
@@ -10195,6 +10714,28 @@ void Engine::render() {
     // World map overlay — needs player position and tilemap
     if (world_map_.is_open() && world_.has<Position>(player_)) {
         auto& pos = world_.get<Position>(player_);
+
+        // Set quest target marker for the next incomplete main quest
+        world_map_.set_quest_target(-1, -1);
+        struct QuestTarget { QuestId id; int x, y; };
+        static const QuestTarget QUEST_TARGETS[] = {
+            {QuestId::MQ_01_BARROW_WIGHT,   560, 375},  // The Barrow
+            {QuestId::MQ_02_SCHOLAR_CLUE,    500, 375},  // Thornwall
+            {QuestId::MQ_03_FIRST_FRAGMENT,  650, 325},  // Stonekeep
+            {QuestId::MQ_04_SAGE_COUNSEL,    525, 225},  // Frostmere
+            {QuestId::MQ_05_SECOND_FRAGMENT, 425, 475},  // The Catacombs
+            {QuestId::MQ_06_THIRD_FRAGMENT,  700, 375},  // The Molten Depths
+            {QuestId::MQ_07_BREAK_SEAL,      275, 275},  // Hollowgate
+            {QuestId::MQ_08_ENTER_SEPULCHRE, 500, 75},   // The Sepulchre
+            {QuestId::MQ_09_CLAIM_RELIQUARY, 500, 75},   // The Sepulchre
+        };
+        for (auto& qt : QUEST_TARGETS) {
+            if (journal_.has_quest(qt.id) && journal_.get_state(qt.id) == QuestState::ACTIVE) {
+                world_map_.set_quest_target(qt.x, qt.y);
+                break;
+            }
+        }
+
         world_map_.render(renderer_, font_, font_title_, map_, pos.x, pos.y, width_, height_);
     }
 
@@ -10253,7 +10794,7 @@ void Engine::render() {
                                 {100, 95, 90, 255}, width_ / 2, py + ph - TTF_FontLineSkip(font_) - 4);
     }
 
-    // Look mode cursor highlight
+    // Look mode cursor highlight + examine info panel
     if (look_mode_ && map_.in_bounds(look_x_, look_y_)) {
         int px = (look_x_ - camera_.x) * camera_.tile_size;
         int py = (look_y_ - camera_.y) * camera_.tile_size;
@@ -10264,6 +10805,98 @@ void Engine::render() {
             SDL_RenderFillRect(renderer_, &cursor_rect);
             SDL_SetRenderDrawColor(renderer_, 255, 255, 100, 200);
             SDL_RenderDrawRect(renderer_, &cursor_rect);
+
+            // Examine info panel: find entity at cursor, show details
+            if (font_) {
+                int line_h = TTF_FontLineSkip(font_);
+                Entity examine_ent = 0;
+                auto& pos_pool = world_.pool<Position>();
+                for (size_t ei = 0; ei < pos_pool.size(); ei++) {
+                    auto& epos = pos_pool.at_index(ei);
+                    if (epos.x == look_x_ && epos.y == look_y_) {
+                        Entity ee = pos_pool.entity_at(ei);
+                        if (ee != player_ && world_.has<Stats>(ee)) {
+                            examine_ent = ee;
+                            break;
+                        }
+                    }
+                }
+
+                if (examine_ent && world_.has<Stats>(examine_ent)) {
+                    auto& est = world_.get<Stats>(examine_ent);
+                    // Build info lines
+                    char lines[8][128];
+                    int nlines = 0;
+                    snprintf(lines[nlines++], 128, "%s", est.name.c_str());
+                    snprintf(lines[nlines++], 128, "HP %d/%d   Dmg %d   Arm %d",
+                             est.hp, est.hp_max, est.melee_damage(), est.protection());
+                    snprintf(lines[nlines++], 128, "STR %d  DEX %d  CON %d  WIL %d",
+                             est.eff_attr(Attr::STR), est.eff_attr(Attr::DEX),
+                             est.eff_attr(Attr::CON), est.eff_attr(Attr::WIL));
+                    // Status effects
+                    if (world_.has<StatusEffects>(examine_ent)) {
+                        auto& efx = world_.get<StatusEffects>(examine_ent);
+                        if (!efx.effects.empty()) {
+                            std::string sline = "Status:";
+                            for (auto& sf : efx.effects) {
+                                switch (sf.type) {
+                                    case StatusType::POISON:  sline += " Poisoned"; break;
+                                    case StatusType::BURN:    sline += " Burning"; break;
+                                    case StatusType::BLEED:   sline += " Bleeding"; break;
+                                    case StatusType::FROZEN:  sline += " Frozen"; break;
+                                    case StatusType::STUNNED: sline += " Stunned"; break;
+                                    case StatusType::CONFUSED:sline += " Confused"; break;
+                                    case StatusType::BLIND:   sline += " Blinded"; break;
+                                    case StatusType::FEARED:  sline += " Feared"; break;
+                                }
+                            }
+                            snprintf(lines[nlines++], 128, "%s", sline.c_str());
+                        }
+                    }
+                    // Behavior hint
+                    if (world_.has<AI>(examine_ent)) {
+                        auto& eai = world_.get<AI>(examine_ent);
+                        const char* bhint = "";
+                        switch (eai.behavior) {
+                            case BehaviorType::LICH: bhint = "Drains life. Teleports."; break;
+                            case BehaviorType::DRAGON: bhint = "Breathes fire."; break;
+                            case BehaviorType::TROLL: bhint = "Regenerates."; break;
+                            case BehaviorType::CHARGER: bhint = "Charges in lines."; break;
+                            case BehaviorType::PACK: bhint = "Flanks with allies."; break;
+                            case BehaviorType::WRAITH: bhint = "Phases through walls."; break;
+                            case BehaviorType::NECROMANCER: bhint = "Raises the dead."; break;
+                            case BehaviorType::SHAMAN: bhint = "Heals and buffs allies."; break;
+                            case BehaviorType::ARCHER: bhint = "Ranged attacks."; break;
+                            case BehaviorType::THIEF: bhint = "Hit and run."; break;
+                            default: break;
+                        }
+                        if (bhint[0]) snprintf(lines[nlines++], 128, "%s", bhint);
+                    }
+
+                    // Position panel to the right of cursor, or left if near edge
+                    int panel_w = 250;
+                    int panel_h = nlines * (line_h + 2) + 12;
+                    int panel_x = cursor_rect.x + cursor_rect.w + 8;
+                    int panel_y = cursor_rect.y;
+                    if (panel_x + panel_w > width_ - 10)
+                        panel_x = cursor_rect.x - panel_w - 8;
+                    if (panel_y + panel_h > height_ - 40)
+                        panel_y = height_ - 40 - panel_h;
+
+                    ui::draw_panel(renderer_, panel_x, panel_y, panel_w, panel_h);
+
+                    SDL_Color name_col = {220, 200, 140, 255};
+                    SDL_Color stat_col = {180, 170, 160, 255};
+                    SDL_Color hint_col = {140, 160, 120, 255};
+                    int ty = panel_y + 6;
+                    for (int li = 0; li < nlines; li++) {
+                        SDL_Color c = (li == 0) ? name_col : (li == nlines - 1 && world_.has<AI>(examine_ent)) ? hint_col : stat_col;
+                        ui::draw_text_clipped(renderer_, font_, lines[li], c,
+                                               panel_x + 8, ty, panel_w - 16);
+                        ty += line_h + 2;
+                    }
+                }
+            }
         }
     }
 
@@ -10390,6 +11023,74 @@ void Engine::render_minimap() {
     }
 }
 
+void Engine::open_npc_dialogue(Entity target) {
+    if (!world_.has<NPC>(target) || dialogue_screen_.is_open()) return;
+    auto& npc = world_.get<NPC>(target);
+    std::vector<DialogueOption> opts;
+
+    // Church priest: add church services
+    if (world_.has<Church>(target) && world_.has<GodAlignment>(player_)) {
+        auto& church = world_.get<Church>(target);
+        auto& ga = world_.get<GodAlignment>(player_);
+        if (ga.god == church.god || ga.god == GodId::NONE) {
+            opts.push_back({"Church services", 5, true});
+            opts.push_back({"Talk", 2, true});
+            dialogue_screen_.open(npc.name, npc.dialogue, opts);
+            dialogue_npc_ = target;
+            return;
+        } else {
+            auto& ginfo = get_god_info(church.god);
+            char buf[128];
+            snprintf(buf, sizeof(buf), "This is the Church of %s. You serve another god.", ginfo.name);
+            opts.push_back({"Talk", 2, true});
+            dialogue_screen_.open(npc.name, buf, opts);
+            dialogue_npc_ = target;
+            return;
+        }
+    }
+
+    // Role-based options
+    if (npc.role == NPCRole::SHOPKEEPER || npc.role == NPCRole::BLACKSMITH) {
+        opts.push_back({"Browse wares", 1, true});
+        opts.push_back({"Talk", 2, true});
+    } else if (npc.role == NPCRole::INNKEEPER) {
+        int inn_cost = 10;
+        if (world_.has<Position>(player_)) {
+            auto& ip = world_.get<Position>(player_);
+            float id = std::sqrt(static_cast<float>((ip.x-500)*(ip.x-500)+(ip.y-375)*(ip.y-375)));
+            inn_cost = 10 + static_cast<int>(id / 30.0f);
+        }
+        char rest_label[48]; snprintf(rest_label, sizeof(rest_label), "Rest (%d gold)", inn_cost);
+        opts.push_back({rest_label, 3, gold_ >= inn_cost});
+        opts.push_back({"Talk", 2, true});
+    } else {
+        opts.push_back({"Talk", 2, true});
+    }
+
+    // Quest option
+    if (npc.quest_id >= 0) {
+        auto qid = static_cast<QuestId>(npc.quest_id);
+        int qidx = static_cast<int>(qid);
+        bool prereq_ok = true;
+        if (qidx > 0 && qidx <= static_cast<int>(QuestId::MQ_09_CLAIM_RELIQUARY)) {
+            auto prereq = static_cast<QuestId>(qidx - 1);
+            if (!journal_.has_quest(prereq) || journal_.get_state(prereq) != QuestState::FINISHED)
+                prereq_ok = false;
+        }
+        if (journal_.get_state(qid) == QuestState::COMPLETE)
+            opts.push_back({"Turn in quest", 4, true});
+        else if (!journal_.has_quest(qid) && prereq_ok)
+            opts.push_back({"Ask about work", 4, true});
+        else if (journal_.get_state(qid) == QuestState::ACTIVE)
+            opts.push_back({"Ask about quest", 4, true});
+    }
+
+    if (!opts.empty()) {
+        dialogue_screen_.open(npc.name, npc.dialogue, opts);
+        dialogue_npc_ = target;
+    }
+}
+
 void Engine::render_build_panel() {
     if (!font_ || !world_.has<Player>(player_)) return;
 
@@ -10404,9 +11105,10 @@ void Engine::render_build_panel() {
     int tx = panel_x + 7;
     int ty = panel_y + 6;
 
-    // Measure content height first (class + description + traits + background)
+    // Measure content height first (class + description + abilities + traits + background)
     int est_lines = 3; // class name + spacing
     est_lines += 4;    // class description (~3-4 wrapped lines)
+    est_lines += 5;    // gear synergy + lv5 ability + active hint + prayer
     est_lines += static_cast<int>(build_traits_.size()) * 3; // trait name + desc
     est_lines += 3;    // background
     int panel_h = line_h * est_lines + 20;
@@ -10435,16 +11137,15 @@ void Engine::render_build_panel() {
     SDL_RenderFillRect(renderer_, &accent);
     SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_NONE);
 
-    // Helper: estimate wrapped text height
-    // Get actual character width from font
-    int char_w = 8;
-    { int tw = 0; TTF_SizeText(font_, "ABCDEFGHIJ", &tw, nullptr); char_w = tw / 10; }
-    if (char_w < 4) char_w = 8;
+    // Helper: measure actual wrapped text height using TTF
     auto wrap_h = [&](const char* text) -> int {
-        int len = static_cast<int>(strlen(text));
-        int chars_per_line = std::max(1, text_w / char_w);
-        int lines = (len + chars_per_line - 1) / chars_per_line;
-        return lines * line_h;
+        if (!text || !text[0] || text_w <= 0) return line_h;
+        SDL_Surface* surf = TTF_RenderText_Blended_Wrapped(font_, text, {255,255,255,255},
+                                                            static_cast<Uint32>(text_w));
+        if (!surf) return line_h;
+        int h = surf->h;
+        SDL_FreeSurface(surf);
+        return h;
     };
 
     // Class name
@@ -10455,7 +11156,48 @@ void Engine::render_build_panel() {
 
     // Class description (wrapped, skip by actual height)
     ui::draw_text_wrapped(renderer_, font_, cls.description, {160, 155, 145, 255}, tx, ty, text_w);
-    ty += wrap_h(cls.description) + 8;
+    ty += wrap_h(cls.description) + 6;
+
+    // Class abilities section
+    auto details = get_class_details(player.class_id);
+    SDL_Color ability_col = {200, 200, 140, 255};
+    SDL_Color dim_ability = {150, 145, 130, 255};
+
+    // Gear synergy
+    ui::draw_text_wrapped(renderer_, font_, details.gear_synergy, dim_ability, tx, ty, text_w);
+    ty += wrap_h(details.gear_synergy) + 4;
+
+    // Level 5 ability
+    if (world_.has<Stats>(player_) && world_.get<Stats>(player_).level >= 5) {
+        ui::draw_text_wrapped(renderer_, font_, details.level5_ability, ability_col, tx, ty, text_w);
+        ty += wrap_h(details.level5_ability) + 4;
+    } else {
+        char lv5buf[64]; snprintf(lv5buf, sizeof(lv5buf), "Lv5: ???");
+        ui::draw_text(renderer_, font_, lv5buf, {80, 75, 70, 255}, tx, ty);
+        ty += line_h + 4;
+    }
+
+    // Active ability reminder (Knight/Dwarf wait, prayer key)
+    {
+        const char* active_hint = nullptr;
+        switch (player.class_id) {
+            case ClassId::KNIGHT: active_hint = "[.] Wait = Bulwark (block 2x)"; break;
+            case ClassId::DWARF:  active_hint = "[.] Wait = Fortify (next hit 2x)"; break;
+            default: break;
+        }
+        if (active_hint) {
+            ui::draw_text_wrapped(renderer_, font_, active_hint, {180, 200, 140, 255}, tx, ty, text_w);
+            ty += line_h + 2;
+        }
+    }
+
+    // Prayer reminder
+    if (world_.has<GodAlignment>(player_) && world_.get<GodAlignment>(player_).god != GodId::NONE) {
+        ui::draw_text(renderer_, font_, "[P] Pray (1/2/3)", {160, 160, 180, 255}, tx, ty);
+        ty += line_h + 2;
+    }
+
+    ty += 4;
 
     // Traits with descriptions
     if (!build_traits_.empty()) {
@@ -10595,14 +11337,15 @@ void Engine::render_god_panel() {
     }
     SDL_Color passive_col = {ginfo.color.r * 3/4 + 60, ginfo.color.g * 3/4 + 60,
                              ginfo.color.b * 3/4 + 60, 255};
-    // Helper for wrapped height
-    int gchar_w = 8;
-    { int tw = 0; TTF_SizeText(font_, "ABCDEFGHIJ", &tw, nullptr); gchar_w = tw / 10; }
-    if (gchar_w < 4) gchar_w = 8;
+    // Measure actual wrapped text height using TTF
     auto god_wrap_h = [&](const char* text) -> int {
-        int len = static_cast<int>(strlen(text));
-        int cpl = std::max(1, text_max_w / gchar_w);
-        return ((len + cpl - 1) / cpl) * line_h;
+        if (!text || !text[0] || text_max_w <= 0) return line_h;
+        SDL_Surface* surf = TTF_RenderText_Blended_Wrapped(font_, text, {255,255,255,255},
+                                                            static_cast<Uint32>(text_max_w));
+        if (!surf) return line_h;
+        int h = surf->h;
+        SDL_FreeSurface(surf);
+        return h;
     };
 
     ui::draw_text_wrapped(renderer_, font_, passive_short, passive_col, tx, ty, text_max_w);
@@ -10614,6 +11357,25 @@ void Engine::render_god_panel() {
         if (ty >= panel_y + panel_h - line_h) break;
         ui::draw_text_wrapped(renderer_, font_, tenets.tenets[i].description, tenet_col, tx, ty, text_max_w);
         ty += god_wrap_h(tenets.tenets[i].description) + 4;
+    }
+
+    // Prayers available ([P] to use)
+    auto prayers = get_prayers(ga.god);
+    if (prayers && ty < panel_y + panel_h - line_h * 4) {
+        ui::draw_text(renderer_, font_, "[P] Prayers:", {180, 180, 200, 255}, tx, ty);
+        ty += line_h + 2;
+        for (int pi = 0; pi < 2; pi++) {
+            if (ty >= panel_y + panel_h - line_h * 2) break;
+            char pbuf[80];
+            snprintf(pbuf, sizeof(pbuf), "%d. %s (%d)", pi + 1, prayers[pi].name, prayers[pi].favor_cost);
+            ui::draw_text_clipped(renderer_, font_, pbuf, {160, 155, 145, 255}, tx, ty, text_max_w);
+            ty += line_h;
+        }
+        if (ga.favor >= 75) {
+            ui::draw_text_clipped(renderer_, font_, "3. Mastery (15)", {220, 200, 100, 255}, tx, ty, text_max_w);
+            ty += line_h;
+        }
+        ty += 4;
     }
 
     // Active buffs/status

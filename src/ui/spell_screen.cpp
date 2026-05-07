@@ -182,7 +182,13 @@ void SpellScreen::render(SDL_Renderer* renderer, TTF_Font* font,
         ui::Rect name_area = {spell_row.x, spell_row.y, name_max, spell_row.h};
         SDL_Rect name_clip = name_area.sdl();
         SDL_RenderSetClipRect(renderer, &name_clip);
-        ui::draw_text_in(renderer, font, buf, is_sel ? sel_col : normal_col, name_area, ui::Align::LEFT);
+        // Gray out if can't afford
+        bool can_afford = true;
+        if (world.has<Stats>(player_)) {
+            can_afford = world.get<Stats>(player_).mp >= info.mp_cost;
+        }
+        SDL_Color name_col = is_sel ? sel_col : (can_afford ? normal_col : dim_col);
+        ui::draw_text_in(renderer, font, buf, name_col, name_area, ui::Align::LEFT);
         SDL_RenderSetClipRect(renderer, nullptr);
 
         // School tag in fixed right column
@@ -219,6 +225,21 @@ void SpellScreen::render(SDL_Renderer* renderer, TTF_Font* font,
                  (si >= 0 && si < 6) ? SCHOOL_FULL[si] : "?", info.mp_cost);
         auto header_row = desc_layout.row(line_h + 2);
         ui::draw_text_in(renderer, font, header, sel_col, header_row, ui::Align::LEFT);
+
+        // Power / range line
+        char stat_line[64] = {};
+        if (info.base_power > 0 && info.range > 0)
+            snprintf(stat_line, sizeof(stat_line), "Power: %d   Range: %d", info.base_power, info.range);
+        else if (info.base_power > 0)
+            snprintf(stat_line, sizeof(stat_line), "Power: %d   Range: self", info.base_power);
+        else if (info.range > 0)
+            snprintf(stat_line, sizeof(stat_line), "Range: %d", info.range);
+        else if (info.range == -1)
+            snprintf(stat_line, sizeof(stat_line), "Range: all visible");
+        if (stat_line[0]) {
+            auto stat_row = desc_layout.row(line_h + 2);
+            ui::draw_text(renderer, font, stat_line, {140, 180, 200, 255}, stat_row.x, stat_row.y);
+        }
 
         // Description (wrapped into remaining desc space)
         ui::draw_text_wrapped(renderer, font, info.description, normal_col,

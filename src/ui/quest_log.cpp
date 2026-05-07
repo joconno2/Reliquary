@@ -4,6 +4,7 @@
 #include "ui/ui_layout.h"
 #include "core/input_glyphs.h"
 #include "components/dynamic_quest.h"
+#include "data/world_data.h"
 #include <cstdio>
 
 bool QuestLog::handle_input(SDL_Event& event) {
@@ -32,7 +33,8 @@ bool QuestLog::handle_input(SDL_Event& event) {
 
 void QuestLog::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_title,
                        const QuestJournal& journal, int w, int h,
-                       World* world) const {
+                       World* world,
+                       int player_x, int player_y) const {
     if (!open_ || !font) return;
 
     int line_h = TTF_FontLineSkip(font);
@@ -170,15 +172,42 @@ void QuestLog::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_tit
             }
             if (panel.fits(line_h)) {
                 ui::Rect obj_text = panel.row();
-                // Indent the objective text
                 ui::Rect indented = {obj_text.x + 8, obj_text.y, obj_text.w - 16, obj_text.h};
                 ui::draw_text_wrapped(renderer, font, info.objective, active_col,
                                        indented.x, indented.y, indented.w);
             }
+            // Direction hint for main quests
+            if (info.is_main && panel.fits(line_h)) {
+                struct QTgt { QuestId id; int x, y; const char* place; };
+                static const QTgt TARGETS[] = {
+                    {QuestId::MQ_01_BARROW_WIGHT,   560, 375, "The Barrow"},
+                    {QuestId::MQ_02_SCHOLAR_CLUE,    500, 375, "Thornwall"},
+                    {QuestId::MQ_03_FIRST_FRAGMENT,  650, 325, "Stonekeep"},
+                    {QuestId::MQ_04_SAGE_COUNSEL,    525, 225, "Frostmere"},
+                    {QuestId::MQ_05_SECOND_FRAGMENT, 425, 475, "The Catacombs"},
+                    {QuestId::MQ_06_THIRD_FRAGMENT,  700, 375, "The Molten Depths"},
+                    {QuestId::MQ_07_BREAK_SEAL,      275, 275, "Hollowgate"},
+                    {QuestId::MQ_08_ENTER_SEPULCHRE, 500, 75,  "The Sepulchre"},
+                    {QuestId::MQ_09_CLAIM_RELIQUARY, 500, 75,  "The Sepulchre"},
+                };
+                for (auto& qt : TARGETS) {
+                    if (qt.id == entry.id) {
+                        const char* dir = compass_dir(player_x, player_y, qt.x, qt.y);
+                        char dirbuf[128];
+                        snprintf(dirbuf, sizeof(dirbuf), "%s (%s)", qt.place, dir);
+                        ui::Rect dir_row = panel.row();
+                        ui::Rect dir_indented = {dir_row.x + 8, dir_row.y, dir_row.w - 16, dir_row.h};
+                        SDL_Color dir_col = {140, 160, 120, 255};
+                        ui::draw_text_in(renderer, font, dirbuf, dir_col, dir_indented, ui::Align::LEFT);
+                        break;
+                    }
+                }
+            }
         } else if (entry.state == QuestState::COMPLETE) {
             if (panel.fits(line_h)) {
                 ui::Rect turn_in = panel.row();
-                ui::draw_text_in(renderer, font, "Return to turn in.", complete_col, turn_in, ui::Align::LEFT);
+                ui::draw_text_in(renderer, font, "Done! Return to turn in.",
+                                 complete_col, turn_in, ui::Align::LEFT);
             }
         }
     }

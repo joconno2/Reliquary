@@ -27,6 +27,7 @@ struct Stats {
     // Combat
     int base_damage = 1;     // unarmed / natural weapon damage
     int natural_armor = 0;   // innate protection (monsters, traits)
+    int god_armor = 0;       // armor from god passives (reset each recalc tick)
     int base_speed = 100;    // energy gained per tick (100 = normal)
 
     // Equipment attribute bonuses (recalculated each turn from equipped items)
@@ -82,7 +83,7 @@ struct Stats {
     int melee_attack() const { return eff_attr(Attr::STR) + level; }
     int melee_damage() const { return base_damage + eff_attr(Attr::STR) / 3; }
     int dodge_value() const { return eff_attr(Attr::DEX) / 2; }
-    int protection() const { return natural_armor; }
+    int protection() const { return natural_armor + god_armor; }
     int fov_radius() const { return 8 + eff_attr(Attr::PER) / 3 + fov_bonus; }
     int effective_speed() const { return base_speed + equip_speed; }
 

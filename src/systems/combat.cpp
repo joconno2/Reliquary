@@ -13,6 +13,7 @@
 #include "components/status_effect.h"
 #include "components/passive_tree.h"
 #include "components/skills.h"
+#include "components/god.h"
 #include "components/tenet.h"
 #include "components/prayer.h"  // is_undead, is_animal
 #include "core/spritesheet.h"
@@ -210,7 +211,9 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
             if (rng.range(1, 100) <= block_pct) {
                 knight_blocked = true;
                 result.shield_blocked = true;
-                log.add("Shield blocks!", {200, 200, 255, 255});
+                // Shield block grants temporary +2 armor (via god_armor field, reset each tick)
+                def.god_armor += 2;
+                log.add("Shield blocks! (+2 armor)", {200, 200, 255, 255});
             }
         }
     }
@@ -354,6 +357,15 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
         // Unbreakable capstone: halve all incoming damage
         if (world.has<Player>(defender) && world.get<Player>(defender).unbreakable_turns > 0)
             dmg = std::max(1, dmg / 2);
+
+        // God passive: incoming damage modifiers
+        if (world.has<Player>(defender) && world.has<GodAlignment>(defender)) {
+            auto& ga = world.get<GodAlignment>(defender);
+            // Vethrik: living creatures deal +30% to you
+            if (ga.god == GodId::VETHRIK && world.has<Stats>(attacker) &&
+                !is_undead(world.get<Stats>(attacker).name.c_str()))
+                dmg = dmg * 130 / 100;
+        }
 
         result.damage = dmg;
         def.hp -= dmg;
@@ -638,6 +650,55 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
             world.has<Stats>(attacker)) {
             world.get<Stats>(attacker).haste_turns = 3;
             log.add("Adrenaline surges. You move faster.", {200, 220, 140, 255});
+        }
+
+        // Lifesteal (Yashkhet champion): heal 20% of damage dealt
+        if (result.hit && world.has<Player>(attacker) &&
+            has_unique_effect(world, attacker, UniqueEffect::LIFESTEAL) &&
+            world.has<Stats>(attacker)) {
+            int steal = std::max(1, result.damage / 5);
+            auto& as2 = world.get<Stats>(attacker);
+            as2.hp = std::min(as2.hp + steal, as2.hp_max);
+        }
+
+        // Freeze on hit (Thalara champion): apply FROZEN 1 turn
+        if (result.hit && def.hp > 0 && world.has<Player>(attacker) &&
+            has_unique_effect(world, attacker, UniqueEffect::FREEZE_ON_HIT) &&
+            world.has<StatusEffects>(defender)) {
+            world.get<StatusEffects>(defender).add(StatusType::FROZEN, 0, 1);
+        }
+
+        // Poison + bleed on hit (Sythara champion): apply both
+        if (result.hit && def.hp > 0 && world.has<Player>(attacker) &&
+            has_unique_effect(world, attacker, UniqueEffect::POISON_BLEED_HIT) &&
+            world.has<StatusEffects>(defender)) {
+            world.get<StatusEffects>(defender).add(StatusType::POISON, 2, 3);
+            world.get<StatusEffects>(defender).add(StatusType::BLEED, 1, 3);
+        }
+
+        // Fire damage bonus (Soleth champion): +5 fire on all melee hits
+        if (result.hit && def.hp > 0 && world.has<Player>(attacker) &&
+            has_unique_effect(world, attacker, UniqueEffect::FIRE_DAMAGE_BONUS)) {
+            def.hp -= 5;
+            result.damage += 5;
+            if (world.has<StatusEffects>(defender))
+                world.get<StatusEffects>(defender).add(StatusType::BURN, 2, 2);
+        }
+
+        // On kill heal (Vethrik champion): heal 10% max HP on kill
+        if (def.hp <= 0 && world.has<Player>(attacker) &&
+            has_unique_effect(world, attacker, UniqueEffect::ON_KILL_HEAL) &&
+            world.has<Stats>(attacker)) {
+            auto& as2 = world.get<Stats>(attacker);
+            int heal = std::max(1, as2.hp_max / 10);
+            as2.hp = std::min(as2.hp + heal, as2.hp_max);
+        }
+
+        // Kill invisibility (Zhavek champion): 2 turns invisible after kill
+        if (def.hp <= 0 && world.has<Player>(attacker) &&
+            has_unique_effect(world, attacker, UniqueEffect::KILL_INVIS) &&
+            world.has<Stats>(attacker)) {
+            world.get<Stats>(attacker).invisible_turns = 2;
         }
 
         // MP shield (unique amulet): damage from MP first (50%)

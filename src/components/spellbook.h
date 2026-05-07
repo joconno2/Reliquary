@@ -59,6 +59,13 @@ enum class SpellId : int {
     WITHER,
     BLOOD_PACT,
     DOOM,
+    // New spells
+    GLACIAL_SPIKE,     // Conjuration: high single-target ice + stun
+    MIRROR_IMAGE,      // Transmutation: dodge bonus for N turns
+    FARSIGHT,          // Divination: reveal all enemies + items on floor
+    MASS_HEAL,         // Healing: heal all friendlies in range
+    VINE_PRISON,       // Nature: root + bleed target, can't move 3 turns
+    SOUL_CAGE,         // Dark Arts: kill target below 15% HP, gain max HP
     COUNT
 };
 
@@ -197,6 +204,19 @@ inline const SpellInfo& get_spell_info(SpellId id) {
          SpellSchool::DARK_ARTS, 0, 0, 0, false},
         {"Doom",            "Mark nearest enemy. It dies in 5 turns. Range 4.",
          SpellSchool::DARK_ARTS, 22, 0, 4, true},
+        // New spells
+        {"Glacial Spike",   "Dmg 30+INT/3 ice. Stuns 2 turns. Range 6.",
+         SpellSchool::CONJURATION, 15, 30, 6, true},
+        {"Mirror Image",    "Gain +30% dodge for 8 turns.",
+         SpellSchool::TRANSMUTATION, 8, 0, 0, false},
+        {"Farsight",        "Reveal all enemies and items on this floor.",
+         SpellSchool::DIVINATION, 10, 0, 0, false},
+        {"Mass Heal",       "Heal all friendly creatures in range 5 for 15 HP.",
+         SpellSchool::HEALING, 14, 15, 5, false},
+        {"Vine Prison",     "Root nearest enemy 3 turns. Apply bleed. Range 5.",
+         SpellSchool::NATURE, 9, 0, 5, true},
+        {"Soul Cage",       "Kill target below 20% HP. Gain +2 max HP. Range 4.",
+         SpellSchool::DARK_ARTS, 18, 0, 4, true},
     };
     return SPELLS[static_cast<int>(id)];
 }

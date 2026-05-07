@@ -91,7 +91,7 @@ inline const QuestInfo& get_quest_info(QuestId id) {
 
         // MQ_06_THIRD_FRAGMENT
         {"The Third Fragment",
-         "The Molten Depths east of Ironhearth. Volcanic tunnels. "
+         "The Molten Depths beneath Ironhearth. Volcanic tunnels. "
          "Your brand glows hot enough to see by.",
          "Enter The Molten Depths. Find the third fragment.",
          "Three fragments. The Reliquary is whole. You feel it assembling inside you.",
@@ -201,7 +201,7 @@ inline const char* get_quest_hint(QuestId id) {
         case QuestId::MQ_05_SECOND_FRAGMENT:
             return "The Catacombs are near Millhaven. The fragment lies deep.";
         case QuestId::MQ_06_THIRD_FRAGMENT:
-            return "The Molten Depths are east of Ironhearth. Follow the heat.";
+            return "The Molten Depths are beneath Ironhearth. Follow the heat.";
         case QuestId::MQ_07_BREAK_SEAL:
             return "Hollowgate is to the west. The fragments will break the seal.";
 

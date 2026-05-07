@@ -7,12 +7,14 @@
 enum class ChurchAction {
     NONE,
     CLOSE,
-    REST,          // free full heal
-    IDENTIFY,      // ID all items
-    ENCHANT,       // enchant weapon
+    REST,          // full heal (5 favor)
+    IDENTIFY,      // ID all items (8 favor)
+    ENCHANT,       // enchant weapon (12 favor)
     LEARN_SPELL,   // learn exclusive spell
     CLAIM_ITEM,    // get exclusive equipment
     CLAIM_BLESSING,// get champion blessing
+    RANK_UP,       // complete task, advance rank
+    ACCEPT_TASK,   // accept next rank-up task
 };
 
 class ChurchScreen {

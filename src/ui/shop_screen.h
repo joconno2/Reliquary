@@ -8,6 +8,7 @@
 #include "components/god.h"
 #include <vector>
 #include <string>
+#include <unordered_map>
 
 enum class ShopAction {
     NONE,
@@ -26,9 +27,10 @@ class ShopScreen {
 public:
     ShopScreen() = default;
 
-    void open(Entity player, World& world, RNG& rng, int* gold, int difficulty = 0, int price_mult = 100, GodId province_god = GodId::NONE);
+    void open(Entity player, World& world, RNG& rng, int* gold, int difficulty = 0, int price_mult = 100, GodId province_god = GodId::NONE, Entity shopkeeper = 0);
     void close() { open_ = false; }
     bool is_open() const { return open_; }
+    void clear_cache() { stock_cache_.clear(); stock_.clear(); }
 
     ShopAction handle_input(SDL_Event& event);
 
@@ -46,7 +48,9 @@ private:
     int* gold_ = nullptr;
     int price_mult_ = 100; // percentage: 100 = normal, 200 = double
     bool buy_tab_ = true; // true = Buy, false = Sell
-    std::vector<ShopItem> stock_;
+    std::vector<ShopItem> stock_;              // current active stock (points into cache)
+    Entity current_shopkeeper_ = 0;
+    std::unordered_map<Entity, std::vector<ShopItem>> stock_cache_; // per-NPC persistent stock
     mutable std::vector<SDL_Rect> item_rects_; // populated during render
     mutable SDL_Rect tab_buy_rect_ = {};       // buy tab click area
     mutable SDL_Rect tab_sell_rect_ = {};      // sell tab click area

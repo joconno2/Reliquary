@@ -9,7 +9,8 @@ static PauseChoice pause_choice_for(int idx) {
         case 1: return PauseChoice::SAVE;
         case 2: return PauseChoice::LOAD;
         case 3: return PauseChoice::SETTINGS;
-        case 4: return PauseChoice::EXIT_TO_MENU;
+        case 4: return PauseChoice::SAVE_AND_QUIT;
+        case 5: return PauseChoice::EXIT_TO_MENU;
     }
     return PauseChoice::NONE;
 }
@@ -17,12 +18,32 @@ static PauseChoice pause_choice_for(int idx) {
 PauseChoice PauseMenu::handle_input(SDL_Event& event) {
     if (!open_) return PauseChoice::NONE;
 
+    // Exit confirmation sub-dialog
+    if (confirming_exit_) {
+        if (event.type == SDL_KEYDOWN) {
+            switch (event.key.keysym.sym) {
+                case SDLK_y:
+                case SDLK_RETURN:
+                    confirming_exit_ = false;
+                    return PauseChoice::EXIT_TO_MENU;
+                case SDLK_n:
+                case SDLK_ESCAPE:
+                    confirming_exit_ = false;
+                    return PauseChoice::NONE;
+                default:
+                    return PauseChoice::NONE;
+            }
+        }
+        return PauseChoice::NONE;
+    }
+
     if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
         int mx = event.button.x, my = event.button.y;
         for (int i = 0; i < static_cast<int>(option_rects_.size()); i++) {
             auto& r = option_rects_[i];
             if (mx >= r.x && mx < r.x + r.w && my >= r.y && my < r.y + r.h) {
                 selected_ = i;
+                if (i == 5) { confirming_exit_ = true; return PauseChoice::NONE; }
                 return pause_choice_for(i);
             }
         }
@@ -54,6 +75,7 @@ PauseChoice PauseMenu::handle_input(SDL_Event& event) {
             return PauseChoice::NONE;
         case SDLK_RETURN:
         case SDLK_e:
+            if (selected_ == 5) { confirming_exit_ = true; return PauseChoice::NONE; }
             return pause_choice_for(selected_);
         case SDLK_ESCAPE:
             return PauseChoice::CONTINUE;
@@ -87,7 +109,7 @@ void PauseMenu::render(SDL_Renderer* renderer, TTF_Font* body, TTF_Font* title,
     SDL_Color normal_col = {160, 155, 150, 255};
 
     static const char* options[] = {
-        "Continue", "Save", "Load", "Settings", "Exit to Menu"
+        "Continue", "Save", "Load", "Settings", "Save & Quit", "Exit to Menu"
     };
 
     option_rects_.clear();
@@ -106,6 +128,18 @@ void PauseMenu::render(SDL_Renderer* renderer, TTF_Font* body, TTF_Font* title,
 
         ui::draw_text_in(renderer, body, options[i],
                          is_sel ? sel_col : normal_col, row, ui::Align::CENTER);
+    }
+
+    // Exit confirmation overlay
+    if (confirming_exit_) {
+        SDL_Color warn_col = {220, 180, 100, 255};
+        SDL_Color hint_col = {140, 130, 120, 255};
+        auto confirm_row = panel.row(line_h + 8);
+        ui::draw_text_in(renderer, body, "Exit without saving?", warn_col,
+                         confirm_row, ui::Align::CENTER);
+        auto yn_row = panel.row(line_h + 4);
+        ui::draw_text_in(renderer, body, "[Y] Yes   [N] No", hint_col,
+                         yn_row, ui::Align::CENTER);
     }
 
     // Controls hint at bottom

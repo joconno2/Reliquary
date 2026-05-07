@@ -230,6 +230,12 @@ private:
         bool first_skill_levelup = false;
         bool first_npc = false;
         bool first_potion = false;
+        bool first_prayer = false;
+        bool first_passive_point = false;
+        bool first_shop = false;
+        bool first_church = false;
+        bool first_overworld = false;
+        bool first_low_hp = false;
     } tips_shown_;
     static constexpr int MAX_SUMMONS = 3;
     std::vector<Entity> summons_;     // active friendly summons
@@ -333,6 +339,8 @@ private:
     void render_minimap();
     void render_god_panel();
     void render_build_panel();
+    void open_npc_dialogue(Entity target);
+    void execute_mastery_prayer();
     bool minimap_visible_ = true; // toggle with Tab in gameplay
 
     // Methods

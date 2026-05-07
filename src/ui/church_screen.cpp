@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
 void ChurchScreen::open(Entity player, World* world, GodId god, int favor) {
     open_ = true;
@@ -13,7 +14,12 @@ void ChurchScreen::open(Entity player, World* world, GodId god, int favor) {
     world_ = world;
     god_ = god;
     favor_ = favor;
-    rank_ = church_rank_for_favor(favor);
+    // Use actual earned rank from GodAlignment, not just favor threshold
+    rank_ = ChurchRank::OUTSIDER;
+    if (world && world->has<GodAlignment>(player)) {
+        auto& ga = world->get<GodAlignment>(player);
+        rank_ = static_cast<ChurchRank>(ga.church_rank);
+    }
     selected_ = 0;
 }
 
@@ -32,21 +38,32 @@ ChurchAction ChurchScreen::handle_input(SDL_Event& event) {
                 if (selected_ < max_options_ - 1) selected_++;
                 return ChurchAction::NONE;
             case SDLK_RETURN: case SDLK_SPACE: {
-                int opt = 0;
-                if (rank_ >= ChurchRank::INITIATE) {
-                    if (selected_ == opt++) return ChurchAction::REST;
+                // Build action list matching render order
+                std::vector<ChurchAction> actions;
+                if (world_ && world_->has<GodAlignment>(player_)) {
+                    auto& ga = world_->get<GodAlignment>(player_);
+                    auto next = static_cast<ChurchRank>(ga.church_rank + 1);
+                    if (next < ChurchRank::RANK_COUNT) {
+                        if (ga.task_complete && favor_ >= church_rank_favor(next))
+                            actions.push_back(ChurchAction::RANK_UP);
+                        else if (!ga.task_active && !ga.task_complete)
+                            actions.push_back(ChurchAction::ACCEPT_TASK);
+                    }
                 }
+                if (rank_ >= ChurchRank::INITIATE)
+                    actions.push_back(ChurchAction::REST);
                 if (rank_ >= ChurchRank::ACOLYTE) {
-                    if (selected_ == opt++) return ChurchAction::IDENTIFY;
-                    if (selected_ == opt++) return ChurchAction::ENCHANT;
-                    if (selected_ == opt++) return ChurchAction::LEARN_SPELL;
+                    actions.push_back(ChurchAction::IDENTIFY);
+                    actions.push_back(ChurchAction::ENCHANT);
+                    actions.push_back(ChurchAction::LEARN_SPELL);
                 }
-                if (rank_ >= ChurchRank::DEVOTED) {
-                    if (selected_ == opt++) return ChurchAction::CLAIM_ITEM;
-                }
-                if (rank_ >= ChurchRank::CHAMPION) {
-                    if (selected_ == opt++) return ChurchAction::CLAIM_BLESSING;
-                }
+                if (rank_ >= ChurchRank::DEVOTED)
+                    actions.push_back(ChurchAction::CLAIM_ITEM);
+                if (rank_ >= ChurchRank::CHAMPION)
+                    actions.push_back(ChurchAction::CLAIM_BLESSING);
+                actions.push_back(ChurchAction::CLOSE);
+                if (selected_ >= 0 && selected_ < static_cast<int>(actions.size()))
+                    return actions[selected_];
                 return ChurchAction::CLOSE;
             }
             default: return ChurchAction::NONE;
@@ -134,7 +151,7 @@ void ChurchScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font
     // Rank rewards ladder
     struct RankEntry { ChurchRank rank; const char* label; const char* detail; };
     char enchant_buf[64], spell_buf[64], item_buf[64], blessing_buf[64];
-    snprintf(enchant_buf, sizeof(enchant_buf), "Weapon enchant: %s (+%d dmg, 50 turns)",
+    snprintf(enchant_buf, sizeof(enchant_buf), "Weapon enchant: %s (+%d dmg)",
              rewards.enchant_name, rewards.enchant_bonus);
     auto& spell_info = get_spell_info(rewards.exclusive_spell);
     snprintf(spell_buf, sizeof(spell_buf), "Learn: %s", spell_info.name);
@@ -174,6 +191,33 @@ void ChurchScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font
 
     panel.skip(panel.gap);
 
+    // Current task / rank-up status
+    if (world_ && world_->has<GodAlignment>(player_)) {
+        auto& ga = world_->get<GodAlignment>(player_);
+        ChurchRank next = static_cast<ChurchRank>(ga.church_rank + 1);
+        if (next < ChurchRank::RANK_COUNT) {
+            auto& task = get_church_task(god_, next);
+            auto task_hdr = panel.row(line_h + 2);
+            if (ga.task_complete) {
+                ui::draw_text(renderer, font, "Task complete! Rank up available.", rank_col, task_hdr.x, task_hdr.y);
+            } else if (ga.task_active) {
+                char tbuf[128];
+                int target = task.kill_target > 0 ? task.kill_target :
+                             task.items_donated > 0 ? task.items_donated : 1;
+                snprintf(tbuf, sizeof(tbuf), "Task: %s (%d/%d)",
+                         task.description, std::min(ga.task_progress, target), target);
+                ui::draw_text_clipped(renderer, font, tbuf, avail_col, task_hdr.x, task_hdr.y, outer.w - 40);
+            } else {
+                char tbuf[128];
+                snprintf(tbuf, sizeof(tbuf), "Next: %s (need %d favor)",
+                         church_rank_name(next), church_rank_favor(next));
+                ui::draw_text_clipped(renderer, font, tbuf, desc_col, task_hdr.x, task_hdr.y, outer.w - 40);
+            }
+        }
+    }
+
+    panel.skip(panel.gap);
+
     // Action options
     auto svc_hdr = panel.row(line_h + 4);
     ui::draw_text(renderer, font, "-- Services --", title_col, svc_hdr.x, svc_hdr.y);
@@ -192,8 +236,22 @@ void ChurchScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font
 
     auto* self = const_cast<ChurchScreen*>(this);
 
+    // Task / rank-up options
+    if (world_ && world_->has<GodAlignment>(player_)) {
+        auto& ga = world_->get<GodAlignment>(player_);
+        ChurchRank next = static_cast<ChurchRank>(ga.church_rank + 1);
+        if (next < ChurchRank::RANK_COUNT) {
+            if (ga.task_complete && favor_ >= church_rank_favor(next)) {
+                char rub[64]; snprintf(rub, sizeof(rub), "Rank up to %s", church_rank_name(next));
+                draw_option(rub, true); // action 6: RANK_UP
+            } else if (!ga.task_active && !ga.task_complete) {
+                draw_option("Accept church task", favor_ >= church_rank_favor(next) / 2); // action 7: ACCEPT_TASK
+            }
+        }
+    }
+
     if (rank_ >= ChurchRank::INITIATE)
-        draw_option("Rest and heal (full restore)", true);
+        draw_option("Rest and heal (5 favor)", true);
     if (rank_ >= ChurchRank::ACOLYTE) {
         draw_option("Identify all items", true);
         draw_option(enchant_buf, true);

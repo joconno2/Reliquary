@@ -16,7 +16,8 @@ public:
 
     void render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_title,
                 const QuestJournal& journal, int w, int h,
-                World* world = nullptr) const;
+                World* world = nullptr,
+                int player_x = 0, int player_y = 0) const;
 
 private:
     bool open_ = false;

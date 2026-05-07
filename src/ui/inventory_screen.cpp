@@ -367,9 +367,10 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
 
         char letter = 'a' + static_cast<char>(i);
         char buf[128];
-        snprintf(buf, sizeof(buf), "%c) %s%s", letter,
+        const char* new_tag = (item.new_pickup && !is_equipped) ? " *NEW*" : "";
+        snprintf(buf, sizeof(buf), "%c) %s%s%s", letter,
                  item.display_name().c_str(),
-                 is_equipped ? " [E]" : "");
+                 is_equipped ? " [E]" : "", new_tag);
 
         SDL_Color col;
         if (is_sel) col = sel_col;
@@ -418,6 +419,7 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
         Entity item_e = inv.items[orig_sel];
         if (world.has<Item>(item_e)) {
             auto& item = world.get<Item>(item_e);
+            item.new_pickup = false; // clear "new" flag on view
             SDL_Color stat_col = {140, 160, 180, 255};
             SDL_Color value_col = {200, 180, 80, 255};
 
@@ -564,6 +566,21 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
                 auto rr = det.row(line_h + 2);
                 ui::draw_text(renderer, font, rarity_name(item.rarity),
                               rarity_color(item.rarity), rr.x, rr.y);
+            }
+
+            // Curse/blessed state (only show if identified)
+            if (item.identified && item.curse_state != 0 && det.fits_row()) {
+                auto cr = det.row(line_h + 2);
+                if (item.curse_state == 1)
+                    ui::draw_text(renderer, font, "CURSED (cannot unequip)", {220, 60, 60, 255}, cr.x, cr.y);
+                else if (item.curse_state == 2)
+                    ui::draw_text(renderer, font, "Blessed", {100, 200, 255, 255}, cr.x, cr.y);
+            }
+
+            // Unidentified warning
+            if (!item.identified && det.fits_row()) {
+                auto ur2 = det.row(line_h + 2);
+                ui::draw_text(renderer, font, "? Unidentified", {180, 140, 80, 255}, ur2.x, ur2.y);
             }
 
             // Gold value

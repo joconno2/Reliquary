@@ -150,9 +150,10 @@ void spawn_monsters(World& world, const TileMap& map,
 
             auto& def = MONSTER_TABLE[idx];
 
-            // Scale HP and damage with depth (steeper for shorter dungeons)
-            float hp_scale = 1.0f + dungeon_level * 0.5f;
-            float dmg_scale = 1.0f + dungeon_level * 0.35f;
+            // Scale HP and damage with depth (softer early, steeper late)
+            // Depth 1: 1.3x/1.2x, Depth 2: 1.7x/1.5x, Depth 3: 2.2x/1.85x, Depth 4: 2.8x/2.2x
+            float hp_scale = 1.0f + dungeon_level * (dungeon_level <= 2 ? 0.35f : 0.5f);
+            float dmg_scale = 1.0f + dungeon_level * (dungeon_level <= 2 ? 0.25f : 0.35f);
             int scaled_hp = static_cast<int>(def.hp * hp_scale);
             int scaled_dmg = static_cast<int>(def.base_damage * dmg_scale);
 
@@ -1496,10 +1497,9 @@ void spawn_doodads(World& world, TileMap& map,
             world.add<Renderable>(e, {sheet, sx, sy, {255,255,255,255}, 0});
         };
 
-        // === FURNITURE CLUSTERS: grouped doodads that look intentional ===
-        // Rooms large enough (>= 7x7) get a furniture cluster 40% of the time
-        if (room.w >= 7 && room.h >= 7 && rng.chance(40)) {
-            // Pick cluster center (avoiding edges)
+        // === ROOM TEMPLATES: zone-aware furniture arrangements ===
+        // Rooms >= 7x7 get a template 50% of the time
+        if (room.w >= 7 && room.h >= 7 && rng.chance(50)) {
             int cx = rng.range(room.x + 2, room.x + room.w - 3);
             int cy = rng.range(room.y + 2, room.y + room.h - 3);
             auto place_at = [&](int ox, int oy, int sx, int sy) {
@@ -1510,28 +1510,168 @@ void spawn_doodads(World& world, TileMap& map,
                     world.add<Renderable>(e, {SHEET_TILES, sx, sy, {255,255,255,255}, 0});
                 }
             };
-            int cluster_type = rng.range(0, 5);
-            switch (cluster_type) {
-                case 0: // Storage: barrels + sack
-                    place_at(0, 0, 4, 17); place_at(1, 0, 4, 17);
-                    place_at(0, 1, 5, 17); break;
-                case 1: // Burial: coffin + bones + blood
-                    place_at(0, 0, rng.range(0, 2), 23);
-                    place_at(1, 0, rng.range(0, 1), 21);
-                    place_at(0, 1, rng.range(0, 1), 22); break;
-                case 2: // Camp: log pile + barrel + mushroom
-                    place_at(0, 0, 6, 17); place_at(1, 0, 4, 17);
-                    place_at(-1, 0, 0, 20); break;
-                case 3: // Rubble: rocks + bones
-                    place_at(0, 0, 0, 18); place_at(1, 0, 1, 18);
-                    place_at(0, 1, rng.range(0, 1), 21); break;
-                case 4: // Shrine: sarcophagus + candles (bones flanking)
-                    place_at(0, 0, 3, 23);
-                    place_at(-1, 0, rng.range(0, 1), 21);
-                    place_at(1, 0, rng.range(0, 1), 21); break;
-                case 5: // Supplies: ore + barrel + log
-                    place_at(0, 0, 5, 17); place_at(1, 0, 5, 17);
-                    place_at(0, 1, 6, 17); place_at(1, 1, 4, 17); break;
+
+            // Zone-specific template pools
+            if (is_warrens) {
+                switch (rng.range(0, 4)) {
+                    case 0: // Nest: mushroom ring around slime pool
+                        place_at(-1, 0, 0, 20); place_at(1, 0, 0, 20);
+                        place_at(0, -1, 1, 20); place_at(0, 1, 1, 20);
+                        place_at(0, 0, rng.range(2, 3), 22); break;
+                    case 1: // Den: bones scattered with barrel (goblin stash)
+                        place_at(0, 0, 4, 17); place_at(1, 0, 5, 17);
+                        place_at(-1, 1, 0, 21); place_at(1, 1, 1, 21);
+                        place_at(0, -1, rng.range(2, 3), 22); break;
+                    case 2: // Fungal grove: many mushrooms
+                        place_at(-1, -1, 0, 20); place_at(0, -1, 1, 20);
+                        place_at(1, 0, 0, 20); place_at(-1, 1, 1, 20);
+                        place_at(0, 1, 0, 20); break;
+                    case 3: // Webbed corner: slime + bones
+                        place_at(0, 0, 3, 22); place_at(1, 0, 2, 22);
+                        place_at(0, 1, 2, 22); place_at(1, 1, 0, 21); break;
+                    case 4: // Larder: barrels and logs (stolen goods)
+                        place_at(0, 0, 4, 17); place_at(1, 0, 4, 17);
+                        place_at(2, 0, 6, 17); place_at(0, 1, 5, 17); break;
+                }
+            } else if (is_stonekeep) {
+                switch (rng.range(0, 4)) {
+                    case 0: // Armory: barrels flanked by supply sacks
+                        place_at(-1, 0, 5, 17); place_at(0, 0, 4, 17);
+                        place_at(1, 0, 5, 17); place_at(0, 1, 4, 17);
+                        place_at(0, -1, 6, 17); break;
+                    case 1: // Guard post: barrels in L-shape
+                        place_at(0, 0, 4, 17); place_at(1, 0, 4, 17);
+                        place_at(0, 1, 4, 17); break;
+                    case 2: // Mess hall: logs (tables) in row
+                        place_at(-1, 0, 6, 17); place_at(0, 0, 6, 17);
+                        place_at(1, 0, 6, 17); break;
+                    case 3: // War room: sarcophagus (table) + sacks (map rolls)
+                        place_at(0, 0, 3, 23); place_at(-1, -1, 5, 17);
+                        place_at(1, -1, 5, 17); break;
+                    case 4: // Trophy room: bones arranged on display
+                        place_at(-1, 0, 0, 21); place_at(0, 0, 1, 21);
+                        place_at(1, 0, 0, 21); place_at(0, 1, rng.range(0, 1), 22); break;
+                }
+            } else if (is_catacombs) {
+                switch (rng.range(0, 4)) {
+                    case 0: // Crypt: sarcophagus center, coffins flanking
+                        place_at(0, 0, 3, 23);
+                        place_at(-2, 0, rng.range(0, 2), 23);
+                        place_at(2, 0, rng.range(0, 2), 23); break;
+                    case 1: // Ossuary: bones everywhere
+                        place_at(-1, -1, 0, 21); place_at(0, -1, 1, 21);
+                        place_at(1, -1, 0, 21); place_at(-1, 0, 1, 21);
+                        place_at(1, 0, 0, 21); place_at(0, 1, 1, 21); break;
+                    case 2: // Embalming room: coffin open + blood + bones
+                        place_at(0, 0, 2, 23); place_at(1, 0, 0, 22);
+                        place_at(-1, 0, 1, 22); place_at(0, 1, 0, 21); break;
+                    case 3: // Mass grave: coffins row + blood pool
+                        place_at(-1, 0, 0, 23); place_at(0, 0, 1, 23);
+                        place_at(1, 0, 0, 23); place_at(0, 1, 0, 22);
+                        place_at(0, 2, 1, 22); break;
+                    case 4: // Ritual circle: bones in diamond, blood center
+                        place_at(0, -1, 0, 21); place_at(-1, 0, 1, 21);
+                        place_at(1, 0, 0, 21); place_at(0, 1, 1, 21);
+                        place_at(0, 0, 0, 22); break;
+                }
+            } else if (is_molten) {
+                switch (rng.range(0, 4)) {
+                    case 0: // Forge: ore sacks around central heat
+                        place_at(-1, 0, 5, 17); place_at(1, 0, 5, 17);
+                        place_at(0, -1, 5, 17); place_at(0, 1, 5, 17); break;
+                    case 1: // Mine cart: ore + barrels in line
+                        place_at(0, 0, 5, 17); place_at(1, 0, 5, 17);
+                        place_at(2, 0, 4, 17); place_at(3, 0, 4, 17); break;
+                    case 2: // Slag heap: rocks + scorch marks
+                        place_at(0, 0, 0, 18); place_at(1, 0, 1, 18);
+                        place_at(0, 1, 0, 22); place_at(1, 1, 1, 22); break;
+                    case 3: // Worked vein: ore sacks + rubble
+                        place_at(-1, 0, 5, 17); place_at(0, 0, 0, 18);
+                        place_at(1, 0, 5, 17); place_at(0, 1, 1, 18); break;
+                    case 4: // Furnace room: barrels flanked by ore
+                        place_at(0, 0, 4, 17); place_at(-1, 0, 5, 17);
+                        place_at(1, 0, 5, 17); place_at(-1, 1, 4, 17);
+                        place_at(1, 1, 4, 17); break;
+                }
+            } else if (is_sunken) {
+                switch (rng.range(0, 4)) {
+                    case 0: // Tide pool: mushrooms ringing slime
+                        place_at(0, 0, rng.range(2, 3), 22);
+                        place_at(-1, 0, 0, 20); place_at(1, 0, 1, 20);
+                        place_at(0, -1, 0, 20); place_at(0, 1, 1, 20); break;
+                    case 1: // Drowned cache: barrels half-sunk + slime
+                        place_at(0, 0, 4, 17); place_at(1, 0, 4, 17);
+                        place_at(0, 1, 2, 22); place_at(1, 1, 3, 22); break;
+                    case 2: // Coral cluster: mushrooms dense
+                        place_at(-1, -1, 1, 20); place_at(0, -1, 0, 20);
+                        place_at(1, 0, 1, 20); place_at(-1, 0, 0, 20);
+                        place_at(0, 0, 1, 20); place_at(0, 1, 0, 20); break;
+                    case 3: // Ruin: rocks + slime (collapsed structure)
+                        place_at(0, 0, 0, 18); place_at(1, 0, 1, 18);
+                        place_at(2, 0, 0, 18); place_at(0, 1, 2, 22); break;
+                    case 4: // Algae bloom: slime cluster
+                        place_at(0, 0, 2, 22); place_at(1, 0, 3, 22);
+                        place_at(0, 1, 3, 22); place_at(1, 1, 2, 22); break;
+                }
+            } else if (is_deep_halls) {
+                switch (rng.range(0, 4)) {
+                    case 0: // Collapsed pillar: rocks in line
+                        place_at(-1, 0, 0, 18); place_at(0, 0, 1, 18);
+                        place_at(1, 0, 0, 18); place_at(2, 0, 1, 18); break;
+                    case 1: // Mining camp: ore + logs + barrel
+                        place_at(0, 0, 5, 17); place_at(1, 0, 6, 17);
+                        place_at(0, 1, 4, 17); place_at(1, 1, 5, 17); break;
+                    case 2: // Boulder field: scattered rocks
+                        place_at(-1, -1, 0, 18); place_at(1, -1, 1, 18);
+                        place_at(0, 0, 0, 18);
+                        place_at(-1, 1, 1, 18); place_at(1, 1, 0, 18); break;
+                    case 3: // Abandoned excavation: rocks + bones (dead miners)
+                        place_at(0, 0, 0, 18); place_at(1, 0, 1, 18);
+                        place_at(0, 1, 0, 21); place_at(1, 1, 1, 21);
+                        place_at(2, 0, 6, 17); break;
+                    case 4: // Crystal cave: mushrooms + rocks (fungi on stone)
+                        place_at(0, 0, 0, 18); place_at(-1, 0, 0, 20);
+                        place_at(1, 0, 1, 20); place_at(0, 1, 1, 18);
+                        place_at(0, -1, 0, 20); break;
+                }
+            } else if (is_sepulchre) {
+                switch (rng.range(0, 4)) {
+                    case 0: // Ancient tomb: sarcophagus + coffins + blood
+                        place_at(0, 0, 3, 23);
+                        place_at(-2, 0, 0, 23); place_at(2, 0, 1, 23);
+                        place_at(0, 2, 0, 22); place_at(0, -1, 1, 22); break;
+                    case 1: // Bone throne: bones arranged like a seat
+                        place_at(0, 0, 0, 21); place_at(-1, -1, 1, 21);
+                        place_at(1, -1, 0, 21); place_at(-1, 0, 1, 21);
+                        place_at(1, 0, 0, 21); break;
+                    case 2: // Blood pool: blood tiles in cross
+                        place_at(0, 0, 0, 22); place_at(-1, 0, 1, 22);
+                        place_at(1, 0, 0, 22); place_at(0, -1, 1, 22);
+                        place_at(0, 1, 0, 22); break;
+                    case 3: // Sealed chamber: sarcophagi in row
+                        place_at(-1, 0, 3, 23); place_at(0, 0, 3, 23);
+                        place_at(1, 0, 3, 23); break;
+                    case 4: // Sacrificial altar: bones + blood in circle
+                        place_at(0, 0, 0, 22); place_at(-1, -1, 0, 21);
+                        place_at(1, -1, 1, 21); place_at(-1, 1, 1, 21);
+                        place_at(1, 1, 0, 21); place_at(0, -2, 0, 22); break;
+                }
+            } else {
+                // Generic fallback (same as before)
+                switch (rng.range(0, 3)) {
+                    case 0: // Storage
+                        place_at(0, 0, 4, 17); place_at(1, 0, 4, 17);
+                        place_at(0, 1, 5, 17); break;
+                    case 1: // Rubble
+                        place_at(0, 0, 0, 18); place_at(1, 0, 1, 18);
+                        place_at(0, 1, rng.range(0, 1), 21); break;
+                    case 2: // Camp
+                        place_at(0, 0, 6, 17); place_at(1, 0, 4, 17);
+                        place_at(-1, 0, 0, 20); break;
+                    case 3: // Supplies
+                        place_at(0, 0, 5, 17); place_at(1, 0, 5, 17);
+                        place_at(0, 1, 6, 17); place_at(1, 1, 4, 17); break;
+                }
             }
         }
 

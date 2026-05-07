@@ -157,4 +157,12 @@ struct GodAlignment {
     bool lethal_save_used = false;  // Lethis once-per-floor lethal save
     int items_identified_floor = 0; // Thessarka auto-ID tracking
     bool dig_used_floor = false;    // Gathruun dig tracking
+
+    // Church rank progression
+    int church_rank = 0;            // actual earned rank (0-4)
+    bool task_active = false;       // currently working on a rank task
+    int task_progress = 0;          // kills/items/gold toward current task
+    bool task_complete = false;     // task done, visit church to rank up
+    bool church_item_claimed = false;   // Devoted item already received
+    bool church_blessing_claimed = false; // Champion blessing already received
 };

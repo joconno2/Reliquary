@@ -1136,9 +1136,9 @@ void populate(World& world, TileMap& map, RNG& rng,
         {275, 425, "wolf", 3},      // Greenwood fringe
         // Spider nests (Greenwood, caves)
         {225, 325, "spider", 3},    // deep Greenwood
-        {300, 475, "spider", 4},    // near Tanglewood
+        {300, 475, "spider", 4},    // south Greenwood
         // Skeleton patrols (near catacombs/ruins)
-        {425, 325, "skeleton", 3},  // near Ashford
+        {425, 325, "skeleton", 3},  // near Bramblewood
         {600, 340, "skeleton", 4}, // near Greywatch
         {675, 525, "skeleton", 3},// Dust Province ruins
         // Bandit camps (roads, trade routes)
@@ -1150,7 +1150,7 @@ void populate(World& world, TileMap& map, RNG& rng,
         {325, 500, "boar", 3},     // south Greenwood
         // Lion pride (Dust Provinces, warm)
         {600, 575, "lion", 2},    // south desert
-        {525, 600, "lion", 3},    // near Sandmoor
+        {525, 600, "lion", 3},    // south of Dustfall
         // Scorpion nest (Dust Provinces)
         {650, 600, "scorpion", 4}, // deep desert
         {450, 625, "scorpion", 3},  // far south

@@ -79,6 +79,17 @@ EffectResult process(World& world, Entity player, TileMap& map, RNG& rng,
             if (stats.bleed_resist >= 100) { eff.turns_remaining = 0; continue; }
         }
         if (dmg < 0) dmg = 0;
+        // Soleth: fire damage 2x to player
+        if (eff.type == StatusType::BURN && dmg > 0 && world.has<GodAlignment>(player) &&
+            world.get<GodAlignment>(player).god == GodId::SOLETH)
+            dmg *= 2;
+        // Thalara: immune to poison and freeze
+        if (world.has<GodAlignment>(player) && world.get<GodAlignment>(player).god == GodId::THALARA) {
+            if (eff.type == StatusType::POISON || eff.type == StatusType::FROZEN) {
+                eff.turns_remaining = 0;
+                dmg = 0;
+            }
+        }
         stats.hp -= dmg;
         if (dmg > 0 && stats.hp <= 0) {
             switch (eff.type) {

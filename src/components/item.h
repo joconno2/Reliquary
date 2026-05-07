@@ -281,6 +281,13 @@ enum class UniqueEffect : int {
     TELEPORT_STRIKE,    // 15% chance to blink behind target on hit
     STEALTH_REGEN,      // regen 2 HP/turn while sneaking
     FEAR_AURA,          // 10% chance nearby enemies flee on your turn
+    // Champion legendaries
+    LIFESTEAL,          // heal 20% of melee damage dealt
+    FREEZE_ON_HIT,      // melee hits apply FROZEN 1 turn
+    POISON_BLEED_HIT,   // melee hits apply poison + bleed
+    KILL_INVIS,         // 2 turns invisible after each kill
+    FIRE_DAMAGE_BONUS,  // +5 fire damage on all melee hits
+    ON_KILL_HEAL,       // kills heal 10% max HP
     COUNT
 };
 
@@ -314,6 +321,12 @@ inline const char* unique_effect_description(UniqueEffect ue) {
         case UniqueEffect::TELEPORT_STRIKE:    return "15% chance: blink behind target on hit";
         case UniqueEffect::STEALTH_REGEN:      return "Regenerate 2 HP/turn while sneaking";
         case UniqueEffect::FEAR_AURA:          return "10% chance: nearby enemies flee";
+        case UniqueEffect::LIFESTEAL:          return "Heal 20% of melee damage dealt";
+        case UniqueEffect::FREEZE_ON_HIT:      return "Melee hits freeze target 1 turn";
+        case UniqueEffect::POISON_BLEED_HIT:   return "Melee hits apply poison + bleed";
+        case UniqueEffect::KILL_INVIS:         return "2 turns invisible after each kill";
+        case UniqueEffect::FIRE_DAMAGE_BONUS:  return "+5 fire damage on all melee hits";
+        case UniqueEffect::ON_KILL_HEAL:       return "Kills heal 10% max HP";
         default: return "";
     }
 }
@@ -370,6 +383,7 @@ struct Item {
 
     // Item tags for sacred/profane system (bitmask from tenet.h ItemTag)
     uint32_t tags = 0;
+    bool new_pickup = false; // set on pickup, cleared when viewed in inventory
 
     // God relic: -1 = not a relic, 0-12 = GodId of owning god
     int relic_god = -1;

@@ -3,6 +3,8 @@
 #include "components/renderable.h"
 #include "components/death_anim.h"
 #include "components/status_effect.h"
+#include "components/ai.h"
+#include "components/stats.h"
 #include <algorithm>
 #include <vector>
 #include <cmath>
@@ -555,6 +557,40 @@ void draw_entities(SDL_Renderer* renderer, const SpriteManager& sprites,
             SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
         }
     }
+
+    // Enemy HP bars (drawn after all sprites)
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    for (size_t i = 0; i < positions.size(); i++) {
+        Entity e = positions.entity_at(i);
+        if (!world.has<AI>(e) || !world.has<Stats>(e)) continue;
+        auto& ai = world.get<AI>(e);
+        if (ai.friendly) continue;
+        auto& es = world.get<Stats>(e);
+        if (es.hp >= es.hp_max) continue; // only show when damaged
+        auto& ep = positions.at_index(i);
+        if (!map.in_bounds(ep.x, ep.y) || !map.at(ep.x, ep.y).visible) continue;
+        int ex = (ep.x - cam.x) * TS;
+        int ey = (ep.y - cam.y) * TS;
+        // Small bar below sprite
+        int bar_w = TS - 4;
+        int bar_h = 3;
+        int bar_x = ex + 2;
+        int bar_y = ey + TS - 2;
+        // Background
+        SDL_Rect bg = {bar_x, bar_y, bar_w, bar_h};
+        SDL_SetRenderDrawColor(renderer, 20, 15, 15, 180);
+        SDL_RenderFillRect(renderer, &bg);
+        // Fill
+        int fill_w = std::max(1, bar_w * es.hp / es.hp_max);
+        SDL_Rect fill = {bar_x, bar_y, fill_w, bar_h};
+        // Color: green > 50%, yellow > 25%, red <= 25%
+        int pct = es.hp * 100 / es.hp_max;
+        if (pct > 50) SDL_SetRenderDrawColor(renderer, 60, 180, 60, 200);
+        else if (pct > 25) SDL_SetRenderDrawColor(renderer, 200, 180, 60, 200);
+        else SDL_SetRenderDrawColor(renderer, 200, 50, 40, 200);
+        SDL_RenderFillRect(renderer, &fill);
+    }
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
 }
 
 } // namespace render

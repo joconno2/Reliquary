@@ -516,7 +516,7 @@ void PassiveTreeScreen::draw_tooltip(SDL_Renderer* renderer, TTF_Font* font,
                 status_text = req_buf;
                 status_col = {200, 100, 80, 255};
             } else if (state.points_available > 0) {
-                status_text = "Click to allocate";
+                status_text = "Click to allocate (1 point)";
                 status_col = {220, 200, 80, 255};
             } else {
                 status_text = "No points available";

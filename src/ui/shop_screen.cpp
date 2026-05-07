@@ -6,6 +6,8 @@
 #include "core/spritesheet.h"
 #include "components/spellbook.h"
 #include "components/tenet.h"
+#include "components/god.h"
+#include "components/player.h"
 #include <cstdio>
 #include <algorithm>
 
@@ -110,8 +112,7 @@ static ShopItem make_shop_item(const ShopItemDef& def) {
 }
 
 void ShopScreen::generate_stock(RNG& rng, int difficulty, GodId province_god) {
-    // Don't regenerate if stock still exists (prevents reroll on re-talk)
-    if (!stock_.empty()) return;
+    stock_.clear();
 
 
     // Difficulty scales: 0 = starting area, 4 = mid-game, 8 = endgame
@@ -351,18 +352,38 @@ void ShopScreen::generate_stock(RNG& rng, int difficulty, GodId province_god) {
     }
 }
 
-void ShopScreen::open(Entity player, [[maybe_unused]] World& world, RNG& rng, int* gold, int difficulty, int price_mult, GodId province_god) {
+void ShopScreen::open(Entity player, [[maybe_unused]] World& world, RNG& rng, int* gold, int difficulty, int price_mult, GodId province_god, Entity shopkeeper) {
     open_ = true;
     selected_ = 0;
     player_ = player;
     gold_ = gold;
     price_mult_ = price_mult;
     buy_tab_ = true;
-    generate_stock(rng, difficulty, province_god);
-    // Apply price multiplier to stock
-    if (price_mult_ != 100) {
-        for (auto& si : stock_)
-            si.item.gold_value = std::max(1, si.item.gold_value * price_mult_ / 100);
+    current_shopkeeper_ = shopkeeper;
+
+    // Per-NPC persistent stock
+    if (shopkeeper != 0) {
+        auto it = stock_cache_.find(shopkeeper);
+        if (it != stock_cache_.end()) {
+            // Use cached stock for this shopkeeper
+            stock_ = it->second;
+        } else {
+            // Generate new stock and cache it
+            generate_stock(rng, difficulty, province_god);
+            if (price_mult_ != 100) {
+                for (auto& si : stock_)
+                    si.item.gold_value = std::max(1, si.item.gold_value * price_mult_ / 100);
+            }
+            stock_cache_[shopkeeper] = stock_;
+        }
+    } else {
+        // No shopkeeper entity (caravan etc): always generate fresh
+        stock_.clear();
+        generate_stock(rng, difficulty, province_god);
+        if (price_mult_ != 100) {
+            for (auto& si : stock_)
+                si.item.gold_value = std::max(1, si.item.gold_value * price_mult_ / 100);
+        }
     }
 }
 
@@ -460,8 +481,10 @@ bool ShopScreen::execute(World& world, int* gold) {
         world.add<Item>(e, std::move(item));
         inv.add(e);
 
-        // Remove from stock
+        // Remove from stock and update cache
         stock_.erase(stock_.begin() + selected_);
+        if (current_shopkeeper_ != 0)
+            stock_cache_[current_shopkeeper_] = stock_;
         if (selected_ >= static_cast<int>(stock_.size()) && selected_ > 0) selected_--;
         return true;
     } else {
@@ -470,6 +493,13 @@ bool ShopScreen::execute(World& world, int* gold) {
         Entity item_e = inv.items[selected_];
         if (!world.has<Item>(item_e)) return false;
         auto& item = world.get<Item>(item_e);
+
+        // Ossren: can't sell equipment
+        if (world.has<Player>(player_) && world.has<GodAlignment>(player_) &&
+            world.get<GodAlignment>(player_).god == GodId::OSSREN &&
+            item.slot != EquipSlot::NONE) {
+            return false; // silently block
+        }
 
         int sell_price = item.gold_value / 2;
         if (sell_price < 1) sell_price = 1;
@@ -612,6 +642,23 @@ void ShopScreen::render(SDL_Renderer* renderer, TTF_Font* font,
             ui::Rect price_rect = {price_col_x, item_row.y, price_col_w, item_row.h};
             ui::draw_text_in(renderer, font, price, can_afford ? price_col : cant_col,
                              price_rect, ui::Align::RIGHT);
+
+            // Owned count (below price, dim)
+            if (world.has<Inventory>(player_)) {
+                auto& pinv = world.get<Inventory>(player_);
+                int owned = 0;
+                for (auto ie : pinv.items) {
+                    if (world.has<Item>(ie) && world.get<Item>(ie).name == si.item.name)
+                        owned++;
+                }
+                if (owned > 0) {
+                    char obuf[24];
+                    snprintf(obuf, sizeof(obuf), "own:%d", owned);
+                    ui::draw_text_in(renderer, font, obuf, hint_col,
+                                     {price_col_x, item_row.y + line_h + 2, price_col_w, line_h},
+                                     ui::Align::RIGHT);
+                }
+            }
         }
 
         // Detail area for selected item

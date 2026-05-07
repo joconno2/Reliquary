@@ -1283,6 +1283,100 @@ CastResult cast(World& world, Entity caster, SpellId spell,
             break;
         }
 
+        case SpellId::GLACIAL_SPIKE: {
+            Entity target = nearest_enemy(world, caster, map, info.range);
+            if (target == NULL_ENTITY) {
+                if (is_player) log.add("No target.", {140, 130, 120, 255});
+                if (blood_magic) stats.hp += actual_cost; else stats.mp += actual_cost;
+                result.consumed_turn = false; break;
+            }
+            auto& tgt = world.get<Stats>(target);
+            int dmg = power + rng.range(0, power / 4);
+            tgt.hp -= dmg;
+            if (!world.has<StatusEffects>(target)) world.add<StatusEffects>(target, {});
+            world.get<StatusEffects>(target).add(StatusType::FROZEN, 0, 2);
+            world.get<StatusEffects>(target).add(StatusType::STUNNED, 0, 2);
+            if (is_player) { char buf[96]; snprintf(buf, sizeof(buf), "Glacial spike impales the %s! %d dmg, stunned.", tgt.name.c_str(), dmg); log.add(buf, {140, 200, 255, 255}); }
+            if (tgt.hp <= 0 && !world.has<Player>(target)) spell_kill_xp(target);
+            result.success = true; break;
+        }
+        case SpellId::MIRROR_IMAGE: {
+            // +3 armor for 8 turns via FORESIGHT buff (dodge proxy)
+            if (world.has<Buffs>(caster))
+                world.get<Buffs>(caster).add(BuffType::FORESIGHT, 8, 3);
+            stats.natural_armor += 3;
+            if (is_player) log.add("Mirror images shimmer around you. +3 armor for 8 turns.", {180, 200, 220, 255});
+            result.success = true; break;
+        }
+        case SpellId::FARSIGHT: {
+            // Reveal all enemies and items on floor
+            for (int my = 0; my < map.height(); my++)
+                for (int mx = 0; mx < map.width(); mx++)
+                    map.at(mx, my).explored = true;
+            // Mark all enemy positions as visible briefly (via explored)
+            if (is_player) log.add("Your mind expands. The floor is revealed.", {140, 180, 220, 255});
+            result.success = true; break;
+        }
+        case SpellId::MASS_HEAL: {
+            int healed_count = 0;
+            auto& ai_pool = world.pool<AI>();
+            for (size_t i = 0; i < ai_pool.size(); i++) {
+                Entity ae = ai_pool.entity_at(i);
+                if (!ai_pool.at_index(i).friendly) continue;
+                if (!world.has<Stats>(ae) || !world.has<Position>(ae)) continue;
+                auto& as = world.get<Stats>(ae);
+                if (as.hp < as.hp_max) {
+                    int h = std::min(power, as.hp_max - as.hp);
+                    as.hp += h;
+                    healed_count++;
+                }
+            }
+            // Also heal self
+            int self_heal = std::min(power, stats.hp_max - stats.hp);
+            stats.hp += self_heal;
+            if (is_player) { char buf[64]; snprintf(buf, sizeof(buf), "Mass heal! +%d HP. %d allies healed.", self_heal, healed_count); log.add(buf, {100, 220, 100, 255}); }
+            result.success = true; break;
+        }
+        case SpellId::VINE_PRISON: {
+            Entity target = nearest_enemy(world, caster, map, info.range);
+            if (target == NULL_ENTITY) {
+                if (is_player) log.add("No target.", {140, 130, 120, 255});
+                if (blood_magic) stats.hp += actual_cost; else stats.mp += actual_cost;
+                result.consumed_turn = false; break;
+            }
+            auto& tgt = world.get<Stats>(target);
+            if (!world.has<StatusEffects>(target)) world.add<StatusEffects>(target, {});
+            world.get<StatusEffects>(target).add(StatusType::STUNNED, 0, 3); // rooted = stunned
+            world.get<StatusEffects>(target).add(StatusType::BLEED, 2, 3);
+            if (is_player) { char buf[96]; snprintf(buf, sizeof(buf), "Vines erupt, trapping the %s!", tgt.name.c_str()); log.add(buf, {80, 180, 60, 255}); }
+            result.success = true; break;
+        }
+        case SpellId::SOUL_CAGE: {
+            Entity target = nearest_enemy(world, caster, map, info.range);
+            if (target == NULL_ENTITY) {
+                if (is_player) log.add("No target.", {140, 130, 120, 255});
+                if (blood_magic) stats.hp += actual_cost; else stats.mp += actual_cost;
+                result.consumed_turn = false; break;
+            }
+            auto& tgt = world.get<Stats>(target);
+            if (tgt.hp * 5 <= tgt.hp_max) {
+                // Below 20% HP: instant kill + gain max HP
+                if (is_player) { char buf[96]; snprintf(buf, sizeof(buf), "The %s's soul is caged. +2 max HP.", tgt.name.c_str()); log.add(buf, {160, 80, 200, 255}); }
+                tgt.hp = 0;
+                spell_kill_xp(target);
+                stats.base_hp_max += 2;
+                stats.hp_max += 2;
+                stats.hp += 2;
+            } else {
+                // Not low enough: deal damage instead
+                int dmg = power;
+                tgt.hp -= dmg;
+                if (is_player) { char buf[96]; snprintf(buf, sizeof(buf), "Soul Cage tears at the %s. %d damage. Must be below 20%% HP.", tgt.name.c_str(), dmg); log.add(buf, {140, 60, 160, 255}); }
+                if (tgt.hp <= 0 && !world.has<Player>(target)) spell_kill_xp(target);
+            }
+            result.success = true; break;
+        }
+
         default:
             if (is_player) {
                 log.add("That spell does nothing yet.", {140, 130, 120, 255});

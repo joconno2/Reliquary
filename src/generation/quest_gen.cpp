@@ -534,6 +534,18 @@ void spawn_quest_content(World& world, const TileMap& map,
             }
         }
 
+        // Floor 7: Narrative beat (home stretch)
+        if (dungeon_level == 7) {
+            log.add("The walls are breathing.", {180, 100, 160, 255});
+            log.add("Your brand is the only light. Everything else has given up.", {160, 80, 140, 255});
+        }
+
+        // Floor 8: Final warning
+        if (dungeon_level == 8) {
+            log.add("You can hear it. Below you. Waiting.", {200, 120, 180, 255});
+            log.add("One floor remains.", {255, 220, 100, 255});
+        }
+
         // Floor 9: The Keeper (already spawned via quest item section below)
     }
 
@@ -575,20 +587,45 @@ void spawn_quest_content(World& world, const TileMap& map,
         bool is_bottom = (dungeon_level >= zone_max);
 
         if (is_bottom) {
-            // MQ_03: First Fragment in Stonekeep
+            // MQ_03: First Fragment in Stonekeep (guarded by The Warden)
             if (dungeon_ctx->quest == "MQ_03") {
+                Entity guardian = populate::spawn_boss(world, map, rooms,
+                    "The Warden", SHEET_MONSTERS, 3, 4,
+                    65, 16, 10, 14, 9, 4, 80, 120);
+                if (guardian != NULL_ENTITY) {
+                    world.add<StatusEffects>(guardian);
+                    log.add("A figure in corroded armor blocks the way.", {200, 180, 140, 255});
+                }
                 spawn_quest_item("Reliquary Fragment",
                     "A shard of burned stone. The words carved into it are too heavy.",
                     7, 21, QuestId::MQ_03_FIRST_FRAGMENT);
             }
-            // MQ_05: Second Fragment in The Catacombs
+            // MQ_05: Second Fragment in The Catacombs (guarded by The Revenant King)
             if (dungeon_ctx->quest == "MQ_05") {
+                Entity guardian = populate::spawn_boss(world, map, rooms,
+                    "The Revenant King", SHEET_MONSTERS, 2, 4,
+                    80, 18, 12, 16, 11, 3, 85, 160);
+                if (guardian != NULL_ENTITY) {
+                    world.get<AI>(guardian).behavior = BehaviorType::NECROMANCER;
+                    world.add<StatusEffects>(guardian);
+                    log.add("The dead king rises from its throne.", {200, 160, 200, 255});
+                }
                 spawn_quest_item("Reliquary Fragment",
                     "A shard of solidified memory. It hums with warmth.",
                     2, 16, QuestId::MQ_05_SECOND_FRAGMENT);
             }
-            // MQ_06: Third Fragment in The Molten Depths
+            // MQ_06: Third Fragment in The Molten Depths (guarded by The Slag Mother)
             if (dungeon_ctx->quest == "MQ_06") {
+                Entity guardian = populate::spawn_boss(world, map, rooms,
+                    "The Slag Mother", SHEET_MONSTERS, 2, 8,
+                    100, 20, 8, 20, 14, 5, 70, 200);
+                if (guardian != NULL_ENTITY) {
+                    auto& gai = world.get<AI>(guardian);
+                    gai.behavior = BehaviorType::DRAGON;
+                    gai.ranged_damage = 10;
+                    world.add<StatusEffects>(guardian);
+                    log.add("Molten stone heaves upward. Something ancient wakes.", {255, 140, 60, 255});
+                }
                 spawn_quest_item("Reliquary Fragment",
                     "Cold even in the heart of the furnace. Three of three.",
                     2, 16, QuestId::MQ_06_THIRD_FRAGMENT,

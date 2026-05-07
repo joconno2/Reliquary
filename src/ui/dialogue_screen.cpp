@@ -79,7 +79,8 @@ void DialogueScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* fo
 
     int content_h = title_h + 12 + // NPC name
                     text_lines * line_h + 16 + // dialogue text
-                    static_cast<int>(options_.size()) * (line_h + 4) + 20; // options
+                    static_cast<int>(options_.size()) * (line_h + 4) + // options
+                    line_h + 24; // control hint
     int panel_h = content_h + 40;
     int panel_y = (sh - panel_h) / 2;
 
@@ -148,4 +149,9 @@ void DialogueScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* fo
         ui::draw_text(renderer, font, buf, col, cx, cy);
         cy += line_h + 4;
     }
+
+    // Control hint at bottom
+    cy += 4;
+    ui::draw_text(renderer, font, "Up/Down select, Enter choose, Esc leave",
+                  {100, 95, 85, 255}, cx, cy);
 }
