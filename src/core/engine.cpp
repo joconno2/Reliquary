@@ -831,7 +831,6 @@ void Engine::generate_level() {
         for (int ti = 0; ti < TOWN_COUNT; ti++) {
             GodId god = get_town_god(ALL_TOWNS[ti].x, ALL_TOWNS[ti].y);
             TileType wall_type = TileType::WALL_STONE_BRICK; // default
-            TileType floor_type = TileType::FLOOR_STONE;
             switch (god) {
                 case GodId::KHAEL:    wall_type = TileType::WALL_WOOD; break;
                 case GodId::GATHRUUN: wall_type = TileType::WALL_STONE_ROUGH; break;
@@ -1018,19 +1017,19 @@ void Engine::generate_level() {
         static const char* SHOPKEEPER_IDLE[] = {
             "Take your time. I'm not going anywhere.", "Good stock today. Fresh from the road.",
             "You look like you could use supplies.", "Best prices this side of Thornwall.",
-            "Business has been slow. Too many dungeons, not enough customers.",
-            "I trade in what the road provides.",
+            "Slow day.",
+            "Take a look.",
         };
         static const char* HERBALIST_IDLE[] = {
-            "The forest provides, if you know where to look.",
+            "Herbs and poultices.",
             "Antidotes don't grow on trees. Well, some do.",
             "These poultices take days to prepare.", "Mind the red mushrooms. Those aren't for eating.",
         };
         static const char* INNKEEPER_IDLE[] = {
             "10 gold for a room. Best deal you'll find.",
             "The ale's fresh. The beds are... acceptable.",
-            "Travelers bring news. Mostly bad news, these days.",
-            "Rest up. The road doesn't get easier from here.",
+            "Any news from the road?",
+            "Get some sleep.",
         };
         // Province-specific opening lines for merchants/herbalists
         struct ProvinceDialogue {
@@ -1042,7 +1041,7 @@ void Engine::generate_level() {
             switch (god) {
                 case GodId::KHAEL: return {
                     "Trade goods from the deep wood. Nothing forged, nothing mined.",
-                    "The Greenwood teaches patience. Every root has a use.",
+                    "Wood goods. No metal.",
                     "Rooms are simple. Walls are living wood. You'll sleep well."};
                 case GodId::SYTHARA: return {
                     "What I have is what's left. Take it or leave it.",
@@ -1051,7 +1050,7 @@ void Engine::generate_level() {
                 case GodId::GATHRUUN: return {
                     "Furs, tools, and preserved rations. Nothing fancy survives the cold.",
                     "Frostbite remedies and warming draughts. You'll need both.",
-                    "The hearth is the only warm thing in this town. Stay close to it."};
+                    "Cold out there. Room's warm."};
                 case GodId::OSSREN: return {
                     "Forged steel and mining supplies. The coast provides.",
                     "Burns and lung sickness. That's what I treat, mostly.",
@@ -1062,7 +1061,7 @@ void Engine::generate_level() {
                     "Pilgrims and soldiers. That's all we get these days."};
                 default: return {
                     "Browse, if you like. I don't haggle.",
-                    "The wilds hold remedies for every ill, if you know where to look.",
+                    "Remedies and poultices.",
                     "10 gold for a room. Best deal you'll find."};
             }
         };
@@ -1489,16 +1488,7 @@ void Engine::generate_level() {
             }
         };
 
-        static const char* HERBALIST_LINES[] = {
-            "The wilds hold remedies for every ill, if you know where to look.",
-            "Moonpetal grows only where the dead have lain. Think about that.",
-            "Most poisons come from the same plants as their cures.",
-        };
-        static const char* MERCHANT_LINES[] = {
-            "I trade in what the road provides. Take a look.",
-            "Every town needs something only another town has.",
-            "The roads are getting worse. Good for business, bad for living.",
-        };
+        // (Herbalist and merchant idle lines handled by NPC::idle_lines)
         for (int i = 0; i < TOWN_COUNT; i++) {
             auto herb_name = gen_npc_name("Herbalist", ALL_TOWNS[i].x + 1, ALL_TOWNS[i].y);
             auto merch_name = gen_npc_name("Merchant", ALL_TOWNS[i].x, ALL_TOWNS[i].y + 1);
@@ -2389,7 +2379,6 @@ void Engine::generate_level() {
                 if (gi >= 0 && gi < 13)
                     log_.add(TAUNTS[gi], {200, 180, 220, 255});
                 audio_.play(SfxId::SPELL_IMPACT);
-                trigger_screen_shake(3.0f);
             }
         }
 
@@ -2448,13 +2437,112 @@ void Engine::generate_level() {
             }
         }
 
-        // Unique items — 12% chance per floor, zone-aware
+        // Unique items — placed on bottom floor of optional dungeons, guarded
         if (current_dungeon_idx_ >= 0 &&
-            current_dungeon_idx_ < static_cast<int>(dungeon_registry_.size()) &&
-            rng_.chance(12)) {
+            current_dungeon_idx_ < static_cast<int>(dungeon_registry_.size())) {
             auto& dentry = dungeon_registry_[current_dungeon_idx_];
-            int effective_depth = dungeon_level_ + dentry.zone_difficulty;
-            populate::spawn_unique(world_, rooms_, rng_, effective_depth, dentry.zone);
+
+            // Check if we're on the bottom floor of this dungeon
+            struct ZoneMax { const char* key; int max_depth; };
+            static const ZoneMax ZONE_DEPTHS[] = {
+                {"warrens", 3}, {"stonekeep", 4}, {"deep_halls", 4},
+                {"catacombs", 4}, {"molten", 4}, {"sunken", 4},
+                {"sepulchre", 9},
+            };
+            int zone_max = 3;
+            for (auto& zd : ZONE_DEPTHS)
+                if (dentry.zone == zd.key) { zone_max = zd.max_depth; break; }
+
+            bool is_bottom = (dungeon_level_ >= zone_max);
+            bool is_quest_dungeon = !dentry.quest.empty();
+
+            // Optional dungeons: guaranteed unique + named guardian on bottom floor
+            if (is_bottom && !is_quest_dungeon) {
+                int effective_depth = dungeon_level_ + dentry.zone_difficulty;
+                Entity ue = populate::spawn_unique(world_, rooms_, rng_, effective_depth, dentry.zone);
+                if (ue != NULL_ENTITY) {
+                    // Named guardian per dungeon (thematic to location)
+                    struct DungeonGuardian {
+                        const char* dungeon;
+                        const char* name;
+                        const char* announce;
+                        int sx, sy;         // sprite coords
+                        int hp, str, dmg, armor, speed;
+                        BehaviorType ai;
+                        int regen;          // 0 = none
+                    };
+                    static const DungeonGuardian GUARDIANS[] = {
+                        // Warrens
+                        {"The Crawl Warren",    "Brood Queen",           "The Brood Queen is here.",
+                         8, 6,   70, 14,  8, 2, 110, BehaviorType::BASIC, 0},
+                        {"The Worm Warren",     "Tunneler",              "The Tunneler blocks the passage.",
+                         9, 6,   90, 18, 10, 3,  70, BehaviorType::CHARGER, 0},
+                        {"The Worm Tunnels",    "Rat Patriarch",         "The Rat Patriarch.",
+                         11, 6,  65, 14,  9, 1, 130, BehaviorType::PACK, 0},
+                        // Stonekeep
+                        {"The Grey Citadel",    "Grey Warden",           "The Grey Warden still stands guard.",
+                         3, 4,   85, 18, 10, 5,  85, BehaviorType::BASIC, 0},
+                        {"The Broken Vault",    "Vault Keeper",          "The Vault Keeper.",
+                         2, 7,  100, 16, 12, 6,  60, BehaviorType::BASIC, 0},
+                        {"The Silent Citadel",  "Hollow Knight",         "The Hollow Knight.",
+                         3, 4,   80, 16,  9, 4, 100, BehaviorType::WRAITH, 0},
+                        // Deep Halls
+                        {"The Sunless Galleries","Stone Watcher",        "The Stone Watcher.",
+                         2, 7,  110, 20, 12, 5,  60, BehaviorType::BASIC, 0},
+                        {"The Deep Halls",      "Chained Minotaur",      "The Chained Minotaur.",
+                         7, 7,  100, 22, 14, 3,  85, BehaviorType::CHARGER, 0},
+                        {"The Hollow Underhall", "Deeproot",              "The Deeproot.",
+                         2, 1,   95, 18, 10, 4,  70, BehaviorType::TROLL, 3},
+                        // Catacombs
+                        {"The Dead Ossuary",    "Bone Sovereign",        "The Bone Sovereign.",
+                         2, 4,   85, 16, 11, 3,  90, BehaviorType::NECROMANCER, 0},
+                        {"The Bone Ossuary",    "Marrow Eater",          "The Marrow Eater.",
+                         5, 4,   75, 18, 12, 2, 110, BehaviorType::THIEF, 0},
+                        {"The Grave Ossuary",   "Entombed Priest",       "The Entombed Priest.",
+                         2, 4,   90, 14,  9, 3,  85, BehaviorType::LICH, 0},
+                        // Molten
+                        {"The Ash Forge",       "Forgespawn",            "The Forgespawn.",
+                         2, 7,  100, 20, 13, 6,  60, BehaviorType::BASIC, 0},
+                        {"The Slag Core",       "Cinder Drake",          "The Cinder Drake.",
+                         2, 8,  110, 20, 14, 4,  80, BehaviorType::DRAGON, 0},
+                        {"The Cinder Core",     "Living Furnace",        "The Living Furnace.",
+                         2, 7,  120, 18, 11, 7,  50, BehaviorType::TROLL, 2},
+                        // Sunken
+                        {"The Damp Basin",      "Drowned Priestess",     "The Drowned Priestess.",
+                         4, 7,   80, 14, 10, 2, 100, BehaviorType::LICH, 0},
+                        {"The Salt Grotto",     "Brine Worm",            "The Brine Worm.",
+                         9, 6,  100, 16, 11, 3,  70, BehaviorType::CHARGER, 0},
+                        {"The Murk Grotto",     "Deep Naga",             "The Deep Naga.",
+                         4, 7,   90, 18, 12, 2, 120, BehaviorType::BASIC, 0},
+                    };
+
+                    // Find matching guardian for this dungeon
+                    const DungeonGuardian* dg = nullptr;
+                    for (auto& g : GUARDIANS) {
+                        if (dentry.name == g.dungeon) { dg = &g; break; }
+                    }
+
+                    if (dg) {
+                        Entity guard = populate::spawn_boss(world_, map_, rooms_,
+                            dg->name, SHEET_MONSTERS, dg->sx, dg->sy,
+                            dg->hp, dg->str, 10, dg->str,
+                            dg->dmg, dg->armor, dg->speed, dg->hp);
+                        if (guard != NULL_ENTITY) {
+                            world_.get<AI>(guard).behavior = dg->ai;
+                            if (dg->regen > 0)
+                                world_.get<AI>(guard).regen_per_turn = dg->regen;
+                            if (dg->ai == BehaviorType::DRAGON)
+                                world_.get<AI>(guard).ranged_damage = dg->dmg * 2 / 3;
+                            if (dg->ai == BehaviorType::LICH) {
+                                world_.get<AI>(guard).ranged_range = 6;
+                                world_.get<AI>(guard).ranged_damage = dg->dmg;
+                            }
+                            world_.add<StatusEffects>(guard);
+                            log_.add(dg->announce, {220, 180, 100, 255});
+                        }
+                    }
+                }
+            }
         }
 
         // Spawn quest bosses, quest items, and depth-triggered quest auto-starts
@@ -2571,7 +2659,6 @@ void Engine::generate_level() {
 void Engine::grant_skill_xp(SkillId skill, int amount) {
     if (!world_.has<Skills>(player_)) return;
     auto& skills = world_.get<Skills>(player_);
-    int old_lv = skills.get_level(skill);
     bool leveled = skills.grant_xp(skill, amount);
     if (leveled) {
         int new_lv = skills.get_level(skill);
@@ -2871,10 +2958,25 @@ void Engine::try_move_player(int dx, int dy) {
             int mark_bonus = atk_result.damage / 2;
             world_.get<Stats>(target).hp -= mark_bonus;
             atk_result.damage += mark_bonus;
+            char mkb[64];
+            snprintf(mkb, sizeof(mkb), "Marked prey! (+%d)", mark_bonus);
+            log_.add(mkb, {140, 255, 100, 255});
             if (world_.get<Stats>(target).hp <= 0) {
                 combat::kill(world_, target, log_);
                 atk_result.killed = true;
                 ranger_marked_target_ = 0;
+            }
+        }
+        // Ranger: auto-mark on first hit (before next attack so it applies immediately)
+        if (world_.has<Player>(player_) && world_.get<Player>(player_).class_id == ClassId::RANGER &&
+            atk_result.hit && target != ranger_marked_target_ && !atk_result.killed) {
+            ranger_marked_target_ = target;
+            if (world_.has<Stats>(target)) {
+                char mb[64]; snprintf(mb, sizeof(mb), "Marked: %s", world_.get<Stats>(target).name.c_str());
+                log_.add(mb, {200, 255, 140, 255});
+                // Visible mark particles
+                auto& tp = world_.get<Position>(target);
+                particles_.burst((float)tp.x, (float)tp.y, 15, 100, 255, 80, 0.12f, 0.6f, 4);
             }
         }
 
@@ -2955,7 +3057,6 @@ void Engine::try_move_player(int dx, int dy) {
             dwarf_fortified_ = false;
             log_.add("Fortified strike!", {200, 180, 100, 255});
                 audio_.play(SfxId::CRIT);
-            trigger_screen_shake(4.0f);
             if (world_.get<Stats>(target).hp <= 0) {
                 combat::kill(world_, target, log_);
                 atk_result.killed = true;
@@ -2990,7 +3091,6 @@ void Engine::try_move_player(int dx, int dy) {
 
         // Skill XP from melee hit
         if (atk_result.hit && world_.has<Skills>(player_)) {
-            auto& skills = world_.get<Skills>(player_);
             // Determine weapon skill from equipped weapon tags
             uint32_t wtags = 0;
             if (world_.has<Inventory>(player_)) {
@@ -3100,9 +3200,13 @@ void Engine::try_move_player(int dx, int dy) {
             int fav = ga.favor;
             switch (ga.god) {
                 case GodId::VETHRIK: {
-                    // Undead damage: 15% base, 25% at favor 25, 35% at favor 50
                     int pct = (fav >= 50) ? 35 : (fav >= 25) ? 25 : 15;
-                    if (is_undead(tgt_stats.name.c_str())) bonus = std::max(1, atk_result.damage * pct / 100);
+                    if (is_undead(tgt_stats.name.c_str())) {
+                        bonus = std::max(1, atk_result.damage * pct / 100);
+                        char vb[48]; snprintf(vb, sizeof(vb), "+%d vs undead", bonus);
+                        log_.add(vb, {180, 180, 140, 255});
+                        particles_.burst((float)nx, (float)ny, 12, 200, 200, 160, 0.12f, 0.5f, 4);
+                    }
                     int bone_dmg = (fav >= 75) ? 4 : 2;
                     if (weapon_tags & TAG_BONE_ITEM) bonus += bone_dmg;
                     break;
@@ -3114,7 +3218,6 @@ void Engine::try_move_player(int dx, int dy) {
                         tgt_stats.hp -= first_bonus;
                         bonus += first_bonus;
                         log_.add("IRON STRIKE!", {220, 180, 60, 255});
-                        trigger_screen_shake(4.0f);
                         particles_.burst((float)nx, (float)ny, 10, 200, 160, 80, 0.12f, 0.6f, 3);
                     }
                     // Blunt/axe bonus
@@ -3124,9 +3227,14 @@ void Engine::try_move_player(int dx, int dy) {
                 }
                 case GodId::YASHKHET: {
                     auto& ps = world_.get<Stats>(player_);
-                    // Lifesteal: heal 15% of damage dealt
                     int steal = std::max(1, atk_result.damage * 15 / 100);
+                    int old_hp = ps.hp;
                     ps.hp = std::min(ps.hp + steal, ps.hp_max);
+                    int healed = ps.hp - old_hp;
+                    if (healed > 0) {
+                        char yb[32]; snprintf(yb, sizeof(yb), "+%d HP (blood)", healed);
+                        log_.add(yb, {200, 80, 80, 255});
+                    }
                     // Low-HP bonus: +25% damage below 50% HP (75% at favor 50)
                     int threshold_pct = (fav >= 50) ? 75 : 50;
                     int dmg_pct = (fav >= 25) ? 25 : 15;
@@ -3149,23 +3257,25 @@ void Engine::try_move_player(int dx, int dy) {
                     break;
                 }
                 case GodId::ZHAVEK: {
-                    // Stealth multiplier: 2x base, 3x at favor 50
                     if (world_.get<Stats>(player_).invisible_turns > 0) {
-                        int mult = (fav >= 50) ? 2 : 1; // 2x or 3x total
+                        int mult = (fav >= 50) ? 2 : 1;
                         bonus = atk_result.damage * mult;
                         world_.get<Stats>(player_).invisible_turns = 0;
+                        char zb[48]; snprintf(zb, sizeof(zb), "Backstab! (+%d)", bonus);
+                        log_.add(zb, {140, 120, 200, 255});
+                        particles_.burst((float)nx, (float)ny, 15, 100, 60, 180, 0.15f, 0.5f, 5);
                     }
                     break;
                 }
                 case GodId::OSSREN: {
-                    // +1 damage per equipped item (god of permanence blesses all gear)
                     if (world_.has<Inventory>(player_)) {
                         auto& oinv = world_.get<Inventory>(player_);
                         int equip_count = 0;
                         for (int s = 0; s < EQUIP_SLOT_COUNT; s++)
                             if (oinv.equipped[s] != NULL_ENTITY) equip_count++;
-                        bonus = equip_count; // +1 per slot filled
+                        bonus = equip_count;
                     }
+                    // Ossren bonus is constant, no per-hit message (would spam)
                     break;
                 }
                 case GodId::GATHRUUN: {
@@ -3239,15 +3349,16 @@ void Engine::try_move_player(int dx, int dy) {
                     atk_result.damage += 3;
                     if (world_.has<StatusEffects>(target))
                         world_.get<StatusEffects>(target).add(StatusType::BURN, 1, 2);
-                    // Fire burst VFX
-                    particles_.spell_fire((float)nx, (float)ny);
-                    particles_.burst((float)nx, (float)ny, 6, 255, 160, 40, 0.1f, 0.4f, 3);
+                    log_.add("+3 fire", {255, 160, 60, 255});
+                    particles_.burst((float)nx, (float)ny, 15, 255, 140, 40, 0.15f, 0.5f, 5);
+                    particles_.rise((float)nx, (float)ny, 8, 255, 200, 60, 0.4f, 3);
                     if (tgt_stats.hp <= 0) { combat::kill(world_, target, log_); atk_result.killed = true; }
                 }
 
                 // Sythara: ALL attacks poison (100%)
                 if (ga.god == GodId::SYTHARA && world_.has<StatusEffects>(target)) {
                     world_.get<StatusEffects>(target).add(StatusType::POISON, 2, 3);
+                    particles_.drift((float)nx, (float)ny, 10, 100, 200, 60, 0.8f, 3);
                 }
 
                 // Gathruun: earthquake on crit
@@ -3272,7 +3383,7 @@ void Engine::try_move_player(int dx, int dy) {
         }
 
         if (atk_result.hit && atk_result.critical) {
-            audio_.play(SfxId::CRIT); particles_.crit_flash((float)nx, (float)ny); trigger_screen_shake(4.0f);
+            audio_.play(SfxId::CRIT); particles_.crit_flash((float)nx, (float)ny);
             char cbuf[16]; snprintf(cbuf, sizeof(cbuf), "%d", atk_result.damage);
             floating_text_.spawn((float)nx, (float)ny, cbuf, {255, 200, 80, 255}, true);
         } else if (atk_result.hit) {
@@ -3313,13 +3424,14 @@ void Engine::try_move_player(int dx, int dy) {
                         break;
                     case ClassId::RANGER:
                         // Green pulse on marked target
-                        if (ranger_marked_target_ == target)
-                            particles_.burst(fx, fy, 5, 100, 220, 80, 0.08f, 0.4f, 2);
+                        if (ranger_marked_target_ == target) {
+                            particles_.burst(fx, fy, 12, 100, 255, 80, 0.1f, 0.5f, 4);
+                            particles_.rise(fx, fy, 6, 140, 255, 100, 0.4f, 3);
+                        }
                         break;
                     case ClassId::BARBARIAN:
                         if (world_.has<Stats>(player_) && world_.get<Stats>(player_).hp * 2 < world_.get<Stats>(player_).hp_max) {
                             particles_.burst(fx, fy, 8, 255, 40, 40, 0.12f, 0.5f, 3);
-                            trigger_screen_shake(3.0f);
                         }
                         break;
                     case ClassId::KNIGHT:
@@ -3406,7 +3518,6 @@ void Engine::try_move_player(int dx, int dy) {
             bool is_un = world_.has<Stats>(target) && is_undead(world_.get<Stats>(target).name.c_str());
             bool is_an = world_.has<Stats>(target) && is_animal(world_.get<Stats>(target).name.c_str());
             particles_.death_burst_typed((float)nx, (float)ny, is_un, is_an);
-            trigger_screen_shake(3.0f);
         }
 
         // Bandit pickpocket gold (legacy, kept for any remaining gold_stolen usage)
@@ -3587,15 +3698,7 @@ void Engine::try_move_player(int dx, int dy) {
             }
         }
 
-        // Ranger: mark target for bonus damage (auto-mark on first hit)
-        if (world_.has<Player>(player_) && world_.get<Player>(player_).class_id == ClassId::RANGER &&
-            atk_result.hit && target != ranger_marked_target_) {
-            ranger_marked_target_ = target;
-            if (world_.has<Stats>(target)) {
-                char mb[64]; snprintf(mb, sizeof(mb), "Marked: %s", world_.get<Stats>(target).name.c_str());
-                log_.add(mb, {200, 255, 140, 255});
-            }
-        }
+        // (Ranger mark moved earlier, near damage application)
 
         // Tenet action tracking for kills
         if (atk_result.killed) {
@@ -5432,7 +5535,7 @@ void Engine::process_turn() {
 
                 }
                 if (mresult.critical) {
-                    particles_.crit_flash(pp.x, pp.y); trigger_screen_shake(5.0f);
+                    particles_.crit_flash(pp.x, pp.y);
                 }
                 else particles_.blood(pp.x, pp.y);
                 // Track what hit us for death screen
@@ -5907,7 +6010,6 @@ void Engine::check_tenets() {
         if (favor_after < favor_before) {
             auto& gi = get_god_info(world_.get<GodAlignment>(player_).god);
             screen_flash(gi.color.r, gi.color.g, gi.color.b, 80.0f);
-            trigger_screen_shake(3.0f);
             // God-colored particles burst from player
             if (world_.has<Position>(player_)) {
                 auto& pp = world_.get<Position>(player_);
@@ -5996,8 +6098,8 @@ void Engine::fire_ranged() {
         if (world_.has<Skills>(player_))
             grant_skill_xp(SkillId::ARCHERY, 2);
     }
-    if (result.critical) { trigger_screen_shake(4.0f); }
-    if (result.killed) { audio_.play(SfxId::DEATH); particles_.death_burst(tgt_x, tgt_y); trigger_screen_shake(3.0f); }
+    if (result.critical) { particles_.crit_flash(tgt_x, tgt_y); }
+    if (result.killed) { audio_.play(SfxId::DEATH); particles_.death_burst(tgt_x, tgt_y); }
 
     // Bestiary stats (ranged has access to victim stats before combat::kill removes them)
     if (result.killed && !victim_name.empty()) {
@@ -6503,13 +6605,13 @@ void Engine::sepulchre_ambient() {
         if (game_turn_ % 18 != 0) return;
         static const char* SEPULCHRE[] = {
             "A cold draft from nowhere.",
-            "The shadows move when you aren't looking.",
-            "Something scratches behind the walls.",
-            "The floor feels wrong beneath your feet.",
+            "Shadows shift.",
+            "Scratching behind the walls.",
+            "The floor is uneven.",
             "You smell old blood.",
-            "A whisper in a language you almost understand.",
+            "A faint whisper.",
             "Your god stirs uneasily.",
-            "The silence presses against your ears.",
+            "Silence.",
             "Stone groans overhead.",
             "You feel watched.",
         };
@@ -6520,10 +6622,10 @@ void Engine::sepulchre_ambient() {
         if (zone == "warrens") {
             static const char* W[] = {
                 "Rats skitter in the walls.", "The dirt ceiling sags.", "A damp, earthy smell.",
-                "Roots hang from the ceiling like fingers.", "Something wet drips on your neck.",
-                "The tunnel narrows to a crawl ahead.", "Insect legs brush the back of your hand.",
-                "A nest of something. Recently abandoned.", "The walls are scored with claw marks.",
-                "Fungus grows thick on the ceiling. Some of it pulses faintly.",
+                "Roots hang from the ceiling.", "Water drips on you.",
+                "The tunnel narrows to a crawl ahead.", "Insects in the walls.",
+                "An abandoned nest.", "The walls are scored with claw marks.",
+                "Fungus on the ceiling.",
             };
             log_.add(W[rng_.range(0, 9)], {140, 130, 100, 255});
         } else if (zone == "stonekeep") {
@@ -6672,7 +6774,6 @@ void Engine::try_interact() {
             particles_.burst(cx, cy, 8, 180, 80, 60, 0.1f, 0.5f, 3);
             particles_.blood(cx, cy);
             audio_.play(SfxId::DEATH);
-            trigger_screen_shake(3.0f);
             char eb[48]; snprintf(eb, sizeof(eb), "You DEVOUR the corpse. (+%d HP)", heal);
             log_.add(eb, {200, 80, 60, 255});
             // Lv5 GORGE: 3 corpses this floor = +5 permanent max HP
@@ -8016,7 +8117,6 @@ void Engine::handle_input() {
                             world_.get<StatusEffects>(player_).effects.clear();
                         log_.add("You rest in the church. Fully restored. (-5 favor)", {100, 200, 140, 255});
                         audio_.play(SfxId::HEAL);
-                        auto& gi = get_god_info(church_screen_.get_god());
                         particles_.heal_effect(world_.get<Position>(player_).x, world_.get<Position>(player_).y);
                     }
                 }
@@ -8290,7 +8390,6 @@ void Engine::handle_input() {
                     log_.add(rbuf, {255, 220, 80, 255});
                     audio_.play(SfxId::LEVELUP);
                     auto& gi = get_god_info(ga.god);
-                    screen_flash(gi.color.r, gi.color.g, gi.color.b, 100);
                     trigger_screen_shake(3.0f);
                     if (world_.has<Position>(player_)) {
                         auto& pp = world_.get<Position>(player_);
@@ -8639,7 +8738,6 @@ void Engine::handle_input() {
                                 ps.set_attr(ga_attr, ps.attr(ga_attr) + 3);
                                 ps.set_attr(la_attr, std::max(3, ps.attr(la_attr) - 1));
                                 log_.add("Your flesh shifts. Mutation!", {180, 100, 255, 255});
-                                particles_.burst((float)pp.x, (float)pp.y, 12, 180, 80, 255, 0.1f, 0.8f, 3);
                                 trigger_screen_shake(4.0f);
                                 break;
                             }
@@ -8658,7 +8756,6 @@ void Engine::handle_input() {
                                         frozen_count++;
                                     }
                                 }
-                                log_.add("The ocean's cold reaches out. Everything freezes.", {80, 180, 220, 255});
                                 trigger_screen_shake(3.0f);
                                 break;
                             }
@@ -8921,191 +9018,279 @@ void Engine::handle_input() {
                                 turn_actions_.used_healing_magic = true;
                             auto& sp = world_.get<Position>(player_);
                             switch (spell) {
-                                case SpellId::SPARK:
+                                // === CONJURATION: scaled by power ===
+                                case SpellId::SPARK: // 8 dmg, cheap
                                     if (has_target) {
-                                        particles_.projectile(sp.x, sp.y, tx, ty, 8, 255, 255, 100, 0.35f, 4);
-                                        particles_.burst(tx, ty, 10, 255, 255, 140, 0.1f, 0.3f, 3);
+                                        particles_.projectile(sp.x, sp.y, tx, ty, 6, 255, 255, 100, 0.4f, 3);
+                                        particles_.burst(tx, ty, 8, 255, 255, 140, 0.08f, 0.3f, 3);
                                     }
                                     break;
-                                case SpellId::FORCE_BOLT:
+                                case SpellId::FORCE_BOLT: // 15 dmg
                                     if (has_target) {
-                                        particles_.projectile(sp.x, sp.y, tx, ty, 12, 140, 160, 255, 0.3f, 5);
-                                        particles_.burst(tx, ty, 15, 160, 180, 255, 0.1f, 0.5f, 6);
+                                        particles_.projectile(sp.x, sp.y, tx, ty, 14, 100, 140, 255, 0.3f, 5);
+                                        particles_.burst(tx, ty, 18, 140, 180, 255, 0.12f, 0.5f, 5);
+                                        screen_flash(100, 140, 255, 30);
                                     }
                                     break;
-                                case SpellId::FIREBALL:
+                                case SpellId::ICE_SHARD: // 18 dmg + freeze
                                     if (has_target) {
-                                        particles_.projectile(sp.x, sp.y, tx, ty, 15, 255, 140, 40, 0.25f, 6);
-                                        particles_.burst(tx, ty, 25, 255, 120, 30, 0.15f, 0.6f, 8);
-                                        particles_.burst(tx, ty, 15, 255, 200, 60, 0.1f, 0.4f, 6);
-                                        trigger_screen_shake(3.0f);
-                                        screen_flash(255, 120, 30, 50);
+                                        particles_.projectile(sp.x, sp.y, tx, ty, 12, 140, 200, 255, 0.3f, 5);
+                                        particles_.burst(tx, ty, 20, 180, 220, 255, 0.12f, 0.5f, 5);
+                                        particles_.drift(tx, ty, 15, 200, 240, 255, 0.8f, 4);
+                                        screen_flash(140, 200, 255, 30);
                                     }
                                     break;
-                                case SpellId::DRAIN_LIFE:
+                                case SpellId::FIREBALL: // 25 dmg + burn
                                     if (has_target) {
-                                        particles_.trail(tx, ty, sp.x, sp.y, 12, 140, 60, 180, 4);
-                                        particles_.burst(tx, ty, 10, 160, 80, 200, 0.08f, 0.5f, 6);
+                                        particles_.projectile(sp.x, sp.y, tx, ty, 18, 255, 140, 40, 0.25f, 6);
+                                        particles_.burst(tx, ty, 30, 255, 120, 30, 0.15f, 0.7f, 8);
+                                        particles_.burst(tx, ty, 20, 255, 200, 60, 0.1f, 0.5f, 6);
+                                        screen_flash(255, 120, 30, 60);
                                     }
                                     break;
-                                case SpellId::FEAR:
-                                    particles_.burst(sp.x, sp.y, 18, 100, 60, 140, 0.12f, 0.6f, 6);
+                                case SpellId::LIGHTNING: // 30 dmg
+                                    if (has_target) {
+                                        particles_.projectile(sp.x, sp.y, tx, ty, 20, 255, 255, 180, 0.5f, 2);
+                                        particles_.burst(tx, ty, 25, 255, 255, 140, 0.2f, 0.4f, 4);
+                                        screen_flash(255, 255, 220, 80);
+                                    }
                                     break;
+                                case SpellId::CHAIN_LIGHTNING: // 20 dmg x3
+                                    if (has_target) {
+                                        particles_.projectile(sp.x, sp.y, tx, ty, 22, 255, 255, 180, 0.5f, 2);
+                                        particles_.burst(tx, ty, 30, 255, 255, 140, 0.25f, 0.5f, 5);
+                                        particles_.burst(sp.x, sp.y, 20, 200, 200, 255, 0.15f, 0.6f, 4);
+                                        screen_flash(255, 255, 200, 90);
+                                    }
+                                    break;
+                                case SpellId::GLACIAL_SPIKE: // 35 dmg + stun
+                                    if (has_target) {
+                                        particles_.projectile(sp.x, sp.y, tx, ty, 20, 160, 220, 255, 0.25f, 6);
+                                        particles_.burst(tx, ty, 35, 200, 240, 255, 0.18f, 0.6f, 7);
+                                        particles_.drift(tx, ty, 20, 220, 240, 255, 1.0f, 5);
+                                        screen_flash(180, 220, 255, 60);
+                                        trigger_screen_shake(4.0f);
+                                    }
+                                    break;
+                                case SpellId::ACID_SPLASH: // 12 dmg + armor shred
+                                    if (has_target) {
+                                        particles_.projectile(sp.x, sp.y, tx, ty, 12, 120, 200, 40, 0.3f, 5);
+                                        particles_.fall(tx, ty, 20, 100, 220, 40, 0.8f, 5);
+                                        particles_.drift(tx, ty, 10, 80, 180, 30, 0.6f, 3);
+                                    }
+                                    break;
+                                case SpellId::FROST_NOVA: // 15 dmg AoE + freeze
+                                    particles_.burst(sp.x, sp.y, 50, 160, 220, 255, 0.22f, 1.2f, 7);
+                                    particles_.drift(sp.x, sp.y, 35, 200, 240, 255, 1.5f, 5);
+                                    particles_.burst(sp.x, sp.y, 20, 255, 255, 255, 0.25f, 0.5f, 3);
+                                    screen_flash(140, 200, 255, 60);
+                                    trigger_screen_shake(3.0f);
+                                    break;
+                                case SpellId::METEOR: // 45 dmg
+                                    if (has_target) {
+                                        particles_.fall(tx, ty, 25, 255, 160, 40, 0.5f, 10);
+                                        particles_.burst(tx, ty, 40, 255, 100, 20, 0.2f, 0.8f, 8);
+                                        particles_.burst(tx, ty, 20, 255, 200, 60, 0.15f, 0.5f, 6);
+                                        trigger_screen_shake(8.0f);
+                                        screen_flash(255, 160, 40, 100);
+                                    }
+                                    break;
+                                case SpellId::DISINTEGRATE: // 60 dmg
+                                    if (has_target) {
+                                        particles_.projectile(sp.x, sp.y, tx, ty, 25, 200, 40, 200, 0.35f, 3);
+                                        particles_.burst(tx, ty, 40, 220, 60, 220, 0.22f, 0.6f, 6);
+                                        particles_.burst(tx, ty, 50, 255, 200, 255, 0.3f, 0.4f, 3);
+                                        particles_.drift(tx, ty, 20, 180, 40, 180, 1.0f, 5);
+                                        trigger_screen_shake(6.0f);
+                                        screen_flash(200, 40, 200, 80);
+                                    }
+                                    break;
+                                // === TRANSMUTATION: distinct per spell ===
                                 case SpellId::HARDEN_SKIN:
-                                    particles_.burst(sp.x, sp.y, 14, 160, 150, 120, 0.05f, 0.6f, 6);
+                                    particles_.orbit(sp.x, sp.y, 14, 160, 150, 120, 0.3f, 0.8f, 6);
                                     break;
+                                case SpellId::HASTEN:
+                                    particles_.rise(sp.x, sp.y, 20, 255, 255, 140, 0.6f, 4);
+                                    particles_.burst(sp.x, sp.y, 12, 255, 240, 100, 0.15f, 0.3f, 3);
+                                    break;
+                                case SpellId::STONE_FIST:
+                                    particles_.burst(sp.x, sp.y, 18, 180, 140, 80, 0.06f, 0.6f, 7);
+                                    screen_flash(140, 100, 60, 30);
+                                    break;
+                                case SpellId::PHASE:
+                                    particles_.burst(sp.x, sp.y, 25, 100, 140, 220, 0.2f, 0.5f, 4);
+                                    screen_flash(100, 140, 220, 40);
+                                    break;
+                                case SpellId::IRON_BODY:
+                                    particles_.orbit(sp.x, sp.y, 20, 200, 200, 220, 0.4f, 1.0f, 7);
+                                    particles_.burst(sp.x, sp.y, 15, 180, 180, 200, 0.05f, 0.8f, 6);
+                                    screen_flash(180, 180, 200, 40);
+                                    break;
+                                case SpellId::SLOW:
+                                    if (has_target) {
+                                        particles_.drift(tx, ty, 15, 140, 120, 80, 1.0f, 5);
+                                        particles_.fall(tx, ty, 10, 120, 100, 60, 0.6f, 4);
+                                    }
+                                    break;
+                                case SpellId::POLYMORPH:
+                                    if (has_target) {
+                                        particles_.burst(tx, ty, 30, 200, 140, 255, 0.15f, 0.7f, 6);
+                                        screen_flash(200, 140, 255, 40);
+                                    }
+                                    break;
+                                case SpellId::MIRROR_IMAGE:
+                                    particles_.orbit(sp.x, sp.y, 18, 180, 200, 255, 0.5f, 1.2f, 5);
+                                    particles_.burst(sp.x, sp.y, 12, 200, 220, 255, 0.1f, 0.4f, 4);
+                                    break;
+                                // === DIVINATION: blue/white ===
                                 case SpellId::REVEAL_MAP:
                                 case SpellId::DETECT_MONSTERS:
-                                    particles_.burst(sp.x, sp.y, 20, 120, 140, 220, 0.18f, 0.7f, 5);
+                                case SpellId::FARSIGHT:
+                                    particles_.burst(sp.x, sp.y, 25, 120, 140, 220, 0.2f, 0.8f, 5);
+                                    particles_.rise(sp.x, sp.y, 12, 160, 180, 255, 0.6f, 4);
                                     break;
                                 case SpellId::IDENTIFY:
-                                    particles_.burst(sp.x, sp.y, 12, 220, 220, 255, 0.06f, 0.4f, 5);
+                                case SpellId::SCRY:
+                                    particles_.burst(sp.x, sp.y, 15, 220, 220, 255, 0.08f, 0.5f, 5);
                                     break;
+                                case SpellId::FORESIGHT:
+                                case SpellId::TRUESIGHT:
+                                    particles_.orbit(sp.x, sp.y, 14, 180, 200, 255, 0.4f, 0.8f, 5);
+                                    break;
+                                case SpellId::CLAIRVOYANCE:
+                                    particles_.burst(sp.x, sp.y, 30, 140, 160, 255, 0.2f, 1.0f, 6);
+                                    particles_.rise(sp.x, sp.y, 20, 180, 200, 255, 0.8f, 5);
+                                    screen_flash(140, 160, 255, 40);
+                                    break;
+                                // === HEALING: green/white rising ===
                                 case SpellId::MINOR_HEAL:
                                     particles_.heal_effect(sp.x, sp.y);
                                     break;
-                                case SpellId::MAJOR_HEAL:
-                                    particles_.rise(sp.x, sp.y, 25, 80, 240, 80, 1.2f, 7);
-                                    particles_.rise(sp.x, sp.y, 12, 180, 255, 180, 0.9f, 5);
-                                    break;
                                 case SpellId::CURE_POISON:
-                                    particles_.rise(sp.x, sp.y, 15, 200, 255, 200, 0.7f, 6);
+                                    particles_.rise(sp.x, sp.y, 18, 200, 255, 200, 0.7f, 5);
                                     break;
-                                case SpellId::ENTANGLE:
-                                    particles_.burst(sp.x, sp.y, 20, 60, 160, 40, 0.12f, 0.7f, 6);
+                                case SpellId::MAJOR_HEAL:
+                                    particles_.rise(sp.x, sp.y, 30, 80, 240, 80, 1.2f, 7);
+                                    particles_.rise(sp.x, sp.y, 15, 180, 255, 180, 0.9f, 5);
+                                    screen_flash(80, 240, 80, 30);
                                     break;
-                                // --- Conjuration: fire/ice/lightning ---
-                                case SpellId::ICE_SHARD:
-                                    if (has_target) {
-                                        particles_.projectile(sp.x, sp.y, tx, ty, 10, 140, 200, 255, 0.35f, 4);
-                                        particles_.drift(tx, ty, 12, 180, 220, 255, 0.6f, 4);
-                                    }
-                                    break;
-                                case SpellId::LIGHTNING:
-                                case SpellId::CHAIN_LIGHTNING:
-                                    if (has_target) {
-                                        particles_.projectile(sp.x, sp.y, tx, ty, 18, 255, 255, 180, 0.5f, 2);
-                                        particles_.burst(tx, ty, 20, 255, 255, 140, 0.2f, 0.3f, 3);
-                                        trigger_screen_shake(2.0f);
-                                        screen_flash(255, 255, 220, 70);
-                                    }
-                                    break;
-                                case SpellId::FROST_NOVA:
-                                    particles_.burst(sp.x, sp.y, 45, 160, 220, 255, 0.2f, 1.0f, 6);
-                                    particles_.drift(sp.x, sp.y, 30, 200, 240, 255, 1.5f, 4);
-                                    particles_.burst(sp.x, sp.y, 15, 255, 255, 255, 0.25f, 0.4f, 2);
-                                    trigger_screen_shake(2.0f);
-                                    screen_flash(140, 200, 255, 50);
-                                    break;
-                                case SpellId::METEOR:
-                                    if (has_target) {
-                                        particles_.fall(tx, ty, 15, 255, 160, 40, 0.5f, 8);
-                                        particles_.burst(tx, ty, 30, 255, 100, 20, 0.18f, 0.7f, 7);
-                                        trigger_screen_shake(6.0f);
-                                        screen_flash(255, 160, 40, 80);
-                                    }
-                                    break;
-                                case SpellId::ACID_SPLASH:
-                                    if (has_target) {
-                                        particles_.projectile(sp.x, sp.y, tx, ty, 10, 120, 200, 40, 0.3f, 4);
-                                        particles_.fall(tx, ty, 15, 100, 220, 40, 0.8f, 4);
-                                    }
-                                    break;
-                                case SpellId::DISINTEGRATE:
-                                    if (has_target) {
-                                        particles_.projectile(sp.x, sp.y, tx, ty, 22, 200, 40, 200, 0.4f, 3);
-                                        particles_.burst(tx, ty, 25, 220, 60, 220, 0.2f, 0.5f, 4);
-                                        particles_.burst(tx, ty, 35, 255, 200, 255, 0.25f, 0.3f, 2);
-                                        trigger_screen_shake(4.0f);
-                                        screen_flash(200, 40, 200, 60);
-                                    }
-                                    break;
-                                // --- Transmutation: earthy/metallic ---
-                                case SpellId::HASTEN:
-                                    particles_.rise(sp.x, sp.y, 15, 255, 255, 140, 0.5f, 3);
-                                    break;
-                                case SpellId::STONE_FIST:
-                                    particles_.burst(sp.x, sp.y, 12, 160, 140, 100, 0.08f, 0.5f, 7);
-                                    break;
-                                case SpellId::PHASE:
-                                    particles_.burst(sp.x, sp.y, 20, 100, 140, 220, 0.15f, 0.4f, 3);
-                                    break;
-                                case SpellId::IRON_BODY:
-                                    particles_.burst(sp.x, sp.y, 18, 180, 180, 200, 0.05f, 0.8f, 6);
-                                    break;
-                                case SpellId::POLYMORPH:
-                                    if (has_target) particles_.burst(tx, ty, 20, 200, 140, 255, 0.12f, 0.6f, 5);
-                                    break;
-                                // --- Healing: green/white rising ---
                                 case SpellId::CLEANSE:
+                                    particles_.rise(sp.x, sp.y, 20, 255, 255, 200, 0.8f, 5);
+                                    particles_.burst(sp.x, sp.y, 12, 200, 255, 180, 0.1f, 0.5f, 4);
+                                    break;
                                 case SpellId::RESTORE:
-                                    particles_.rise(sp.x, sp.y, 18, 140, 255, 180, 0.8f, 5);
+                                    particles_.rise(sp.x, sp.y, 22, 140, 255, 180, 0.9f, 6);
+                                    particles_.burst(sp.x, sp.y, 10, 100, 200, 255, 0.08f, 0.4f, 4);
                                     break;
                                 case SpellId::SHIELD_OF_FAITH:
-                                    particles_.orbit(sp.x, sp.y, 12, 255, 240, 180, 0.5f, 1.0f, 4);
+                                    particles_.orbit(sp.x, sp.y, 16, 255, 240, 180, 0.5f, 1.2f, 5);
+                                    screen_flash(255, 240, 180, 25);
                                     break;
                                 case SpellId::SANCTUARY:
-                                    particles_.orbit(sp.x, sp.y, 16, 200, 255, 200, 0.6f, 1.5f, 5);
-                                    particles_.rise(sp.x, sp.y, 10, 255, 255, 220, 1.0f, 3);
+                                    particles_.orbit(sp.x, sp.y, 22, 200, 255, 200, 0.6f, 1.5f, 6);
+                                    particles_.rise(sp.x, sp.y, 15, 255, 255, 220, 1.0f, 4);
+                                    screen_flash(200, 255, 200, 40);
                                     break;
-                                // --- Nature: green bursts/drifts ---
+                                case SpellId::RESURRECTION:
+                                    particles_.orbit(sp.x, sp.y, 25, 255, 255, 200, 0.7f, 2.0f, 7);
+                                    particles_.rise(sp.x, sp.y, 20, 255, 240, 140, 1.5f, 6);
+                                    screen_flash(255, 255, 200, 50);
+                                    trigger_screen_shake(3.0f);
+                                    break;
+                                // === NATURE: green ===
+                                case SpellId::ENTANGLE:
+                                    particles_.burst(sp.x, sp.y, 25, 60, 160, 40, 0.15f, 0.8f, 6);
+                                    particles_.drift(sp.x, sp.y, 15, 80, 200, 60, 1.0f, 4);
+                                    break;
                                 case SpellId::BEAST_CALL:
+                                    particles_.burst(sp.x, sp.y, 20, 80, 180, 60, 0.12f, 0.7f, 6);
+                                    particles_.rise(sp.x, sp.y, 10, 120, 200, 80, 0.6f, 4);
+                                    break;
                                 case SpellId::SWARM:
-                                    particles_.burst(sp.x, sp.y, 15, 80, 180, 60, 0.1f, 0.6f, 5);
+                                    particles_.burst(sp.x, sp.y, 15, 60, 140, 40, 0.1f, 0.5f, 5);
                                     break;
                                 case SpellId::POISON_CLOUD:
-                                    particles_.drift(sp.x, sp.y, 25, 100, 200, 60, 1.5f, 5);
+                                    particles_.drift(sp.x, sp.y, 35, 100, 200, 60, 1.8f, 6);
+                                    particles_.burst(sp.x, sp.y, 15, 80, 180, 40, 0.1f, 1.0f, 5);
                                     break;
-                                case SpellId::EARTHQUAKE:
-                                    particles_.burst(sp.x, sp.y, 40, 140, 120, 80, 0.25f, 0.8f, 8);
-                                    particles_.burst(sp.x, sp.y, 20, 200, 180, 100, 0.15f, 0.5f, 10);
-                                    trigger_screen_shake(8.0f);
-                                    screen_flash(140, 100, 50, 60);
+                                case SpellId::THORNWALL:
+                                    particles_.burst(sp.x, sp.y, 20, 100, 140, 60, 0.12f, 0.7f, 6);
+                                    particles_.drift(sp.x, sp.y, 12, 140, 80, 40, 0.8f, 4);
+                                    break;
+                                case SpellId::REJUVENATE:
+                                    particles_.rise(sp.x, sp.y, 20, 100, 220, 80, 1.0f, 5);
                                     break;
                                 case SpellId::BARKSKIN:
-                                    particles_.burst(sp.x, sp.y, 14, 100, 140, 60, 0.04f, 0.7f, 6);
+                                    particles_.orbit(sp.x, sp.y, 16, 100, 140, 60, 0.3f, 0.8f, 6);
+                                    break;
+                                case SpellId::EARTHQUAKE:
+                                    particles_.burst(sp.x, sp.y, 50, 140, 120, 80, 0.3f, 1.0f, 10);
+                                    particles_.burst(sp.x, sp.y, 30, 200, 180, 100, 0.2f, 0.6f, 10);
+                                    particles_.fall(sp.x, sp.y, 15, 160, 140, 80, 0.8f, 6);
+                                    trigger_screen_shake(10.0f);
+                                    screen_flash(140, 100, 50, 70);
                                     break;
                                 case SpellId::LIGHTNING_STORM:
-                                    particles_.burst(sp.x, sp.y, 35, 255, 255, 160, 0.25f, 0.5f, 3);
-                                    particles_.burst(sp.x, sp.y, 25, 200, 200, 255, 0.2f, 0.7f, 5);
-                                    trigger_screen_shake(5.0f);
+                                    particles_.burst(sp.x, sp.y, 40, 255, 255, 160, 0.3f, 0.6f, 4);
+                                    particles_.burst(sp.x, sp.y, 30, 200, 200, 255, 0.25f, 0.8f, 6);
+                                    particles_.burst(sp.x, sp.y, 15, 255, 255, 255, 0.15f, 0.3f, 3);
+                                    trigger_screen_shake(6.0f);
+                                    screen_flash(255, 255, 200, 80);
                                     break;
-                                // --- Dark Arts: purple/red drains ---
+                                // === DARK ARTS: purple/red ===
+                                case SpellId::DRAIN_LIFE:
+                                    if (has_target) {
+                                        particles_.trail(tx, ty, sp.x, sp.y, 18, 140, 60, 180, 5);
+                                        particles_.burst(tx, ty, 15, 160, 80, 200, 0.1f, 0.5f, 6);
+                                    }
+                                    break;
+                                case SpellId::FEAR:
+                                    particles_.burst(sp.x, sp.y, 25, 100, 60, 140, 0.15f, 0.8f, 7);
+                                    particles_.drift(sp.x, sp.y, 15, 80, 40, 120, 1.0f, 5);
+                                    break;
                                 case SpellId::RAISE_DEAD:
-                                    particles_.rise(sp.x, sp.y, 25, 120, 60, 160, 1.2f, 6);
-                                    particles_.burst(sp.x, sp.y, 15, 80, 200, 80, 0.08f, 0.8f, 5);
-                                    particles_.drift(sp.x, sp.y, 10, 160, 100, 200, 1.5f, 4);
+                                    particles_.rise(sp.x, sp.y, 30, 120, 60, 160, 1.2f, 7);
+                                    particles_.burst(sp.x, sp.y, 18, 80, 200, 80, 0.08f, 0.9f, 6);
+                                    particles_.drift(sp.x, sp.y, 12, 160, 100, 200, 1.5f, 5);
                                     break;
                                 case SpellId::HEX:
-                                    if (has_target) particles_.drift(tx, ty, 15, 140, 60, 180, 1.0f, 4);
+                                    if (has_target) {
+                                        particles_.drift(tx, ty, 20, 140, 60, 180, 1.2f, 5);
+                                        particles_.burst(tx, ty, 10, 180, 80, 220, 0.1f, 0.5f, 4);
+                                    }
                                     break;
                                 case SpellId::SOUL_REND:
                                     if (has_target) {
-                                        particles_.trail(tx, ty, sp.x, sp.y, 15, 180, 60, 220, 3);
-                                        particles_.burst(tx, ty, 15, 200, 80, 255, 0.12f, 0.4f, 5);
+                                        particles_.trail(tx, ty, sp.x, sp.y, 20, 180, 60, 220, 4);
+                                        particles_.burst(tx, ty, 20, 200, 80, 255, 0.15f, 0.5f, 6);
+                                        screen_flash(180, 60, 220, 30);
                                     }
                                     break;
                                 case SpellId::DARKNESS:
-                                    particles_.burst(sp.x, sp.y, 40, 20, 10, 40, 0.15f, 1.5f, 10);
-                                    particles_.drift(sp.x, sp.y, 25, 40, 20, 60, 2.0f, 8);
-                                    screen_flash(10, 5, 20, 100); // heavy dark flash
+                                    particles_.burst(sp.x, sp.y, 50, 20, 10, 40, 0.18f, 1.8f, 12);
+                                    particles_.drift(sp.x, sp.y, 30, 40, 20, 60, 2.5f, 8);
+                                    screen_flash(10, 5, 20, 120);
                                     break;
                                 case SpellId::WITHER:
-                                    if (has_target) particles_.fall(tx, ty, 15, 100, 80, 40, 0.8f, 4);
+                                    if (has_target) {
+                                        particles_.fall(tx, ty, 20, 100, 80, 40, 1.0f, 5);
+                                        particles_.drift(tx, ty, 12, 80, 60, 30, 0.8f, 4);
+                                    }
                                     break;
                                 case SpellId::BLOOD_PACT:
-                                    particles_.burst(sp.x, sp.y, 30, 200, 40, 40, 0.12f, 1.0f, 7);
-                                    particles_.rise(sp.x, sp.y, 15, 255, 60, 60, 0.8f, 4);
-                                    particles_.fall(sp.x, sp.y, 10, 180, 0, 0, 0.6f, 5);
-                                    trigger_screen_shake(3.0f);
-                                    screen_flash(180, 20, 20, 70);
+                                    particles_.burst(sp.x, sp.y, 35, 200, 40, 40, 0.15f, 1.2f, 8);
+                                    particles_.rise(sp.x, sp.y, 20, 255, 60, 60, 0.9f, 5);
+                                    particles_.fall(sp.x, sp.y, 15, 180, 0, 0, 0.7f, 6);
+                                    trigger_screen_shake(4.0f);
+                                    screen_flash(180, 20, 20, 80);
                                     break;
                                 case SpellId::DOOM:
                                     if (has_target) {
-                                        particles_.fall(tx, ty, 30, 80, 0, 120, 1.5f, 8);
-                                        particles_.burst(tx, ty, 20, 160, 40, 200, 0.1f, 1.0f, 8);
-                                        particles_.drift(tx, ty, 15, 60, 0, 80, 2.0f, 6);
-                                        trigger_screen_shake(3.0f);
+                                        particles_.fall(tx, ty, 40, 80, 0, 120, 1.8f, 10);
+                                        particles_.burst(tx, ty, 25, 160, 40, 200, 0.12f, 1.2f, 8);
+                                        particles_.drift(tx, ty, 20, 60, 0, 80, 2.5f, 7);
+                                        trigger_screen_shake(5.0f);
+                                        screen_flash(80, 0, 120, 60);
                                     }
                                     break;
                                 // --- Fallback by school ---
@@ -10369,7 +10554,7 @@ void Engine::render() {
     render::draw_map(renderer_, sprites_, map_, render_cam, y_off);
 
     // Draw entities
-    render::draw_entities(renderer_, sprites_, world_, map_, render_cam, y_off);
+    render::draw_entities(renderer_, sprites_, world_, map_, render_cam, y_off, ranger_marked_target_);
 
     // Target reticle
     if (ranged_target_ != 0 && world_.has<Position>(ranged_target_) &&

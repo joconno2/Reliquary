@@ -20,14 +20,14 @@ namespace populate {
 // Monster table — row/col in monsters.png
 //                                          sheet            sx sy  hp  str dex con dmg arm spd flee xp
 static const MonsterDef MONSTER_TABLE[] = {
-    // Early game
-    {"giant rat",       SHEET_MONSTERS, 11, 6,  6,   6, 14,  6,  2, 0, 130, 40,  10},
-    {"bat",             SHEET_MONSTERS,  6, 6,  4,   4, 16,  4,  1, 0, 150, 70,   5},
-    {"kobold",          SHEET_MONSTERS,  0, 9,  6,   6, 12,  6,  1, 0, 120, 35,  10},
-    {"slime",           SHEET_MONSTERS,  1, 2, 16,   6,  4, 14,  2, 0,  60,  0,  15}, // 3.b big slime
-    {"goblin",          SHEET_MONSTERS,  2, 0,  8,   8, 12,  8,  2, 0, 110, 30,  15},
-    {"giant spider",    SHEET_MONSTERS,  8, 6, 12,  10, 12,  8,  3, 1, 120, 20,  20},
-    {"goblin archer",   SHEET_MONSTERS,  5, 0, 10,   8, 14,  8,  3, 0, 110, 25,  20},
+    // Early game (bumped: no more one-shot fodder)
+    {"giant rat",       SHEET_MONSTERS, 11, 6, 10,   8, 14,  6,  3, 0, 130, 40,  10},
+    {"bat",             SHEET_MONSTERS,  6, 6,  7,   6, 16,  4,  2, 0, 150, 70,   5},
+    {"kobold",          SHEET_MONSTERS,  0, 9,  9,   8, 12,  8,  2, 0, 120, 35,  10},
+    {"slime",           SHEET_MONSTERS,  1, 2, 20,   8,  4, 14,  3, 0,  60,  0,  15}, // 3.b big slime
+    {"goblin",          SHEET_MONSTERS,  2, 0, 12,  10, 12,  8,  3, 0, 110, 30,  15},
+    {"giant spider",    SHEET_MONSTERS,  8, 6, 16,  12, 12, 10,  4, 1, 120, 20,  20},
+    {"goblin archer",   SHEET_MONSTERS,  5, 0, 14,  10, 14,  8,  4, 0, 110, 25,  20},
     {"orc",             SHEET_MONSTERS,  0, 0, 18,  14,  8, 12,  4, 1,  90, 15,  30},
     {"skeleton",        SHEET_MONSTERS,  0, 4, 14,  10, 10, 10,  3, 2, 100,  0,  25},
     // Mid game
@@ -41,7 +41,7 @@ static const MonsterDef MONSTER_TABLE[] = {
     {"bandit",          SHEET_MONSTERS,  3, 0, 16,  12, 16, 10,  4, 1, 120, 25,  30},
     // Late game
     {"ghoul",           SHEET_MONSTERS,  5, 4, 22,  14, 12, 14,  5, 1, 110,  0,  40},
-    {"lich",            SHEET_MONSTERS,  2, 4, 50,  10, 10, 12, 12, 0, 100,  0,  80},
+    {"lich",            SHEET_MONSTERS,  2, 4, 55,  12, 10, 14, 14, 0, 100,  0,  80},
     {"death knight",    SHEET_MONSTERS,  3, 4, 65,  18, 12, 16, 14, 4,  90,  0, 100},
     {"manticore",       SHEET_MONSTERS,  3, 6, 35,  16, 14, 14,  7, 2, 110, 10,  70},
     {"minotaur",        SHEET_MONSTERS,  7, 7, 45,  20, 10, 18,  9, 3,  85, 10,  90},
@@ -187,7 +187,7 @@ void spawn_monsters(World& world, const TileMap& map,
             } else if (mname == "lich") {
                 ai_comp.behavior = BehaviorType::LICH;
                 ai_comp.ranged_range = 6;
-                ai_comp.ranged_damage = static_cast<int>(8 * dmg_scale);
+                ai_comp.ranged_damage = static_cast<int>(12 * dmg_scale);
             } else if (mname == "troll") {
                 ai_comp.behavior = BehaviorType::TROLL;
                 ai_comp.regen_per_turn = 2;
@@ -244,53 +244,61 @@ struct ItemDef {
 };
 
 static const ItemDef WEAPON_TABLE[] = {
-    // Ordered weakest to strongest — depth gating uses min index
+    // Ordered weakest to strongest. Bigger jumps, clearer upgrades.
+    // Each tier is a real step up. Weapon types have identity:
+    //   Daggers: low dmg, high atk (reliable hits)
+    //   Swords: balanced dmg/atk
+    //   Axes: high dmg, penalty atk (big swings)
+    //   Blunt: high dmg, slow (stun synergy)
+    //   Spears: moderate dmg, dodge bonus (defensive)
     //                                                                                  sx  sy  dmg arm atk dge heal gold unid
-    {"club",           "+1 dmg.",                        ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 8,  1, 0, 0, 0, 0,   5, ""},
-    {"dagger",         "+2 dmg, +2 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 0,  2, 0, 2, 0, 0,  15, ""},
-    {"short sword",    "+3 dmg.",                         ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 0,  3, 0, 0, 0, 0,  30, ""},
-    {"hand axe",       "+3 dmg, +1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 3,  3, 0, 1, 0, 0,  25, ""},
-    {"short spear",    "+3 dmg, +1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 6,  3, 0, 1, 0, 0,  28, ""},
-    {"mace",           "+4 dmg.",                         ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 5,  4, 0, 0, 0, 0,  40, ""},
-    {"spear",          "+4 dmg, +1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 6,  4, 0, 1, 0, 0,  35, ""},
-    {"scimitar",       "+4 dmg, +1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 2,  4, 0, 1, 0, 0,  45, ""},
-    {"rapier",         "+3 dmg, +3 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 2, 1,  3, 0, 3, 0, 0,  50, ""},
-    {"spiked club",    "+5 dmg, -1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 8,  5, 0,-1, 0, 0,  35, ""},
-    {"flail",          "+5 dmg, -1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 7,  5, 0,-1, 0, 0,  42, ""},
-    {"long sword",     "+5 dmg.",                         ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 0,  5, 0, 0, 0, 0,  60, ""},
-    {"battle axe",     "+6 dmg, -1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 3,  6, 0,-1, 0, 0,  55, ""},
-    {"war mace",       "+6 dmg.",                         ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 5,  6, 0, 0, 0, 0,  55, ""},
-    {"trident",        "+5 dmg, +1 atk, +1 dodge.",      ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 6,  5, 0, 1, 1, 0,  60, ""},
-    {"halberd",        "+7 dmg, -1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 2, 3,  7, 0,-1, 0, 0,  65, ""},
-    {"kukri",          "+5 dmg, +2 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 4, 2,  5, 0, 2, 0, 0,  55, ""},
-    {"bastard sword",  "+7 dmg.",                         ItemType::WEAPON, EquipSlot::MAIN_HAND, 4, 0,  7, 0, 0, 0, 0,  80, ""},
-    {"war hammer",     "+8 dmg, -1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 4,  8, 0,-1, 0, 0,  90, ""},
-    {"great mace",     "+8 dmg, -2 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 2, 5,  8, 0,-2, 0, 0,  85, ""},
-    {"long rapier",    "+5 dmg, +4 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 1,  5, 0, 4, 0, 0,  90, ""},
-    {"great scimitar", "+7 dmg, +1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 2,  7, 0, 1, 0, 0,  80, ""},
-    {"great axe",      "+9 dmg, -2 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 3,  9, 0,-2, 0, 0, 100, ""},
-    {"large flamberge","+10 dmg, -2 atk.",               ItemType::WEAPON, EquipSlot::MAIN_HAND, 5, 1, 10, 0,-2, 0, 0, 110, ""},  // 2.f
-    {"great sword",    "+11 dmg, -3 atk.",               ItemType::WEAPON, EquipSlot::MAIN_HAND, 6, 1, 11, 0,-3, 0, 0, 125, ""},  // 2.g
-    {"giant axe",      "+11 dmg, -3 atk.",               ItemType::WEAPON, EquipSlot::MAIN_HAND, 4, 3, 11, 0,-3, 0, 0, 130, ""},  // 4.e
-    {"great hammer",   "+10 dmg, -3 atk.",               ItemType::WEAPON, EquipSlot::MAIN_HAND, 4, 4, 10, 0,-3, 0, 0, 115, ""},  // 5.e
-    {"trident",        "+6 dmg, +1 atk, +1 dodge.",      ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 6,  6, 0, 1, 1, 0,  65, ""},  // 7.d
-    {"spiked flail",   "+7 dmg, -1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 8,  7, 0,-1, 0, 0,  60, ""},  // 9.d club with nails
+    // --- Tier 1 (depth 1, starter) ---
+    {"club",           "+2 dmg.",                        ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 8,  2, 0, 0, 0, 0,   5, ""},
+    {"dagger",         "+3 dmg, +3 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 0,  3, 0, 3, 0, 0,  15, ""},
+    {"short sword",    "+4 dmg, +1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 0,  4, 0, 1, 0, 0,  25, ""},
+    {"hand axe",       "+5 dmg, -1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 3,  5, 0,-1, 0, 0,  25, ""},
+    {"short spear",    "+4 dmg, +1 dodge.",              ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 6,  4, 0, 0, 1, 0,  28, ""},
+    {"mace",           "+5 dmg.",                         ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 5,  5, 0, 0, 0, 0,  30, ""},
+    // --- Tier 2 (depth 2) ---
+    {"stiletto",       "+4 dmg, +4 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 2, 1,  4, 0, 4, 0, 0,  40, ""},
+    {"scimitar",       "+6 dmg, +1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 2,  6, 0, 1, 0, 0,  45, ""},
+    {"battle axe",     "+8 dmg, -2 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 3,  8, 0,-2, 0, 0,  50, ""},
+    {"spear",          "+6 dmg, +1 dodge.",              ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 6,  6, 0, 0, 1, 0,  45, ""},
+    {"flail",          "+7 dmg, -1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 7,  7, 0,-1, 0, 0,  48, ""},
+    {"long sword",     "+7 dmg.",                         ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 0,  7, 0, 0, 0, 0,  55, ""},
+    // --- Tier 3 (depth 3) ---
+    {"war mace",       "+8 dmg.",                         ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 5,  8, 0, 0, 0, 0,  65, ""},
+    {"trident",        "+7 dmg, +1 atk, +1 dodge.",      ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 6,  7, 0, 1, 1, 0,  65, ""},
+    {"halberd",        "+9 dmg, -1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 2, 3,  9, 0,-1, 0, 0,  70, ""},
+    {"kukri",          "+6 dmg, +4 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 4, 2,  6, 0, 4, 0, 0,  60, ""},
+    {"bastard sword",  "+9 dmg.",                         ItemType::WEAPON, EquipSlot::MAIN_HAND, 4, 0,  9, 0, 0, 0, 0,  80, ""},
+    {"spiked flail",   "+9 dmg, -1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 8,  9, 0,-1, 0, 0,  70, ""},
+    // --- Tier 4 (depth 4, endgame) ---
+    {"war hammer",     "+10 dmg, -1 atk.",               ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 4, 10, 0,-1, 0, 0,  90, ""},
+    {"great scimitar", "+9 dmg, +2 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 2,  9, 0, 2, 0, 0,  85, ""},
+    {"great axe",      "+12 dmg, -3 atk.",               ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 3, 12, 0,-3, 0, 0, 100, ""},
+    {"large flamberge","+11 dmg, -1 atk.",               ItemType::WEAPON, EquipSlot::MAIN_HAND, 5, 1, 11, 0,-1, 0, 0, 110, ""},
+    {"great sword",    "+12 dmg, -2 atk.",               ItemType::WEAPON, EquipSlot::MAIN_HAND, 6, 1, 12, 0,-2, 0, 0, 125, ""},
+    {"giant axe",      "+14 dmg, -4 atk.",               ItemType::WEAPON, EquipSlot::MAIN_HAND, 4, 3, 14, 0,-4, 0, 0, 130, ""},
+    {"great hammer",   "+13 dmg, -3 atk.",               ItemType::WEAPON, EquipSlot::MAIN_HAND, 4, 4, 13, 0,-3, 0, 0, 120, ""},
+    {"war trident",    "+9 dmg, +2 atk, +2 dodge.",      ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 6,  9, 0, 2, 2, 0,  95, ""},
+    {"long rapier",    "+7 dmg, +6 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 1,  7, 0, 6, 0, 0,  90, ""},
 };
 
 // Legendary weapons — genuinely unique sprites only. NOT in random drops.
 static const ItemDef LEGENDARY_WEAPON_TABLE[] = {
-    // Unique sword sprites (1.g-k)
-    {"Sanguine Edge",   "+8 dmg, +2 atk.",   ItemType::WEAPON, EquipSlot::MAIN_HAND, 6, 0,  8, 0, 2, 0, 0, 0, ""},  // 1.g sanguine dagger
-    {"Nullblade",       "+7 dmg, +3 atk.",   ItemType::WEAPON, EquipSlot::MAIN_HAND, 7, 0,  7, 0, 3, 0, 0, 0, ""},  // 1.h magic dagger
-    {"Crystal Fang",    "+9 dmg, +2 atk.",   ItemType::WEAPON, EquipSlot::MAIN_HAND, 8, 0,  9, 0, 2, 0, 0, 0, ""},  // 1.i crystal sword
-    {"Doomhilt",        "+11 dmg, -1 atk.",  ItemType::WEAPON, EquipSlot::MAIN_HAND, 9, 0, 11, 0,-1, 0, 0, 0, ""},  // 1.j evil sword
-    {"Emberbrand",      "+10 dmg, +1 atk.",  ItemType::WEAPON, EquipSlot::MAIN_HAND,10, 0, 10, 0, 1, 0, 0, 0, ""},  // 1.k flame sword
+    // Unique sword sprites (1.g-k). These should clearly outclass regular drops.
+    {"Sanguine Edge",   "+10 dmg, +4 atk.",  ItemType::WEAPON, EquipSlot::MAIN_HAND, 6, 0, 10, 0, 4, 0, 0, 0, ""},  // 1.g sanguine dagger
+    {"Nullblade",       "+9 dmg, +5 atk.",   ItemType::WEAPON, EquipSlot::MAIN_HAND, 7, 0,  9, 0, 5, 0, 0, 0, ""},  // 1.h magic dagger
+    {"Crystal Fang",    "+12 dmg, +3 atk.",  ItemType::WEAPON, EquipSlot::MAIN_HAND, 8, 0, 12, 0, 3, 0, 0, 0, ""},  // 1.i crystal sword
+    {"Doomhilt",        "+15 dmg, -2 atk.",  ItemType::WEAPON, EquipSlot::MAIN_HAND, 9, 0, 15, 0,-2, 0, 0, 0, ""},  // 1.j evil sword
+    {"Emberbrand",      "+13 dmg, +2 atk.",  ItemType::WEAPON, EquipSlot::MAIN_HAND,10, 0, 13, 0, 2, 0, 0, 0, ""},  // 1.k flame sword
     // Unique spear sprite (7.e)
-    {"Stormcaller",     "+9 dmg, +2 atk.",   ItemType::WEAPON, EquipSlot::MAIN_HAND, 4, 6,  9, 0, 2, 0, 0, 0, ""},  // 7.e magic spear
+    {"Stormcaller",     "+11 dmg, +3 atk, +2 dodge.", ItemType::WEAPON, EquipSlot::MAIN_HAND, 4, 6, 11, 0, 3, 2, 0, 0, ""},  // 7.e magic spear
     // Unique staff sprites (11.f, 11.h, 11.j)
-    {"Red Pyre",        "+6 dmg, +2 atk.",   ItemType::WEAPON, EquipSlot::MAIN_HAND, 5, 10, 6, 0, 2, 0, 0, 0, ""},  // 11.f red crystal staff
-    {"Frostspire",      "+7 dmg, +2 atk.",   ItemType::WEAPON, EquipSlot::MAIN_HAND, 7, 10, 7, 0, 2, 0, 0, 0, ""},  // 11.h blue crystal staff
-    {"Saint's Rest",    "+6 dmg, +3 atk.",   ItemType::WEAPON, EquipSlot::MAIN_HAND, 9, 10, 6, 0, 3, 0, 0, 0, ""},  // 11.j saint's staff
+    {"Red Pyre",        "+8 dmg, +4 atk.",   ItemType::WEAPON, EquipSlot::MAIN_HAND, 5, 10, 8, 0, 4, 0, 0, 0, ""},  // 11.f red crystal staff
+    {"Frostspire",      "+9 dmg, +3 atk.",   ItemType::WEAPON, EquipSlot::MAIN_HAND, 7, 10, 9, 0, 3, 0, 0, 0, ""},  // 11.h blue crystal staff
+    {"Saint's Rest",    "+8 dmg, +5 atk.",   ItemType::WEAPON, EquipSlot::MAIN_HAND, 9, 10, 8, 0, 5, 0, 0, 0, ""},  // 11.j saint's staff
 };
 
 // Legendary armor/accessories — unique sprites only.
@@ -373,240 +381,242 @@ struct UniqueDef {
 };
 
 static const UniqueDef UNIQUE_TABLE[] = {
-    // --- WARRENS (rat tunnels, goblins, tight corridors) ---
+    // Uniques should feel game-changing. Big stats + powerful effect.
+
+    // --- WARRENS ---
     {"Rat King's Fang",
-     "A dagger caked in filth. It remembers every throat.",
+     "Kills below 15% HP. Heals on kill.",
      ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 0,
-     4, 0, 3, 0,  0, 2, 0,
+     7, 0, 4, 0,  0, 3, 0,
      UniqueEffect::EXECUTE_THRESHOLD, "warrens", 2},
 
     {"Goblin King's Crown",
-     "Too small for a human head. Fits anyway.",
+     "Kills heal 10% max HP.",
      ItemType::ARMOR_HEAD, EquipSlot::HEAD, 5, 15,
-     0, 3, 0, 1,  0, 0, 2,
-     UniqueEffect::GOLD_FIND, "warrens", 2},
+     0, 4, 0, 2,  0, 0, 3,
+     UniqueEffect::ON_KILL_HEAL, "warrens", 2},
 
     {"Tunnel Rat's Blade",
-     "Forged in darkness. Sees in darkness.",
+     "Double stealth bonus. Poison and bleed on hit.",
      ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 0,
-     5, 0, 2, 0,  0, 1, 0,
-     UniqueEffect::LIGHT_RADIUS, "warrens", 3},
+     8, 0, 5, 0,  0, 3, 0,
+     UniqueEffect::POISON_BLEED_HIT, "warrens", 3},
 
-    // --- STONEKEEP (ancient fortifications, skeletons) ---
+    // --- STONEKEEP ---
     {"Bonecleaver",
-     "Etched with prayers against the risen dead.",
+     "+50% vs undead.",
      ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 3,
-     7, 0, 1, 0,  2, 0, 0,
+     10, 0, 2, 0,  3, 0, 0,
      UniqueEffect::UNDEAD_SLAYER, "stonekeep", 2},
 
     {"Warden's Plate",
-     "Worn by the last keeper of Stonekeep. Thorns line the inside.",
+     "Reflects 3 damage. +6 AC.",
      ItemType::ARMOR_CHEST, EquipSlot::CHEST, 3, 12,
-     0, 5, 0, -1,  0, 0, 2,
+     0, 6, 0, 0,  0, 0, 3,
      UniqueEffect::THORNS, "stonekeep", 3},
 
-    {"Keeper's Lantern",
-     "Light that no wind can extinguish.",
+    {"Iron Oath Amulet",
+     "30% counter on dodge. +3 dodge.",
      ItemType::AMULET, EquipSlot::AMULET, 3, 16,
-     0, 0, 1, 0,  0, 0, 1,
-     UniqueEffect::LIGHT_RADIUS, "stonekeep", 2},
+     0, 2, 2, 3,  0, 0, 2,
+     UniqueEffect::DODGE_COUNTER, "stonekeep", 2},
 
-    // --- CATACOMBS (undead, bone floors, coffins) ---
+    // --- CATACOMBS ---
     {"Grave Warden's Mace",
-     "Made to put the dead back down.",
+     "+50% vs undead. +10 dmg.",
      ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 5,
-     8, 0, 0, 0,  2, 0, 0,
+     10, 0, 1, 0,  3, 0, 0,
      UniqueEffect::UNDEAD_SLAYER, "catacombs", 3},
 
     {"Deathless Shroud",
-     "The burial cloth of someone who refused to stay buried.",
+     "Survive one lethal hit per floor. +5 AC, +2 dodge.",
      ItemType::ARMOR_CHEST, EquipSlot::CHEST, 2, 12,
-     0, 2, 0, 2,  0, 0, 0,
+     0, 5, 0, 2,  0, 0, 3,
      UniqueEffect::DEATHWARD, "catacombs", 4},
 
     {"Ossuary Ring",
-     "Bone polished smooth by centuries of prayer.",
+     "Corpses explode (3 dmg, radius 2). +3 AC.",
      ItemType::RING, EquipSlot::RING_1, 1, 18,
-     0, 1, 0, 0,  0, 0, 2,
-     UniqueEffect::REGEN, "catacombs", 3},
+     2, 3, 1, 0,  0, 0, 2,
+     UniqueEffect::CORPSE_EXPLODE, "catacombs", 3},
 
     {"Corpselight",
-     "A pendant that glows when the dead are near. It never stops glowing here.",
+     "Corpses explode (3 dmg, radius 2). +3 atk.",
      ItemType::AMULET, EquipSlot::AMULET, 2, 16,
-     0, 0, 2, 0,  0, 0, 0,
+     3, 0, 3, 0,  0, 0, 0,
      UniqueEffect::CORPSE_EXPLODE, "catacombs", 4},
 
-    // --- MOLTEN (fire, lava, dragons) ---
+    // --- MOLTEN ---
     {"Cinderscale Shield",
-     "Dragonhide stretched over iron. Still warm.",
+     "Immune to burn. +6 AC, reflects 3 damage.",
      ItemType::SHIELD, EquipSlot::OFF_HAND, 3, 11,
-     0, 5, 0, 0,  0, 0, 2,
-     UniqueEffect::THORNS, "molten", 4},
+     0, 6, 0, 1,  0, 0, 3,
+     UniqueEffect::FIRE_IMMUNE, "molten", 4},
 
     {"Flamecaller",
-     "The blade sweats heat. Enemies nearby flinch.",
+     "+10 dmg, +5 fire damage, 20% chain lightning.",
      ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 0,
-     8, 0, 1, 0,  0, 0, 0,
-     UniqueEffect::CHAIN_LIGHTNING, "molten", 4},
+     10, 0, 2, 0,  2, 0, 0,
+     UniqueEffect::FIRE_DAMAGE_BONUS, "molten", 4},
 
     {"Ashen Crown",
-     "Forged in eruption. The wearer sees through smoke and stone.",
+     "Immune to burn. +5 fire damage. +5 AC.",
      ItemType::ARMOR_HEAD, EquipSlot::HEAD, 4, 15,
-     0, 3, 0, 0,  0, 0, 0,
-     UniqueEffect::LIGHT_RADIUS, "molten", 3},
+     0, 5, 0, 0,  0, 0, 3,
+     UniqueEffect::FIRE_IMMUNE, "molten", 3},
 
-    // --- SUNKEN (water, flooded rooms, naga) ---
+    // --- SUNKEN ---
     {"Tidecaller",
-     "A trident that hums near water. Lightning follows.",
+     "+9 dmg, 20% chain lightning, freeze on hit.",
      ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 6,
-     7, 0, 2, 0,  0, 2, 0,
+     9, 0, 3, 1,  0, 3, 0,
      UniqueEffect::CHAIN_LIGHTNING, "sunken", 3},
 
     {"Drowned Man's Ring",
-     "Pried from a waterlogged corpse. It wants to keep you alive.",
+     "Freeze on hit. Immune to poison. +3 dodge.",
      ItemType::RING, EquipSlot::RING_1, 2, 18,
-     0, 0, 0, 1,  0, 0, 2,
-     UniqueEffect::REGEN, "sunken", 3},
+     2, 0, 0, 3,  0, 2, 3,
+     UniqueEffect::FREEZE_ON_HIT, "sunken", 3},
 
     {"Naiad's Veil",
-     "Woven from river kelp. Traps slide off you like water.",
+     "Immune to traps. +3 dodge, +3 AC.",
      ItemType::ARMOR_HEAD, EquipSlot::HEAD, 1, 15,
-     0, 1, 0, 2,  0, 1, 0,
+     0, 3, 0, 3,  0, 2, 0,
      UniqueEffect::TRAP_IMMUNITY, "sunken", 4},
 
-    // --- DEEP HALLS (cavernous, minotaurs, darkness) ---
+    // --- DEEP HALLS ---
     {"Minotaur's Cleaver",
-     "Bigger than it should be. Hits harder than it should.",
+     "Kills below 15% HP. +12 dmg, +3 STR.",
      ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 3,
-     10, 0, -2, 0,  3, 0, 0,
+     12, 0, -2, 0,  3, 0, 2,
      UniqueEffect::EXECUTE_THRESHOLD, "deep_halls", 4},
 
     {"Deepstone Gauntlets",
-     "Stone that moves like leather. The mountain's gift.",
+     "Immune to traps. +4 AC, +2 STR.",
      ItemType::ARMOR_HANDS, EquipSlot::HANDS, 3, 13,
-     0, 3, 1, 0,  1, 0, 2,
+     0, 4, 2, 0,  2, 0, 3,
      UniqueEffect::TRAP_IMMUNITY, "deep_halls", 3},
 
     {"Delver's Eye",
-     "A jewel from the deep. It knows things it shouldn't.",
+     "50% damage absorbed by MP. +3 atk.",
      ItemType::AMULET, EquipSlot::AMULET, 5, 16,
-     0, 0, 0, 0,  0, 0, 0,
-     UniqueEffect::IDENTIFY_ON_PICKUP, "deep_halls", 2},
+     0, 0, 3, 0,  0, 0, 2,
+     UniqueEffect::MP_SHIELD, "deep_halls", 2},
 
-    // --- SEPULCHRE (final dungeon, death, endgame) ---
+    // --- SEPULCHRE ---
     {"The Terminus",
-     "The last blade ever forged. Its edge is the end of things.",
+     "Kills below 15% HP. 20% lifesteal. +14 dmg.",
      ItemType::WEAPON, EquipSlot::MAIN_HAND, 5, 0,
-     12, 0, 2, 0,  0, 0, 0,
+     14, 0, 3, 0,  2, 0, 0,
      UniqueEffect::EXECUTE_THRESHOLD, "sepulchre", 5},
 
     {"Death's Mantle",
-     "Sewn from the dark between stars.",
+     "Survive one lethal hit per floor. +7 AC, +3 dodge.",
      ItemType::ARMOR_CHEST, EquipSlot::CHEST, 4, 12,
-     0, 6, 0, 1,  0, 0, 0,
+     0, 7, 0, 3,  0, 0, 3,
      UniqueEffect::DEATHWARD, "sepulchre", 5},
 
     {"The Hungering Ring",
-     "It feeds on death. So do you.",
+     "20% lifesteal. +50 speed for 3 turns on kill.",
      ItemType::RING, EquipSlot::RING_1, 5, 17,
-     2, 0, 1, 0,  0, 0, 0,
-     UniqueEffect::XP_BONUS, "sepulchre", 4},
+     3, 0, 2, 0,  2, 0, 0,
+     UniqueEffect::LIFESTEAL, "sepulchre", 4},
 
-    // --- ANY ZONE (general purpose, rarer) ---
+    // --- ANY ZONE ---
     {"Scholar's Lens",
-     "Ground from crystal found only in collapsed libraries.",
+     "20% free casts. Favor gains doubled.",
      ItemType::AMULET, EquipSlot::AMULET, 6, 16,
-     0, 0, 1, 0,  0, 0, 0,
-     UniqueEffect::IDENTIFY_ON_PICKUP, "", 3},
+     0, 0, 2, 0,  0, 0, 2,
+     UniqueEffect::FREE_CAST, "", 3},
 
     {"Pilgrim's Sash",
-     "Blessed by seven temples. The gods listen closer.",
+     "Favor gains doubled. +4 AC.",
      ItemType::ARMOR_CHEST, EquipSlot::CHEST, 0, 12,
-     0, 1, 0, 0,  0, 0, 0,
+     0, 4, 0, 0,  0, 0, 3,
      UniqueEffect::FAVOR_DOUBLED, "", 4},
 
     {"Poacher's Knife",
-     "Notched from a hundred kills. Knows where to cut a beast.",
+     "+50% vs beasts. Poison and bleed on hit. +7 dmg.",
      ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 0,
-     4, 0, 3, 0,  0, 2, 0,
+     7, 0, 4, 0,  0, 3, 0,
      UniqueEffect::BEAST_SLAYER, "", 2},
 
     {"Miser's Band",
-     "Gold sticks to whoever wears this.",
+     "+25% XP. +50% gold.",
      ItemType::RING, EquipSlot::RING_1, 1, 17,
      0, 0, 0, 0,  0, 0, 0,
-     UniqueEffect::GOLD_FIND, "", 2},
+     UniqueEffect::XP_BONUS, "", 2},
 
     {"Channeler's Staff",
-     "The wood is warm. It drinks mana from the air.",
+     "20% free casts. +8 dmg, +4 atk.",
      ItemType::WEAPON, EquipSlot::MAIN_HAND, 4, 10,
-     4, 0, 2, 0,  0, 0, 0,
+     8, 0, 4, 0,  0, 0, 2,
      UniqueEffect::FREE_CAST, "", 4},
 
     {"Shadowstep Boots",
-     "They make no sound. Neither does anything that steps on them.",
+     "Immune to traps. +4 dodge, +3 AC.",
      ItemType::ARMOR_FEET, EquipSlot::FEET, 3, 14,
-     0, 2, 0, 3,  0, 2, 0,
+     0, 3, 0, 4,  0, 3, 0,
      UniqueEffect::TRAP_IMMUNITY, "", 4},
 
     // --- UNIQUE RINGS ---
     {"Bloodthorn Ring",
-     "Thorns grow inward. Every critical hit opens a wound that won't close.",
+     "Crits apply bleed (3 turns). 20% lifesteal. +2 dmg.",
      ItemType::RING, EquipSlot::RING_1, 3, 18,
-     1, 0, 1, 0,  0, 1, 0,
+     2, 0, 2, 0,  0, 2, 0,
      UniqueEffect::CRIT_BLEED, "", 3},
 
     {"Coward's Loop",
-     "Worn by a duelist who never lost. He fought dirty.",
+     "30% counter on dodge. +4 dodge, +3 DEX.",
      ItemType::RING, EquipSlot::RING_1, 4, 18,
-     0, 0, 0, 3,  0, 2, 0,
+     0, 0, 0, 4,  0, 3, 0,
      UniqueEffect::DODGE_COUNTER, "stonekeep", 3},
 
     {"Slayer's Band",
-     "Warm to the touch after a kill. You move faster. You want another.",
+     "+50 speed for 3 turns on kill. +3 dmg.",
      ItemType::RING, EquipSlot::RING_1, 5, 18,
-     2, 0, 1, 0,  1, 0, 0,
+     3, 0, 2, 0,  2, 0, 0,
      UniqueEffect::KILL_HASTE, "deep_halls", 4},
 
     {"Wychwood Ring",
-     "Carved from a tree that grew in a graveyard. No venom touches you.",
+     "Immune to poison. +3 CON, +2 AC.",
      ItemType::RING, EquipSlot::RING_1, 0, 18,
-     0, 1, 0, 0,  0, 0, 2,
+     0, 2, 0, 0,  0, 0, 3,
      UniqueEffect::POISON_IMMUNE, "warrens", 2},
 
     {"Charred Signet",
-     "The seal of a fire cult. The brand is permanent. So is the protection.",
+     "Immune to burn. +3 AC.",
      ItemType::RING, EquipSlot::RING_1, 1, 18,
      0, 1, 0, 0,  0, 0, 1,
      UniqueEffect::FIRE_IMMUNE, "molten", 3},
 
     {"Phasing Band",
-     "The metal shifts when you aren't looking. Sometimes you shift with it.",
+     "15% chance to blink behind target on hit.",
      ItemType::RING, EquipSlot::RING_1, 2, 18,
      1, 0, 2, 0,  0, 1, 0,
      UniqueEffect::TELEPORT_STRIKE, "sepulchre", 4},
 
     // --- UNIQUE AMULETS ---
     {"Medallion of Devotion",
-     "Prayer heals the body when the faith is strong enough.",
+     "Heal 5 HP when you pray.",
      ItemType::AMULET, EquipSlot::AMULET, 4, 16,
      0, 1, 0, 0,  0, 0, 1,
      UniqueEffect::PRAYER_HEAL, "", 3},
 
     {"Mana Phylactery",
-     "A lich's failed experiment. It drinks damage and turns it to power.",
+     "50% damage absorbed by MP.",
      ItemType::AMULET, EquipSlot::AMULET, 5, 16,
      0, 0, 0, 0,  0, 0, 0,
      UniqueEffect::MP_SHIELD, "catacombs", 4},
 
     {"Shadow Pendant",
-     "Cold to the touch. Wounds close when no one is watching.",
+     "Regen 1 HP every 5 turns. +2 AC.",
      ItemType::AMULET, EquipSlot::AMULET, 1, 16,
      0, 0, 0, 1,  0, 1, 0,
      UniqueEffect::STEALTH_REGEN, "", 3},
 
     {"Dread Gorget",
-     "Something in the metal screams. Enemies hear it too.",
+     "10% chance enemies flee. +2 AC, +1 dmg.",
      ItemType::AMULET, EquipSlot::AMULET, 0, 16,
      1, 2, 0, 0,  1, 0, 0,
      UniqueEffect::FEAR_AURA, "deep_halls", 4},
@@ -1125,25 +1135,25 @@ void spawn_items(World& world, const TileMap& map,
             struct LoreEntry { const char* name; const char* text; };
             static const LoreEntry LORE[] = {
                 {"tattered journal",
-                 "...the seals were placed long before we came. Whoever made them knew what was below. They didn't want it found."},
+                 "Seals on the lower levels. Old. Someone didn't want this place opened."},
                 {"carved inscription",
-                 "THE RELIQUARY PREDATES THE GODS. WHAT MADE IT HAS NO NAME."},
+                 "THE RELIQUARY PREDATES THE GODS."},
                 {"bloodstained note",
-                 "If you're reading this, turn back. I didn't listen either. — K."},
+                 "Turn back. -- K."},
                 {"pilgrim's diary",
-                 "Day 14. The deeper I go, the more I hear it. Not a voice. A vibration. Like the stones remember something."},
+                 "Day 14. Vibrations in the stone. Getting stronger."},
                 {"crumbling scroll",
-                 "Seven gods. Seven claims. None of them made the Reliquary. That's the part they don't want you to know."},
+                 "Seven gods claimed the Reliquary. None of them made it."},
                 {"faded letter",
-                 "My dearest, I descended to the third level today. The walls have faces here. I don't think they were carved."},
+                 "Third level. Faces in the walls."},
                 {"explorer's log",
-                 "The monsters down here aren't guarding anything. They're running from something deeper."},
+                 "The monsters aren't guards. They're trapped here too."},
                 {"priest's confession",
-                 "I stopped praying on the fourth day. Not because I lost faith. Because something answered that wasn't my god."},
+                 "Stopped praying on day four. Something else answered."},
                 {"scratched warning",
-                 "DON'T TAKE IT. DON'T TOUCH IT. IT REMEMBERS EVERYONE WHO HAS."},
+                 "DON'T TAKE IT."},
                 {"ancient tablet fragment",
-                 "...before the first dawn, there was the Reliquary. It was not created. It simply was. Everything else followed."},
+                 "Before the gods, there was the Reliquary."},
             };
             static constexpr int LORE_COUNT = sizeof(LORE) / sizeof(LORE[0]);
             auto& lore = LORE[rng.range(0, LORE_COUNT - 1)];

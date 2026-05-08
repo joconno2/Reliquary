@@ -25,24 +25,24 @@ struct ShopItemDef {
 
 // tags field packed into heal_amount for weapons (repurposed since weapons don't heal)
 static const ShopItemDef SHOP_WEAPONS[] = {
-    // Daggers (TAG_DAGGER)
-    {"dagger",        "+2 dmg, +2 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 0,  2, 0, 2, 0, 0,  15},
-    {"stiletto",      "+3 dmg, +3 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 0,  3, 0, 3, 0, 0,  35},
-    // Swords (TAG_SWORD)
-    {"short sword",   "+3 dmg, +1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 0,  3, 0, 1, 0, 0,  30},
-    {"long sword",    "+5 dmg, +1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 0,  5, 0, 1, 0, 0,  60},
-    {"falchion",      "+6 dmg.",                         ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 0,  6, 0, 0, 0, 0,  75},
-    // Axes (TAG_AXE)
-    {"hand axe",      "+3 dmg.",                         ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 3,  3, 0, 0, 0, 0,  25},
-    {"battle axe",    "+6 dmg, -1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 3,  6, 0,-1, 0, 0,  55},
-    // Blunt (TAG_BLUNT)
-    {"mace",          "+4 dmg.",                         ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 5,  4, 0, 0, 0, 0,  40},
-    {"warhammer",     "+7 dmg, -1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 5,  7, 0,-1, 0, 0,  70},
-    // Spears
-    {"spear",         "+4 dmg, +1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 6,  4, 0, 1, 0, 0,  35},
-    // Bows (TAG_BOW)
-    {"short bow",     "+2 dmg, +2 atk, range 6.",       ItemType::WEAPON, EquipSlot::MAIN_HAND, 2, 6,  2, 0, 2, 0, 0,  30},
-    {"hunting bow",   "+4 dmg, +3 atk, range 6.",       ItemType::WEAPON, EquipSlot::MAIN_HAND, 2, 6,  4, 0, 3, 0, 0,  55},
+    // Daggers: low dmg, high atk (reliable)
+    {"dagger",        "+3 dmg, +3 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 0,  3, 0, 3, 0, 0,  15},
+    {"stiletto",      "+4 dmg, +4 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 0,  4, 0, 4, 0, 0,  40},
+    // Swords: balanced
+    {"short sword",   "+4 dmg, +1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 0,  4, 0, 1, 0, 0,  25},
+    {"long sword",    "+7 dmg.",                         ItemType::WEAPON, EquipSlot::MAIN_HAND, 3, 0,  7, 0, 0, 0, 0,  55},
+    {"bastard sword", "+9 dmg.",                         ItemType::WEAPON, EquipSlot::MAIN_HAND, 4, 0,  9, 0, 0, 0, 0,  80},
+    // Axes: high dmg, penalty atk
+    {"hand axe",      "+5 dmg, -1 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 3,  5, 0,-1, 0, 0,  25},
+    {"battle axe",    "+8 dmg, -2 atk.",                ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 3,  8, 0,-2, 0, 0,  50},
+    // Blunt: high dmg
+    {"mace",          "+5 dmg.",                         ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 5,  5, 0, 0, 0, 0,  30},
+    {"war mace",      "+8 dmg.",                         ItemType::WEAPON, EquipSlot::MAIN_HAND, 1, 5,  8, 0, 0, 0, 0,  65},
+    // Spears: defensive
+    {"spear",         "+6 dmg, +1 dodge.",               ItemType::WEAPON, EquipSlot::MAIN_HAND, 0, 6,  6, 0, 0, 1, 0,  45},
+    // Bows: ranged
+    {"short bow",     "+3 dmg, +3 atk, range 6.",       ItemType::WEAPON, EquipSlot::MAIN_HAND, 2, 6,  3, 0, 3, 0, 0,  30},
+    {"hunting bow",   "+5 dmg, +4 atk, range 6.",       ItemType::WEAPON, EquipSlot::MAIN_HAND, 2, 6,  5, 0, 4, 0, 0,  55},
 };
 
 static const ShopItemDef SHOP_ARMOR[] = {

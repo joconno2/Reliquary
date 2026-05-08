@@ -105,14 +105,14 @@ void populate(World& world, TileMap& map, RNG& rng,
 
     // Travelers on roads between towns
     static const struct { int x, y; const char* dialogue; } TRAVELERS[] = {
-        {437, 350, "The roads aren't safe. But then, nothing is."},
+        {437, 350, "Roads are bad lately."},
         {575, 355, "I'm heading to Greywatch. They say there's work there."},
         {475, 425, "Used to be farmers here. Before the barrow opened."},
         {550, 300, "The cold gets worse the further north you go."},
         {350, 375, "Bramblewood's seen better days. The forest is closing in."},
         {650, 425, "Ironhearth's forges never stop. You can hear them for miles."},
         {400, 525, "Something's wrong with the water south of here."},
-        {525, 475, "I saw lights in the hills last night. Moving."},
+        {525, 475, "Lights in the hills last night."},
     };
     for (auto& t : TRAVELERS) {
         spawn_ow_npc(t.x, t.y, "Traveler", t.dialogue, NPCRole::FARMER, 1, 6); // peasant sprite
@@ -133,6 +133,14 @@ void populate(World& world, TileMap& map, RNG& rng,
     spawn_ow_npc(900, 200, "Old Woman", "I remember when there were no dungeons. Then the ground opened.", NPCRole::FARMER, 3, 6);
     spawn_ow_npc(200, 600, "Hermit", "The Reliquary isn't what they think. It was here before the gods.", NPCRole::PRIEST, 4, 6);
     spawn_ow_npc(800, 550, "Madman", "I HEARD IT. Under the stone. Breathing.", NPCRole::FARMER, 1, 6);
+
+    // Hints about overworld legendaries
+    spawn_ow_npc(250, 400, "Woodcutter",
+        "There's a tree west of here that glows at night. I don't go near it.", NPCRole::FARMER, 2, 6);
+    spawn_ow_npc(475, 150, "Mountaineer",
+        "Found an ice altar in the peaks north of Frostmere. Something guards it.", NPCRole::FARMER, 1, 6);
+    spawn_ow_npc(550, 575, "Scavenger",
+        "Shrine in the southern wastes. Sythara's mark on it. Don't go alone.", NPCRole::FARMER, 2, 6);
 
     // Road merchants (between major towns)
     spawn_ow_npc(460, 375, "Traveling Merchant", "Buy something or move along. The road is dangerous.", NPCRole::SHOPKEEPER, 2, 5);
@@ -188,7 +196,7 @@ void populate(World& world, TileMap& map, RNG& rng,
     // Abandoned camp — near the deep woods
     paint_ruin(650, 600);
     place_lore(650, 600, "abandoned journal",
-        "Day 3. We found the entrance. Day 5. Markus didn't come back. Day 7. None of us are going back in.");
+        "Markus went in. Didn't come back.");
     spawn_ow_npc(327, 300, "Deserter", "I was a guard once. Then I saw what's down there.", NPCRole::FARMER, 1, 6);
 
     // Mercenary camp — between Greywatch and Ironhearth
@@ -198,7 +206,7 @@ void populate(World& world, TileMap& map, RNG& rng,
     // Scholar's camp — in the frozen north
     spawn_ow_npc(540, 185, "Field Scholar", "The inscriptions up north predate the current pantheon by centuries.", NPCRole::PRIEST, 5, 6);
     place_lore(1075, 370, "field notes",
-        "The symbols in the north match nothing in our records. They resemble the Sepulchre markings.");
+        "Symbols in the north match the Sepulchre.");
 
     // Refugee camp — in the southern wastes
     spawn_ow_npc(475, 575, "Refugee", "The southern dungeons drove us out. We can't go home.", NPCRole::FARMER, 0, 6);
@@ -217,15 +225,15 @@ void populate(World& world, TileMap& map, RNG& rng,
 
     paint_standing_stone(200, 200);
     place_lore(400, 402, "worn inscription",
-        "BEFORE THE SEVEN. BEFORE THE NAMING. THIS PLACE REMEMBERS.");
+        "Before the Seven. Before the Naming.");
 
     paint_standing_stone(800, 150);
     place_lore(1600, 302, "cracked tablet",
-        "The Reliquary was not made. It arrived. The stones grew around it.");
+        "The Reliquary was here before the gods.");
 
     paint_standing_stone(400, 650);
     place_lore(800, 1302, "eroded pillar text",
-        "Seven gods claimed it. None of them made it. Who will claim it next?");
+        "Seven gods claimed it. None made it.");
 
     // === LEGENDARY SECRET LOCATIONS (3 overworld-placed game-breaking items) ===
     // Each is at a visually distinct landmark that players can find by exploring or NPC hints
@@ -243,13 +251,25 @@ void populate(World& world, TileMap& map, RNG& rng,
         world.add<Position>(wsi, {tx, ty+1});
         world.add<Renderable>(wsi, {SHEET_ITEMS, 1, 2, {120, 255, 120, 255}, 3}); // green glow, high z
         Item ws_item;
-        ws_item.name = "Worldsplitter"; ws_item.description = "An axe that fell from a dead god's hand. Kills in one hit below 30% HP. +15 damage.";
+        ws_item.name = "Worldsplitter"; ws_item.description = "Kills below 30% HP. +15 dmg, +3 atk.";
         ws_item.type = ItemType::WEAPON; ws_item.slot = EquipSlot::MAIN_HAND;
         ws_item.damage_bonus = 15; ws_item.attack_bonus = 3;
         ws_item.unique_effect = UniqueEffect::EXECUTE_THRESHOLD;
         ws_item.rarity = Rarity::LEGENDARY; ws_item.identified = true;
         ws_item.gold_value = 500;
         world.add<Item>(wsi, std::move(ws_item));
+        // Guardian: The Greenfather (ancient treant)
+        Entity wsg = world.create();
+        world.add<Position>(wsg, {tx-1, ty+1});
+        world.add<Renderable>(wsg, {SHEET_MONSTERS, 2, 1, {60, 140, 60, 255}, 5});
+        Stats wss; wss.name = "The Greenfather"; wss.hp = 120; wss.hp_max = 120;
+        wss.set_attr(Attr::STR, 20); wss.set_attr(Attr::CON, 22);
+        wss.base_damage = 12; wss.natural_armor = 4; wss.base_speed = 70; wss.xp_value = 200;
+        world.add<Stats>(wsg, std::move(wss));
+        AI wsa; wsa.flee_threshold = 0; wsa.behavior = BehaviorType::TROLL; wsa.regen_per_turn = 3;
+        world.add<AI>(wsg, wsa);
+        world.add<Energy>(wsg, {0, 70});
+        world.add<StatusEffects>(wsg);
     }
 
     // 2. The Frozen Altar (far north peaks) - Frostbind Crown
@@ -262,13 +282,25 @@ void populate(World& world, TileMap& map, RNG& rng,
         world.add<Position>(fbi, {tx, ty});
         world.add<Renderable>(fbi, {SHEET_ITEMS, 7, 15, {140, 200, 255, 255}, 3}); // ice blue glow
         Item fb_item;
-        fb_item.name = "Frostbind Crown"; fb_item.description = "Worn by a king who froze time. All enemies near you are slowed. +5 armor. Immune to freeze.";
+        fb_item.name = "Frostbind Crown"; fb_item.description = "10% chance enemies flee. +5 AC, +2 dodge.";
         fb_item.type = ItemType::ARMOR_HEAD; fb_item.slot = EquipSlot::HEAD;
         fb_item.armor_bonus = 5; fb_item.dodge_bonus = 2;
         fb_item.unique_effect = UniqueEffect::FEAR_AURA; // repurpose: slows enemies (closest mechanic)
         fb_item.rarity = Rarity::LEGENDARY; fb_item.identified = true;
         fb_item.gold_value = 500;
         world.add<Item>(fbi, std::move(fb_item));
+        // Guardian: The Frost Sentinel (frozen knight)
+        Entity fbg = world.create();
+        world.add<Position>(fbg, {tx+1, ty});
+        world.add<Renderable>(fbg, {SHEET_MONSTERS, 3, 4, {140, 200, 255, 255}, 5});
+        Stats fbs; fbs.name = "The Frost Sentinel"; fbs.hp = 100; fbs.hp_max = 100;
+        fbs.set_attr(Attr::STR, 18); fbs.set_attr(Attr::DEX, 14); fbs.set_attr(Attr::CON, 20);
+        fbs.base_damage = 10; fbs.natural_armor = 5; fbs.base_speed = 90; fbs.xp_value = 180;
+        world.add<Stats>(fbg, std::move(fbs));
+        AI fba; fba.flee_threshold = 0; fba.behavior = BehaviorType::CHARGER;
+        world.add<AI>(fbg, fba);
+        world.add<Energy>(fbg, {0, 90});
+        world.add<StatusEffects>(fbg);
     }
 
     // 3. The Sunken Shrine (southern wastes, half-buried) - Plagueheart Amulet
@@ -282,13 +314,25 @@ void populate(World& world, TileMap& map, RNG& rng,
         world.add<Position>(phi, {tx+1, ty});
         world.add<Renderable>(phi, {SHEET_ITEMS, 6, 16, {180, 255, 80, 255}, 3}); // sickly green glow
         Item ph_item;
-        ph_item.name = "Plagueheart"; ph_item.description = "A gem cut from Sythara's own flesh. All your attacks deal 5 poison damage. Immune to all disease and poison.";
+        ph_item.name = "Plagueheart"; ph_item.description = "+5 poison damage on all attacks. Immune to poison and disease. +3 CON.";
         ph_item.type = ItemType::AMULET; ph_item.slot = EquipSlot::AMULET;
         ph_item.damage_bonus = 5; ph_item.con_bonus = 3;
         ph_item.unique_effect = UniqueEffect::POISON_IMMUNE;
         ph_item.rarity = Rarity::LEGENDARY; ph_item.identified = true;
         ph_item.gold_value = 500;
         world.add<Item>(phi, std::move(ph_item));
+        // Guardian: The Blighted One (plague horror)
+        Entity phg = world.create();
+        world.add<Position>(phg, {tx-1, ty});
+        world.add<Renderable>(phg, {SHEET_MONSTERS, 4, 7, {120, 200, 60, 255}, 5});
+        Stats phs; phs.name = "The Blighted One"; phs.hp = 90; phs.hp_max = 90;
+        phs.set_attr(Attr::STR, 16); phs.set_attr(Attr::DEX, 12); phs.set_attr(Attr::CON, 18);
+        phs.base_damage = 8; phs.natural_armor = 2; phs.base_speed = 100; phs.xp_value = 160;
+        world.add<Stats>(phg, std::move(phs));
+        AI pha; pha.flee_threshold = 0; pha.behavior = BehaviorType::NECROMANCER;
+        world.add<AI>(phg, pha);
+        world.add<Energy>(phg, {0, 100});
+        world.add<StatusEffects>(phg);
     }
 
     // Graveyard — north of Thornwall
@@ -298,7 +342,7 @@ void populate(World& world, TileMap& map, RNG& rng,
         if (map.in_bounds(gx, gy)) map.at(gx, gy).type = TileType::FLOOR_BONE;
     }
     place_lore(982, 695, "gravestone",
-        "Here lies the second paragon of Morreth. He did not fail. He chose to stop.");
+        "Second paragon of Morreth. Killed in battle.");
 
     // Old battlefield — on the eastern plains
     for (int i = 0; i < 12; i++) {
@@ -308,12 +352,12 @@ void populate(World& world, TileMap& map, RNG& rng,
             map.at(bx, by).type = TileType::FLOOR_BONE;
     }
     place_lore(1280, 960, "rusted helm",
-        "Hundreds died here. The grass grew back. The bones didn't leave.");
+        "Old battlefield. Bones in the grass.");
 
     // Shrine of the older gods — deep wilderness
     paint_ruin(250, 800);
     place_lore(250, 800, "ancient shrine inscription",
-        "This shrine predates the Seven. It honors something that has no name. The stone is warm.");
+        "Predates the Seven. Unknown god.");
 
     // Watchtower ruins — hilltop between Whitepeak and Frostmere
     paint_ruin(920, 420);
@@ -374,12 +418,12 @@ void populate(World& world, TileMap& map, RNG& rng,
     if (map.in_bounds(920, 850)) map.at(920, 850).type = TileType::FLOOR_STONE;
     if (map.in_bounds(919, 850)) map.at(919, 850).type = TileType::ROCK;
     place_lore(921, 851, "roadside prayer stone",
-        "Travelers leave coins here. The shrine takes them. No one knows where they go.");
+        "Coins on the ground. Offering shrine.");
 
     // Abandoned farmstead
     paint_ruin(1100, 800);
     place_lore(1100, 802, "scorched diary",
-        "Day 40. The soldiers passed through again. They took the harvest. Day 41. There is nothing left to take.");
+        "Soldiers took the harvest.");
 
     // --- Pale Reach (Soleth, y < 600, x > 900) ---
 
@@ -393,7 +437,7 @@ void populate(World& world, TileMap& map, RNG& rng,
             map.at(bx, by).type = TileType::FLOOR_BONE;
     }
     place_lore(1305, 503, "charred signpost",
-        "This was Ember's Rest. The name turned out to be prophetic.");
+        "Ember's Rest. Burned down.");
     spawn_ow_npc(654, 250, "Survivor", "Soleth's faithful burned it. Said the town was unclean. Maybe it was.", NPCRole::FARMER, 0, 5);
 
     // Signal beacon (intact)
@@ -407,7 +451,7 @@ void populate(World& world, TileMap& map, RNG& rng,
     // Abandoned forge
     paint_ruin(1500, 900);
     place_lore(1500, 900, "smith's last work",
-        "The anvil cracked under the last blow. The metal was wrong. It came from too deep.");
+        "Cracked anvil. Abandoned forge.");
     spawn_ow_npc(752, 451, "Retired Smithy", "I made weapons for thirty years. Then I made something I couldn't unmake.", NPCRole::FARMER, 4, 5);
 
     // Quarry
@@ -422,7 +466,7 @@ void populate(World& world, TileMap& map, RNG& rng,
         if (map.in_bounds(qx, qy)) map.at(qx, qy).type = TileType::FLOOR_STONE;
     }
     place_lore(1600, 800, "quarry overseer's note",
-        "Good stone here. Deep veins. But the workers hear tapping from below. Tapping that answers back.");
+        "Quarry. Workers left.");
 
     // Merchant caravan wreck
     paint_ruin(1350, 1050);
@@ -439,7 +483,7 @@ void populate(World& world, TileMap& map, RNG& rng,
             map.at(px, py).type = TileType::FLOOR_BONE;
     }
     place_lore(1000, 1200, "plague warden's marker",
-        "CONDEMNED. Do not dig. Do not camp. Do not linger. The soil itself is sick.");
+        "CONDEMNED. Soil is sick.");
 
     // Dried oasis
     for (int i = 0; i < 4; i++) {
@@ -449,13 +493,13 @@ void populate(World& world, TileMap& map, RNG& rng,
     }
     if (map.in_bounds(1150, 1250)) map.at(1150, 1250).type = TileType::FLOOR_DIRT;
     place_lore(1150, 1252, "caravan marker",
-        "Water was here. Ask old Dustfall traders. They remember the springs. The springs don't remember them.");
+        "Dried springs.");
 
     // Bleached ruins
     paint_ruin(900, 1100);
     paint_ruin(908, 1103);
     place_lore(904, 1102, "faded town charter",
-        "Township of Silt Crossing, established in the Year of the Third Reckoning. Population: 0.");
+        "Silt Crossing. Abandoned.");
     spawn_ow_npc(455, 552, "Grave Tender", "Someone has to remember the names. The sand forgets everything else.", NPCRole::FARMER, 0, 5);
 
     // --- Greenwood (Khael, x < 700) ---
@@ -468,7 +512,7 @@ void populate(World& world, TileMap& map, RNG& rng,
     }
     if (map.in_bounds(450, 900)) map.at(450, 900).type = TileType::FLOOR_GRASS;
     place_lore(450, 902, "carved trunk",
-        "Khael's first grove. The oldest tree here has no rings. It stopped counting.");
+        "Khael's first grove.");
 
     // Overgrown road
     place_lore(550, 750, "milestone",
@@ -482,13 +526,13 @@ void populate(World& world, TileMap& map, RNG& rng,
     {
         struct WanderingPriest { int x, y; GodId god; const char* name; const char* line; };
         static const WanderingPriest WANDERING_PRIESTS[] = {
-            {900, 600,  GodId::VETHRIK,   "Priest of Vethrik",   "All things end. I am here to remind you."},
-            {1200, 700, GodId::THESSARKA, "Acolyte of Thessarka","Knowledge is the only treasure worth keeping. The rest is ash."},
-            {800, 800,  GodId::YASHKHET,  "Disciple of Yashkhet","Pain is the only honest teacher. Everything else lies."},
-            {1100, 900, GodId::IXUUL,     "Apostle of Ixuul",    "Form is prison. The Formless offers liberation."},
-            {600, 900,  GodId::ZHAVEK,    "Shadow of Zhavek",    "You didn't see me. That's the point."},
-            {1300, 400, GodId::THALARA,   "Tide Priest",         "The sea remembers everything. Every ship, every shore, every drowned prayer."},
-            {750, 500,  GodId::LETHIS,    "Dreamer of Lethis",   "Sleep is the gate. What waits beyond it is older than the gods."},
+            {900, 600,  GodId::VETHRIK,   "Priest of Vethrik",   "Vethrik watches."},
+            {1200, 700, GodId::THESSARKA, "Acolyte of Thessarka","Thessarka remembers."},
+            {800, 800,  GodId::YASHKHET,  "Disciple of Yashkhet","Blood for Yashkhet."},
+            {1100, 900, GodId::IXUUL,     "Apostle of Ixuul",    "Ixuul changes everything."},
+            {600, 900,  GodId::ZHAVEK,    "Shadow of Zhavek",    "Zhavek sees you."},
+            {1300, 400, GodId::THALARA,   "Tide Priest",         "The sea takes what it wants."},
+            {750, 500,  GodId::LETHIS,    "Dreamer of Lethis",   "Lethis watches your dreams."},
         };
         for (auto& wp : WANDERING_PRIESTS) {
             spawn_ow_npc(wp.x, wp.y, wp.name, wp.line, NPCRole::PRIEST, 5, 6, 35, wp.god);
@@ -842,7 +886,7 @@ void populate(World& world, TileMap& map, RNG& rng,
         {350, 250, 5, 4, "Old Hunter",
          "There's a standing stone to the east. Don't touch it."},
         {1550, 200, 4, 4, "Cartographer",
-         "I've mapped every road. The map changes. I don't think the roads are moving."},
+         "I've mapped every road. They keep changing."},
     };
 
     for (auto& cd : CABINS) {
@@ -897,7 +941,7 @@ void populate(World& world, TileMap& map, RNG& rng,
     struct OutpostDef { int x, y; const char* dialogue; };
     static const OutpostDef OUTPOSTS[] = {
         {525, 330, "Road's clear, last I checked. That was yesterday."},
-        {425, 250, "I watch the northern pass. Nothing human comes through anymore."},
+        {425, 250, "I watch the northern pass. Quiet lately."},
         {350, 475, "The southern road gets worse every year. We need more guards."},
     };
 

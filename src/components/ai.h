@@ -34,6 +34,7 @@ struct AI {
     bool forget_player = false; // Lethis: permanently ignores player
     int ability_cooldown = 0; // cooldown for special abilities
     int regen_per_turn = 0;   // HP regen (troll)
+    int regen_msg_counter = 0; // throttle regen message
     bool friendly = false;    // summoned by player, attacks enemies instead
     Entity target = 0;
     // VFX flags (set by AI, consumed by engine each tick)

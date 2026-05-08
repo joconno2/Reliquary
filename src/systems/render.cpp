@@ -372,7 +372,7 @@ void draw_map(SDL_Renderer* renderer, const SpriteManager& sprites,
 
 void draw_entities(SDL_Renderer* renderer, const SpriteManager& sprites,
                    World& world, const TileMap& map, const Camera& cam,
-                   int y_offset) {
+                   int y_offset, Entity marked_entity) {
     int TS = cam.tile_size;
 
     struct DrawCmd {
@@ -383,6 +383,7 @@ void draw_entities(SDL_Renderer* renderer, const SpriteManager& sprites,
         bool flip_h;
         bool has_status;
         StatusType status;
+        bool marked;
     };
     std::vector<DrawCmd> cmds;
 
@@ -425,7 +426,8 @@ void draw_entities(SDL_Renderer* renderer, const SpriteManager& sprites,
         }
 
         cmds.push_back({rend.z_order, rend.sprite_sheet, rend.sprite_x, rend.sprite_y,
-                         screen_x, screen_y, tint, rend.flip_h, has_status, primary_status});
+                         screen_x, screen_y, tint, rend.flip_h, has_status, primary_status,
+                         e == marked_entity});
     }
 
     std::sort(cmds.begin(), cmds.end(),
@@ -462,6 +464,29 @@ void draw_entities(SDL_Renderer* renderer, const SpriteManager& sprites,
 
         sprites.draw_sprite_sized(renderer, cmd.sheet, sx, sy,
                                    cmd.dx, cmd.dy, TS, cmd.tint, cmd.flip_h);
+
+        // Ranger mark: target icon above creature (pulsing green diamond)
+        if (cmd.marked) {
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+            int mx = cmd.dx + TS / 2;
+            int my = cmd.dy - 4; // above the sprite
+            float pulse = 0.7f + 0.3f * sinf(ticks * 0.006f);
+            Uint8 alpha = static_cast<Uint8>(200 * pulse);
+            int sz = 5;
+            // Diamond shape
+            SDL_SetRenderDrawColor(renderer, 80, 255, 80, alpha);
+            for (int dy = -sz; dy <= sz; dy++) {
+                int hw = sz - std::abs(dy);
+                SDL_Rect row = {mx - hw, my + dy, hw * 2 + 1, 1};
+                SDL_RenderFillRect(renderer, &row);
+            }
+            // Crosshair lines extending from diamond
+            SDL_SetRenderDrawColor(renderer, 80, 255, 80, static_cast<Uint8>(alpha / 2));
+            SDL_RenderDrawLine(renderer, mx - sz - 3, my, mx - sz - 1, my);
+            SDL_RenderDrawLine(renderer, mx + sz + 1, my, mx + sz + 3, my);
+            SDL_RenderDrawLine(renderer, mx, my - sz - 3, mx, my - sz - 1);
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+        }
 
         // Animated status icon overlay (top-right corner of tile)
         if (cmd.has_status) {

@@ -4,6 +4,7 @@
 #include "components/stats.h"
 #include <cstdio>
 #include <algorithm>
+#include <vector>
 
 SpellAction SpellScreen::handle_input(SDL_Event& event) {
     if (!open_) return SpellAction::NONE;
@@ -85,9 +86,17 @@ SpellAction SpellScreen::handle_input(SDL_Event& event) {
 SpellId SpellScreen::get_selected_spell(World& world) const {
     if (!world.has<Spellbook>(player_)) return SpellId::COUNT;
     auto& book = world.get<Spellbook>(player_);
-    if (selected_ < 0 || selected_ >= static_cast<int>(book.known_spells.size()))
+    int count = static_cast<int>(book.known_spells.size());
+    if (selected_ < 0 || selected_ >= count)
         return SpellId::COUNT;
-    return book.known_spells[selected_];
+    // Build same sorted index as render
+    std::vector<int> sorted_idx(count);
+    for (int i = 0; i < count; i++) sorted_idx[i] = i;
+    std::sort(sorted_idx.begin(), sorted_idx.end(), [&](int a, int b) {
+        return static_cast<int>(get_spell_info(book.known_spells[a]).school)
+             < static_cast<int>(get_spell_info(book.known_spells[b]).school);
+    });
+    return book.known_spells[sorted_idx[selected_]];
 }
 
 void SpellScreen::render(SDL_Renderer* renderer, TTF_Font* font,
@@ -133,82 +142,141 @@ void SpellScreen::render(SDL_Renderer* renderer, TTF_Font* font,
         ui::draw_text_in(renderer, font, "You know no spells.", dim_col, empty_row, ui::Align::LEFT);
     }
 
+    // Sort spells by school for display (build sorted index)
+    std::vector<int> sorted_idx(count);
+    for (int i = 0; i < count; i++) sorted_idx[i] = i;
+    std::sort(sorted_idx.begin(), sorted_idx.end(), [&](int a, int b) {
+        auto sa = static_cast<int>(get_spell_info(book.known_spells[a]).school);
+        auto sb = static_cast<int>(get_spell_info(book.known_spells[b]).school);
+        return sa < sb;
+    });
+
+    // Map selection to sorted order
     int sel = selected_;
     if (sel >= count && count > 0) sel = count - 1;
 
-    // Reserve bottom space: description area (4 lines) + hint row
-    int desc_reserve = line_h * 4 + panel.gap * 2 + line_h + panel.pad;
+    // Reserve bottom space
     auto hint_row = panel.row_bottom(line_h);
-    panel.skip(0); // no-op, just for clarity
-    // Reserve description area from bottom
     int desc_area_h = line_h * 4 + panel.gap * 2;
     auto desc_area = panel.row_bottom(desc_area_h);
 
-    // Remaining space is the spell list
-    int list_h = panel.remaining_h();
-    int row_h = line_h + 2;
-    int visible_spells = list_h / row_h;
-    if (visible_spells < 1) visible_spells = 1;
+    // School colors
+    static const SDL_Color SCHOOL_COLORS[] = {
+        {255, 160, 80, 255},  // Conjuration (orange)
+        {200, 180, 120, 255}, // Transmutation (gold)
+        {140, 170, 255, 255}, // Divination (blue)
+        {120, 240, 140, 255}, // Healing (green)
+        {100, 200, 80, 255},  // Nature (forest green)
+        {200, 100, 220, 255}, // Dark Arts (purple)
+    };
+    static const char* SCHOOL_HEADERS[] = {
+        "-- Conjuration --", "-- Transmutation --", "-- Divination --",
+        "-- Healing --", "-- Nature --", "-- Dark Arts --"
+    };
 
-    // Scroll offset
-    int scroll = 0;
-    if (count > visible_spells) {
-        scroll = sel - visible_spells / 2;
-        if (scroll < 0) scroll = 0;
-        if (scroll > count - visible_spells) scroll = count - visible_spells;
+    // Clip rect for spell list
+    SDL_Rect list_clip = {panel.cursor.x, panel.cursor.y,
+                          panel.cursor.w, panel.remaining_h()};
+    SDL_RenderSetClipRect(renderer, &list_clip);
+
+    int row_h = line_h + 2;
+    int header_h = line_h + 6;
+
+    // Count total visual rows (spells + school headers)
+    int total_rows = count;
+    { int last_school = -1;
+      for (int i = 0; i < count; i++) {
+          int si = static_cast<int>(get_spell_info(book.known_spells[sorted_idx[i]]).school);
+          if (si != last_school) { total_rows++; last_school = si; }
+      }
     }
+
+    int visible = panel.remaining_h() / row_h;
+    if (visible < 1) visible = 1;
+
+    // Scroll offset based on selected spell position
+    int sel_visual_row = 0;
+    { int last_school = -1;
+      for (int i = 0; i < count; i++) {
+          int si = static_cast<int>(get_spell_info(book.known_spells[sorted_idx[i]]).school);
+          if (si != last_school) { sel_visual_row++; last_school = si; }
+          if (i == sel) break;
+          sel_visual_row++;
+      }
+    }
+    int scroll = std::max(0, sel_visual_row - visible / 2);
+    if (scroll > total_rows - visible) scroll = std::max(0, total_rows - visible);
 
     spell_rects_.clear();
-    for (int i = scroll; i < count && i < scroll + visible_spells; i++) {
-        auto& info = get_spell_info(book.known_spells[i]);
+    int visual_row = 0;
+    int last_school = -1;
+    for (int i = 0; i < count; i++) {
+        auto& info = get_spell_info(book.known_spells[sorted_idx[i]]);
+        int si = static_cast<int>(info.school);
+
+        // School header
+        if (si != last_school) {
+            last_school = si;
+            if (visual_row >= scroll && visual_row < scroll + visible && panel.fits(header_h)) {
+                auto hdr_row = panel.row(header_h);
+                SDL_Color hdr_col = (si >= 0 && si < 6) ? SCHOOL_COLORS[si] : dim_col;
+                hdr_col.a = 180;
+                ui::draw_text_in(renderer, font,
+                    (si >= 0 && si < 6) ? SCHOOL_HEADERS[si] : "-- Unknown --",
+                    hdr_col, hdr_row, ui::Align::LEFT);
+            }
+            visual_row++;
+        }
+
         bool is_sel = (i == sel);
 
-        auto spell_row = panel.row(row_h);
-        spell_rects_.push_back(spell_row.sdl());
+        if (visual_row >= scroll && visual_row < scroll + visible && panel.fits(row_h)) {
+            auto spell_row = panel.row(row_h);
+            spell_rects_.push_back(spell_row.sdl());
 
-        if (is_sel) {
-            ui::Rect hl = spell_row.inset(panel.gap / 2, 0);
-            SDL_Rect hl_sdl = hl.sdl();
-            SDL_SetRenderDrawColor(renderer, 30, 25, 45, 255);
-            SDL_RenderFillRect(renderer, &hl_sdl);
+            if (is_sel) {
+                SDL_Rect hl = spell_row.inset(panel.gap / 2, 0).sdl();
+                SDL_SetRenderDrawColor(renderer, 30, 25, 45, 255);
+                SDL_RenderFillRect(renderer, &hl);
+            }
+
+            // Spell name with school-tinted color
+            char buf[128];
+            snprintf(buf, sizeof(buf), "%s", info.name);
+            int name_max = spell_row.w - 80;
+            ui::Rect name_area = {spell_row.x, spell_row.y, name_max, spell_row.h};
+
+            bool can_afford = true;
+            if (world.has<Stats>(player_))
+                can_afford = world.get<Stats>(player_).mp >= info.mp_cost;
+
+            SDL_Color name_col;
+            if (is_sel) name_col = sel_col;
+            else if (!can_afford) name_col = dim_col;
+            else if (si >= 0 && si < 6) name_col = SCHOOL_COLORS[si];
+            else name_col = normal_col;
+
+            ui::draw_text_clipped(renderer, font, buf, name_col,
+                                   name_area.x, name_area.y, name_max);
+
+            // MP cost right-aligned
+            char cost[16];
+            snprintf(cost, sizeof(cost), "%dmp", info.mp_cost);
+            SDL_Color mp_col = can_afford ? cost_col : dim_col;
+            ui::Rect cost_area = {spell_row.x2() - 55, spell_row.y, 55, spell_row.h};
+            ui::draw_text_in(renderer, font, cost, mp_col, cost_area, ui::Align::RIGHT);
+        } else if (visual_row >= scroll && visual_row < scroll + visible) {
+            // Off-screen but in range: push dummy rect for click tracking
+            spell_rects_.push_back({0, 0, 0, 0});
         }
-
-        char letter = 'a' + static_cast<char>(i);
-        char buf[128];
-        snprintf(buf, sizeof(buf), "%c) %s", letter, info.name);
-
-        // Name column: clip to leave room for school + cost
-        int name_max = spell_row.w - 140;
-        ui::Rect name_area = {spell_row.x, spell_row.y, name_max, spell_row.h};
-        SDL_Rect name_clip = name_area.sdl();
-        SDL_RenderSetClipRect(renderer, &name_clip);
-        // Gray out if can't afford
-        bool can_afford = true;
-        if (world.has<Stats>(player_)) {
-            can_afford = world.get<Stats>(player_).mp >= info.mp_cost;
-        }
-        SDL_Color name_col = is_sel ? sel_col : (can_afford ? normal_col : dim_col);
-        ui::draw_text_in(renderer, font, buf, name_col, name_area, ui::Align::LEFT);
-        SDL_RenderSetClipRect(renderer, nullptr);
-
-        // School tag in fixed right column
-        static const char* SCHOOL_NAMES[] = {"CONJ", "TRAN", "DIV", "HEAL", "NAT", "DARK"};
-        int si = static_cast<int>(info.school);
-        if (si >= 0 && si < 6) {
-            ui::Rect school_area = {spell_row.x2() - 115, spell_row.y, 60, spell_row.h};
-            ui::draw_text_in(renderer, font, SCHOOL_NAMES[si], dim_col, school_area, ui::Align::LEFT);
-        }
-
-        // MP cost in rightmost column
-        char cost[16];
-        snprintf(cost, sizeof(cost), "%dmp", info.mp_cost);
-        ui::Rect cost_area = {spell_row.x2() - 55, spell_row.y, 55, spell_row.h};
-        ui::draw_text_in(renderer, font, cost, cost_col, cost_area, ui::Align::LEFT);
+        visual_row++;
     }
+
+    SDL_RenderSetClipRect(renderer, nullptr);
 
     // Spell description for selected spell
     if (sel >= 0 && sel < count) {
-        auto& info = get_spell_info(book.known_spells[sel]);
+        auto& info = get_spell_info(book.known_spells[sorted_idx[sel]]);
         auto desc_layout = ui::Layout::from_rect(desc_area, line_h);
 
         // Divider line

@@ -49,76 +49,74 @@ inline const QuestInfo& get_quest_info(QuestId id) {
     static const QuestInfo QUESTS[] = {
         // MQ_01_BARROW_WIGHT
         {"The Barrow Wight",
-         "The brand on your face burns when you face east. Something in the Barrow "
-         "woke the same night you appeared. The elder says a wight walks there.",
+         "The Barrow is east of Thornwall. "
+         "A wight has been seen there.",
          "Enter The Barrow east of Thornwall. Kill the wight on floor 3.",
-         "The wight crumbles. Your brand flares. Find Scholar Aldric in Thornwall. He studies the old texts.",
+         "Wight killed. Scholar Aldric in Thornwall may know about the brand.",
          true, 50, 30},
 
         // MQ_02_SCHOLAR_CLUE
         {"What Stirs Below",
-         "When the wight died, your brand pulsed. Scholar Aldric in Thornwall "
-         "studies old texts. He may know what the brand means.",
+         "Scholar Aldric in Thornwall "
+         "studies old texts. He might know about the brand.",
          "Speak to Scholar Aldric in Thornwall.",
-         "Aldric went pale. 'The Reliquary. Three fragments, scattered in the deep places. "
-         "Find them or the brand will consume you.'",
+         "Three fragments in three dungeons. Find them to open the Sepulchre.",
          true, 60, 0},
 
         // MQ_03_FIRST_FRAGMENT
         {"The First Fragment",
-         "The first fragment lies in Stonekeep to the northeast. Your brand aches "
-         "as you face that direction. The walls are groaning.",
+         "The first fragment is in Stonekeep to the northeast. "
+         "The dungeon is active.",
          "Descend Stonekeep. Find the first fragment on the bottom floor.",
-         "The fragment fused to your hand, then released. You can feel the others.",
+         "First fragment found.",
          true, 120, 50},
 
         // MQ_04_SAGE_COUNSEL
         {"The Sage's Warning",
-         "One fragment found. Sage Yeva in Frostmere to the north studies things "
-         "older than the gods. She may know what the fragments do when assembled.",
+         "Sage Yeva in Frostmere to the north knows "
+         "about the Reliquary.",
          "Travel north to Frostmere. Speak to Sage Yeva.",
-         "'Vehlkyr assembled it once. It killed him. The second fragment is in the "
-         "Catacombs near Millhaven. The third burns in the Molten Depths.'",
+         "Second fragment in the Catacombs. Third in the Molten Depths.",
          true, 140, 30},
 
         // MQ_05_SECOND_FRAGMENT
         {"The Second Fragment",
-         "The Catacombs near Millhaven. Your brand burns brighter with each fragment. "
-         "Something dead guards this one.",
+         "The Catacombs are near Millhaven. "
+         "Undead in the Catacombs.",
          "Descend The Catacombs. Find the second fragment.",
-         "Two of three. The fragments resonate. Your brand is changing.",
+         "Second fragment found.",
          true, 200, 60},
 
         // MQ_06_THIRD_FRAGMENT
         {"The Third Fragment",
-         "The Molten Depths beneath Ironhearth. Volcanic tunnels. "
-         "Your brand glows hot enough to see by.",
+         "The Molten Depths are beneath Ironhearth. "
+         "The Molten Depths beneath Ironhearth.",
          "Enter The Molten Depths. Find the third fragment.",
-         "Three fragments. The Reliquary is whole. You feel it assembling inside you.",
+         "Third fragment found. All three assembled.",
          true, 280, 80},
 
         // MQ_07_BREAK_SEAL
         {"The Final Seal",
-         "The Sepulchre is sealed beneath Hollowgate in the deep Greenwood. "
-         "The assembled fragments will break it. Your brand is screaming.",
+         "The Sepulchre is sealed at Hollowgate in the Greenwood. "
+         "Use the fragments to break the seal.",
          "Travel to Hollowgate. Break the seal.",
-         "The seal shattered. The descent is open.",
+         "Seal broken. The Sepulchre is open.",
          true, 360, 0},
 
         // MQ_08_ENTER_SEPULCHRE
         {"The Sepulchre",
-         "The oldest place in the world. Everything has led here. "
-         "Your brand is a beacon now.",
+         "The final dungeon. "
+         "The Sepulchre is ahead.",
          "Enter The Sepulchre.",
-         "The air is wrong. Each floor is older than the last.",
+         "The Sepulchre.",
          true, 400, 0},
 
         // MQ_09_CLAIM_RELIQUARY
         {"The Reliquary",
-         "You see it. Not light. Not dark. Something from before the distinction. "
-         "Your brand is burning. Your god is screaming. This is what you were made for.",
+         "The Reliquary is on the bottom floor. "
+         "Get past the Keeper.",
          "Claim the Reliquary on the bottom floor.",
-         "You hold it. For a moment, you understand everything. Then you forget.",
+         "The Reliquary claimed.",
          true, 500, 0},
 
         // SQ_RAT_CELLAR
@@ -126,7 +124,7 @@ inline const QuestInfo& get_quest_info(QuestId id) {
          "The shopkeeper complains about rats in the cellar beneath the shop. "
          "Probably nothing dangerous.",
          "Kill 5 rats in the first dungeon level.",
-         "The rats are dealt with. The shopkeeper is grateful.",
+         "Rats cleared.",
          false, 20, 15},
 
         // SQ_LOST_AMULET
@@ -134,7 +132,7 @@ inline const QuestInfo& get_quest_info(QuestId id) {
          "A farmer lost a family amulet somewhere in the Warrens. "
          "She'd like it back, if you happen to find it.",
          "Find the lost amulet in the Warrens.",
-         "The farmer clutches the amulet. It's worthless, but she weeps anyway.",
+         "Amulet returned.",
          false, 25, 10},
 
         // SQ_UNDEAD_PATROL
@@ -142,7 +140,7 @@ inline const QuestInfo& get_quest_info(QuestId id) {
          "The guard captain wants the undead numbers thinned in the Catacombs. "
          "Ten should make a difference. Maybe.",
          "Destroy 10 undead in the Catacombs.",
-         "Ten fewer dead things walking. The captain nods.",
+         "Undead cleared.",
          false, 40, 25},
 
         // SQ_KILL_BEAR
@@ -150,7 +148,7 @@ inline const QuestInfo& get_quest_info(QuestId id) {
          "A dangerous bear has been killing livestock east of Thornwall. "
          "The guard wants it dealt with before someone gets hurt.",
          "Kill the bear east of Thornwall.",
-         "The bear is dead. The livestock are safe. For now.",
+         "Bear killed.",
          false, 35, 20},
 
         // SQ_DELIVER_WEAPON
@@ -158,7 +156,7 @@ inline const QuestInfo& get_quest_info(QuestId id) {
          "The blacksmith has forged a sword for the guard captain in Greywatch. "
          "He needs someone to deliver it.",
          "Deliver the sword to the guard captain in Greywatch.",
-         "The captain tests the blade and nods. Fine work.",
+         "Sword delivered.",
          false, 30, 25},
 
         // SQ_HERB_GATHERING
@@ -166,15 +164,15 @@ inline const QuestInfo& get_quest_info(QuestId id) {
          "The herbalist needs rare herbs that grow in the wilderness. "
          "Three bundles should be enough for a season's remedies.",
          "Gather 3 herb bundles from the wilderness.",
-         "The herbalist smells each bundle carefully. These will do.",
+         "Herbs delivered.",
          false, 30, 15},
 
         // SQ_MISSING_PERSON
         {"The Farmer's Son",
          "A farmer's son went into the Warrens looking for adventure. "
-         "He hasn't come back. The farmer fears the worst.",
+         "He hasn't come back.",
          "Find the farmer's son in the Warrens.",
-         "The boy is shaken but alive. His father weeps with relief.",
+         "Son found.",
          false, 50, 30},
     };
     return QUESTS[static_cast<int>(id)];

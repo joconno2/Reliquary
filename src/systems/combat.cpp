@@ -174,6 +174,14 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
         def_dodge = 0; // no dodging
     }
 
+    // Weapon material (needed for hit check and damage)
+    MaterialType wpn_mat = MaterialType::NONE;
+    if (world.has<Inventory>(attacker)) {
+        Entity wpn = world.get<Inventory>(attacker).get_equipped(EquipSlot::MAIN_HAND);
+        if (wpn != NULL_ENTITY && world.has<Item>(wpn))
+            wpn_mat = world.get<Item>(wpn).material;
+    }
+
     // Attack roll
     int raw_roll = rng.range(1, 20);
     int attack_roll = raw_roll + atk_melee + atk_eq_atk;
@@ -231,7 +239,8 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
             log.add(rbuf, {220, 200, 140, 255});
             if (atk.hp <= 0) result.attacker_killed = true;
         }
-    } else if (death_marked || (!tree_dodged && (attack_roll >= defense_roll || natural_20))) {
+    } else if (death_marked || wpn_mat == MaterialType::MITHRIL
+               || (!tree_dodged && (attack_roll >= defense_roll || natural_20))) {
         result.hit = true;
 
         // Wraith: immune to non-silver/non-magical weapons
@@ -326,6 +335,16 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
             dmg = dmg * (100 + atk_tree.low_hp_dmg_bonus) / 100;
         }
 
+        // Material bonuses (wpn_mat already resolved above)
+        // Silver: +50% vs undead
+        if (wpn_mat == MaterialType::SILVER && is_undead(def.name.c_str()))
+            dmg = dmg * 3 / 2;
+        // Obsidian: crits deal 3x instead of 2x (retroactively boost if we crit'd)
+        if (wpn_mat == MaterialType::OBSIDIAN && result.critical && !death_marked)
+            dmg = dmg * 3 / 2; // already 2x from crit, this makes it 3x total
+        // Adamantine: ignore target armor (applied later by zeroing armor reduction)
+        bool adamantine_ignore_armor = (wpn_mat == MaterialType::ADAMANTINE);
+
         // Unique item effects: damage modifiers
         if (world.has<Player>(attacker)) {
             UniqueEffect wpn_ue = get_weapon_unique(world, attacker);
@@ -351,7 +370,8 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
             }
         }
 
-        dmg -= (def.protection() + def_eq_arm + def_tree.armor + def_armor_bonus);
+        if (!adamantine_ignore_armor)
+            dmg -= (def.protection() + def_eq_arm + def_tree.armor + def_armor_bonus);
         if (dmg < 1) dmg = 1;
 
         // Unbreakable capstone: halve all incoming damage
@@ -658,14 +678,14 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
             world.has<Stats>(attacker)) {
             int steal = std::max(1, result.damage / 5);
             auto& as2 = world.get<Stats>(attacker);
-            as2.hp = std::min(as2.hp + steal, as2.hp_max);
+            int old = as2.hp; as2.hp = std::min(as2.hp + steal, as2.hp_max); if (as2.hp > old) { char lb[32]; snprintf(lb, sizeof(lb), "+%d HP (lifesteal)", as2.hp - old); log.add(lb, {200, 100, 100, 255}); }
         }
 
         // Freeze on hit (Thalara champion): apply FROZEN 1 turn
         if (result.hit && def.hp > 0 && world.has<Player>(attacker) &&
             has_unique_effect(world, attacker, UniqueEffect::FREEZE_ON_HIT) &&
             world.has<StatusEffects>(defender)) {
-            world.get<StatusEffects>(defender).add(StatusType::FROZEN, 0, 1);
+            world.get<StatusEffects>(defender).add(StatusType::FROZEN, 0, 1); if (world.has<Player>(attacker)) log.add("Frozen!", {140, 200, 255, 255});
         }
 
         // Poison + bleed on hit (Sythara champion): apply both
@@ -673,14 +693,14 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
             has_unique_effect(world, attacker, UniqueEffect::POISON_BLEED_HIT) &&
             world.has<StatusEffects>(defender)) {
             world.get<StatusEffects>(defender).add(StatusType::POISON, 2, 3);
-            world.get<StatusEffects>(defender).add(StatusType::BLEED, 1, 3);
+            world.get<StatusEffects>(defender).add(StatusType::BLEED, 1, 3); if (world.has<Player>(attacker)) log.add("Poison + Bleed!", {140, 180, 80, 255});
         }
 
         // Fire damage bonus (Soleth champion): +5 fire on all melee hits
         if (result.hit && def.hp > 0 && world.has<Player>(attacker) &&
             has_unique_effect(world, attacker, UniqueEffect::FIRE_DAMAGE_BONUS)) {
             def.hp -= 5;
-            result.damage += 5;
+            result.damage += 5; if (world.has<Player>(attacker)) log.add("+5 fire", {255, 160, 60, 255});
             if (world.has<StatusEffects>(defender))
                 world.get<StatusEffects>(defender).add(StatusType::BURN, 2, 2);
         }
@@ -691,7 +711,7 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
             world.has<Stats>(attacker)) {
             auto& as2 = world.get<Stats>(attacker);
             int heal = std::max(1, as2.hp_max / 10);
-            as2.hp = std::min(as2.hp + heal, as2.hp_max);
+            int old = as2.hp; as2.hp = std::min(as2.hp + heal, as2.hp_max); if (as2.hp > old) { char hb[32]; snprintf(hb, sizeof(hb), "+%d HP (kill)", as2.hp - old); log.add(hb, {120, 220, 120, 255}); }
         }
 
         // Kill invisibility (Zhavek champion): 2 turns invisible after kill
@@ -720,17 +740,27 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
                 rng.range(1, 100) <= atk_tree.on_hit_bleed_chance &&
                 world.has<StatusEffects>(defender)) {
                 world.get<StatusEffects>(defender).add(StatusType::BLEED, 1, 5);
+                if (world.has<Player>(attacker))
+                    log.add("Bleed!", {200, 80, 80, 255});
             }
             if (atk_tree.on_hit_poison_chance > 0 &&
                 rng.range(1, 100) <= atk_tree.on_hit_poison_chance &&
                 world.has<StatusEffects>(defender)) {
                 world.get<StatusEffects>(defender).add(StatusType::POISON, 2, 4);
+                if (world.has<Player>(attacker))
+                    log.add("Poison!", {100, 200, 80, 255});
             }
             // Vampiric Pact: heal from damage dealt
             if (atk_tree.vampiric_pact && world.has<Stats>(attacker)) {
                 auto& atk_s = world.get<Stats>(attacker);
-                int heal = dmg / 3; // heal 33% of damage dealt
-                if (heal > 0) atk_s.hp = std::min(atk_s.hp + heal, atk_s.hp_max);
+                int heal = dmg / 3;
+                if (heal > 0) {
+                    atk_s.hp = std::min(atk_s.hp + heal, atk_s.hp_max);
+                    if (world.has<Player>(attacker)) {
+                        char vb[32]; snprintf(vb, sizeof(vb), "+%d HP (drain)", heal);
+                        log.add(vb, {200, 80, 80, 255});
+                    }
+                }
             }
 
             // Affix on-hit procs (from equipped weapon)
@@ -870,7 +900,13 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
                     auto& atk_s = world.get<Stats>(attacker);
                     int heal = atk_s.hp_max * atk_tree.on_kill_heal_pct / 100;
                     if (heal > 0) {
+                        int old_hp = atk_s.hp;
                         atk_s.hp = std::min(atk_s.hp + heal, atk_s.hp_max);
+                        int actual = atk_s.hp - old_hp;
+                        if (actual > 0) {
+                            char hb[32]; snprintf(hb, sizeof(hb), "+%d HP (kill)", actual);
+                            log.add(hb, {120, 220, 120, 255});
+                        }
                     }
                 }
                 // Tree: Mana Siphon (restore MP on kill)
@@ -879,7 +915,13 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
                     auto& atk_s = world.get<Stats>(attacker);
                     int mp_restore = atk_s.mp_max * atk_tree.mana_siphon_pct / 100;
                     if (mp_restore > 0) {
+                        int old_mp = atk_s.mp;
                         atk_s.mp = std::min(atk_s.mp + mp_restore, atk_s.mp_max);
+                        int actual = atk_s.mp - old_mp;
+                        if (actual > 0) {
+                            char mb[32]; snprintf(mb, sizeof(mb), "+%d MP (siphon)", actual);
+                            log.add(mb, {120, 140, 220, 255});
+                        }
                     }
                 }
 
@@ -1187,7 +1229,7 @@ AttackResult ranged_attack(World& world, Entity attacker, Entity defender,
             if (world.has<StatusEffects>(defender)) {
                 int status_roll = rng.range(0, 2);
                 if (status_roll == 0) world.get<StatusEffects>(defender).add(StatusType::BURN, 1, 2);
-                else if (status_roll == 1) world.get<StatusEffects>(defender).add(StatusType::FROZEN, 0, 1);
+                else if (status_roll == 1) world.get<StatusEffects>(defender).add(StatusType::FROZEN, 0, 1); if (world.has<Player>(attacker)) log.add("Frozen!", {140, 200, 255, 255});
                 else world.get<StatusEffects>(defender).add(StatusType::POISON, 1, 3);
             }
         }

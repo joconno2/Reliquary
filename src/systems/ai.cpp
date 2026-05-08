@@ -341,6 +341,20 @@ void process(World& world, TileMap& map, Entity player, RNG& rng,
                 auto& mstats = world.get<Stats>(e);
                 if (mstats.hp < mstats.hp_max) {
                     mstats.hp = std::min(mstats.hp + ai_comp.regen_per_turn, mstats.hp_max);
+                    // Show regen message every 3rd heal (visible enemies only)
+                    if (world.has<Position>(e)) {
+                        auto& mpos = world.get<Position>(e);
+                        if (map.in_bounds(mpos.x, mpos.y) && map.at(mpos.x, mpos.y).visible
+                            && mstats.hp < mstats.hp_max) {
+                            ai_comp.regen_msg_counter++;
+                            if (ai_comp.regen_msg_counter >= 3) {
+                                ai_comp.regen_msg_counter = 0;
+                                char rbuf[64];
+                                snprintf(rbuf, sizeof(rbuf), "The %s regenerates.", mstats.name.c_str());
+                                log.add(rbuf, {120, 200, 120, 255});
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -385,14 +399,14 @@ void process(World& world, TileMap& map, Entity player, RNG& rng,
                             int drain = ai_comp.ranged_damage > 0 ? ai_comp.ranged_damage : 8;
                             ps.hp -= drain;
                             ls.hp = std::min(ls.hp + drain / 2, ls.hp_max);
-                            ai_comp.ability_cooldown = 3;
+                            ai_comp.ability_cooldown = 2;
                             ai_comp.last_spell = AI::SpellVFX::DRAIN;
                             char db[64]; snprintf(db, sizeof(db), "The %s drains your life! (%d)", ls.name.c_str(), drain);
                             log.add(db, {200, 100, 255, 255});
                             break;
                         }
                         // Summon skeleton if no ability used and cooldown ready
-                        if (can_see && dist <= 8 && ai_comp.ability_cooldown == 0 && rng.chance(25)) {
+                        if (can_see && dist <= 8 && ai_comp.ability_cooldown == 0 && rng.chance(35)) {
                             // Find empty adjacent tile to spawn a skeleton
                             static const int DX[] = {-1, 0, 1, -1, 1, -1, 0, 1};
                             static const int DY[] = {-1, -1, -1, 0, 0, 1, 1, 1};
@@ -426,31 +440,40 @@ void process(World& world, TileMap& map, Entity player, RNG& rng,
                     }
 
                     case BehaviorType::CHARGER:
-                        // Charge when 2-4 tiles away in a cardinal line
+                        // Charge when 2-4 tiles away (any direction, not just cardinal)
                         if (can_see && ai_comp.ability_cooldown == 0 && dist >= 2 && dist <= 4) {
                             int cdx = player_pos.x - pos.x;
                             int cdy = player_pos.y - pos.y;
-                            bool in_line = (cdx == 0 || cdy == 0);
-                            if (in_line) {
-                                int sdx = (cdx > 0) ? 1 : (cdx < 0) ? -1 : 0;
-                                int sdy = (cdy > 0) ? 1 : (cdy < 0) ? -1 : 0;
-                                // Move up to (dist-1) tiles toward player
-                                for (int step = 0; step < dist - 1; step++) {
-                                    int nx = pos.x + sdx;
-                                    int ny = pos.y + sdy;
-                                    if (map.is_walkable(nx, ny) && !tile_blocked_by_entity(world, nx, ny, e)) {
-                                        pos.x = nx;
-                                        pos.y = ny;
-                                    } else break;
-                                }
-                                // Stun player if adjacent after charge
-                                if (distance(pos.x, pos.y, player_pos.x, player_pos.y) <= 1
-                                    && world.has<StatusEffects>(player)) {
-                                    world.get<StatusEffects>(player).add(StatusType::STUNNED, 0, 1);
-                                }
-                                ai_comp.ability_cooldown = 6;
-                                break;
+                            // Normalize to step direction
+                            int sdx = (cdx > 0) ? 1 : (cdx < 0) ? -1 : 0;
+                            int sdy = (cdy > 0) ? 1 : (cdy < 0) ? -1 : 0;
+                            // Rush toward player (move up to dist-1 tiles)
+                            int steps_taken = 0;
+                            for (int step = 0; step < dist - 1; step++) {
+                                int nx = pos.x + sdx;
+                                int ny = pos.y + sdy;
+                                if (map.is_walkable(nx, ny) && !tile_blocked_by_entity(world, nx, ny, e)) {
+                                    pos.x = nx;
+                                    pos.y = ny;
+                                    steps_taken++;
+                                } else break;
                             }
+                            // Impact: stun + bonus damage if reached player
+                            if (steps_taken > 0 && distance(pos.x, pos.y, player_pos.x, player_pos.y) <= 1) {
+                                if (world.has<StatusEffects>(player))
+                                    world.get<StatusEffects>(player).add(StatusType::STUNNED, 0, 2);
+                                // Charge impact damage
+                                if (world.has<Stats>(player)) {
+                                    int charge_dmg = 4 + steps_taken * 2;
+                                    world.get<Stats>(player).hp -= charge_dmg;
+                                    char cbuf[64];
+                                    snprintf(cbuf, sizeof(cbuf), "%s slams into you! (%d)",
+                                             world.get<Stats>(e).name.c_str(), charge_dmg);
+                                    log.add(cbuf, {255, 140, 60, 255});
+                                }
+                            }
+                            ai_comp.ability_cooldown = 5;
+                            break;
                         }
                         move_toward(world, map, e, tx, ty, rng);
                         break;
@@ -478,10 +501,10 @@ void process(World& world, TileMap& map, Entity player, RNG& rng,
                         break;
 
                     case BehaviorType::PACK: {
-                        // Prefer flanking: move to tile opposite another pack member
-                        bool flanked = false;
-                        if (can_see && dist <= 2) {
-                            // Find another pack member near the player
+                        // Pack tactics: count adjacent pack members near player
+                        // If 2+ wolves adjacent to player, they get a damage bonus
+                        if (can_see && dist <= 1 && world.has<Stats>(e)) {
+                            int pack_count = 0;
                             auto& all_ai = world.pool<AI>();
                             for (size_t j = 0; j < all_ai.size(); j++) {
                                 Entity ally = all_ai.entity_at(j);
@@ -489,20 +512,27 @@ void process(World& world, TileMap& map, Entity player, RNG& rng,
                                 if (all_ai.at_index(j).behavior != BehaviorType::PACK) continue;
                                 if (!world.has<Position>(ally)) continue;
                                 auto& apos = world.get<Position>(ally);
-                                if (distance(apos.x, apos.y, player_pos.x, player_pos.y) <= 1) {
-                                    // Try to move to opposite side of player
-                                    int fx = player_pos.x - (apos.x - player_pos.x);
-                                    int fy = player_pos.y - (apos.y - player_pos.y);
-                                    if (map.is_walkable(fx, fy) && !tile_blocked_by_entity(world, fx, fy, e)) {
-                                        int old_x = pos.x;
-                                        move_toward(world, map, e, fx, fy, rng);
-                                        flanked = true;
-                                        break;
-                                    }
+                                if (distance(apos.x, apos.y, player_pos.x, player_pos.y) <= 1)
+                                    pack_count++;
+                            }
+                            if (pack_count >= 1 && ai_comp.ability_cooldown == 0) {
+                                // Pack attack: bonus damage when flanking
+                                int bonus = 3 + pack_count * 2;
+                                if (world.has<Stats>(player)) {
+                                    world.get<Stats>(player).hp -= bonus;
+                                    auto& ms = world.get<Stats>(e);
+                                    char pb[64];
+                                    snprintf(pb, sizeof(pb), "The %s%s tear at you! (%d)",
+                                             ms.name.c_str(), pack_count > 1 ? "s" : " pack",
+                                             bonus);
+                                    log.add(pb, {255, 140, 80, 255});
                                 }
+                                ai_comp.ability_cooldown = 3;
+                                break;
                             }
                         }
-                        if (!flanked) move_toward(world, map, e, tx, ty, rng);
+                        // Otherwise, move toward player aggressively
+                        move_toward(world, map, e, tx, ty, rng);
                         break;
                     }
 
@@ -682,7 +712,7 @@ void process(World& world, TileMap& map, Entity player, RNG& rng,
 
                                 // Heal if wounded
                                 if (as.hp < as.hp_max * 3 / 4) {
-                                    int heal = 5 + as.hp_max / 10;
+                                    int heal = 8 + as.hp_max / 4;
                                     as.hp = std::min(as.hp + heal, as.hp_max);
                                     ai_comp.ability_cooldown = 4;
                                     ai_comp.last_spell = AI::SpellVFX::HEAL_ALLY;
@@ -692,8 +722,8 @@ void process(World& world, TileMap& map, Entity player, RNG& rng,
                                     break;
                                 }
                                 // Buff damage if at full health
-                                if (as.hp >= as.hp_max * 3 / 4 && rng.chance(30)) {
-                                    as.base_damage += 2;
+                                if (as.hp >= as.hp_max * 3 / 4 && rng.chance(40)) {
+                                    as.base_damage += 3;
                                     ai_comp.ability_cooldown = 8;
                                     ai_comp.last_spell = AI::SpellVFX::BUFF_ALLY;
                                     char bb[64]; snprintf(bb, sizeof(bb), "The shaman empowers the %s!", as.name.c_str());
@@ -715,12 +745,20 @@ void process(World& world, TileMap& map, Entity player, RNG& rng,
                     }
 
                     case BehaviorType::THIEF:
-                        // Rush in, if adjacent player has items, steal one and flee
+                        // Hit and run: quick strike then flee
                         if (dist <= 1 && can_see && ai_comp.ability_cooldown == 0) {
-                            // Steal attempt handled in engine (monster hit callback)
-                            // For now, just mark that the thief wants to flee after hitting
+                            if (world.has<Stats>(player) && world.has<Stats>(e)) {
+                                auto& ts = world.get<Stats>(e);
+                                int sneak_dmg = ts.base_damage + 3;
+                                world.get<Stats>(player).hp -= sneak_dmg;
+                                char sb[64];
+                                snprintf(sb, sizeof(sb), "The %s strikes and darts away! (%d)",
+                                         ts.name.c_str(), sneak_dmg);
+                                log.add(sb, {255, 180, 80, 255});
+                            }
                             ai_comp.state = AIState::FLEEING;
-                            ai_comp.ability_cooldown = 10;
+                            ai_comp.ability_cooldown = 6;
+                            break;
                         }
                         move_toward(world, map, e, tx, ty, rng);
                         break;

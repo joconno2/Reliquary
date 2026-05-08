@@ -45,6 +45,6 @@ void draw_map(SDL_Renderer* renderer, const SpriteManager& sprites,
 
 void draw_entities(SDL_Renderer* renderer, const SpriteManager& sprites,
                    World& world, const TileMap& map, const Camera& cam,
-                   int y_offset = 0);
+                   int y_offset = 0, Entity marked_entity = 0);
 
 } // namespace render

@@ -482,15 +482,15 @@ void spawn_quest_content(World& world, const TileMap& map,
         }
         // Sepulchre atmospheric entry messages (9 floors, each distinct)
         static const char* SEPULCHRE_ENTRY[] = {
-            "The air changes. Something is wrong with this place.",
-            "The walls are older than stone should be. Your brand pulses.",
-            "Bones line every surface. Not decoration. Geology.",
-            "The dead here were arranged. Something organized them.",
-            "Heat rises from below. The stone sweats. Your brand burns.",
-            "Lava flows behind the walls. The architecture defies reason.",
-            "Ice. Impossible ice over volcanic stone. The cold is wrong.",
-            "The geometry stops making sense. Corners that shouldn't exist.",
-            "You can feel it. Vast and patient and aware. The Reliquary waits.",
+            "The air is different down here.",
+            "Old walls. Your brand pulses.",
+            "Bones everywhere.",
+            "The dead were arranged.",
+            "Heat from below. Your brand burns.",
+            "Lava behind the walls.",
+            "Ice over volcanic stone.",
+            "The geometry is wrong.",
+            "The Reliquary is close.",
         };
         if (dungeon_level >= 1 && dungeon_level <= 9) {
             log.add(SEPULCHRE_ENTRY[dungeon_level - 1], {160, 100, 140, 255});
@@ -511,7 +511,7 @@ void spawn_quest_content(World& world, const TileMap& map,
                     world.get<AI>(boss).behavior = BehaviorType::CHARGER; // charges
                     world.get<AI>(boss).flee_threshold = 0;
                 }
-                log.add("Something massive stirs in the bones ahead.", {200, 180, 160, 255});
+                log.add("The Bone Colossus.", {200, 180, 160, 255});
             }
         }
 
@@ -530,19 +530,19 @@ void spawn_quest_content(World& world, const TileMap& map,
                     world.get<AI>(boss).ranged_range = 4;
                     world.get<AI>(boss).ranged_damage = 12;
                 }
-                log.add("The heat intensifies. Something ancient coils in the magma.", {255, 140, 60, 255});
+                log.add("The Ember Wyrm.", {255, 140, 60, 255});
             }
         }
 
         // Floor 7: Narrative beat (home stretch)
         if (dungeon_level == 7) {
-            log.add("The walls are breathing.", {180, 100, 160, 255});
-            log.add("Your brand is the only light. Everything else has given up.", {160, 80, 140, 255});
+            log.add("The walls move.", {180, 100, 160, 255});
+            log.add("Your brand is the only light.", {160, 80, 140, 255});
         }
 
         // Floor 8: Final warning
         if (dungeon_level == 8) {
-            log.add("You can hear it. Below you. Waiting.", {200, 120, 180, 255});
+            log.add("Something below.", {200, 120, 180, 255});
             log.add("One floor remains.", {255, 220, 100, 255});
         }
 

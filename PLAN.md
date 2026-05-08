@@ -1,10 +1,10 @@
 # Reliquary -- Project Plan
 
-> Last updated: 2026-05-07
+> Last updated: 2026-05-08
 
-## Current Status: v0.3.55+, Polish Pass Complete
+## Current Status: v0.3.56+, Major Overhaul Sessions May 6-8
 
-All core systems built, wired, and functional. Major UI/UX polish pass, balance tuning, content additions, and bug fixes applied May 6-7. No TODOs, FIXMEs, or disabled code. ~41K lines of C++20.
+Two full sessions of balance, content, AI, items, spells, and text overhaul across May 6-8. No TODOs, FIXMEs, or disabled code. Zero compiler warnings. ~41K lines of C++20.
 
 **Repo:** https://github.com/joconno2/Reliquary.git
 **Location:** ~/projects/Reliquary
@@ -210,6 +210,73 @@ All tiers 1-6 are complete. See git history for details.
 
 **SFX**
 - Monster special abilities now have audio: death knight fear (CURSE), naga stun (SPELL_IMPACT), wraith confusion (CURSE), ice breath (SPELL_FREEZE), basilisk blind (CURSE), dragon fire (SPELL_FIRE), lich drain (SPELL_IMPACT).
+
+### Overhaul Pass (May 7-8)
+
+**Monster AI**
+- **Charger rework**: charges from any direction (was cardinal-only), deals impact damage (4 + 2*tiles), stuns 2 turns, shows message. Minotaurs and Bone Colossus now visibly charge.
+- **Troll regen feedback**: "The troll regenerates." message every 3rd tick when visible.
+- **Pack wolves**: 2+ wolves adjacent to player deal bonus damage with message. Flanking is visible.
+- **Thief (bandit)**: deals sneak attack damage + flees with message (was a silent stub).
+- **Lich buff**: drain damage 8->12, cooldown 3->2 turns, summon chance 25%->35%. Liches are scary now.
+- **Shaman buff**: heals 8+HP/4 (was 5+HP/10), buff +3 damage (was +2).
+- **Early monsters buffed**: rat 6->10 HP, bat 4->7, kobold 6->9, goblin 8->12, spider 12->16. No more one-shot fodder.
+
+**Weapon overhaul**
+- Complete weapon table redesign: 27 weapons in 4 clear tiers (depth 1-4). Each tier is a real step up.
+- Weapon types have identity: daggers (high atk), swords (balanced), axes (high dmg, -atk penalty), blunt (high dmg), spears (dodge bonus).
+- Removed sidegrades (old table had 10 weapons at +3 to +4 dmg).
+- Shop weapons updated to match.
+
+**Material system**
+- Silver: +50% damage vs undead (was just +0 with an unfulfilled comment).
+- Obsidian: +3 dmg, crits deal 3x instead of 2x. Crit build material.
+- Mithril: +2 dmg, attacks never miss (ignores dodge).
+- Adamantine: +4 dmg, ignores target armor entirely.
+- Each material has a real reason to exist.
+
+**Spell overhaul**
+- Clear damage tiers: Spark(8) < Force Bolt(15) < Ice Shard(18) < Fireball(25) < Lightning(30) < Glacial Spike(35) < Meteor(45) < Disintegrate(60).
+- No more overlapping buff spells. Each buff does one distinct thing.
+- VFX scaled to power level: Spark is subtle, Meteor shakes the screen (8.0), Disintegrate has 4 particle layers + shake 6 + purple flash.
+- All transmutation/healing/nature buffs last the whole floor (999 turns, was 15-20).
+- Disintegrate buffed to 60 damage. Magic is allowed to be strong.
+
+**Spellbook UI**
+- Spells sorted by school with colored section headers (Conjuration orange, Dark Arts purple, etc).
+- Spell names tinted by school color. Unaffordable spells dimmed.
+- Clip rect prevents overflow into description area.
+- Removed redundant school tag column.
+
+**Unique items overhaul**
+- All 38 uniques buffed to be game-changing (+10 dmg, +6 AC, multiple effects). Finding one should feel like winning.
+- Drop system: no more random floor drops. Guaranteed unique on bottom floor of each optional dungeon, guarded by a named boss.
+- 18 named dungeon guardians (Brood Queen, Grey Warden, Chained Minotaur, Bone Sovereign, Cinder Drake, Drowned Priestess, etc). Each has thematic AI.
+- 3 overworld legendaries (Worldsplitter, Frostbind Crown, Plagueheart) now guarded by named bosses (The Greenfather, The Frost Sentinel, The Blighted One).
+- 3 NPC hints about overworld legendary locations.
+- Legendary weapons buffed (+10 to +15 dmg range, was +6 to +11).
+- Removed duplicate/boring effects (3x LIGHT_RADIUS, 2x GOLD_FIND, 2x IDENTIFY_ON_PICKUP, 2x REGEN all replaced with combat-relevant effects).
+
+**Screen shake cleanup**
+- Removed shake from regular combat (crits, kills, melee hits, small spells).
+- Shake reserved for: Keeper phases, big spells (Earthquake, Meteor, Disintegrate), boss abilities, transformations. Down from 35 calls to 22.
+
+**Compiler warnings**
+- Fixed all 10 warnings (unused variables, narrowing conversions).
+
+**Text overhaul (full game pass)**
+- All player-visible text rewritten to be informational, not narrative. The player imagines; the text informs.
+- Quest descriptions: stripped narration ("Your brand aches" -> "The dungeon is active.")
+- Quest completions: stripped narration ("The farmer clutches the amulet" -> "Amulet returned.")
+- Town rumors: stripped dramatic fragments ("The temple bells ring on their own now. Always at midnight." -> "Temple bells ring at midnight on their own.")
+- NPC dialogue: stripped LLM prose ("The forest provides, if you know where to look." -> "Herbs and poultices.")
+- Background descriptions: stripped fragments ("Knows cures. Knows curses. Knows the difference." -> "Village healer.")
+- Item descriptions: stats only, no flavor kickers.
+- Lore text: short and factual.
+- Death screen god lines: two words each ("Sythara rots you.")
+- Victory endings: one line each ("The blood price is paid.")
+- Sepulchre entry messages: short ("Bones everywhere." not "Bones line every surface. Not decoration. Geology.")
+- Dungeon ambient text: trimmed ("Roots hang from the ceiling." not "Roots hang from the ceiling like fingers.")
 
 **Onboarding (16 tutorial popups)**
 - New: "Welcome" (after intro, shows movement/inventory/quest/map/help keybinds), "Resting" (first rest, explains limited rests and depth scaling), "Consumables" (first potion pickup, explains use and identification), "Danger" (first time HP drops below 30%, suggests rest/potions/retreat).

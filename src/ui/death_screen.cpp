@@ -112,20 +112,20 @@ void render_death_screen(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_
         const char* death_line = nullptr;
         GodId dgod = static_cast<GodId>(god_id);
         switch (dgod) {
-            case GodId::VETHRIK:   death_line = "Vethrik adds your bones to the collection."; break;
-            case GodId::THESSARKA: death_line = "Thessarka records your death. She forgets nothing."; break;
-            case GodId::MORRETH:   death_line = "Morreth found you wanting."; break;
-            case GodId::YASHKHET:  death_line = "Yashkhet accepts the offering."; break;
-            case GodId::KHAEL:     death_line = "Your body feeds the roots."; break;
+            case GodId::VETHRIK:   death_line = "Vethrik claims you."; break;
+            case GodId::THESSARKA: death_line = "Thessarka remembers."; break;
+            case GodId::MORRETH:   death_line = "Morreth is disappointed."; break;
+            case GodId::YASHKHET:  death_line = "Yashkhet takes the blood."; break;
+            case GodId::KHAEL:     death_line = "Khael reclaims you."; break;
             case GodId::SOLETH:    death_line = "The flame goes out."; break;
-            case GodId::IXUUL:     death_line = "Ixuul is already making something new from the pieces."; break;
-            case GodId::ZHAVEK:    death_line = "You vanish. No one notices."; break;
-            case GodId::THALARA:   death_line = "The sea takes you back."; break;
-            case GodId::OSSREN:    death_line = "You were not built to last."; break;
-            case GodId::LETHIS:    death_line = "You fall asleep. You do not wake up."; break;
-            case GodId::GATHRUUN:  death_line = "The stone closes over you."; break;
-            case GodId::SYTHARA:   death_line = "Rot takes you before you hit the ground."; break;
-            default:               death_line = "You die alone."; break;
+            case GodId::IXUUL:     death_line = "Ixuul reshapes you."; break;
+            case GodId::ZHAVEK:    death_line = "Zhavek hides you."; break;
+            case GodId::THALARA:   death_line = "Thalara drowns you."; break;
+            case GodId::OSSREN:    death_line = "Ossren discards you."; break;
+            case GodId::LETHIS:    death_line = "Lethis takes you."; break;
+            case GodId::GATHRUUN:  death_line = "Gathruun buries you."; break;
+            case GodId::SYTHARA:   death_line = "Sythara rots you."; break;
+            default:               death_line = "Dead."; break;
         }
         auto row = layout.row(line_h + 8);
         SDL_Color dim = {160, 120, 120, static_cast<Uint8>(god_alpha)};
@@ -143,7 +143,7 @@ void render_death_screen(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_
     // Brand fading line -- fades in after 2s
     int brand_alpha = std::max(0, std::min(255, static_cast<int>((elapsed_ms - 2000) * 255 / 1500)));
     if (elapsed_ms >= 2000) {
-        const char* brand_line = "The brand fades from your face. The Reliquary will find another.";
+        const char* brand_line = "The brand fades.";
         auto row = layout.row(line_h + 16);
         SDL_Color brand_col = {180, 160, 100, static_cast<Uint8>(brand_alpha)};
         SDL_Surface* bsurf = TTF_RenderText_Blended(font, brand_line, brand_col);
@@ -201,23 +201,23 @@ void render_victory_screen(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* fon
     const char* ending = nullptr;
     GodId god = static_cast<GodId>(god_id);
     switch (god) {
-        case GodId::VETHRIK:   ending = "Vethrik claims the Reliquary.\nThe dead lie still. The undead crumble to dust.\nThe graveyards are quiet again.\nIt is done."; break;
-        case GodId::THESSARKA: ending = "Thessarka takes the Reliquary.\nEvery secret in the world is laid bare.\nThe price is madness. You pay it gladly."; break;
-        case GodId::MORRETH:   ending = "Morreth takes the Reliquary.\nThe wars end. The strong rule.\nYou are the strongest. That is enough."; break;
-        case GodId::YASHKHET:  ending = "Yashkhet takes the Reliquary.\nThe blood price is paid in full.\nYour hands will never stop shaking."; break;
-        case GodId::KHAEL:     ending = "Khael takes the Reliquary.\nThe forest reclaims the cities.\nMankind is no longer the dominant species."; break;
-        case GodId::SOLETH:    ending = "Soleth takes the Reliquary.\nThe Sepulchre burns. The old places burn.\nEverything unclean burns.\nThere is a lot of burning."; break;
-        case GodId::IXUUL:     ending = "Ixuul takes the Reliquary.\nIt becomes something else. So does everything.\nThe world is unrecognizable by morning."; break;
-        case GodId::ZHAVEK:    ending = "Zhavek takes the Reliquary.\nIt disappears. The gods cannot find it.\nNeither can you."; break;
-        case GodId::THALARA:   ending = "Thalara takes the Reliquary.\nThe sea rises. The lowlands flood.\nThe age of land is over."; break;
-        case GodId::OSSREN:    ending = "Ossren takes the Reliquary.\nIt is sealed in iron and stone.\nNo one will ever open it again."; break;
-        case GodId::LETHIS:    ending = "Lethis takes the Reliquary.\nThe world falls asleep.\nSome of it wakes up. Most does not."; break;
-        case GodId::GATHRUUN:  ending = "Gathruun takes the Reliquary.\nIt sinks into the earth.\nThe mountains grow taller. The tunnels go deeper."; break;
-        case GodId::SYTHARA:   ending = "Sythara takes the Reliquary.\nIt decays. So does everything else.\nThis was always going to happen."; break;
-        default:               ending = "No god claims the Reliquary.\nYou hold it in faithless hands.\nIt is yours. You are not sure what that means."; break;
+        case GodId::VETHRIK:   ending = "Vethrik claims the Reliquary.\nThe dead stop walking."; break;
+        case GodId::THESSARKA: ending = "Thessarka takes the Reliquary.\nAll secrets revealed."; break;
+        case GodId::MORRETH:   ending = "Morreth takes the Reliquary.\nThe wars end."; break;
+        case GodId::YASHKHET:  ending = "Yashkhet takes the Reliquary.\nThe blood price is paid."; break;
+        case GodId::KHAEL:     ending = "Khael takes the Reliquary.\nThe forest grows back."; break;
+        case GodId::SOLETH:    ending = "Soleth takes the Reliquary.\nThe old places burn."; break;
+        case GodId::IXUUL:     ending = "Ixuul takes the Reliquary.\nEverything changes."; break;
+        case GodId::ZHAVEK:    ending = "Zhavek takes the Reliquary.\nIt disappears."; break;
+        case GodId::THALARA:   ending = "Thalara takes the Reliquary.\nThe sea rises."; break;
+        case GodId::OSSREN:    ending = "Ossren takes the Reliquary.\nSealed in stone."; break;
+        case GodId::LETHIS:    ending = "Lethis takes the Reliquary.\nThe world sleeps."; break;
+        case GodId::GATHRUUN:  ending = "Gathruun takes the Reliquary.\nIt sinks into the earth."; break;
+        case GodId::SYTHARA:   ending = "Sythara takes the Reliquary.\nIt decays."; break;
+        default:               ending = "No god claims the Reliquary.\nIt is yours."; break;
     }
 
-    const char* brand_conclusion = "The brand burns white. Then it goes out forever.";
+    const char* brand_conclusion = "The brand goes out.";
 
     // Render title
     SDL_Color gold = {255, 220, 100, 255};

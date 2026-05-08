@@ -6,14 +6,14 @@
 
 enum class MaterialType : int {
     NONE = 0,    // non-physical items (potions, scrolls, food)
-    BONE,        // -1 dmg, very light, sacred to Vethrik
-    WOOD,        // -2 dmg, light, sacred to Khael
+    BONE,        // -1 dmg, sacred to Vethrik
+    WOOD,        // -2 dmg, sacred to Khael
     IRON,        // +0, standard
     STEEL,       // +1, improved
     SILVER,      // +0, +50% vs undead/lycanthropes
-    OBSIDIAN,    // +2, shatters on crit fail, sacred to Yashkhet
-    MITHRIL,     // +2, very light, reduced armor penalty
-    ADAMANTINE,  // +4, heavy, ignores armor
+    OBSIDIAN,    // +3, crits deal 3x instead of 2x, sacred to Yashkhet
+    MITHRIL,     // +2, attacks never miss (ignores dodge), harms wraiths
+    ADAMANTINE,  // +4, ignores target armor, harms wraiths
     MAT_COUNT
 };
 
@@ -53,7 +53,7 @@ inline int material_damage_mod(MaterialType m) {
         case MaterialType::IRON:       return 0;
         case MaterialType::STEEL:      return 1;
         case MaterialType::SILVER:     return 0;
-        case MaterialType::OBSIDIAN:   return 2;
+        case MaterialType::OBSIDIAN:   return 3;
         case MaterialType::MITHRIL:    return 2;
         case MaterialType::ADAMANTINE: return 4;
         default: return 0;
