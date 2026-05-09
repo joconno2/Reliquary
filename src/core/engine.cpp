@@ -3697,9 +3697,10 @@ void Engine::try_move_player(int dx, int dy) {
             } else {
                 // Not in beast form: build toward transformation
                 druid_kill_counter_++;
-                // Spear-type weapons (no TAG_SPEAR yet, use damage threshold as proxy)
-                // Shapeshift at 4 kills
-                if (druid_kill_counter_ >= 4) {
+                // Base: 5 kills. Spears reduce to 4.
+                int shapeshift_threshold = 5;
+                if (player_weapon_tags & TAG_SPEAR) shapeshift_threshold = 4;
+                if (druid_kill_counter_ >= shapeshift_threshold) {
                     druid_kill_counter_ = 0;
                     druid_beast_turns_ = 10;
                     log_.add("THE BEAST AWAKENS!", {80, 200, 80, 255});
@@ -3718,7 +3719,7 @@ void Engine::try_move_player(int dx, int dy) {
                         ps.base_speed += 30;
                     }
                 } else {
-                    char kb[32]; snprintf(kb, sizeof(kb), "Beast stirs: %d/5", druid_kill_counter_);
+                    char kb[32]; snprintf(kb, sizeof(kb), "Beast stirs: %d/%d", druid_kill_counter_, shapeshift_threshold);
                     log_.add(kb, {80, 160, 80, 255});
                 }
             }
@@ -6806,6 +6807,36 @@ void Engine::reset_to_main_menu() {
     state_ = GameState::MAIN_MENU;
     main_menu_.set_can_continue(false);
     log_ = MessageLog();
+
+    // Reset all per-run class/ability state
+    sneaking_ = false;
+    tips_shown_ = {};
+    summons_.clear();
+    death_cause_.clear();
+    newly_unlocked_.clear();
+    zealot_fury_turns_ = 0;
+    revenant_saved_this_floor_ = false;
+    dwarf_moved_last_turn_ = true;
+    heavy_hitter_used_this_floor_ = false;
+    ranger_marked_target_ = 0;
+    serpentine_stacks_ = 0;
+    serpentine_target_ = 0;
+    dwarf_fortified_ = false;
+    elf_weave_counter_ = 0;
+    druid_kill_counter_ = 0;
+    druid_beast_turns_ = 0;
+    monk_hit_counter_ = 0;
+    keeper_phase_ = 1;
+    keeper_entity_ = 0;
+    knight_bulwark_cd_ = 0;
+    knight_bulwark_turns_ = 0;
+    revenant_fury_turns_ = 0;
+    trollblood_corpses_floor_ = 0;
+    trollblood_gorged_ = false;
+    ranged_target_ = 0;
+    target_cycle_idx_ = -1;
+    bestiary_.clear();
+
     audio_.stop_all_ambient(800);
     audio_.play_music(MusicId::TITLE, 3000);
     audio_.play_ambient(AmbientId::FIRE_CRACKLE, 4000);

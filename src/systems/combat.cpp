@@ -215,7 +215,7 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
         Entity shield = world.get<Inventory>(defender).get_equipped(EquipSlot::OFF_HAND);
         if (shield != NULL_ENTITY && world.has<Item>(shield) &&
             world.get<Item>(shield).type == ItemType::SHIELD) {
-            int block_pct = (world.get<Player>(defender).bulwark_turns > 0) ? 40 : 20;
+            int block_pct = (world.get<Player>(defender).bulwark_turns > 0) ? 50 : 30;
             if (rng.range(1, 100) <= block_pct) {
                 knight_blocked = true;
                 result.shield_blocked = true;
@@ -717,7 +717,7 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
         }
 
         // MP shield (unique amulet): damage from MP first (50%)
-        if (def.hp < 0 && world.has<Player>(defender) &&
+        if (def.hp <= 0 && world.has<Player>(defender) &&
             has_unique_effect(world, defender, UniqueEffect::MP_SHIELD) &&
             def.mp > 0) {
             // Recover some HP by spending MP instead

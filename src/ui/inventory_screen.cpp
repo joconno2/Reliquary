@@ -287,10 +287,10 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
 
     item_rects_.clear();
 
-    int sel = selected_;
     auto sorted = get_sorted_indices(world);
     int count = static_cast<int>(sorted.size());
-    if (sel >= count && count > 0) sel = count - 1;
+    if (selected_ >= count && count > 0) selected_ = count - 1;
+    int sel = selected_;
 
     if (sorted.empty()) {
         auto empty_row = list.row();

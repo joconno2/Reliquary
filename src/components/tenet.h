@@ -178,25 +178,26 @@ enum ItemTag : uint32_t {
     TAG_AXE          = 1 << 2,
     TAG_SWORD        = 1 << 3,
     TAG_BOW          = 1 << 4,
-    TAG_HEAVY_ARMOR  = 1 << 5,   // plate
-    TAG_MEDIUM_ARMOR = 1 << 6,   // chain, scale
-    TAG_LIGHT_ARMOR  = 1 << 7,   // leather, cloth
-    TAG_SHIELD       = 1 << 8,
-    TAG_BOOK         = 1 << 9,   // spellbooks, scrolls, tomes
-    TAG_HERB         = 1 << 10,  // herbs, mushrooms, plants
-    TAG_TORCH        = 1 << 11,  // torches, light sources
-    TAG_HOLY         = 1 << 12,  // holy symbols, blessed items
-    TAG_DARK         = 1 << 13,  // dark arts items, necromantic
-    TAG_POTION       = 1 << 14,
-    TAG_FOOD_COOKED  = 1 << 15,
-    TAG_FOOD_RAW     = 1 << 16,
-    TAG_BONE_ITEM    = 1 << 17,  // bone weapons/items
-    TAG_FIRE_ITEM    = 1 << 18,  // fire weapons, braziers
-    TAG_WATER_ITEM   = 1 << 19,  // trident, net, coral
-    TAG_CRAFT_ITEM   = 1 << 20,  // hammers as tools, anvils
-    TAG_POISON_ITEM  = 1 << 21,  // poison vials, toxic items
-    TAG_GEM          = 1 << 22,
-    TAG_MUSHROOM     = 1 << 23,
+    TAG_SPEAR        = 1 << 5,
+    TAG_HEAVY_ARMOR  = 1 << 6,   // plate
+    TAG_MEDIUM_ARMOR = 1 << 7,   // chain, scale
+    TAG_LIGHT_ARMOR  = 1 << 8,   // leather, cloth
+    TAG_SHIELD       = 1 << 9,
+    TAG_BOOK         = 1 << 10,  // spellbooks, scrolls, tomes
+    TAG_HERB         = 1 << 11,  // herbs, mushrooms, plants
+    TAG_TORCH        = 1 << 12,  // torches, light sources
+    TAG_HOLY         = 1 << 13,  // holy symbols, blessed items
+    TAG_DARK         = 1 << 14,  // dark arts items, necromantic
+    TAG_POTION       = 1 << 15,
+    TAG_FOOD_COOKED  = 1 << 16,
+    TAG_FOOD_RAW     = 1 << 17,
+    TAG_BONE_ITEM    = 1 << 18,  // bone weapons/items
+    TAG_FIRE_ITEM    = 1 << 19,  // fire weapons, braziers
+    TAG_WATER_ITEM   = 1 << 20,  // trident, net, coral
+    TAG_CRAFT_ITEM   = 1 << 21,  // hammers as tools, anvils
+    TAG_POISON_ITEM  = 1 << 22,  // poison vials, toxic items
+    TAG_GEM          = 1 << 23,
+    TAG_MUSHROOM     = 1 << 24,
 };
 
 struct SacredProfane {

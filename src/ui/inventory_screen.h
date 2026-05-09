@@ -38,7 +38,7 @@ public:
 
 private:
     bool open_ = false;
-    int selected_ = 0;
+    mutable int selected_ = 0;
     mutable int scroll_ = 0; // first visible item index
     Entity player_ = 0;
     mutable InvSortMode sort_mode_ = InvSortMode::DEFAULT;

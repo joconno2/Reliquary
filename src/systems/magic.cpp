@@ -183,6 +183,12 @@ CastResult cast(World& world, Entity caster, SpellId spell,
     }
 
     if (!arcane_overload) {
+        // Warlock Lv5 Dark Pact: spend HP when out of MP
+        if (!blood_magic && world.has<Player>(caster) &&
+            world.get<Player>(caster).class_id == ClassId::WARLOCK &&
+            stats.level >= 5 && stats.mp < actual_cost && stats.hp > actual_cost) {
+            blood_magic = true;
+        }
         if (blood_magic) {
             if (stats.hp <= actual_cost) {
                 log.add("Not enough blood to give.", {200, 60, 60, 255});
@@ -309,6 +315,7 @@ CastResult cast(World& world, Entity caster, SpellId spell,
         auto& ai_pool = world.pool<AI>();
         for (size_t i = 0; i < ai_pool.size(); i++) {
             Entity e = ai_pool.entity_at(i);
+            if (ai_pool.at_index(i).friendly) continue; // skip summons
             if (!world.has<Position>(e) || !world.has<Stats>(e)) continue;
             auto& epos = world.get<Position>(e);
             if (distance(cpos.x, cpos.y, epos.x, epos.y) <= info.range) {
@@ -405,10 +412,11 @@ CastResult cast(World& world, Entity caster, SpellId spell,
             if (!world.has<StatusEffects>(target)) world.add<StatusEffects>(target, {});
             world.get<StatusEffects>(target).add(StatusType::FROZEN, 0, 2);
             if (steamed) {
-                // Steam cloud: blind all visible enemies
+                // Steam cloud: blind all visible hostile enemies
                 auto& ai_pool2 = world.pool<AI>();
                 for (size_t j = 0; j < ai_pool2.size(); j++) {
                     Entity ae = ai_pool2.entity_at(j);
+                    if (ai_pool2.at_index(j).friendly) continue;
                     if (world.has<StatusEffects>(ae))
                         world.get<StatusEffects>(ae).add(StatusType::BLIND, 0, 3);
                 }

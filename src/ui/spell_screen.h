@@ -28,7 +28,7 @@ public:
 
 private:
     bool open_ = false;
-    int selected_ = 0;
+    mutable int selected_ = 0;
     Entity player_ = 0;
     mutable std::vector<SDL_Rect> spell_rects_;
 };

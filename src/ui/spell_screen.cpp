@@ -108,6 +108,7 @@ void SpellScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     bool has_stats = world.has<Stats>(player_);
 
     int count = static_cast<int>(book.known_spells.size());
+    if (selected_ >= count && count > 0) selected_ = count - 1;
     int line_h = TTF_FontLineSkip(font);
 
     SDL_Color title_col = {180, 160, 200, 255};

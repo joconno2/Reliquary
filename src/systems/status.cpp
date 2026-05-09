@@ -193,7 +193,7 @@ EffectResult process(World& world, Entity player, TileMap& map, RNG& rng,
         if (e == player) continue;
         auto& es = all_stats_pool.at_index(i);
         // Drown tick
-        if (es.drown_turns > 0) {
+        if (es.drown_turns > 0 && es.hp > 0) {
             es.hp -= es.drown_damage;
             es.drown_turns--;
             if (es.hp <= 0) combat::kill(world, e, log);

@@ -966,6 +966,9 @@ static void apply_tags(Item& item) {
         item.tags |= TAG_SWORD;
     if (n.find("bow") != std::string::npos || n.find("crossbow") != std::string::npos)
         item.tags |= TAG_BOW;
+    if (n.find("spear") != std::string::npos || n.find("pike") != std::string::npos
+        || n.find("halberd") != std::string::npos || n.find("trident") != std::string::npos)
+        item.tags |= TAG_SPEAR;
 
     // Armor tags
     if (item.type == ItemType::ARMOR_CHEST || item.type == ItemType::ARMOR_HEAD

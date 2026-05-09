@@ -107,6 +107,9 @@ static ShopItem make_shop_item(const ShopItemDef& def) {
             si.item.tags |= TAG_BOW;
             si.item.range = 6;
         }
+        else if (n.find("spear") != std::string::npos || n.find("pike") != std::string::npos
+                 || n.find("halberd") != std::string::npos || n.find("trident") != std::string::npos)
+            si.item.tags |= TAG_SPEAR;
     }
     return si;
 }
@@ -428,8 +431,9 @@ ShopAction ShopScreen::handle_input(SDL_Event& event) {
     }
     // Mouse wheel scroll
     if (event.type == SDL_MOUSEWHEEL) {
+        int max_sel = std::max(0, static_cast<int>(stock_.size()) - 1);
         if (event.wheel.y > 0 && selected_ > 0) selected_--;
-        else if (event.wheel.y < 0) selected_++;
+        else if (event.wheel.y < 0 && selected_ < max_sel) selected_++;
         return ShopAction::NONE;
     }
 
@@ -450,7 +454,7 @@ ShopAction ShopScreen::handle_input(SDL_Event& event) {
         case SDLK_DOWN:
         case SDLK_s:
         case SDLK_j:
-            selected_++;
+            if (selected_ < static_cast<int>(stock_.size()) - 1) selected_++;
             return ShopAction::NONE;
         case SDLK_RETURN:
         case SDLK_SPACE:
