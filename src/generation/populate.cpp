@@ -1362,8 +1362,8 @@ Entity spawn_unique(World& world, const std::vector<Room>& rooms, RNG& rng,
                               static_cast<int>(rooms.size()) - 2);
     if (room_idx < 1) room_idx = 1;
     auto& room = rooms[room_idx];
-    int x = room.cx() + rng.range(-1, 1);
-    int y = room.cy() + rng.range(-1, 1);
+    int x = room.cx();
+    int y = room.cy();
 
     Entity e = world.create();
     world.add<Position>(e, {x, y});
@@ -1896,17 +1896,33 @@ void spawn_doodads(World& world, TileMap& map,
     }
 }
 
-Entity spawn_boss(World& world, [[maybe_unused]] const TileMap& map,
+Entity spawn_boss(World& world, const TileMap& map,
                    const std::vector<Room>& rooms, const char* name,
                    int sheet, int sx, int sy,
                    int hp, int str, int dex, int con,
                    int dmg, int armor, int speed, int xp_value) {
     if (rooms.size() < 2) return NULL_ENTITY;
 
-    // Spawn in the last room center
+    // Spawn in the last room center, with walkability fallback
     auto& room = rooms.back();
     int x = room.cx();
     int y = room.cy();
+
+    // If center isn't walkable, search the room for a walkable spot
+    if (!map.in_bounds(x, y) || !map.is_walkable(x, y)) {
+        bool found = false;
+        for (int r = 1; r <= std::max(room.w, room.h) / 2 && !found; r++) {
+            for (int dy = -r; dy <= r && !found; dy++) {
+                for (int dx = -r; dx <= r && !found; dx++) {
+                    int nx = room.cx() + dx;
+                    int ny = room.cy() + dy;
+                    if (map.in_bounds(nx, ny) && map.is_walkable(nx, ny)) {
+                        x = nx; y = ny; found = true;
+                    }
+                }
+            }
+        }
+    }
 
     Entity e = world.create();
     world.add<Position>(e, {x, y});

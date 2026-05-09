@@ -2399,6 +2399,22 @@ void Engine::generate_level() {
                 auto& last_room = rooms_.back();
                 int gx = last_room.x + last_room.w / 2;
                 int gy = last_room.y + last_room.h / 2;
+                // Find walkable spot if center is blocked
+                if (!map_.in_bounds(gx, gy) || !map_.is_walkable(gx, gy)) {
+                    for (int r = 1; r <= std::max(last_room.w, last_room.h) / 2; r++) {
+                        bool found = false;
+                        for (int dy = -r; dy <= r && !found; dy++) {
+                            for (int dx = -r; dx <= r && !found; dx++) {
+                                int nx = last_room.cx() + dx;
+                                int ny = last_room.cy() + dy;
+                                if (map_.in_bounds(nx, ny) && map_.is_walkable(nx, ny)) {
+                                    gx = nx; gy = ny; found = true;
+                                }
+                            }
+                        }
+                        if (found) break;
+                    }
+                }
                 Entity guardian = world_.create();
                 world_.add<Position>(guardian, {gx, gy});
 
@@ -2496,7 +2512,7 @@ void Engine::generate_level() {
                         // Catacombs
                         {"The Dead Ossuary",    "Bone Sovereign",        "The Bone Sovereign.",
                          2, 4,   85, 16, 11, 3,  90, BehaviorType::NECROMANCER, 0},
-                        {"The Bone Ossuary",    "Marrow Eater",          "The Marrow Eater.",
+                        {"The Ossuary",  "Marrow Eater",          "The Marrow Eater.",
                          5, 4,   75, 18, 12, 2, 110, BehaviorType::THIEF, 0},
                         {"The Grave Ossuary",   "Entombed Priest",       "The Entombed Priest.",
                          2, 4,   90, 14,  9, 3,  85, BehaviorType::LICH, 0},
@@ -2923,6 +2939,23 @@ void Engine::try_move_player(int dx, int dy) {
                 player_weapon_tags = world_.get<Item>(wpn).tags;
         }
 
+        // Teleport behind target (Rogue shadow step, teleport strike ring)
+        if (atk_result.teleport_behind && world_.has<Position>(player_) &&
+            world_.has<Position>(target)) {
+            auto& ppos = world_.get<Position>(player_);
+            auto& tpos = world_.get<Position>(target);
+            // Move to opposite side of target from player's original position
+            int dx = tpos.x - ppos.x;
+            int dy = tpos.y - ppos.y;
+            int behind_x = tpos.x + (dx != 0 ? (dx > 0 ? 1 : -1) : 0);
+            int behind_y = tpos.y + (dy != 0 ? (dy > 0 ? 1 : -1) : 0);
+            if (map_.in_bounds(behind_x, behind_y) && map_.is_walkable(behind_x, behind_y) &&
+                combat::entity_at(world_, behind_x, behind_y, player_) == NULL_ENTITY) {
+                ppos.x = behind_x;
+                ppos.y = behind_y;
+            }
+        }
+
         // Class ability audio from combat triggers
         if (atk_result.shadow_stepped) audio_.play(SfxId::SPELL);
         if (atk_result.parried) audio_.play(SfxId::BLOCK1);
@@ -3284,18 +3317,9 @@ void Engine::try_move_player(int dx, int dy) {
                     else bonus = -3; // penalty on surface
                     break;
                 }
-                case GodId::SYTHARA: {
-                    // Poison chance: 15% base, 25% at favor 25, 35% at favor 50
-                    int pois_chance = (fav >= 50) ? 35 : (fav >= 25) ? 25 : 15;
-                    int pois_sev = (fav >= 75) ? 3 : 2;
-                    if (rng_.chance(pois_chance) && !atk_result.killed) {
-                        if (!world_.has<StatusEffects>(target))
-                            world_.add<StatusEffects>(target, {});
-                        world_.get<StatusEffects>(target).add(StatusType::POISON, pois_sev, 8);
-                        log_.add("Your touch carries Sythara's gift.", {120, 180, 60, 255});
-                    }
+                case GodId::SYTHARA:
+                    // Poison applied in dramatic passives section below (100%, always)
                     break;
-                }
                 case GodId::KHAEL:
                     // -4 damage in dungeons (nature weakens underground)
                     if (dungeon_level_ > 0) bonus = -4;
@@ -3357,7 +3381,9 @@ void Engine::try_move_player(int dx, int dy) {
 
                 // Sythara: ALL attacks poison (100%)
                 if (ga.god == GodId::SYTHARA && world_.has<StatusEffects>(target)) {
-                    world_.get<StatusEffects>(target).add(StatusType::POISON, 2, 3);
+                    int sev = (ga.favor >= 75) ? 3 : 2;
+                    world_.get<StatusEffects>(target).add(StatusType::POISON, sev, 3);
+                    log_.add("Sythara's venom.", {120, 180, 60, 255});
                     particles_.drift((float)nx, (float)ny, 10, 100, 200, 60, 0.8f, 3);
                 }
 
@@ -5178,6 +5204,8 @@ void Engine::process_turn() {
             } else {
                 state_ = GameState::DEAD;
                 end_screen_time_ = SDL_GetTicks();
+                if (dungeon_level_ >= 4) meta_.died_deep = true;
+                update_meta_on_end();
                 audio_.play(SfxId::DEATH);
                 audio_.stop_all_ambient(500);
                 audio_.play_music(MusicId::DEATH, 1500);
@@ -5913,6 +5941,8 @@ void Engine::process_turn() {
             } else {
                 state_ = GameState::DEAD;
                 end_screen_time_ = SDL_GetTicks();
+                if (dungeon_level_ >= 4) meta_.died_deep = true;
+                update_meta_on_end();
                 audio_.stop_all_ambient(500);
                 audio_.play_music(MusicId::DEATH, 1500);
                 return;
@@ -5951,6 +5981,8 @@ void Engine::process_turn() {
                 death_cause_ = fx_result.death_cause;
                 state_ = GameState::DEAD;
                 end_screen_time_ = SDL_GetTicks();
+                if (dungeon_level_ >= 4) meta_.died_deep = true;
+                update_meta_on_end();
                 audio_.stop_all_ambient(500);
                 audio_.play_music(MusicId::DEATH, 1500);
             }
@@ -6100,6 +6132,40 @@ void Engine::fire_ranged() {
     }
     if (result.critical) { particles_.crit_flash(tgt_x, tgt_y); }
     if (result.killed) { audio_.play(SfxId::DEATH); particles_.death_burst(tgt_x, tgt_y); }
+
+    // Ranger: Marked Prey applies to ranged attacks too
+    if (world_.has<Player>(player_) && world_.get<Player>(player_).class_id == ClassId::RANGER) {
+        // Apply mark bonus damage
+        if (ranger_marked_target_ == target && result.hit && !result.killed &&
+            world_.has<Stats>(target)) {
+            int mark_bonus = result.damage / 2; // +50%
+            // Bow bonus: +25% extra (total +75%)
+            if (weapon.tags & TAG_BOW)
+                mark_bonus += result.damage / 4;
+            world_.get<Stats>(target).hp -= mark_bonus;
+            result.damage += mark_bonus;
+            char mkb[64];
+            snprintf(mkb, sizeof(mkb), "Marked prey! (+%d)", mark_bonus);
+            log_.add(mkb, {140, 255, 100, 255});
+            particles_.burst((float)tgt_x, (float)tgt_y, 12, 100, 255, 80, 0.1f, 0.5f, 4);
+            particles_.rise((float)tgt_x, (float)tgt_y, 6, 140, 255, 100, 0.4f, 3);
+            if (world_.get<Stats>(target).hp <= 0) {
+                combat::kill(world_, target, log_);
+                result.killed = true;
+                ranger_marked_target_ = 0;
+                audio_.play(SfxId::DEATH); particles_.death_burst(tgt_x, tgt_y);
+            }
+        }
+        // Auto-mark on first hit
+        if (result.hit && target != ranger_marked_target_ && !result.killed) {
+            ranger_marked_target_ = target;
+            if (world_.has<Stats>(target)) {
+                char mb[64]; snprintf(mb, sizeof(mb), "Marked: %s", world_.get<Stats>(target).name.c_str());
+                log_.add(mb, {200, 255, 140, 255});
+                particles_.burst((float)tgt_x, (float)tgt_y, 15, 100, 255, 80, 0.12f, 0.6f, 4);
+            }
+        }
+    }
 
     // Bestiary stats (ranged has access to victim stats before combat::kill removes them)
     if (result.killed && !victim_name.empty()) {
@@ -7786,7 +7852,7 @@ void Engine::handle_input() {
                     creation_screen_.set_unlock_progress(static_cast<int>(ClassId::BARBARIAN),
                         prog(meta_.total_kills, 50, "kills"));
                     creation_screen_.set_unlock_progress(static_cast<int>(ClassId::KNIGHT),
-                        prog(meta_.max_dungeon_depth, 5, "depth"));
+                        prog(meta_.max_dungeon_depth, 3, "depth"));
                     creation_screen_.set_unlock_progress(static_cast<int>(ClassId::MONK),
                         meta_.killed_unarmed ? "Complete!" : "Not yet achieved");
                     creation_screen_.set_unlock_progress(static_cast<int>(ClassId::TEMPLAR),
@@ -7798,7 +7864,7 @@ void Engine::handle_input() {
                     creation_screen_.set_unlock_progress(static_cast<int>(ClassId::WARLOCK),
                         meta_.died_deep ? "Complete!" : "Not yet achieved");
                     creation_screen_.set_unlock_progress(static_cast<int>(ClassId::DWARF),
-                        prog(meta_.max_dungeon_depth, 6, "depth"));
+                        prog(meta_.max_dungeon_depth, 4, "depth"));
                     creation_screen_.set_unlock_progress(static_cast<int>(ClassId::ELF),
                         prog(meta_.total_creatures_examined, 15, "examined"));
                     creation_screen_.set_unlock_progress(static_cast<int>(ClassId::BANDIT),
@@ -7811,6 +7877,14 @@ void Engine::handle_input() {
                     { int gc = meta_.gods_completed_count();
                       creation_screen_.set_unlock_progress(static_cast<int>(ClassId::HERETIC),
                         prog(gc, GOD_COUNT, "gods")); }
+                    creation_screen_.set_unlock_progress(static_cast<int>(ClassId::WYRMKIN),
+                        meta_.killed_dragon ? "Complete!" : "Not yet achieved");
+                    creation_screen_.set_unlock_progress(static_cast<int>(ClassId::REVENANT),
+                        prog(meta_.total_deaths, 10, "deaths"));
+                    creation_screen_.set_unlock_progress(static_cast<int>(ClassId::SERPENTINE),
+                        prog(meta_.max_diseases, 3, "diseases"));
+                    creation_screen_.set_unlock_progress(static_cast<int>(ClassId::TROLLBLOOD),
+                        prog(meta_.max_dungeon_depth, 4, "depth"));
 
                     start_transition(TransitionType::FADE_OUT, 400);
                     state_ = GameState::CREATING;
@@ -9337,8 +9411,6 @@ void Engine::handle_input() {
                 if (hardcore_) {
                     std::filesystem::remove(save::default_path());
                 }
-                if (dungeon_level_ >= 4) meta_.died_deep = true;
-                update_meta_on_end();
                 reset_to_main_menu();
                 return;
             }

@@ -511,7 +511,7 @@ void CreationScreen::render_class_select(SDL_Renderer* renderer, TTF_Font* font,
 
         // Full description (wrapped, uses all remaining vertical space)
         ui::draw_text_wrapped(renderer, font, cls.description, desc_col, dp_x, ty, dp_w);
-        ty += line_h * 5 + 12; // approximate space for wrapped text
+        ty += ui::text_wrapped_height(font, cls.description, dp_w) + 8;
 
         // Gear synergy + Level 5 + Build tip (below description)
         auto details = get_class_details(static_cast<ClassId>(selected_));
@@ -1306,8 +1306,14 @@ void CreationScreen::render_build_screen(SDL_Renderer* renderer, TTF_Font* font,
 
         int bicon_r = 22;
         int banchor_y = by + build_bg_cursor_ * bg_row_h;
+        // Measure total content height below bblock_y to clamp properly
+        int desc_inner_w = desc_w - margin * 2;
+        int flavor_h = ui::text_wrapped_height(font, bg.description, desc_inner_w);
+        int passive_h = bg.passive_desc[0] ? ui::text_wrapped_height(font, bg.passive_desc, desc_inner_w) : 0;
+        int total_below = bicon_r * 2 + 8 + line_h + 4 + flavor_h + 8
+                          + (bg.passive_name[0] ? line_h + 4 : 0) + passive_h + line_h;
         int bmin_y = top_y + 10;
-        int bmax_y = h - line_h * 9 - bicon_r * 2;
+        int bmax_y = h - line_h * 2 - total_below;
         int bblock_y = std::max(bmin_y, std::min(bmax_y, banchor_y - bicon_r));
 
         // Background circle (filled)
@@ -1331,19 +1337,18 @@ void CreationScreen::render_build_screen(SDL_Renderer* renderer, TTF_Font* font,
 
         // Background name below icon
         int bname_y = bicon_cy + bicon_r + 8;
-        ui::draw_text_clipped(renderer, font, bg.name, active_col, bdx + margin, bname_y, desc_w - margin * 2);
+        ui::draw_text_clipped(renderer, font, bg.name, active_col, bdx + margin, bname_y, desc_inner_w);
 
         // Flavor text
         int bdy = bname_y + line_h + 4;
-        ui::draw_text_wrapped(renderer, font, bg.description, dim_col, bdx + margin, bdy, desc_w - margin * 2);
-        // Mechanical passive (below flavor, generous spacing)
-        bdy += line_h * 3 + 10;
+        ui::draw_text_wrapped(renderer, font, bg.description, dim_col, bdx + margin, bdy, desc_inner_w);
+        bdy += flavor_h + 8;
         if (bg.passive_name[0]) {
-            ui::draw_text_clipped(renderer, font, bg.passive_name, picked_col, bdx + margin, bdy, desc_w - margin * 2);
+            ui::draw_text_clipped(renderer, font, bg.passive_name, picked_col, bdx + margin, bdy, desc_inner_w);
             bdy += line_h + 4;
         }
         if (bg.passive_desc[0]) {
-            ui::draw_text_wrapped(renderer, font, bg.passive_desc, desc_col, bdx + margin, bdy, desc_w - margin * 2);
+            ui::draw_text_wrapped(renderer, font, bg.passive_desc, desc_col, bdx + margin, bdy, desc_inner_w);
         }
     }
 

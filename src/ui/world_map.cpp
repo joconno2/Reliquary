@@ -205,7 +205,7 @@ void WorldMap::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_tit
         {332, 170, "The Sunless Galleries"}, {918, 99, "The Dead Ossuary"},
         {448, 609, "The Ash Forge"}, {408, 113, "The Damp Basin"},
         {223, 198, "The Worm Warren"}, {401, 311, "The Broken Vault"},
-        {227, 61, "The Deep Halls"}, {506, 149, "The Bone Ossuary"},
+        {227, 61, "The Deep Halls"}, {506, 149, "The Ossuary"},
         {671, 446, "The Slag Core"}, {131, 66, "The Salt Grotto"},
         {647, 548, "The Worm Tunnels"}, {331, 540, "The Silent Citadel"},
         {847, 372, "The Hollow Underhall"}, {880, 554, "The Grave Ossuary"},

@@ -278,6 +278,34 @@ All tiers 1-6 are complete. See git history for details.
 - Sepulchre entry messages: short ("Bones everywhere." not "Bones line every surface. Not decoration. Geology.")
 - Dungeon ambient text: trimmed ("Roots hang from the ceiling." not "Roots hang from the ceiling like fingers.")
 
+### Ability Feedback Pass (May 8)
+
+**Ranger mark:**
+- Pulsing green diamond icon drawn above marked target in render system (not tint-based). Crosshair lines extend from diamond.
+- Mark now sets in damage processing block (was post-combat, first hit never got bonus).
+- "Marked: goblin" on first mark, "Marked prey! (+N)" on bonus damage, 15-particle green burst on mark, 12+6 per-hit pulse.
+
+**God passive feedback:**
+- Vethrik: "+N vs undead" message + 12-particle bone burst when undead bonus triggers.
+- Yashkhet: "+N HP (blood)" message on lifesteal.
+- Soleth: "+3 fire" message + 15-particle fire burst + 8 rising embers (was 6 particles, no message).
+- Zhavek: "Backstab! (+N)" message + 15-particle purple burst (was completely silent).
+- Sythara: 10-particle green drift on poison application (was silent).
+
+**Passive tree trigger feedback:**
+- On-hit bleed: "Bleed!" message.
+- On-hit poison: "Poison!" message.
+- Vampiric Pact: "+N HP (drain)" message.
+- On-kill heal: "+N HP (kill)" message.
+- Mana Siphon: "+N MP (siphon)" message.
+
+**Unique item effect feedback:**
+- Lifesteal: "+N HP (lifesteal)" (was silent).
+- Freeze on Hit: "Frozen!" (was silent).
+- Fire Damage Bonus: "+5 fire" (was silent).
+- On-Kill Heal: "+N HP (kill)" (was silent).
+- Poison+Bleed: "Poison + Bleed!" (was silent).
+
 **Onboarding (16 tutorial popups)**
 - New: "Welcome" (after intro, shows movement/inventory/quest/map/help keybinds), "Resting" (first rest, explains limited rests and depth scaling), "Consumables" (first potion pickup, explains use and identification), "Danger" (first time HP drops below 30%, suggests rest/potions/retreat).
 - Updated dungeon entry tip text to reflect partial rest healing.
