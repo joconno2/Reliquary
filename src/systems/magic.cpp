@@ -156,6 +156,7 @@ CastResult cast(World& world, Entity caster, SpellId spell,
             case SpellSchool::HEALING:       school_skill = SkillId::HEALING; break;
             case SpellSchool::NATURE:        school_skill = SkillId::NATURE_MAGIC; break;
             case SpellSchool::DARK_ARTS:     school_skill = SkillId::DARK_ARTS; break;
+            default: break;
         }
         int reduce_pct = skill_bonus::spell_cost_reduce(skills.get_level(school_skill));
         // Also tree bonus
@@ -1397,6 +1398,7 @@ CastResult cast(World& world, Entity caster, SpellId spell,
             case SpellSchool::HEALING:       school_skill = SkillId::HEALING; break;
             case SpellSchool::NATURE:        school_skill = SkillId::NATURE_MAGIC; break;
             case SpellSchool::DARK_ARTS:     school_skill = SkillId::DARK_ARTS; break;
+            default: break;
         }
         skills.grant_xp(school_skill, 3);
     }

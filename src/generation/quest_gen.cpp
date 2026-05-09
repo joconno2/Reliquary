@@ -432,6 +432,8 @@ void generate_town_quests(World& world, [[maybe_unused]] const TileMap& map, RNG
                     continue;
                 }
                 break;
+            default:
+                continue;
         }
 
         world.add<DynamicQuest>(e, std::move(dq));
@@ -500,7 +502,6 @@ void spawn_quest_content(World& world, const TileMap& map,
 
         // Floor 3: The Bone Colossus (assembled from the dead of floors 1-2)
         if (dungeon_level == 3 && !rooms.empty()) {
-            auto& boss_room = rooms.back();
             Entity boss = populate::spawn_boss(world, map, rooms,
                 "The Bone Colossus", SHEET_MONSTERS, 7, 7,  // golem sprite
                 120, 18, 10, 20, 14, 6, 75, 300);
@@ -517,7 +518,6 @@ void spawn_quest_content(World& world, const TileMap& map,
 
         // Floor 6: The Ember Wyrm (volcanic serpent from the impossible heat)
         if (dungeon_level == 6 && !rooms.empty()) {
-            auto& boss_room = rooms.back();
             Entity boss = populate::spawn_boss(world, map, rooms,
                 "The Ember Wyrm", SHEET_MONSTERS, 2, 8,  // dragon sprite
                 160, 22, 14, 22, 20, 5, 85, 400);

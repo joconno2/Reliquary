@@ -655,11 +655,6 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
         if (world.has<Player>(attacker) &&
             has_unique_effect(world, attacker, UniqueEffect::TELEPORT_STRIKE) &&
             rng.range(1, 100) <= 15 && world.has<Position>(defender) && world.has<Position>(attacker)) {
-            auto& dpos2 = world.get<Position>(defender);
-            auto& apos = world.get<Position>(attacker);
-            // Move attacker to opposite side of defender
-            // Flag for engine.cpp to handle the actual position swap
-            // (combat.cpp doesn't have map access for bounds checking)
             result.teleport_behind = true;
             log.add("You blink through your target.", {180, 140, 255, 255});
         }
@@ -1228,9 +1223,13 @@ AttackResult ranged_attack(World& world, Entity attacker, Entity defender,
             // Random status on ranged hit
             if (world.has<StatusEffects>(defender)) {
                 int status_roll = rng.range(0, 2);
-                if (status_roll == 0) world.get<StatusEffects>(defender).add(StatusType::BURN, 1, 2);
-                else if (status_roll == 1) world.get<StatusEffects>(defender).add(StatusType::FROZEN, 0, 1); if (world.has<Player>(attacker)) log.add("Frozen!", {140, 200, 255, 255});
-                else world.get<StatusEffects>(defender).add(StatusType::POISON, 1, 3);
+                if (status_roll == 0) {
+                    world.get<StatusEffects>(defender).add(StatusType::BURN, 1, 2);
+                } else if (status_roll == 1) {
+                    world.get<StatusEffects>(defender).add(StatusType::FROZEN, 0, 1);
+                } else {
+                    world.get<StatusEffects>(defender).add(StatusType::POISON, 1, 3);
+                }
             }
         }
 

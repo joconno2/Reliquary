@@ -413,8 +413,6 @@ void CreationScreen::render_class_select(SDL_Renderer* renderer, TTF_Font* font,
     SDL_Color desc_col = {140, 130, 120, 255};
     SDL_Color lock_col = {80, 70, 65, 255};
 
-    auto screen = ui::Layout::from_screen(w, h, line_h);
-
     // Layout: left 2/3 = class grid, right 1/3 = description panel
     int desc_panel_w = w / 3;
     int grid_area_w = w - desc_panel_w;
@@ -1136,10 +1134,9 @@ void CreationScreen::render_character_preview(SDL_Renderer* renderer, TTF_Font* 
 }
 
 void CreationScreen::render_build_screen(SDL_Renderer* renderer, TTF_Font* font,
-                                          TTF_Font* font_title, int w, int h) const {
+                                          [[maybe_unused]] TTF_Font* font_title, int w, int h) const {
     if (!font) return;
     int line_h = TTF_FontLineSkip(font);
-    int title_h = font_title ? TTF_FontLineSkip(font_title) : line_h;
     int margin = 12;
 
     // Layout: right 1/4 = character preview, left 3/4 split into 3 pairs (name+detail)

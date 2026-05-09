@@ -532,7 +532,7 @@ void PassiveTreeScreen::draw_tooltip(SDL_Renderer* renderer, TTF_Font* font,
 
 void PassiveTreeScreen::draw_hud(SDL_Renderer* renderer, TTF_Font* font,
                                   const PassiveTreeState& state,
-                                  int sw, int sh) const {
+                                  [[maybe_unused]] int sw, int sh) const {
     if (!font) return;
     int line_h = TTF_FontLineSkip(font);
 

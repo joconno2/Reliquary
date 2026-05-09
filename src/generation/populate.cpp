@@ -798,7 +798,7 @@ static void apply_curse_bless(Item& item, int dungeon_level, RNG& rng) {
 }
 
 // Make items with affixes unidentified (they have hidden bonuses worth discovering)
-static void apply_identification(Item& item, RNG& rng) {
+static void apply_identification(Item& item, [[maybe_unused]] RNG& rng) {
     // Items that already have curse/bless state are handled in apply_curse_bless
     if (item.curse_state != 0) return;
     // Items with affixes start unidentified

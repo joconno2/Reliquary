@@ -61,7 +61,7 @@ bool IntroScreen::handle_input(SDL_Event& event) {
     return true; // consume all input while intro is showing
 }
 
-void IntroScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_title,
+void IntroScreen::render(SDL_Renderer* renderer, TTF_Font* font, [[maybe_unused]] TTF_Font* font_title,
                           int w, int h) const {
     if (done_ || !font) return;
 
@@ -74,7 +74,6 @@ void IntroScreen::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_
     SDL_RenderClear(renderer);
 
     // Layout: center text vertically, 60% screen width
-    auto screen = ui::Layout::from_screen(w, h, line_h);
     int content_w = w * 3 / 5;
     int total_text_h = static_cast<int>(lines_.size()) * (line_h + 6);
     int start_y = (h - total_text_h) / 2;

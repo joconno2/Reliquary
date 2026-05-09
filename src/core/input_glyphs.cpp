@@ -231,7 +231,7 @@ std::string InputGlyphs::gamepad_label(Action action) const {
         case Action::PASSIVE_TREE: return std::string("(") + lb + "+Lt)";
         case Action::BESTIARY:     return std::string("(") + lb + "+Rt)";
         case Action::HELP:         return "(Start)";
-        default:                   return "(??)";
+        default:                   return "(?\?)";
     }
 }
 

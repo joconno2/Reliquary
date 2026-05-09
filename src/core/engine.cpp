@@ -8337,7 +8337,6 @@ void Engine::handle_input() {
                 church_screen_.close();
             } else if (cact == ChurchAction::CLAIM_BLESSING) {
                 // One-time Champion legendary, costs 20 favor
-                auto& rewards = get_church_rewards(church_screen_.get_god());
                 if (!world_.has<GodAlignment>(player_)) { church_screen_.close(); continue; }
                 auto& ga_bless = world_.get<GodAlignment>(player_);
                 if (ga_bless.church_blessing_claimed) {
@@ -11592,8 +11591,9 @@ void Engine::render_god_panel() {
         case GodId::SYTHARA:  passive_short = "All hits poison. Heal halved."; break;
         default: break;
     }
-    SDL_Color passive_col = {ginfo.color.r * 3/4 + 60, ginfo.color.g * 3/4 + 60,
-                             ginfo.color.b * 3/4 + 60, 255};
+    SDL_Color passive_col = {static_cast<Uint8>(ginfo.color.r * 3/4 + 60),
+                             static_cast<Uint8>(ginfo.color.g * 3/4 + 60),
+                             static_cast<Uint8>(ginfo.color.b * 3/4 + 60), 255};
     // Measure actual wrapped text height using TTF
     auto god_wrap_h = [&](const char* text) -> int {
         if (!text || !text[0] || text_max_w <= 0) return line_h;

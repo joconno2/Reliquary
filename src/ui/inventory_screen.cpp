@@ -306,7 +306,6 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     int row_h = std::max(line_h + 8, 36);
     int avail_h = list.remaining_h();
     bool needs_top_ind = false;
-    bool needs_bot_ind = false;
 
     // First pass: how many items fit without indicators
     int visible_count = std::max(1, avail_h / row_h);
@@ -327,7 +326,6 @@ void InventoryScreen::render(SDL_Renderer* renderer, TTF_Font* font,
     if (scroll_ < 0) scroll_ = 0;
 
     needs_top_ind = scroll_ > 0;
-    needs_bot_ind = (scroll_ + visible_count) < count;
 
     // Scroll indicator (top)
     if (needs_top_ind) {

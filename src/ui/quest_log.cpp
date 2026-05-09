@@ -90,9 +90,6 @@ void QuestLog::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_tit
     int count = static_cast<int>(journal.entries.size());
     if (selected_ >= count) selected_ = count - 1;
 
-    // Calculate how much vertical space the quest list can use (half the remaining panel)
-    int list_budget = panel.remaining_h() / 2;
-
     // Quest list
     for (int i = 0; i < count; i++) {
         auto& entry = journal.entries[i];
