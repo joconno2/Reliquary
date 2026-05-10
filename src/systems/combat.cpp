@@ -613,9 +613,15 @@ AttackResult melee_attack(World& world, Entity attacker, Entity defender,
                 result.poison_stacked = true; // signal to engine for stack tracking
             }
 
-            // Wyrmkin: Dragon Breath (every 8th hit, fire AoE)
+            // Wyrmkin: Dragon Breath (every 8th hit, fire AoE; axes = every 4th)
             if (cid == ClassId::WYRMKIN) {
                 atk.wyrmkin_breath_ctr++;
+                // Axe synergy: double increment (8 -> 4 hits to trigger)
+                if (world.has<Inventory>(attacker)) {
+                    Entity bw = world.get<Inventory>(attacker).get_equipped(EquipSlot::MAIN_HAND);
+                    if (bw != NULL_ENTITY && world.has<Item>(bw) && (world.get<Item>(bw).tags & TAG_AXE))
+                        atk.wyrmkin_breath_ctr++;
+                }
                 if (atk.wyrmkin_breath_ctr >= 8) {
                     atk.wyrmkin_breath_ctr = 0;
                     int breath_dmg = 6 + atk.level + atk_tree.breath_dmg_bonus;
@@ -1208,10 +1214,33 @@ AttackResult ranged_attack(World& world, Entity attacker, Entity defender,
             }
         }
 
-        // Wyrmkin: ranged hits also count toward Dragon Breath
+        // Wyrmkin: ranged hits count toward Dragon Breath and can trigger it
         if (world.has<Player>(attacker) &&
             world.get<Player>(attacker).class_id == ClassId::WYRMKIN) {
             atk.wyrmkin_breath_ctr++;
+            if (atk.wyrmkin_breath_ctr >= 8) {
+                atk.wyrmkin_breath_ctr = 0;
+                auto atk_tree = get_tree_bonuses(world, attacker);
+                int breath_dmg = 6 + atk.level + atk_tree.breath_dmg_bonus;
+                def.hp -= breath_dmg;
+                result.damage += breath_dmg;
+                if (world.has<Position>(defender)) {
+                    auto& dpos = world.get<Position>(defender);
+                    auto& ai_pool = world.pool<AI>();
+                    for (size_t ai = 0; ai < ai_pool.size(); ai++) {
+                        Entity ae = ai_pool.entity_at(ai);
+                        if (ae == defender || ai_pool.at_index(ai).friendly) continue;
+                        if (!world.has<Position>(ae) || !world.has<Stats>(ae)) continue;
+                        auto& ap = world.get<Position>(ae);
+                        if (std::abs(ap.x - dpos.x) <= 1 && std::abs(ap.y - dpos.y) <= 1) {
+                            world.get<Stats>(ae).hp -= breath_dmg;
+                        }
+                    }
+                }
+                log.add("Dragon breath!", {255, 140, 40, 255});
+                if (world.has<StatusEffects>(defender))
+                    world.get<StatusEffects>(defender).add(StatusType::BURN, 3, 2);
+            }
         }
 
         // Elf: Arcane Arrow (ranged attacks deal bonus INT damage + random status)

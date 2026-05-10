@@ -140,9 +140,9 @@ void spawn_monsters(World& world, const TileMap& map,
                 idx = rng.range(0, max_idx);
             }
 
-            // Dragon: max 1 per floor, only depth 3+
+            // Dragon: max 1 per floor, only effective depth 6+
             bool is_dragon = (std::string(MONSTER_TABLE[idx].name) == "dragon");
-            if (is_dragon && (dragons_this_floor >= 1 || dungeon_level < 3)) {
+            if (is_dragon && (dragons_this_floor >= 1 || dungeon_level < 6)) {
                 idx = rng.range(0, std::min(max_idx, 20)); // reroll to non-dragon
                 is_dragon = false;
             }

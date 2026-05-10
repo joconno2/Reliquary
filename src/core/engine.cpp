@@ -324,6 +324,14 @@ void Engine::do_load() {
         }
     }
 
+    // Populate overworld_explored_ cache so dungeon round-trips preserve exploration
+    if (dungeon_level_ == 0 && map_.width() > 0) {
+        int sz = map_.width() * map_.height();
+        overworld_explored_.resize(sz);
+        for (int i = 0; i < sz; i++)
+            overworld_explored_[i] = map_.at(i % map_.width(), i / map_.width()).explored;
+    }
+
     state_ = GameState::PLAYING;
     pause_menu_.close();
     update_music_for_location();
@@ -3040,10 +3048,7 @@ void Engine::try_move_player(int dx, int dy) {
             // Warlock + Dagger: siphon gives +3 extra MP on kill
             // (applied in on-kill section below)
 
-            // Wyrmkin + Axe: breath counter counts as 2 per hit (effectively 4 hits)
-            if (gcid == ClassId::WYRMKIN && (player_weapon_tags & TAG_AXE) && world_.has<Stats>(player_)) {
-                world_.get<Stats>(player_).wyrmkin_breath_ctr++; // extra increment
-            }
+            // Wyrmkin + Axe: handled in combat.cpp (double increment before trigger check)
 
             // Serpentine + Dagger: double stacking
             if (gcid == ClassId::SERPENTINE && (player_weapon_tags & TAG_DAGGER) &&
@@ -5490,6 +5495,31 @@ void Engine::process_turn() {
         int dx = std::abs(mpos.x - ppos.x);
         int dy = std::abs(mpos.y - ppos.y);
         int dist = std::max(dx, dy);
+
+        // Attack adjacent friendly summons if not adjacent to player
+        if (dist > 1) {
+            for (size_t si = 0; si < ai_pool.size(); si++) {
+                Entity se = ai_pool.entity_at(si);
+                if (!ai_pool.at_index(si).friendly) continue;
+                if (!world_.has<Position>(se) || !world_.has<Stats>(se)) continue;
+                auto& sp = world_.get<Position>(se);
+                int sd = std::max(std::abs(mpos.x - sp.x), std::abs(mpos.y - sp.y));
+                if (sd == 1) {
+                    auto& ms = world_.get<Stats>(e);
+                    auto& ss = world_.get<Stats>(se);
+                    int dmg = std::max(1, ms.base_damage - ss.natural_armor);
+                    ss.hp -= dmg;
+                    char sbuf[128];
+                    snprintf(sbuf, sizeof(sbuf), "The %s attacks your %s. (%d)",
+                             ms.name.c_str(), ss.name.c_str(), dmg);
+                    log_.add(sbuf, {200, 160, 140, 255});
+                    if (ss.hp <= 0) {
+                        combat::kill(world_, se, log_);
+                    }
+                    break; // one attack per turn
+                }
+            }
+        }
 
         if (dist <= 1 && dist > 0) {
             // Melee attack

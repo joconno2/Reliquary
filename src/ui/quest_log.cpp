@@ -202,9 +202,32 @@ void QuestLog::render(SDL_Renderer* renderer, TTF_Font* font, TTF_Font* font_tit
             }
         } else if (entry.state == QuestState::COMPLETE) {
             if (panel.fits(line_h)) {
-                ui::Rect turn_in = panel.row();
-                ui::draw_text_in(renderer, font, "Done! Return to turn in.",
-                                 complete_col, turn_in, ui::Align::LEFT);
+                // Show turn-in location with compass direction
+                struct QTurnIn { QuestId id; int x, y; const char* npc; const char* town; };
+                static const QTurnIn TURNINS[] = {
+                    {QuestId::MQ_03_FIRST_FRAGMENT,  650, 335, "Captain Voss",      "Greywatch"},
+                    {QuestId::MQ_05_SECOND_FRAGMENT, 425, 475, "Scholar Maren",     "Millhaven"},
+                    {QuestId::MQ_06_THIRD_FRAGMENT,  700, 375, "Master Smith Brynn","Ironhearth"},
+                };
+                bool found_turnin = false;
+                for (auto& ti : TURNINS) {
+                    if (ti.id == entry.id) {
+                        const char* dir = compass_dir(player_x, player_y, ti.x, ti.y);
+                        char tibuf[128];
+                        snprintf(tibuf, sizeof(tibuf), "Return to %s in %s (%s).",
+                                 ti.npc, ti.town, dir);
+                        ui::Rect turn_in = panel.row();
+                        ui::draw_text_in(renderer, font, tibuf,
+                                         complete_col, turn_in, ui::Align::LEFT);
+                        found_turnin = true;
+                        break;
+                    }
+                }
+                if (!found_turnin) {
+                    ui::Rect turn_in = panel.row();
+                    ui::draw_text_in(renderer, font, "Done! Return to turn in.",
+                                     complete_col, turn_in, ui::Align::LEFT);
+                }
             }
         }
     }
