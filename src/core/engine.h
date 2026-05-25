@@ -270,6 +270,7 @@ private:
     int serpentine_stacks_ = 0;
     Entity serpentine_target_ = 0;
     bool dwarf_fortified_ = false;
+    int bonus_actions_ = 0; // speed draught: skip monster turns
     int elf_weave_counter_ = 0;
     int druid_kill_counter_ = 0;
     int druid_beast_turns_ = 0;

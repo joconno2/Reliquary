@@ -110,7 +110,7 @@ void TraitSelectScreen::render(SDL_Renderer* renderer, TTF_Font* font,
 
     // Title + counter
     auto title_row = screen.row(line_h + 2);
-    ui::draw_text_in(renderer, font, "Choose your traits.", title_col, title_row, ui::Align::CENTER);
+    ui::draw_text_in(renderer, font, "Choose up to 3 traits.", title_col, title_row, ui::Align::CENTER);
 
     char count_buf[64];
     snprintf(count_buf, sizeof(count_buf), "Selected: %d/3",

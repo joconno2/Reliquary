@@ -135,12 +135,21 @@ EffectResult process(World& world, Entity player, TileMap& map, RNG& rng,
             stats.hp++;
         }
 
-        // Vampirism: surface (overworld) hurts — 1 damage every 3 turns
+        // Vampirism: surface (overworld) hurts — 1 damage every 3 turns (daytime, outdoors only)
         if (diseases.has(DiseaseId::VAMPIRISM) && dungeon_level <= 0
+            && (game_turn % 200) < 140 // daytime only
             && game_turn % 3 == 0) {
-            stats.hp--;
-            if (game_turn % 15 == 0) // don't spam
-                log.add("The sunlight scalds your skin.", {200, 160, 100, 255});
+            auto& vp = world.get<Position>(player);
+            int walls = 0;
+            if (map.is_opaque(vp.x-1, vp.y)) walls++;
+            if (map.is_opaque(vp.x+1, vp.y)) walls++;
+            if (map.is_opaque(vp.x, vp.y-1)) walls++;
+            if (map.is_opaque(vp.x, vp.y+1)) walls++;
+            if (walls < 2) {
+                stats.hp--;
+                if (game_turn % 15 == 0)
+                    log.add("The sunlight scalds your skin.", {200, 160, 100, 255});
+            }
         }
     }
 

@@ -1268,6 +1268,13 @@ Entity spawn_relic(World& world, const std::vector<Room>& rooms, RNG& rng,
     int x = room.cx() + rng.range(-1, 1);
     int y = room.cy() + rng.range(-1, 1);
 
+    // Walkability fallback
+    if (x < room.x + 1 || x >= room.x + room.w - 1 ||
+        y < room.y + 1 || y >= room.y + room.h - 1) {
+        x = room.cx();
+        y = room.cy();
+    }
+
     Entity e = world.create();
     world.add<Position>(e, {x, y});
 
@@ -1314,8 +1321,14 @@ Entity spawn_legendary(World& world, const std::vector<Room>& rooms, [[maybe_unu
     else if (dungeon_name == "The Sepulchre")       def = &LEGENDARY_WEAPON_TABLE[5]; // Stormcaller
     else return NULL_ENTITY;
 
-    // Place in the last room (deepest point)
-    auto& room = rooms.back();
+    // Place in the largest room (deepest point)
+    int best_ri = static_cast<int>(rooms.size()) - 1;
+    int best_a = 0;
+    for (int i = 1; i < static_cast<int>(rooms.size()); i++) {
+        int a = rooms[i].w * rooms[i].h;
+        if (a > best_a) { best_a = a; best_ri = i; }
+    }
+    auto& room = rooms[best_ri];
     int x = room.cx();
     int y = room.cy();
 
@@ -1906,15 +1919,21 @@ Entity spawn_boss(World& world, const TileMap& map,
                    int dmg, int armor, int speed, int xp_value) {
     if (rooms.size() < 2) return NULL_ENTITY;
 
-    // Spawn in the last room center, with walkability fallback
-    auto& room = rooms.back();
+    // Pick the largest room (excluding room 0 where the player enters)
+    int best_idx = static_cast<int>(rooms.size()) - 1;
+    int best_area = 0;
+    for (int i = 1; i < static_cast<int>(rooms.size()); i++) {
+        int area = rooms[i].w * rooms[i].h;
+        if (area > best_area) { best_area = area; best_idx = i; }
+    }
+    auto& room = rooms[best_idx];
     int x = room.cx();
     int y = room.cy();
 
-    // If center isn't walkable, search the room for a walkable spot
+    // If center isn't walkable, search outward within the full room
     if (!map.in_bounds(x, y) || !map.is_walkable(x, y)) {
         bool found = false;
-        for (int r = 1; r <= std::max(room.w, room.h) / 2 && !found; r++) {
+        for (int r = 1; r <= std::max(room.w, room.h) && !found; r++) {
             for (int dy = -r; dy <= r && !found; dy++) {
                 for (int dx = -r; dx <= r && !found; dx++) {
                     int nx = room.cx() + dx;
@@ -2017,7 +2036,7 @@ static const ParagonDef PARAGON_TABLE[] = {
 };
 static constexpr int PARAGON_COUNT = sizeof(PARAGON_TABLE) / sizeof(PARAGON_TABLE[0]);
 
-Entity spawn_paragon(World& world, [[maybe_unused]] const TileMap& map,
+Entity spawn_paragon(World& world, const TileMap& map,
                       const std::vector<Room>& rooms, RNG& rng,
                       int dungeon_level, GodId player_god) {
     if (rooms.size() < 3) return NULL_ENTITY;
@@ -2039,6 +2058,22 @@ Entity spawn_paragon(World& world, [[maybe_unused]] const TileMap& map,
     auto& room = rooms[room_idx];
     int x = room.cx();
     int y = room.cy();
+
+    // Walkability fallback
+    if (!map.in_bounds(x, y) || !map.is_walkable(x, y)) {
+        for (int r = 1; r <= std::max(room.w, room.h); r++) {
+            bool found = false;
+            for (int dy = -r; dy <= r && !found; dy++) {
+                for (int dx = -r; dx <= r && !found; dx++) {
+                    int nx = room.cx() + dx, ny = room.cy() + dy;
+                    if (map.in_bounds(nx, ny) && map.is_walkable(nx, ny)) {
+                        x = nx; y = ny; found = true;
+                    }
+                }
+            }
+            if (found) break;
+        }
+    }
 
     // Depth scaling for 4-floor dungeons (paragons appear floor 3-4)
     float scale = 1.0f + (dungeon_level - 2) * 0.25f;

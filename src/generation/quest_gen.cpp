@@ -101,7 +101,7 @@ static DynamicQuest make_guard_quest(RNG& rng, const std::string& town) {
             "Monsters have been wandering out at night.",
             town.c_str());
         q.description = buf;
-        snprintf(buf, sizeof(buf), "Clear dungeon level %d near %s.", depth, town.c_str());
+        snprintf(buf, sizeof(buf), "Clear dungeon level %d near %s. (M for map)", depth, town.c_str());
         q.objective = buf;
         q.complete_text = "The guard nods. One less thing to worry about.";
         q.xp_reward = 30 + rng.range(0, 20);
@@ -294,7 +294,7 @@ static DynamicQuest make_bounty_quest(RNG& rng, const std::string& town) {
         "%s, %s, has been %s %s. The town is offering a reward for its head.",
         BOUNTIES[bi].name, BOUNTIES[bi].title, BOUNTIES[bi].desc, town.c_str());
     q.description = buf;
-    snprintf(buf, sizeof(buf), "Kill %s in the dungeon near %s.", BOUNTIES[bi].name, town.c_str());
+    snprintf(buf, sizeof(buf), "Kill %s in the dungeon near %s. (M for map)", BOUNTIES[bi].name, town.c_str());
     q.objective = buf;
     snprintf(buf, sizeof(buf), "%s is dead. The bounty is yours.", BOUNTIES[bi].name);
     q.complete_text = buf;
@@ -560,6 +560,18 @@ void spawn_quest_content(World& world, const TileMap& map,
             auto& room = rooms.back();
             int x = room.cx();
             int y = room.cy() + 1;
+            // Walkability fallback
+            if (!map.in_bounds(x, y) || !map.is_walkable(x, y)) {
+                x = room.cx(); y = room.cy();
+                if (!map.in_bounds(x, y) || !map.is_walkable(x, y)) {
+                    for (int dy = -1; dy <= 1; dy++)
+                        for (int dx = -1; dx <= 1; dx++)
+                            if (map.in_bounds(room.cx()+dx, room.cy()+dy) &&
+                                map.is_walkable(room.cx()+dx, room.cy()+dy))
+                                { x = room.cx()+dx; y = room.cy()+dy; goto found_spot; }
+                    found_spot:;
+                }
+            }
             Entity e = world.create();
             world.add<Position>(e, {x, y});
             world.add<Renderable>(e, {SHEET_ITEMS, sprite_x, sprite_y, tint, 2});

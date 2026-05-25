@@ -2739,6 +2739,7 @@ void Engine::grant_skill_xp(SkillId skill, int amount) {
 void Engine::try_move_player(int dx, int dy) {
     if (state_ != GameState::PLAYING) return;
     dwarf_moved_last_turn_ = true;
+    bool was_fortified = dwarf_fortified_;
     dwarf_fortified_ = false; // moving breaks fortify
     ranged_target_ = 0;
     target_cycle_idx_ = -1;
@@ -3085,14 +3086,13 @@ void Engine::try_move_player(int dx, int dy) {
         }
 
         // Dwarf: FORTIFY (double damage, TRIPLE with hammers/blunt)
-        if (dwarf_fortified_ && atk_result.hit && !atk_result.killed &&
+        if (was_fortified && atk_result.hit && !atk_result.killed &&
             world_.has<Player>(player_) && world_.get<Player>(player_).class_id == ClassId::DWARF &&
             world_.has<Stats>(target)) {
             int fort_mult = (player_weapon_tags & TAG_BLUNT) ? 2 : 1; // triple vs double
             int fort_bonus = atk_result.damage * fort_mult;
             world_.get<Stats>(target).hp -= fort_bonus;
             atk_result.damage += fort_bonus;
-            dwarf_fortified_ = false;
             log_.add("Fortified strike!", {200, 180, 100, 255});
                 audio_.play(SfxId::CRIT);
             if (world_.get<Stats>(target).hp <= 0) {
@@ -3164,8 +3164,8 @@ void Engine::try_move_player(int dx, int dy) {
                     atk_result.killed = true;
                 }
             }
-            // Heavy Hitter: +20% miss chance (overswing downside)
-            if (tid == TraitId::HEAVY_HITTER && atk_result.hit && rng_.chance(20)) {
+            // Heavy Hitter: +20% miss chance (overswing downside, not on devastating blow)
+            else if (tid == TraitId::HEAVY_HITTER && atk_result.hit && rng_.chance(20)) {
                 if (world_.has<Stats>(target))
                     world_.get<Stats>(target).hp += atk_result.damage;
                 atk_result.hit = false;
@@ -3186,6 +3186,8 @@ void Engine::try_move_player(int dx, int dy) {
                 int noc_bonus = (dungeon_level_ > 0) ? 4 : -4;
                 world_.get<Stats>(target).hp -= noc_bonus;
                 atk_result.damage += noc_bonus;
+                if (dungeon_level_ > 0)
+                    log_.add("+4 (nocturnal)", {180, 160, 220, 255});
                 if (world_.get<Stats>(target).hp <= 0) {
                     combat::kill(world_, target, log_);
                     atk_result.killed = true;
@@ -3494,7 +3496,7 @@ void Engine::try_move_player(int dx, int dy) {
                         particles_.drift(fx, fy, 3, 140, 60, 200, 0.5f, 2);
                         break;
                     case ClassId::DWARF:
-                        if (dwarf_fortified_)
+                        if (was_fortified)
                             particles_.burst(fx, fy, 10, 180, 140, 80, 0.12f, 0.6f, 3);
                         break;
                     case ClassId::ELF:
@@ -4644,6 +4646,13 @@ void Engine::open_door(int x, int y) {
 void Engine::process_turn() {
     if (!player_acted_) return;
     player_acted_ = false;
+
+    // Bonus actions: player acts without advancing the world
+    if (bonus_actions_ > 0) {
+        bonus_actions_--;
+        return;
+    }
+
     game_turn_++;
 
     // === KEEPER PHASE TRANSITIONS ===
@@ -4801,11 +4810,19 @@ void Engine::process_turn() {
                 particles_.burst((float)pp.x, (float)pp.y, 8, 180, 60, 40, 0.08f, 0.5f, 2);
             }
         }
-        // Vampiric: overworld drains 1 HP/5 turns
-        if (tid == TraitId::VAMPIRIC && dungeon_level_ <= 0 && game_turn_ % 5 == 0 && world_.has<Stats>(player_)) {
-            world_.get<Stats>(player_).hp -= 1;
-            if (game_turn_ % 25 == 0)
-                log_.add("Sunlight burns. Get underground.", {200, 180, 100, 255});
+        // Vampiric: overworld drains 1 HP/5 turns (daytime only, not indoors)
+        if (tid == TraitId::VAMPIRIC && dungeon_level_ <= 0 && !is_night() && game_turn_ % 5 == 0 && world_.has<Stats>(player_)) {
+            auto& pp = world_.get<Position>(player_);
+            int walls = 0;
+            if (map_.in_bounds(pp.x-1, pp.y) && map_.is_opaque(pp.x-1, pp.y)) walls++;
+            if (map_.in_bounds(pp.x+1, pp.y) && map_.is_opaque(pp.x+1, pp.y)) walls++;
+            if (map_.in_bounds(pp.x, pp.y-1) && map_.is_opaque(pp.x, pp.y-1)) walls++;
+            if (map_.in_bounds(pp.x, pp.y+1) && map_.is_opaque(pp.x, pp.y+1)) walls++;
+            if (walls < 2) { // outdoors
+                world_.get<Stats>(player_).hp -= 1;
+                if (game_turn_ % 25 == 0)
+                    log_.add("Sunlight burns. Get underground.", {200, 180, 100, 255});
+            }
         }
         // Bloodletter: slow permanent bleed (1 HP per 8 turns)
         if (tid == TraitId::BLOODLETTER && world_.has<Stats>(player_) && game_turn_ % 8 == 0) {
@@ -5086,10 +5103,11 @@ void Engine::process_turn() {
         if (pstats.hp > pstats.hp_max) pstats.hp = pstats.hp_max;
         if (pstats.mp > pstats.mp_max) pstats.mp = pstats.mp_max;
 
-        // Sync Energy speed with effective speed (base + equip bonuses)
+        // Sync Energy speed with effective speed (base + equip bonuses + kill haste)
         if (world_.has<Energy>(player_)) {
             auto& en = world_.get<Energy>(player_);
             int eff_speed = pstats.base_speed + pstats.equip_speed;
+            if (pstats.haste_turns > 0) eff_speed += 50;
             // Morreth override is handled separately in god passives section
             if (!world_.has<GodAlignment>(player_) || world_.get<GodAlignment>(player_).god != GodId::MORRETH)
                 en.speed = std::max(30, eff_speed);
@@ -5483,7 +5501,7 @@ void Engine::process_turn() {
     for (size_t i = 0; i < ai_pool.size(); i++) {
         Entity e = ai_pool.entity_at(i);
         if (!world_.has<Position>(e) || !world_.has<Stats>(e)) continue;
-        if (!world_.has<Energy>(e) || !world_.get<Energy>(e).can_act()) continue;
+        if (!world_.has<Energy>(e)) continue;
 
         auto& ai_comp = ai_pool.at_index(i);
         if (ai_comp.state != AIState::HUNTING) continue;
@@ -7636,10 +7654,8 @@ void Engine::handle_inventory_action(InvAction action) {
                              had_poison ? " The poison fades." : " Nothing happens.");
                     log_.add(use_buf, {100, 200, 100, 255});
                     consumed = true;
-                } else if (item.name == "speed draught" && world_.has<Energy>(player_)) {
-                    // Temporary speed boost — increase energy speed for a while
-                    // Simple: grant 300 bonus energy (3 free actions)
-                    world_.get<Energy>(player_).current += 300;
+                } else if (item.name == "speed draught") {
+                    bonus_actions_ += 3;
                     snprintf(use_buf, sizeof(use_buf), "You drink the %s. (+3 actions)",
                              item.display_name().c_str());
                     log_.add(use_buf, {220, 220, 100, 255});
